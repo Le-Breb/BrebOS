@@ -11,7 +11,7 @@ void fb_write_cell(unsigned int i, char c, unsigned char fg, unsigned char bg)
         return;
     }
 
-    short* const fb = (short*)0x000B8000;
+    short* const fb = (short*)0xC03FF000;
     fb[i] = (((fg & 0x0F) << 4) | (bg & 0x0F)) << 8 | c;
 }
 
@@ -51,6 +51,18 @@ void fb_ok()
     fb_write_cell(position++, 'K', FB_BLACK, FB_GREEN);
     fb_write_cell(position++, ']', FB_BLACK, FB_WHITE);
     fb_write_cell(position++, '\n', FB_BLACK, FB_WHITE);
+}
+
+void fb_error()
+{
+	fb_write_cell(position++, '[', FB_BLACK, FB_WHITE);
+	fb_write_cell(position++, 'E', FB_BLACK, FB_RED);
+	fb_write_cell(position++, 'R', FB_BLACK, FB_RED);
+	fb_write_cell(position++, 'R', FB_BLACK, FB_RED);
+	fb_write_cell(position++, 'O', FB_BLACK, FB_RED);
+	fb_write_cell(position++, 'R', FB_BLACK, FB_RED);
+	fb_write_cell(position++, ']', FB_BLACK, FB_WHITE);
+	fb_write_cell(position++, '\n', FB_BLACK, FB_WHITE);
 }
 
 void fb_write_hex(unsigned int n)

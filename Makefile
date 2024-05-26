@@ -16,26 +16,33 @@ GRUB_TIMEOUT=0
 
 all: $(OS_ISO)
 
+program:
+	nasm -f bin program.s -o $(BUILD_DIR)/program
+
 kernel.elf: $(OBJECTS)
 	mkdir -p build
 	ld $(LDFLAGS) $(OBJECTS) -o $(BUILD_DIR)/kernel.elf
 
-$(OS_ISO): kernel.elf
+$(OS_ISO): kernel.elf program
 #	Create directories
 	mkdir -p isodir
 	mkdir -p isodir/boot
 	mkdir -p isodir/boot/grub
-
-	cp $(BUILD_DIR)/kernel.elf isodir/boot/
+	mkdir -p isodir/modules
 
 	echo "set timeout=$(GRUB_TIMEOUT)" > grub.cfg
 	echo "set default=0" >> grub.cfg
+	# uncomment the following lines to enable serial debugging. use it with -serial file:serial.log in qemu
+	#echo "set debug=all" >> grub.cfg
+	#echo "serial --unit=0 --speed=115200 --word=8 --parity=no --stop=1" >> grub.cfg
+	#echo "terminal_output serial" >> grub.cfg
 	echo menuentry \"$(OUT_NAME)\" { >> grub.cfg
 	echo "	multiboot /boot/$(OUT_BIN)" >> grub.cfg
+	echo "	module /modules/program" >> grub.cfg
 	echo } >> grub.cfg
-#	echo "title os" >> grub.cfg
 
 	cp $(BUILD_DIR)/$(OUT_BIN) isodir/boot/$(OUT_BIN)
+	cp $(BUILD_DIR)/program isodir/modules/program
 	cp grub.cfg isodir/boot/grub/grub.cfg
 
 	echo "Building ISO..."

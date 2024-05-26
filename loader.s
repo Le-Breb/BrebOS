@@ -1,29 +1,134 @@
 global loader                   ; the entry symbol for ELF
 extern kmain
+extern _kernel_start
+extern _kernel_end
 
-KERNEL_STACK_SIZE equ 4096      ; size of stack in bytes
+KERNEL_STACK_SIZE equ 4096          ; size of stack in bytes
 
-MAGIC_NUMBER equ 0x1BADB002     ; define the magic number constant
-FLAGS        equ 0x0            ; multiboot flags
-CHECKSUM     equ -MAGIC_NUMBER  ; calculate the checksum
-                                ; (magic number + checksum + flags should equal 0)
+MAGIC_NUMBER    equ 0x1BADB002      ; define the magic number constant
+ALIGN_MODULES   equ 0x00000001      ; tell GRUB to align modules
+MEMINFO         equ 0x00000002      ; provide memory map
+FLAGS           equ ALIGN_MODULES | MEMINFO ; set the flags
 
-section .multiboot_header       ; the multiboot header section
-align 4                         ; the code must be 4 byte aligned
-    dd MAGIC_NUMBER             ; write the magic number to the machine code,
-    dd FLAGS                    ; the flags,
-    dd CHECKSUM                 ; and the checksum
+; calculate the checksum (all options + checksum should equal 0)
+CHECKSUM        equ -(MAGIC_NUMBER + FLAGS)
 
-section .text:
-loader:                         ; the loader label (defined as entry point in linker script)
-    mov eax, 0xCAFEBABE         ; place the number 0xCAFEBABE in the register eax
-    mov esp, kernel_stack + KERNEL_STACK_SIZE ; point esp to the start of the stack (end of memory area)
+KERNEL_VIRTUAL_BASE equ 0xC0000000  ; the virtual address where the kernel is loaded
+
+VGA_TEXT_BUFFER equ 0x000B8000      ; the physical address of the VGA text buffer
+
+; Declare a multiboot header that marks the program as a kernel.
+section .multiboot
+align 4
+    dd MAGIC_NUMBER
+    dd FLAGS
+    dd CHECKSUM
+
+; Allocate the initial stack.
+section .bootstrap_stack
+align 4
+stack_bottom:
+    resb 16384   ; 16 KiB
+stack_top:
+
+; Preallocate pages used for paging. Don't hard-code addresses and assume they
+; are available, as the bootloader might have loaded its multiboot structures or
+; modules there. This lets the bootloader know it must avoid the addresses.
+section .bss
+align 4096
+global boot_page_directory
+boot_page_directory:
+    resb 4096
+global boot_page_table1
+boot_page_table1:
+    resb 4096
+; Further page tables may be required if the kernel grows beyond 3 MiB.
+
+; The kernel entry point.
+section .text
+global _start
+_start:
+    ; Physical address of boot_page_table1.
+    mov edi, boot_page_table1 - KERNEL_VIRTUAL_BASE
+
+    ; First address to map is address 0.
+    mov esi, 0
+
+    ; Map 1023 pages. The 1024th will be the VGA text buffer.
+    mov ecx, 1023
+
+map_pages:
+    ; Only map the kernel.
+    cmp esi, _kernel_start
+    jl skip_page
+    cmp esi, _kernel_end - KERNEL_VIRTUAL_BASE
+    jge done_mapping
+
+    ; Map physical address as "present, writable". Note that this maps
+    ; .text and .rodata as writable. Mind security and map them as non-writable.
+    mov edx, esi
+    or edx, 0x003
+    mov [edi], edx
+
+skip_page:
+    ; Size of page is 4096 bytes.
+    add esi, 4096
+    ; Size of entries in boot_page_table1 is 4 bytes.
+    add edi, 4
+    ; Loop to the next entry if we haven't finished.
+    loop map_pages
+
+done_mapping:
+    ; Map VGA video memory to 0xC03FF000 as "present, writable".
+    mov dword [boot_page_table1 - KERNEL_VIRTUAL_BASE + 1023 * 4], VGA_TEXT_BUFFER | 0x003
+
+    ; The page table is used at both page directory entry 0 (virtually from 0x0
+    ; to 0x3FFFFF) (thus identity mapping the kernel) and page directory entry
+    ; 768 (virtually from 0xC0000000 to 0xC03FFFFF) (thus mapping it in the
+    ; higher half). The kernel is identity mapped because enabling paging does
+    ; not change the next instruction, which continues to be physical. The CPU
+    ; would instead page fault if there was no identity mapping.
+
+    ; Map the page table to both virtual addresses 0x00000000 and 0xC0000000.
+    mov eax, boot_page_table1 - KERNEL_VIRTUAL_BASE + 0x003
+    mov [boot_page_directory - KERNEL_VIRTUAL_BASE + 0], eax
+    mov [boot_page_directory - KERNEL_VIRTUAL_BASE + 768 * 4], eax ; 768 is 0xC0000000 / 4MB
+
+    ; Set cr3 to the address of the boot_page_directory.
+    mov ecx, boot_page_directory - KERNEL_VIRTUAL_BASE
+    mov cr3, ecx
+
+    ; Enable paging and the write-protect bit.
+    mov ecx, cr0
+    or ecx, 0x80010000
+    mov cr0, ecx
+
+    ; Jump to higher half with an absolute jump.
+    lea ecx, [rel higher_half]
+    jmp ecx
+
+section .higher_half
+higher_half:
+    ; At this point, paging is fully set up and enabled.
+
+    ; Unmap the identity mapping as it is now unnecessary.
+    mov dword [boot_page_directory + 0], 0
+
+    ; Reload cr3 to force a TLB flush so the changes to take effect.
+    mov ecx, cr3
+    mov cr3, ecx
+
+    ; Set up the stack.
+    mov esp, stack_top
+
+    ; Enter the high-level kernel.
+    add ebx, KERNEL_VIRTUAL_BASE
+    push ebx  ; save module structure pointer
     call kmain
 
-.loop:
-    jmp .loop                   ; loop forever
+    ; Infinite loop if the system has nothing more to do.
+    cli
 
-section .bss
-align 4 ; align at 4 bytes
-kernel_stack: ; label points to beginning of memory
-    resb KERNEL_STACK_SIZE ; reserve stack for the kernel
+halt_loop:
+    hlt
+    jmp halt_loop

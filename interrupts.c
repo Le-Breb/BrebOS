@@ -803,11 +803,23 @@ void idt_set_entry(struct idt_entry* idt, int num, unsigned int base, unsigned s
 	idt[num].offset0_15 = base & 0xFFFF;
 }
 
+void page_fault_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused]] struct stack_state stack_state){
+	unsigned int err = stack_state.error_code;
+	fb_write("Page fault:\n");
+
+	fb_write("Present: ");
+	fb_write(err & 1 ? "True": "False");
+	fb_write("\n");
+}
+
 void interrupt_handler([[maybe_unused]] struct cpu_state cpu_state, unsigned int interrupt, [[maybe_unused]] struct stack_state stack_state)
 {
 	switch (interrupt) {
 		case 0x21:
 			keyboard_interrupt_handler();
+			break;
+		case 0x0e:
+			page_fault_handler(cpu_state, stack_state);
 			break;
 		default:
 			break;

@@ -12,6 +12,7 @@
 #define FB_DARK_GREY 8
 #define FB_BLACK 0
 #define FB_WHITE 15
+#define FB_RED 4
 
 #define FB_WIDTH 80
 #define FB_HEIGHT 25
@@ -47,4 +48,6 @@ void fb_write_hex(unsigned int n);
 void fb_write_dec(unsigned int n);
 
 void fb_ok();
+
+void fb_error();
 #endif /* INCLUDE_FB_H */
