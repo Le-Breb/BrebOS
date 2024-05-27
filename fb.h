@@ -17,9 +17,9 @@
 #define FB_WIDTH 80
 #define FB_HEIGHT 25
 
-/** fb_write_cell:
-* Writes a character with the given foreground and background to position i
-* in the framebuffer.
+#define FB_ADDR 0xC03FF000
+
+/** Writes a character in the framebuffer.
 *
 * @param i The location in the framebuffer
 * @param c The character
@@ -29,25 +29,46 @@
 void fb_write_cell(unsigned int i, char c, unsigned char fg, unsigned char bg);
 
 
-/** fb_move_cursor:
-* Moves the cursor of the framebuffer to the given position
+/** Moves the cursor of the framebuffer to the given position
 *
 * @param pos The new position of the cursor
 */
 void fb_move_cursor(unsigned short pos);
 
-/** fb_clear_screen:
- * Clears the screen by filling the franbuffer with spaces with black bg and white fg
-*/
+/** Clear the screen */
 void fb_clear_screen();
 
+/** Write a string
+ *
+ * @param n String to print
+ */
 void fb_write(char* buf);
 
+/** Write a hexadecimal number
+ *
+ * @param n Number to print
+ */
 void fb_write_hex(unsigned int n);
 
+/** Write a decimal number
+ *
+ * @param n Number to print
+ */
 void fb_write_dec(unsigned int n);
 
+/** Write an ok decorator */
 void fb_ok();
 
+/** Write an error decorator */
 void fb_error();
+
+/** Write an error message with red error decorations
+ *
+ * @param msg Error message to print
+ */
+void fb_write_error_msg(char* msg);
+
+/** Scroll one line up  */
+void fb_scroll();
+
 #endif /* INCLUDE_FB_H */
