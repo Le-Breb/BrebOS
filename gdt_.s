@@ -1,14 +1,3 @@
-section .data
-gdt_start:
-    dq 0x0000000000000000  ; Null descriptor
-    dq 0x00CF9A000000FFFF  ; Code segment descriptor
-    dq 0x00CF92000000FFFF  ; Data segment descriptor
-gdt_end:
-
-gdt_pointer:
-    dw gdt_end - gdt_start - 1  ; Limit (size of GDT - 1)
-    dd gdt_start                ; Base address of GDT
-
 section .text
 global load_gdt ; make the label outb visible outside this file
                 ; load_gdt - load the gdt
@@ -33,3 +22,12 @@ load_gdt:
 
     ; Return from the function
     ret
+
+global load_tss
+load_tss:
+   mov ax, 0x2B      ; Load the index of our TSS structure - The index is
+                     ; 0x28, as it is the 5th selector and each is 8 bytes
+                     ; long, but we set the bottom two bits (making 0x2B)
+                     ; so that it has an RPL of 3, not zero.
+   ltr ax            ; Load 0x2B into the task state register.
+   ret

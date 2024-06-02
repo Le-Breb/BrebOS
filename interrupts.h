@@ -17,18 +17,22 @@
 /* The PIC interrupts have been remapped */
 #define PIC1_START_INTERRUPT 0x20
 #define PIC2_START_INTERRUPT 0x28
-#define PIC2_END_INTERRUPT   PIC2_START_INTERRUPT + 7
+#define PIC2_END_INTERRUPT (PIC2_START_INTERRUPT + 7)
 
 #define PIC_ACK     0x20
 
 #define INTGATE  0x8E00
+#define SYSCALL  0xEF00
 #define NUM_INTERRUPTS 0xFF
 
-struct idt
+// Interrupt Descriptor Table
+struct idt_descriptor
 {
 	unsigned short size;
 	void* address;
 } __attribute__ ((packed));
+
+typedef struct idt_descriptor idt_descriptor_t;
 
 struct idt_entry
 {
@@ -38,7 +42,10 @@ struct idt_entry
 	unsigned short offset16_31;
 } __attribute__ ((packed));
 
-/** pic_acknowledge:
+typedef struct idt_entry idt_entry_t;
+
+/**
+ * pic_acknowledge:
  *  Acknowledges an interrupt from either PIC 1 or PIC 2.
  *
  *  @param num The number of the interrupt
@@ -67,27 +74,69 @@ struct stack_state
 
 #define KBD_DATA_PORT   0x60
 
-/** read_scan_code:
+/**
  *  Reads a scan code from the keyboard
  *
  *  @return The scan code (NOT an ASCII character!)
  */
 unsigned char read_scan_code(void);
 
-void idt_init(struct idt* idt_ptr, struct idt_entry* idt);
+/**
+ * Initializes the IDT
+ *
+ * @param idt_descriptor IDT descriptor
+ * @param idt IDT table
+ */
+void idt_init(idt_descriptor_t * idt_descriptor, idt_entry_t * idt);
 
-void idt_set_entry(struct idt_entry* idt, int num, unsigned int base, unsigned short select, unsigned short type);
+/**
+ * Sets an entry in the IDT
+ *
+ * @param idt IDT table
+ * @param num The number of the interrupt
+ * @param base The base address of the interrupt handler
+ * @param select The selector
+ * @param type The type of the interrupt
+ */
+void idt_set_entry(idt_entry_t* idt, int num, unsigned int base, unsigned short select, unsigned short type);
 
-void load_idt(struct idt* idt_ptr);
+/**
+ * Loads the IDT
+ *
+ * @param idt_ptr The IDT descriptor
+ */
+void load_idt(idt_descriptor_t * idt_ptr);
 
+/**
+ * Generic interrupt handler that calls the appropriate interrupt handler
+ *
+ * @param cpu_state CPU state
+ * @param interrupt The interrupt number
+ * @param stack_state Stack state
+ */
 void interrupt_handler([[maybe_unused]] struct cpu_state cpu_state, unsigned int interrupt, [[maybe_unused]] struct stack_state stack_state);
 
+/**
+ * Remaps the PIC interrupts
+ *
+ * @param offset1 The offset for the first PIC
+ * @param offset2 The offset for the second PIC
+ */
 void pic_remap(int offset1, int offset2);
 
+/**
+ * Enables interrupts
+ */
 void enable_interrupts(void);
 
+/**
+ * Disables interrupts
+ */
 void disable_interrupts(void);
 
+/**
+ * Sets up the PIC
+ */
 void setup_pic();
 
 #endif /* INCLUDE_INTERRUPTS_H */

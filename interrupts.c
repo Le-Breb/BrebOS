@@ -514,6 +514,10 @@ extern void interrupt_handler_254();
 
 extern void interrupt_handler_255();
 
+void syscall_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused]] struct stack_state stack_state);
+
+void gpf_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused]] struct stack_state stack_state);
+
 unsigned char read_scan_code(void)
 {
 	return inb(KBD_DATA_PORT);
@@ -527,11 +531,11 @@ void pic_acknowledge(unsigned int interrupt)
 	outb(interrupt < PIC2_START_INTERRUPT ? PIC1 : PIC2, PIC_ACK);
 }
 
-void idt_init(struct idt* idt_ptr, struct idt_entry* idt)
+void idt_init(idt_descriptor_t * idt_descriptor, idt_entry_t * idt)
 {
 	// Use the macro to declare all interrupt handlers
-	idt_ptr->size = (sizeof(struct idt_entry)) * NUM_INTERRUPTS - 1;
-	idt_ptr->address = idt;
+	idt_descriptor->size = (sizeof(struct idt_entry)) * NUM_INTERRUPTS - 1;
+	idt_descriptor->address = idt;
 
 	idt_set_entry(idt, 0, (unsigned int) interrupt_handler_0, 0x08, INTGATE);
 	idt_set_entry(idt, 1, (unsigned int) interrupt_handler_1, 0x08, INTGATE);
@@ -661,7 +665,7 @@ void idt_init(struct idt* idt_ptr, struct idt_entry* idt)
 	idt_set_entry(idt, 125, (unsigned int) interrupt_handler_125, 0x08, INTGATE);
 	idt_set_entry(idt, 126, (unsigned int) interrupt_handler_126, 0x08, INTGATE);
 	idt_set_entry(idt, 127, (unsigned int) interrupt_handler_127, 0x08, INTGATE);
-	idt_set_entry(idt, 128, (unsigned int) interrupt_handler_128, 0x08, INTGATE);
+	idt_set_entry(idt, 128, (unsigned int) interrupt_handler_128, 0x08, SYSCALL);
 	idt_set_entry(idt, 129, (unsigned int) interrupt_handler_129, 0x08, INTGATE);
 	idt_set_entry(idt, 130, (unsigned int) interrupt_handler_130, 0x08, INTGATE);
 	idt_set_entry(idt, 131, (unsigned int) interrupt_handler_131, 0x08, INTGATE);
@@ -792,10 +796,10 @@ void idt_init(struct idt* idt_ptr, struct idt_entry* idt)
 
 
 	// Load the IDT
-	load_idt(idt_ptr);
+	load_idt(idt_descriptor);
 }
 
-void idt_set_entry(struct idt_entry* idt, int num, unsigned int base, unsigned short select, unsigned short type)
+void idt_set_entry(idt_entry_t* idt, int num, unsigned int base, unsigned short select, unsigned short type)
 {
 	idt[num].offset16_31 = (base >> 16) & 0xFFFF;
 	idt[num].select = select;
@@ -803,24 +807,63 @@ void idt_set_entry(struct idt_entry* idt, int num, unsigned int base, unsigned s
 	idt[num].offset0_15 = base & 0xFFFF;
 }
 
-void page_fault_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused]] struct stack_state stack_state){
+void page_fault_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused]] struct stack_state stack_state)
+{
 	unsigned int err = stack_state.error_code;
 	fb_write("Page fault:\n");
-
 	fb_write("Present: ");
 	fb_write(err & 1 ? "True": "False");
 	fb_write("\n");
+	fb_write("Write: ");
+	fb_write(err & 2 ? "True": "False");
+	fb_write("\n");
+	fb_write("User mode: ");
+	fb_write(err & 4 ? "True": "False");
+	fb_write("\n");
+	fb_write("Reserved: ");
+	fb_write(err & 8 ? "True": "False");
+	fb_write("\n");
+	fb_write("Instruction fetch: ");
+	fb_write(err & 16 ? "True": "False");
+	fb_write("\n");
+	fb_write("Protection key violation: ");
+	fb_write(err & 32 ? "True": "False");
+	fb_write("\n");
+	fb_write("Shadow stack: ");
+	fb_write(err & 64 ? "True": "False");
+	fb_write("\n");
+	fb_write("SGX: ");
+	fb_write(err & 32768 ? "True": "False");
+
+}
+
+void syscall_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused]] struct stack_state stack_state)
+{
+	fb_write("Syscall :D\n");
+}
+
+void gpf_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused]] struct stack_state stack_state)
+{
+	fb_write("General protection fault\n");
+	fb_write("Segment selector: ");
+	fb_write_hex(stack_state.error_code);
 }
 
 void interrupt_handler([[maybe_unused]] struct cpu_state cpu_state, unsigned int interrupt, [[maybe_unused]] struct stack_state stack_state)
 {
-	switch (interrupt) {
+	switch (interrupt)
+	{
 		case 0x21:
 			keyboard_interrupt_handler();
 			break;
 		case 0x0e:
 			page_fault_handler(cpu_state, stack_state);
 			break;
+		case 0xD:
+			gpf_handler(cpu_state, stack_state);
+			break;
+		case 0x80:
+			syscall_handler(cpu_state, stack_state);
 		default:
 			break;
 	}

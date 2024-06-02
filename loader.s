@@ -122,7 +122,6 @@ higher_half:
     mov esp, stack_top
 
     ; Enter the high-level kernel.
-    add ebx, KERNEL_VIRTUAL_BASE
     push ebx  ; save module structure pointer
     call kmain
 

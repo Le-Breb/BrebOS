@@ -13,6 +13,7 @@
 #define FB_BLACK 0
 #define FB_WHITE 15
 #define FB_RED 4
+#define FB_BLUE 1
 
 #define FB_WIDTH 80
 #define FB_HEIGHT 25
@@ -70,5 +71,7 @@ void fb_write_error_msg(char* msg);
 
 /** Scroll one line up  */
 void fb_scroll();
+
+void fb_write_info_msg(char* msg);
 
 #endif /* INCLUDE_FB_H */

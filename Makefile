@@ -1,4 +1,4 @@
-OBJECTS = $(BUILD_DIR)/loader.o $(BUILD_DIR)/io.o $(BUILD_DIR)/kmain.o $(BUILD_DIR)/fb.o $(BUILD_DIR)/gdt.o $(BUILD_DIR)/gdt_.o $(BUILD_DIR)/interrupts_.o $(BUILD_DIR)/interrupts.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/memory.o
+OBJECTS = $(BUILD_DIR)/loader.o $(BUILD_DIR)/io.o $(BUILD_DIR)/kmain.o $(BUILD_DIR)/fb.o $(BUILD_DIR)/gdt.o $(BUILD_DIR)/gdt_.o $(BUILD_DIR)/interrupts_.o $(BUILD_DIR)/interrupts.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/memory.o $(BUILD_DIR)/memory_.o
 CC = gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -c -g
 LDFLAGS = -T link.ld -melf_i386 -g
@@ -17,7 +17,7 @@ GRUB_TIMEOUT=0
 all: $(OS_ISO)
 
 program:
-	nasm -f bin program.s -o $(BUILD_DIR)/program
+	nasm -f bin -g program.s -o $(BUILD_DIR)/program
 
 kernel.elf: $(OBJECTS)
 	mkdir -p build

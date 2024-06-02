@@ -37,25 +37,25 @@ interrupt_handler_%1:
 %endmacro
 
 %macro save_regs 0
-    push    eax
-    push    ecx
-    push    edx
-    push    ebx
     push    esp
     push    ebp
-    push    esi
     push    edi
+    push    esi
+    push    edx
+    push    ecx
+    push    ebx
+    push    eax
 %endmacro
 
 %macro restore_regs 0
-    pop     edi
+    pop     eax
+    pop     ebx
+    pop     ecx
+    pop     edx
     pop     esi
+    pop     edi
     pop     ebp
     pop     esp
-    pop     ebx
-    pop     edx
-    pop     ecx
-    pop     eax
 %endmacro
 
 common_interrupt_handler:               ; the common parts of the generic interrupt handler

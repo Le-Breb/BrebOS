@@ -4,11 +4,11 @@
 #include "multiboot.h"
 #include "memory.h"
 
-struct gdt_entry gdt[3];
-struct gdt gdt_descriptor;
+gdt_entry_t gdt[GDT_ENTRIES];
+gdt_descriptor_t gdt_descriptor;
 
 struct idt_entry idt[256];
-struct idt idt_descriptor;
+struct idt_descriptor idt_descriptor;
 
 //Todo: Return pages to the page frame allocator when enough memory is freed
 int kmain([[maybe_unused]] unsigned int ebx)
@@ -34,37 +34,20 @@ int kmain([[maybe_unused]] unsigned int ebx)
 	enable_interrupts();
 	fb_ok();
 
-	fb_write("Initialize page bitmap\n");
-	init_mem();
+	fb_write("Initialize memory\n");
+	init_mem((multiboot_info_t*) (ebx + 0xC0000000));
 	fb_ok();
 
 	// Do stuff
-	int* a = malloc(10);
+	/*int* a = malloc(10);
 	*a = 2;
 	int* b = malloc(20);
 	*b = 2;
 
 	free(b);
-	free(a);
+	free(a);*/
 
-	/*multiboot_info_t *mbi = (multiboot_info_t *)ebx;
-	fb_write("Module loaded\n");
-	if (mbi->flags & MULTIBOOT_INFO_MODS && mbi->mods_count > 0)
-	{
-		fb_ok();
-		typedef void (* call_module_t)(void);
-		multiboot_module_t* address_of_module = (multiboot_module_t*)(mbi->mods_addr + 0xC0000000);
-
-		// Set module page as present
-		extern void boot_page_table1();
-		unsigned int* pt1 = (unsigned int*)boot_page_table1;
-		unsigned int page = (unsigned int)address_of_module->mod_start / 4096;
-		pt1[page] = page << 12 | 0x3; // Physical address << 12 | present | writable
-		call_module_t start_program = (call_module_t) address_of_module->mod_start + 0xC0000000;
-		start_program();
-	}
-	else
-		fb_error();*/
+	run_module(0);
 
 	//fb_clear_screen();
 	//fb_write("End of kernel\n");

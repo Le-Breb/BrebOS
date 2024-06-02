@@ -1,4 +1,4 @@
-ENTRY(loader)           /* the name of the entry symbol */
+ENTRY(_start)           /* the name of the entry symbol */
 
 SECTIONS {
     . = 0xC0100000;          /* the code should be relocated to 3GB + 1MB */
