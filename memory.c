@@ -2,6 +2,7 @@
 #include "fb.h"
 #include "gdt.h"
 #include "system.h"
+#include "lib/stdio.h"
 
 extern void boot_page_directory();
 
@@ -128,9 +129,7 @@ void init_page_bitmap()
 
 	lowest_free_page = 0;
 	for (; asm_pt1->entries[lowest_free_page] & PAGE_PRESENT; lowest_free_page++);
-	fb_write("Kernel spans over ");
-	fb_write_dec(lowest_free_page);
-	fb_write(" pages\n");
+	printf("Kernel spans over %u pages\n", lowest_free_page);
 
 	if (lowest_free_page == PT_ENTRIES)
 		fb_write_error_msg("Kernel needs more space than available in 1 page table\n");

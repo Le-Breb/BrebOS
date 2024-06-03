@@ -1,6 +1,7 @@
 OBJECTS = $(BUILD_DIR)/loader.o $(BUILD_DIR)/io.o $(BUILD_DIR)/kmain.o $(BUILD_DIR)/fb.o $(BUILD_DIR)/gdt.o \
 $(BUILD_DIR)/gdt_.o $(BUILD_DIR)/interrupts_.o $(BUILD_DIR)/interrupts.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/memory.o \
-$(BUILD_DIR)/memory_.o $(BUILD_DIR)/shutdown.o $(BUILD_DIR)/string.o $(BUILD_DIR)/system.o
+$(BUILD_DIR)/memory_.o $(BUILD_DIR)/shutdown.o $(BUILD_DIR)/string.o $(BUILD_DIR)/stdio.o $(BUILD_DIR)/system.o \
+$(BUILD_DIR)/cstddef.o $(BUILD_DIR)/ctype.o $(BUILD_DIR)/wchar.o $(BUILD_DIR)/stdint.o
 CC = i686-elf-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -c -g
 LDFLAGS = -T link.ld -melf_i386 -g

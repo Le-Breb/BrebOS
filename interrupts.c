@@ -2,6 +2,7 @@
 #include "fb.h"
 #include "keyboard.h"
 #include "memory.h"
+#include "lib/stdio.h"
 
 extern void interrupt_handler_0();
 
@@ -811,30 +812,15 @@ void idt_set_entry(idt_entry_t* idt, int num, unsigned int base, unsigned short 
 void page_fault_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused]] struct stack_state stack_state)
 {
 	unsigned int err = stack_state.error_code;
-	fb_write("Page fault:\n");
-	fb_write("Present: ");
-	fb_write(err & 1 ? "True": "False");
-	fb_write("\n");
-	fb_write("Write: ");
-	fb_write(err & 2 ? "True": "False");
-	fb_write("\n");
-	fb_write("User mode: ");
-	fb_write(err & 4 ? "True": "False");
-	fb_write("\n");
-	fb_write("Reserved: ");
-	fb_write(err & 8 ? "True": "False");
-	fb_write("\n");
-	fb_write("Instruction fetch: ");
-	fb_write(err & 16 ? "True": "False");
-	fb_write("\n");
-	fb_write("Protection key violation: ");
-	fb_write(err & 32 ? "True": "False");
-	fb_write("\n");
-	fb_write("Shadow stack: ");
-	fb_write(err & 64 ? "True": "False");
-	fb_write("\n");
-	fb_write("SGX: ");
-	fb_write(err & 32768 ? "True": "False");
+	printf("Page fault:\n");
+	printf("Present: %s\n", (err & 1 ? "True": "False"));
+	printf("Write: %s\n", err & 2 ? "True": "False");
+	printf("User mode: %s\n", err & 4 ? "True": "False");
+	printf("Reserved: %s\n", err & 8 ? "True": "False");
+	printf("Instruction fetch: %s\n", err & 16 ? "True": "False");
+	printf("Protection key violation: %s\n", err & 32 ? "True": "False");
+	printf("Shadow stack: %s\n", err & 64 ? "True": "False");
+	printf("SGX: %s\n", err & 32768 ? "True": "False");
 }
 
 void syscall_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused]] struct stack_state stack_state)
@@ -851,9 +837,8 @@ void syscall_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused
 
 void gpf_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused]] struct stack_state stack_state)
 {
-	fb_write("General protection fault\n");
-	fb_write("Segment selector: ");
-	fb_write_hex(stack_state.error_code);
+	printf("General protection fault\n");
+	printf("Segment selector: %x\n", stack_state.error_code);
 }
 
 void interrupt_handler([[maybe_unused]] struct cpu_state cpu_state, unsigned int interrupt, [[maybe_unused]] struct stack_state stack_state)

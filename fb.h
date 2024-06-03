@@ -20,14 +20,15 @@
 
 #define FB_ADDR 0xC03FF000
 
-/** Writes a character in the framebuffer.
+/**
+ * Writes a character in the framebuffer.
 *
 * @param i The location in the framebuffer
 * @param c The character
-* @param fg The foreground color
-* @param bg The background color
+* @param bg The foreground color
+* @param fg The background color
 */
-void fb_write_cell(unsigned int i, char c, unsigned char fg, unsigned char bg);
+void fb_write_cell(unsigned int i, char c, unsigned char bg, unsigned char fg);
 
 
 /** Moves the cursor of the framebuffer to the given position
@@ -45,18 +46,6 @@ void fb_clear_screen();
  */
 void fb_write(char* buf);
 
-/** Write a hexadecimal number
- *
- * @param n Number to print
- */
-void fb_write_hex(unsigned int n);
-
-/** Write a decimal number
- *
- * @param n Number to print
- */
-void fb_write_dec(unsigned int n);
-
 /** Write an ok decorator */
 void fb_ok();
 
@@ -72,6 +61,16 @@ void fb_write_error_msg(char* msg);
 /** Scroll one line up  */
 void fb_scroll();
 
+/** Write an info message with green ok decorations
+ *
+ * @param msg Info message to print
+ */
 void fb_write_info_msg(char* msg);
+
+/** Write a character to the framebuffer
+ *
+ * @param c Character to print
+ */
+void fb_write_char(char c);
 
 #endif /* INCLUDE_FB_H */
