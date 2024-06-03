@@ -5,6 +5,15 @@ reload_cr3:
     mov cr3,ecx
     ret
 
+; Set a new pdt
+; [esp + 0] call function ret addr
+; [esp + 4] new pdt physical address
+global change_pdt
+change_pdt:
+    mov eax, [esp + 4]
+    mov cr3, eax
+    ret
+
 ; Run a program in user mode
 ; Doc: //https://web.archive.org/web/20220426003110/http://www.jamesmolloy.co.uk/tutorial_html/10.-User%20Mode.html
 ; [esp +  0] = call function ret addr
@@ -16,9 +25,10 @@ reload_cr3:
 ; [esp + 24] = program ss
 global user_mode_jump
 user_mode_jump:
-.change_pdt:
+.change_to_process_pdt:
     mov eax, [esp + 4]
     mov cr3, eax
+
 
 .set_data_segments:
     mov eax, [esp + 24]

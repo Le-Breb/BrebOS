@@ -115,4 +115,7 @@ void allocate_page_user(unsigned int phys_page_id, unsigned int page_id);
 void user_mode_jump(unsigned int pdt, unsigned int eip, unsigned int cs, unsigned int eflags, unsigned int esp,
 					unsigned int ss);
 
+/** Terminate currently executing program */
+void process_exit();
+
 #endif //INCLUDE_MEMORY_H

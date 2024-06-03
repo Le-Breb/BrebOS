@@ -1,6 +1,7 @@
 #include "interrupts.h"
 #include "fb.h"
 #include "keyboard.h"
+#include "memory.h"
 
 extern void interrupt_handler_0();
 
@@ -834,12 +835,18 @@ void page_fault_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unu
 	fb_write("\n");
 	fb_write("SGX: ");
 	fb_write(err & 32768 ? "True": "False");
-
 }
 
 void syscall_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused]] struct stack_state stack_state)
 {
-	fb_write("Syscall :D\n");
+	switch (cpu_state.eax) {
+		case 1:
+			process_exit();
+			break;
+		default:
+			fb_write("Syscall :D\n");
+			break;
+		}
 }
 
 void gpf_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused]] struct stack_state stack_state)

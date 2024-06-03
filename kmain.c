@@ -3,12 +3,15 @@
 #include "interrupts.h"
 #include "multiboot.h"
 #include "memory.h"
+#include "system.h"
 
 gdt_entry_t gdt[GDT_ENTRIES];
 gdt_descriptor_t gdt_descriptor;
 
 struct idt_entry idt[256];
 struct idt_descriptor idt_descriptor;
+
+
 
 //Todo: Return pages to the page frame allocator when enough memory is freed
 int kmain([[maybe_unused]] unsigned int ebx)
@@ -50,7 +53,6 @@ int kmain([[maybe_unused]] unsigned int ebx)
 	run_module(0);
 
 	//fb_clear_screen();
-	//fb_write("End of kernel\n");
 
-	return 0;
+	return shutdown();
 }
