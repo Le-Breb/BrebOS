@@ -4,6 +4,7 @@
 #include "multiboot.h"
 #include "memory.h"
 #include "system.h"
+#include "process.h"
 
 gdt_entry_t gdt[GDT_ENTRIES];
 gdt_descriptor_t gdt_descriptor;
@@ -50,7 +51,7 @@ int kmain([[maybe_unused]] unsigned int ebx)
 	free(b);
 	free(a);*/
 
-	run_module(0);
+	run_module(0, get_grub_modules(), get_page_tables());
 
 	//fb_clear_screen();
 

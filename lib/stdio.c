@@ -558,3 +558,31 @@ __attribute__ ((format (printf, 1, 2))) int printf(const char* format, ...)
 	va_end (list);
 	return i;
 }
+
+__attribute__ ((format (printf, 1, 2))) int printf_error(const char* format, ...)
+{
+	fb_error_();
+	fb_write_cell(' ');
+	va_list list;
+	va_start (list, format);
+	int i = vprintf(format, list);
+	va_end (list);
+	fb_write_cell(' ');
+	fb_error();
+
+	return i;
+}
+
+__attribute__ ((format (printf, 1, 2))) int printf_info(const char* format, ...)
+{
+	fb_info_();
+	fb_write_cell(' ');
+	va_list list;
+	va_start (list, format);
+	int i = vprintf(format, list);
+	va_end (list);
+	fb_write_cell(' ');
+	fb_info();
+
+	return i;
+}

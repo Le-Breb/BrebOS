@@ -3,6 +3,7 @@
 #include "keyboard.h"
 #include "memory.h"
 #include "lib/stdio.h"
+#include "process.h"
 
 extern void interrupt_handler_0();
 
@@ -812,7 +813,7 @@ void idt_set_entry(idt_entry_t* idt, int num, unsigned int base, unsigned short 
 void page_fault_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused]] struct stack_state stack_state)
 {
 	unsigned int err = stack_state.error_code;
-	printf("Page fault:\n");
+	printf_error("Page fault");
 	printf("Present: %s\n", (err & 1 ? "True": "False"));
 	printf("Write: %s\n", err & 2 ? "True": "False");
 	printf("User mode: %s\n", err & 4 ? "True": "False");
@@ -827,7 +828,7 @@ void syscall_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused
 {
 	switch (cpu_state.eax) {
 		case 1:
-			process_exit();
+			process_exit(get_pdt(), get_page_tables(), get_stack_top_ptr());
 			break;
 		default:
 			fb_write("Syscall :D\n");
@@ -837,7 +838,7 @@ void syscall_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused
 
 void gpf_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused]] struct stack_state stack_state)
 {
-	printf("General protection fault\n");
+	printf_error("General protection fault");
 	printf("Segment selector: %x\n", stack_state.error_code);
 }
 

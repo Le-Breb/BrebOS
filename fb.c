@@ -2,8 +2,10 @@
 #include "io.h"
 #include "lib/string.h"
 
-int caret_pos = 0; /* Framebuffer index */
+unsigned int caret_pos = 0; /* Framebuffer index */
 short* const fb = (short*) FB_ADDR;
+unsigned char BG = FB_BLACK;
+unsigned char FG = FB_WHITE;
 
 void fb_scroll()
 {
@@ -15,13 +17,13 @@ void fb_scroll()
 		fb[FB_WIDTH * (FB_HEIGHT - 1) + i] = ' ';
 }
 
-void fb_write_cell(unsigned int i, char c, unsigned char bg, unsigned char fg)
+void fb_write_cell(char c)
 {
 	// Scroll if buffer full
-	if (i == FB_WIDTH * FB_HEIGHT)
+	if (caret_pos == FB_WIDTH * FB_HEIGHT)
 	{
 		fb_scroll();
-		i -= FB_WIDTH;
+		caret_pos -= FB_WIDTH;
 	}
 	if (c == '\n')
 	{
@@ -37,7 +39,7 @@ void fb_write_cell(unsigned int i, char c, unsigned char bg, unsigned char fg)
 	}
 
 	// Write to fb
-	fb[i] = (short) ((((bg & 0x0F) << 4) | (fg & 0x0F)) << 8 | c);
+	fb[caret_pos++] = (short) ((((BG & 0x0F) << 4) | (FG & 0x0F)) << 8 | c);
 }
 
 void fb_move_cursor(unsigned short pos)
@@ -50,84 +52,74 @@ void fb_move_cursor(unsigned short pos)
 
 void fb_clear_screen()
 {
+	caret_pos = 0;
 	for (int i = 0; i < FB_HEIGHT * FB_WIDTH; i++)
-		fb_write_cell(i, ' ', FB_BLACK, FB_WHITE);
+		fb_write_cell(' ');
+	caret_pos = 0;
 }
 
 void fb_write(char* buf)
 {
 	for (unsigned int i = 0; i < strlen(buf); i++)
-		fb_write_cell(caret_pos++, buf[i], FB_BLACK, FB_WHITE);
+		fb_write_cell(buf[i]);
 }
 
 void fb_ok()
 {
-	fb_write_cell(caret_pos++, '[', FB_BLACK, FB_WHITE);
-	fb_write_cell(caret_pos++, 'O', FB_BLACK, FB_GREEN);
-	fb_write_cell(caret_pos++, 'K', FB_BLACK, FB_GREEN);
-	fb_write_cell(caret_pos++, ']', FB_BLACK, FB_WHITE);
-	fb_write_cell(caret_pos++, '\n', FB_BLACK, FB_WHITE);
+	fb_ok_();
+	fb_write_cell('\n');
 }
 
 void fb_error()
 {
-	fb_write_cell(caret_pos++, '[', FB_BLACK, FB_WHITE);
-	fb_write_cell(caret_pos++, 'E', FB_BLACK, FB_RED);
-	fb_write_cell(caret_pos++, 'R', FB_BLACK, FB_RED);
-	fb_write_cell(caret_pos++, 'R', FB_BLACK, FB_RED);
-	fb_write_cell(caret_pos++, 'O', FB_BLACK, FB_RED);
-	fb_write_cell(caret_pos++, 'R', FB_BLACK, FB_RED);
-	fb_write_cell(caret_pos++, ']', FB_BLACK, FB_WHITE);
-	fb_write_cell(caret_pos++, '\n', FB_BLACK, FB_WHITE);
+	fb_error_();
+	fb_write_cell('\n');
 }
 
-void fb_write_error_msg(char* msg)
+void fb_info()
 {
-	fb_write_cell(caret_pos++, '[', FB_BLACK, FB_WHITE);
-	fb_write_cell(caret_pos++, 'E', FB_BLACK, FB_RED);
-	fb_write_cell(caret_pos++, 'R', FB_BLACK, FB_RED);
-	fb_write_cell(caret_pos++, 'R', FB_BLACK, FB_RED);
-	fb_write_cell(caret_pos++, 'O', FB_BLACK, FB_RED);
-	fb_write_cell(caret_pos++, 'R', FB_BLACK, FB_RED);
-	fb_write_cell(caret_pos++, ']', FB_BLACK, FB_WHITE);
-	fb_write_cell(caret_pos++, ' ', FB_BLACK, FB_WHITE);
-
-	fb_write(msg);
-
-	fb_write_cell(caret_pos++, ' ', FB_BLACK, FB_WHITE);
-	fb_write_cell(caret_pos++, '[', FB_BLACK, FB_WHITE);
-	fb_write_cell(caret_pos++, 'E', FB_BLACK, FB_RED);
-	fb_write_cell(caret_pos++, 'R', FB_BLACK, FB_RED);
-	fb_write_cell(caret_pos++, 'R', FB_BLACK, FB_RED);
-	fb_write_cell(caret_pos++, 'O', FB_BLACK, FB_RED);
-	fb_write_cell(caret_pos++, 'R', FB_BLACK, FB_RED);
-	fb_write_cell(caret_pos++, ']', FB_BLACK, FB_WHITE);
-	fb_write_cell(caret_pos++, '\n', FB_BLACK, FB_WHITE);
+	fb_info_();
+	fb_write_cell('\n');
 }
 
-void fb_write_info_msg(char* msg)
+void fb_ok_()
 {
-	fb_write_cell(caret_pos++, '[', FB_BLACK, FB_WHITE);
-	fb_write_cell(caret_pos++, 'I', FB_BLACK, FB_BLUE);
-	fb_write_cell(caret_pos++, 'N', FB_BLACK, FB_BLUE);
-	fb_write_cell(caret_pos++, 'F', FB_BLACK, FB_BLUE);
-	fb_write_cell(caret_pos++, 'O', FB_BLACK, FB_BLUE);
-	fb_write_cell(caret_pos++, ']', FB_BLACK, FB_WHITE);
-	fb_write_cell(caret_pos++, ' ', FB_BLACK, FB_WHITE);
+	fb_write_cell('[');
+	fb_set_fg(FB_GREEN);
+	fb_write("OK");
+	fb_set_fg(FB_WHITE);
+	fb_write_cell(']');
+}
 
-	fb_write(msg);
+void fb_error_()
+{
+	fb_write_cell('[');
+	fb_set_fg(FB_RED);
+	fb_write("ERROR");
+	fb_set_fg(FB_WHITE);
+	fb_write_cell(']');
+}
 
-	fb_write_cell(caret_pos++, '[', FB_BLACK, FB_WHITE);
-	fb_write_cell(caret_pos++, 'I', FB_BLACK, FB_BLUE);
-	fb_write_cell(caret_pos++, 'N', FB_BLACK, FB_BLUE);
-	fb_write_cell(caret_pos++, 'F', FB_BLACK, FB_BLUE);
-	fb_write_cell(caret_pos++, 'O', FB_BLACK, FB_BLUE);
-	fb_write_cell(caret_pos++, ']', FB_BLACK, FB_WHITE);
-
-	fb_write_cell(caret_pos++, '\n', FB_BLACK, FB_WHITE);
+void fb_info_()
+{
+	fb_write_cell('[');
+	fb_set_fg(FB_BLUE);
+	fb_write("INFO");
+	fb_set_fg(FB_WHITE);
+	fb_write_cell(']');
 }
 
 void fb_write_char(char c)
 {
-	fb_write_cell(caret_pos++, c, FB_BLACK, FB_WHITE);
+	fb_write_cell(c);
+}
+
+void fb_set_fg(unsigned char fg)
+{
+	FG = fg;
+}
+
+void fb_set_bg(unsigned char bg)
+{
+	BG = bg;
 }

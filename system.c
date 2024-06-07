@@ -1,6 +1,6 @@
 #include "system.h"
 #include "io.h"
-#include "fb.h"
+#include "lib/stdio.h"
 
 int shutdown()
 {
@@ -13,7 +13,7 @@ int shutdown()
 		io_wait();
 	}
 	else
-		fb_write_info_msg("System halted (Hardware shutdown not implemented)");
+		printf_info("System halted (Hardware shutdown not implemented)");
 
 
 	return 0;

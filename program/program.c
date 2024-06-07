@@ -3,7 +3,7 @@
 int p_main()
 {
 	char str[] = "Hello, World!";
-	strlen(str);
+	memset(str, 0, 14);
 
 	return 0;
 }

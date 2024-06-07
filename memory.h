@@ -17,13 +17,14 @@
 #define STACK_SIZE 4096
 
 #define PAGE_ID_PHYS_ADDR(i) (i * PAGE_SIZE)
-#define VIRTUAL_ADDRESS(gdt_entry, pt_entry, offset) (gdt_entry << 22 | pt_entry << 12 | offset)
-#define PAGE_ENTRY_ID_PHYS_ADDR(i) (PAGE_ID_PHYS_ADDR((PDT_ENTRIES + i)))
-#define PAGE_ENTRY_USED(i) (PAGE_ENTRY(i) & PAGE_PRESENT)
-#define PAGE_ENTRY(i) (page_tables[i / PDT_ENTRIES].entries[i % PDT_ENTRIES])
+#define VIRTUAL_ADDRESS(pde, pte, offset) (pde << 22 | pte << 12 | offset)
+#define PTE_PHYS_ADDR(i) (PAGE_ID_PHYS_ADDR((PDT_ENTRIES + i)))
+#define PTE_USED(i) (PAGE_ENTRY(i) & PAGE_PRESENT)
+#define PTE(i) (page_tables[i / PDT_ENTRIES].entries[i % PDT_ENTRIES])
 #define PAGE_USED(i) page_bitmap[i / 32] & (1 << (i % 32))
 #define PAGE_FREE(i) !(PAGE_USED(i))
 #define MARK_PAGE_AS_ALLOCATED(i) page_bitmap[i / 32] |= 1 << (i % 32)
+#define MARK_PAGE_AS_FREE(i) page_bitmap[i / 32] &= ~(1 << (i % 32))
 #define PHYS_ADDR(virt_addr) (page_tables[virt_addr >> 22].entries[(virt_addr >> 12) & 0x3FF] & ~0x3FF)
 
 //https://wiki.osdev.org/Paging
@@ -55,14 +56,14 @@ typedef struct
 	page_table_t page_tables[PDT_ENTRIES];
 	pdt_t pdt;
 	multiboot_module_t* module;
+	unsigned int num_pages; // Num pages over which the process code spans
+	unsigned int* page_table_entries; // Array of pte where the process code is loaded to
 } process;
 
 typedef struct
 {
 	unsigned int start_addr, size;
 } GRUB_module;
-
-void* allocate_page_frame();
 
 /** Initialize memory, by referencing free pages, allocating pages to store 1024 pages tables
  *
@@ -77,17 +78,27 @@ void init_mem(multiboot_info_t* minfo);
  */
 void* malloc(unsigned int n);
 
+/**
+ * Allocate page-aligned memory
+ *
+ * @param size Size of memory to allocate
+ *
+ * @return Pointer to page-aligned memory
+ */
+void* page_aligned_malloc(unsigned int size);
+
 /** Frees some memory
  *
  * @param ptr Pointer to the memory block to free
  */
 void free(void* ptr);
 
-/** Run a GRUB module
+/**
+ * Free page-aligned memory
  *
- * @param module Module id
+ * @param ptr Pointer to page-aligned memory to free
  */
-void run_module(unsigned int module);
+void page_aligned_free(void* ptr);
 
 /** Allocate a page
  *
@@ -103,6 +114,12 @@ void allocate_page(unsigned int phys_page_id, unsigned int page_id);
  */
 void allocate_page_user(unsigned int phys_page_id, unsigned int page_id);
 
+/**
+ * Free a page
+ * @param page_id Page id
+ */
+void free_page(unsigned int page_id);
+
 /** Switch to user mode. External assembly function
  *
  * @param pdt PDT physical address
@@ -115,7 +132,22 @@ void allocate_page_user(unsigned int phys_page_id, unsigned int page_id);
 void user_mode_jump(unsigned int pdt, unsigned int eip, unsigned int cs, unsigned int eflags, unsigned int esp,
 					unsigned int ss);
 
-/** Terminate currently executing program */
-void process_exit();
+/** Get index of lowest free page id and update lowest_free_page to next free page id */
+unsigned int get_free_page();
+
+/** Get index of lowest free page entry id and update lowest_free_page_entry to next free page id */
+unsigned int get_free_page_entry();
+
+/** Get pdt */
+pdt_t* get_pdt();
+
+/** Get page tables */
+page_table_t* get_page_tables();
+
+/** Get grub modules */
+GRUB_module* get_grub_modules();
+
+/** Get pointer to top of kernel stack */
+unsigned int* get_stack_top_ptr();
 
 #endif //INCLUDE_MEMORY_H

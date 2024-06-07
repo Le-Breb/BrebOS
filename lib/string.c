@@ -30,3 +30,11 @@ void strcat(char* dest, const char* src)
 		*dest++ = *src++;
 	*dest = '\0';
 }
+
+void memcpy(void* dest, const void* src, unsigned long num)
+{
+	unsigned char* d = (unsigned char*) dest;
+	const unsigned char* s = (const unsigned char*) src;
+	for (unsigned long i = 0; i < num; i++)
+		d[i] = s[i];
+}

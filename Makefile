@@ -1,8 +1,8 @@
 OBJECTS = $(BUILD_DIR)/loader.o $(BUILD_DIR)/io.o $(BUILD_DIR)/kmain.o $(BUILD_DIR)/fb.o $(BUILD_DIR)/gdt.o \
 $(BUILD_DIR)/gdt_.o $(BUILD_DIR)/interrupts_.o $(BUILD_DIR)/interrupts.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/memory.o \
 $(BUILD_DIR)/memory_.o $(BUILD_DIR)/shutdown.o $(BUILD_DIR)/string.o $(BUILD_DIR)/stdio.o $(BUILD_DIR)/system.o \
-$(BUILD_DIR)/cstddef.o $(BUILD_DIR)/ctype.o $(BUILD_DIR)/wchar.o $(BUILD_DIR)/stdint.o
-CC = i686-elf-gcc
+$(BUILD_DIR)/cstddef.o $(BUILD_DIR)/ctype.o $(BUILD_DIR)/wchar.o $(BUILD_DIR)/stdint.o $(BUILD_DIR)/process.o
+CC = /home/mat/opt/cross/bin/i686-elf-gcc # For some reason CLion does not read PATH entry where cross gcc path is set
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -c -g
 LDFLAGS = -T link.ld -melf_i386 -g
 AS = nasm
@@ -24,7 +24,7 @@ all: $(OS_ISO)
 program:
 	#nasm -f bin -g program.s -o $(BUILD_DIR)/program
 	#ld  -T program/link_program.ld $(BUILD_DIR)/start_program.o $(BUILD_DIR)/program.o -melf_i386 -o $(BUILD_DIR)/program
-	nasm -f elf32 -g program/start_program.s -o $(BUILD_DIR)/start_program.o
+	nasm -f elf32 program/start_program.s -o $(BUILD_DIR)/start_program.o
 	$(CC) $(CFLAGS) program/program.c -o $(BUILD_DIR)/program.o
 	ld  -T program/link_program.ld $(BUILD_DIR)/start_program.o $(BUILD_DIR)/program.o $(BUILD_DIR)/string.o -melf_i386 -o $(BUILD_DIR)/program
 

@@ -28,7 +28,7 @@
 * @param bg The foreground color
 * @param fg The background color
 */
-void fb_write_cell(unsigned int i, char c, unsigned char bg, unsigned char fg);
+void fb_write_cell(char c);
 
 
 /** Moves the cursor of the framebuffer to the given position
@@ -52,25 +52,37 @@ void fb_ok();
 /** Write an error decorator */
 void fb_error();
 
-/** Write an error message with red error decorations
- *
- * @param msg Error message to print
- */
-void fb_write_error_msg(char* msg);
+/** Write an info decorator */
+void fb_info();
+
+/** Write an ok decorator without trailing newline */
+void fb_ok_();
+
+/** Write an error decorator without trailing newline */
+void fb_error_();
+
+/** Write an info decorator without trailing newline*/
+void fb_info_();
 
 /** Scroll one line up  */
 void fb_scroll();
-
-/** Write an info message with green ok decorations
- *
- * @param msg Info message to print
- */
-void fb_write_info_msg(char* msg);
 
 /** Write a character to the framebuffer
  *
  * @param c Character to print
  */
 void fb_write_char(char c);
+
+/**
+ * Set foreground color
+ * @param fg foreground code
+ */
+void fb_set_fg(unsigned char fg);
+
+/**
+ * Set background color
+ * @param bg foreground code
+ */
+void fb_set_bg(unsigned char bg);
 
 #endif /* INCLUDE_FB_H */

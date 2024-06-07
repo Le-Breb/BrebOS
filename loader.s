@@ -24,14 +24,6 @@ align 4
     dd FLAGS
     dd CHECKSUM
 
-; Allocate the initial stack.
-section .bootstrap_stack
-align 4
-stack_bottom:
-    resb 16384   ; 16 KiB
-global stack_top
-stack_top:
-
 ; Preallocate pages used for paging. Don't hard-code addresses and assume they
 ; are available, as the bootloader might have loaded its multiboot structures or
 ; modules there. This lets the bootloader know it must avoid the addresses.
@@ -43,6 +35,13 @@ boot_page_directory:
 global boot_page_table1
 boot_page_table1:
     resb 4096
+
+; Allocate the initial stack.
+align 4
+stack_bottom:
+    resb 16384   ; 16 KiB
+global stack_top
+stack_top:
 ; Further page tables may be required if the kernel grows beyond 3 MiB.
 
 ; The kernel entry point.

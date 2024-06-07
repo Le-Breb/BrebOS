@@ -1,7 +1,4 @@
 #include "memory.h"
-#include "fb.h"
-#include "gdt.h"
-#include "system.h"
 #include "lib/stdio.h"
 
 extern void boot_page_directory();
@@ -21,28 +18,17 @@ memory_header base = {.s = {&base, 0}};
 memory_header* freep; /* Lowest free block */
 
 unsigned int loaded_grub_modules = 0;
-GRUB_module grubModules[10];
-process* running_process = 0x00;
+GRUB_module* grub_modules;
 
 extern void stack_top();
 
-unsigned int* stack_top_ptr = (unsigned int*)stack_top;
+unsigned int* stack_top_ptr = (unsigned int*) stack_top;
 
 /** Tries to allocate a contiguous block of memory
  * @param n Size of the block in bytes
  *  @return A pointer to a contiguous block of n bytes or NULL if memory is full
  */
 void* sbrk(unsigned int n);
-
-void set_pdt_entry(pdt_t* pdt, unsigned int num, unsigned int base, char access);
-
-void set_pt_entry(page_table_t* pt, unsigned int num, unsigned int base, char access);
-
-/** Get index of lowest free page id and update lowest_free_page to next free page id */
-unsigned int get_free_page();
-
-/** Get index of lowest free page entry id and update lowest_free_page_entry to next free page id */
-unsigned int get_free_page_entry();
 
 void init_page_bitmap();
 
@@ -53,6 +39,7 @@ void init_page_bitmap();
  */
 memory_header* more_kernel(unsigned int n);
 
+/** Reload cr3 which will acknowledge every pte change and invalidate TLB */
 extern void reload_cr3();
 
 /** Allocate 1024 pages to store the 1024 page tables required to map all the memory. \n
@@ -74,6 +61,20 @@ void allocate_page_tables();
  */
 void load_grub_modules(struct multiboot_info* multibootInfo);
 
+/**
+ * Load a flat binary file in memory
+ * @param module GRUB module id
+ * @return process instance
+ */
+process* load_binary(unsigned int module, GRUB_module* grub_modules);
+
+/**
+ * Load an elf in memory
+ * @param module GRUB module id
+ * @return process instance
+ */
+process* load_elf(unsigned int module, GRUB_module* grub_modules);
+
 unsigned int get_free_page()
 {
 	unsigned int page = lowest_free_page;
@@ -89,28 +90,12 @@ unsigned int get_free_page_entry()
 {
 	unsigned int page_entry = lowest_free_page_entry;
 	unsigned int i = lowest_free_page_entry + 1;
-	while (i < PDT_ENTRIES * PT_ENTRIES && PAGE_ENTRY(i) & PAGE_PRESENT)
+	while (i < PDT_ENTRIES * PT_ENTRIES && PTE(i) & PAGE_PRESENT)
 		i++;
 	lowest_free_page_entry = i;
 
 	return page_entry;
 }
-
-/**
- * Allocate page-aligned memory
- *
- * @param size Size of memory to allocate
- *
- * @return Pointer to page-aligned memory
- */
-void* page_aligned_malloc(unsigned int size);
-
-/**
- * Free page-aligned memory
- *
- * @param ptr Pointer to page-aligned memory to free
- */
-void page_aligned_free(void* ptr);
 
 void init_page_bitmap()
 {
@@ -129,10 +114,10 @@ void init_page_bitmap()
 
 	lowest_free_page = 0;
 	for (; asm_pt1->entries[lowest_free_page] & PAGE_PRESENT; lowest_free_page++);
-	printf("Kernel spans over %u pages\n", lowest_free_page);
+	printf_info("Kernel spans over %u pages", lowest_free_page);
 
 	if (lowest_free_page == PT_ENTRIES)
-		fb_write_error_msg("Kernel needs more space than available in 1 page table\n");
+		printf_error("Kernel needs more space than available in 1 page table\n");
 }
 
 void allocate_page_tables()
@@ -185,13 +170,13 @@ void allocate_page_tables()
 		page_tables[768].entries[i] = asm_pt1->entries[i];
 
 	for (int i = 0; i < 768; ++i)
-		pdt->entries[i] = PAGE_ENTRY_ID_PHYS_ADDR(i) | PAGE_PRESENT | PAGE_WRITE;
+		pdt->entries[i] = PTE_PHYS_ADDR(i) | PAGE_PRESENT | PAGE_WRITE;
 
 	// Update pdt[entry] to point to new location of kernel page table
 	pdt->entries[768] = PAGE_ID_PHYS_ADDR((PDT_ENTRIES + 768)) | (pdt->entries[768] & 0x3FF);
 
 	for (int i = 770; i < PDT_ENTRIES; ++i)
-		pdt->entries[i] = PAGE_ENTRY_ID_PHYS_ADDR(i) | PAGE_PRESENT | PAGE_WRITE;
+		pdt->entries[i] = PTE_PHYS_ADDR(i) | PAGE_PRESENT | PAGE_WRITE;
 
 	// Deallocate asm_pt1's page
 	page_tables[768].entries[asm_pt1_page_table_entry] = 0;
@@ -203,6 +188,8 @@ void allocate_page_tables()
 
 void load_grub_modules(struct multiboot_info* multibootInfo)
 {
+	grub_modules = malloc(multibootInfo->mods_count * sizeof(GRUB_module));
+
 	for (unsigned int i = 0; i < multibootInfo->mods_count; ++i)
 	{
 		multiboot_module_t* module = &((multiboot_module_t*) (multibootInfo->mods_addr + 0xC0000000))[i];
@@ -214,8 +201,8 @@ void load_grub_modules(struct multiboot_info* multibootInfo)
 
 		unsigned int page_entry_id = lowest_free_page_entry;
 
-		grubModules[i].start_addr = ((page_entry_id / PDT_ENTRIES) << 22) | ((page_entry_id % PDT_ENTRIES)<< 12);
-		grubModules[i].size = mod_size;
+		grub_modules[i].start_addr = ((page_entry_id / PDT_ENTRIES) << 22) | ((page_entry_id % PDT_ENTRIES) << 12);
+		grub_modules[i].size = mod_size;
 
 		// Mark module's code pages as allocated and user accessible
 		for (unsigned int j = 0; j < required_pages; ++j)
@@ -236,9 +223,8 @@ void init_mem(struct multiboot_info* multibootInfo)
 {
 	init_page_bitmap();
 	allocate_page_tables();
-	load_grub_modules(multibootInfo);
-
 	freep = &base;
+	load_grub_modules(multibootInfo);
 }
 
 void* sbrk(unsigned int n)
@@ -262,7 +248,7 @@ void* sbrk(unsigned int n)
 		unsigned int j = b;
 
 		// Explore contiguous free blocks while explored block size does not fulfill the request
-		while (!(PAGE_ENTRY(b) & PAGE_PRESENT) && rem > 0)
+		while (!(PTE(b) & PAGE_PRESENT) && rem > 0)
 		{
 			j++;
 			rem -= 1;
@@ -285,7 +271,7 @@ void* sbrk(unsigned int n)
 		allocate_page(get_free_page(), i);
 
 	lowest_free_page_entry = e;
-	while (PAGE_ENTRY(lowest_free_page_entry) & PAGE_PRESENT)
+	while (PTE(lowest_free_page_entry) & PAGE_PRESENT)
 		lowest_free_page_entry++;
 
 	// Allocated memory block virtually starts at page b. Return it.
@@ -374,18 +360,38 @@ void free(void* ptr)
 
 void allocate_page(unsigned int phys_page_id, unsigned int page_id)
 {
-	unsigned int pdt_entry = page_id / PDT_ENTRIES;
-	unsigned int pt_entry = page_id % PDT_ENTRIES;
-    page_tables[pdt_entry].entries[pt_entry] = PAGE_ID_PHYS_ADDR(phys_page_id) | PAGE_WRITE | PAGE_PRESENT; \
-    MARK_PAGE_AS_ALLOCATED(phys_page_id);
+	// Compute indexes
+	unsigned int pde = page_id / PDT_ENTRIES;
+	unsigned int pte = page_id % PDT_ENTRIES;
+
+	// Write PTE
+	page_tables[pde].entries[pte] = PAGE_ID_PHYS_ADDR(phys_page_id) | PAGE_WRITE | PAGE_PRESENT;
+	MARK_PAGE_AS_ALLOCATED(phys_page_id); // Internal allocation registration
+}
+
+void free_page(unsigned int page_id)
+{
+	// Compute indexes
+	unsigned int pde = page_id / PDT_ENTRIES;
+	unsigned int pte = page_id % PDT_ENTRIES;
+
+	unsigned int phys_page_id = PTE(page_id) >> 12;
+
+	// Write PTE
+	page_tables[pde].entries[pte] = 0;
+	__asm__("invlpg (%0)" : : "r" (VIRTUAL_ADDRESS(pde, pte, 0))); // Invalidate TLB entry
+	MARK_PAGE_AS_FREE(phys_page_id); // Internal deallocation registration
 }
 
 void allocate_page_user(unsigned int phys_page_id, unsigned int page_id)
 {
-	unsigned int pdt_entry = page_id / PDT_ENTRIES;
-	unsigned int pt_entry = page_id % PDT_ENTRIES;
-    page_tables[pdt_entry].entries[pt_entry] = PAGE_ID_PHYS_ADDR(phys_page_id) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT; \
-    MARK_PAGE_AS_ALLOCATED(phys_page_id);
+	// Compute indexes
+	unsigned int pde = page_id / PDT_ENTRIES;
+	unsigned int pte = page_id % PDT_ENTRIES;
+
+	// Write PTE
+	page_tables[pde].entries[pte] = PAGE_ID_PHYS_ADDR(phys_page_id) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
+	MARK_PAGE_AS_ALLOCATED(phys_page_id); // Internal allocation registration
 }
 
 void* page_aligned_malloc(unsigned int size)
@@ -393,110 +399,34 @@ void* page_aligned_malloc(unsigned int size)
 	unsigned int total_size = size + sizeof(void*) + PAGE_SIZE;
 	void* base_addr = malloc(total_size);
 
-	unsigned int aligned_addr = ((unsigned int)base_addr + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
-	((void**)aligned_addr)[-1] = base_addr;
+	unsigned int aligned_addr = ((unsigned int) base_addr + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+	((void**) aligned_addr)[-1] = base_addr;
 
-	return (void*)aligned_addr;
+	return (void*) aligned_addr;
 }
 
 void page_aligned_free(void* ptr)
 {
-	void* base_addr = ((void**)ptr)[-1];
+	void* base_addr = ((void**) ptr)[-1];
 	free(base_addr);
 }
 
-void process_exit()
+pdt_t* get_pdt()
 {
-	// For now there's no need to free process code as we never allocated it, it always existed in memory because
-	// GRUB loaded it
-
-	// Free process struct
-	page_aligned_free(running_process);
-
-	running_process = 0x00;
-
-	unsigned pdt_virt_addr = (unsigned int)pdt;
-	unsigned int kernel_pdt_phys_addr = PHYS_ADDR(pdt_virt_addr);
-	extern void change_pdt(unsigned int pdt_phys_addr);
-
-	// Switch back to kernel stack (as we are currently on process' interrupt stack)
-	asm volatile("mov %0, %%esp" : : "r" (stack_top_ptr));
-
-	// Switch back to kernel pdt
-	change_pdt(kernel_pdt_phys_addr);
-	fb_write_info_msg("Process exited");
-
-	shutdown();
+	return pdt;
 }
 
-void run_module([[maybe_unused]] unsigned int module)
+page_table_t* get_page_tables()
 {
-	// Allocate process memory
-	unsigned int proc_size = sizeof (process);
+	return page_tables;
+}
 
-	process * proc = page_aligned_malloc(proc_size);
+GRUB_module* get_grub_modules()
+{
+	return grub_modules;
+}
 
-	// Set process pdt entries
-	for (int i = 0; i < PDT_ENTRIES; ++i)
-	{
-		unsigned int pt_virt_addr = (unsigned int)&proc->page_tables[i];
-		unsigned int pt_phys_addr = PHYS_ADDR(pt_virt_addr);
-		proc->pdt.entries[i] = pt_phys_addr | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
-	}
-
-	// Copy kernel page tables into process' ones
-	for (int i = 0; i < PDT_ENTRIES; ++i)
-		for (int j = 0; j < PT_ENTRIES; ++j)
-			proc->page_tables[i].entries[j] = page_tables[i].entries[j];
-
-	unsigned int mod_size = grubModules[module].size;
-	unsigned int mod_code_pages = mod_size / PAGE_SIZE + ((mod_size % PAGE_SIZE) ? 1 : 0); // Num pages code spans over
-
-	// Map process code at 0x00
-	for (unsigned int i = 0; i < mod_code_pages; ++i)
-	{
-		unsigned int page_pdt_id = i / PDT_ENTRIES;
-		unsigned int page_pt_id = i % PDT_ENTRIES;
-
-		unsigned int process_page_id = grubModules[module].start_addr / PAGE_SIZE + i;
-		unsigned int process_page_pdt_id = process_page_id / PDT_ENTRIES;
-		unsigned int process_page_pt_id = process_page_id % PDT_ENTRIES;
-
-		// Swap process pages entries with first page entries to map process at 0x00
-		if (proc->page_tables[page_pdt_id].entries[page_pt_id] != 0)
-			fb_write_error_msg("Non empty pt entry\n");
-		proc->page_tables[page_pdt_id].entries[page_pt_id] = proc->page_tables[process_page_pdt_id].entries[process_page_pt_id];
-		proc->page_tables[process_page_pdt_id].entries[process_page_pt_id] = 0;
-	}
-
-	// Allocate process stack page. Register it in kernel and process page tables
-	unsigned int p_stack_pdt_id = 767;
-	unsigned int p_stack_pt_id = 1023;
-	if (proc->page_tables[p_stack_pdt_id].entries[p_stack_pt_id] != 0)
-		fb_write_error_msg("Stack page no empty\n");
-	unsigned int stack_page_id = get_free_page();
-	proc->page_tables[p_stack_pdt_id].entries[p_stack_pt_id] = PAGE_ENTRY(get_free_page_entry()) = PAGE_ID_PHYS_ADDR(stack_page_id) | PAGE_USER | PAGE_PRESENT | PAGE_WRITE;
-
-	// Allocate trap handler stack page. Register it in kernel and process page tables
-	unsigned int k_stack_pdt_id = 766;
-	unsigned int k_stack_pt_id = 1023;
-	if (proc->page_tables[k_stack_pdt_id].entries[k_stack_pt_id] != 0)
-		fb_write_error_msg("Kernel stack page not empty\n");
-	proc->page_tables[k_stack_pdt_id].entries[k_stack_pt_id] = PAGE_ENTRY(get_free_page_entry()) = PAGE_ID_PHYS_ADDR(stack_page_id) | PAGE_PRESENT | PAGE_WRITE;
-
-	// Process pdt physical address, after process page tables
-	unsigned int proc_pdt_phys_addr = PHYS_ADDR(((unsigned int)&proc->pdt));
-	unsigned int p_stack_top = (p_stack_pdt_id << 22 | p_stack_pt_id << 12) + (PAGE_SIZE - 4);
-	unsigned int k_stack_top = (k_stack_pdt_id << 22 | k_stack_pt_id << 12) + (PAGE_SIZE - 4);
-
-	// Set TSS esp0 to point to the trap handler stack
-	set_tss_kernel_stack(k_stack_top);
-
-	// Jump
-	running_process = proc;
-	unsigned int user_code_seg_sel = 0x18 | 0x03; // 3rd entry, pl 3
-	unsigned int user_data_seg_sel = 0x20 | 0x03; // 4th entry, pl3
-	unsigned int eflags = 0x200; // IF = 1
-	unsigned int eip = 0; // 0 because process is mapped at 0x00
-	user_mode_jump(proc_pdt_phys_addr, eip, user_code_seg_sel, eflags, p_stack_top, user_data_seg_sel);
+unsigned int* get_stack_top_ptr()
+{
+	return stack_top_ptr;
 }

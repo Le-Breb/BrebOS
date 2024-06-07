@@ -14,4 +14,8 @@ typedef char* va_list;
 
 __attribute__ ((format (printf, 1, 2))) int printf(const char* format, ...);
 
+__attribute__ ((format (printf, 1, 2))) int printf_error(const char* format, ...);
+
+__attribute__ ((format (printf, 1, 2))) int printf_info(const char* format, ...);
+
 #endif //INCLUDE_STDIO_H
