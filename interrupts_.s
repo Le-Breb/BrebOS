@@ -1,5 +1,84 @@
 extern interrupt_handler
 
+; Exit from a syscall and resume user program
+; [esp + 0] = call function ret addr
+; [esp + 4] = struct cpu_state
+; [esp + 4 + sizeof(struct cpu_state)] = struct stack_state
+global syscall_exit_asm
+syscall_exit_asm:
+.restore_regs:
+    mov ebx, [esp + 08]
+    mov ecx, [esp + 12]
+    mov edx, [esp + 16]
+    mov esi, [esp + 20]
+    mov edi, [esp + 24]
+    mov ebp, [esp + 28]
+
+.jump:
+    ;push ss
+    mov eax, [esp + 52] ; 13 * 4
+    push eax
+	;push esp
+    mov eax, [esp + 32] ; (7 + 1) * 4
+    push eax
+	;push eflags
+	mov eax, [esp + 52] ; (11 + 2) * 4
+	push eax
+    ; push cs
+    mov eax, [esp + 52] ; (10 + 3) * 4
+    push eax
+    ; push eip
+    mov eax, [esp + 52] ; (9 + 4) * 4
+    push eax
+
+    mov eax, [esp + 24] ; restore eax (kinda useless as it contains syscall id but it feels right to do it)
+
+	; jump
+	iret
+
+; Run a program in user mode
+; Doc: //https://web.archive.org/web/20220426003110/http://www.jamesmolloy.co.uk/tutorial_html/10.-User%20Mode.html
+; [esp +  0] = call function ret addr
+; [esp +  4] = program pdt physical addr
+; [esp +  8] = program eip (must be 0)
+; [esp + 12] = program cs
+; [esp + 16] = program eflags
+; [esp + 20] = program esp (must be 0xBFFFFFFC)
+; [esp + 24] = program ss
+global user_mode_jump_asm
+user_mode_jump_asm:
+.change_to_process_pdt:
+    mov eax, [esp + 4]
+    mov cr3, eax
+
+
+.set_data_segments:
+    mov eax, [esp + 24]
+    mov ds, eax
+    mov es, eax
+    mov fs, eax
+    mov gs, eax
+
+.jump:
+    ;push ss
+    ;mov eax, [esp + 24] // eax already contains ss
+    push eax
+	;push esp
+    mov eax, [esp + 24]
+    push eax
+	;push eflags
+	mov eax, [esp + 24]
+	push eax
+    ; push cs
+    mov eax, [esp + 24]
+    push eax
+    ; push eip
+    mov eax, [esp + 24]
+    push eax
+
+	; jump
+	iret
+
 global disable_interrupts
 disable_interrupts:
     cli
@@ -37,7 +116,6 @@ interrupt_handler_%1:
 %endmacro
 
 %macro save_regs 0
-    push    esp
     push    ebp
     push    edi
     push    esi
@@ -55,7 +133,6 @@ interrupt_handler_%1:
     pop     esi
     pop     edi
     pop     ebp
-    pop     esp
 %endmacro
 
 common_interrupt_handler:               ; the common parts of the generic interrupt handler

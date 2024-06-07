@@ -517,9 +517,9 @@ extern void interrupt_handler_254();
 
 extern void interrupt_handler_255();
 
-void syscall_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused]] struct stack_state stack_state);
+void syscall_handler(struct cpu_state* cpu_state, struct stack_state* stack_state);
 
-void gpf_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused]] struct stack_state stack_state);
+void gpf_handler([[maybe_unused]] struct cpu_state* cpu_state, [[maybe_unused]] struct stack_state* stack_state);
 
 unsigned char read_scan_code(void)
 {
@@ -824,22 +824,26 @@ void page_fault_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unu
 	printf("SGX: %s\n", err & 32768 ? "True": "False");
 }
 
-void syscall_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused]] struct stack_state stack_state)
+void syscall_handler(struct cpu_state* cpu_state, struct stack_state* stack_state)
 {
-	switch (cpu_state.eax) {
+	switch (cpu_state->eax) {
 		case 1:
 			process_exit(get_pdt(), get_page_tables(), get_stack_top_ptr());
 			break;
+		case 2:
+			fb_write((char*)cpu_state->ebx);
+			syscall_exit_asm(*cpu_state, *stack_state);
+			break;
 		default:
-			fb_write("Syscall :D\n");
+			printf_info("Received unknown syscall id: %u", cpu_state->eax);
 			break;
 		}
 }
 
-void gpf_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused]] struct stack_state stack_state)
+void gpf_handler([[maybe_unused]] struct cpu_state* cpu_state, [[maybe_unused]] struct stack_state* stack_state)
 {
 	printf_error("General protection fault");
-	printf("Segment selector: %x\n", stack_state.error_code);
+	printf("Segment selector: %x\n", stack_state->error_code);
 }
 
 void interrupt_handler([[maybe_unused]] struct cpu_state cpu_state, unsigned int interrupt, [[maybe_unused]] struct stack_state stack_state)
@@ -853,10 +857,10 @@ void interrupt_handler([[maybe_unused]] struct cpu_state cpu_state, unsigned int
 			page_fault_handler(cpu_state, stack_state);
 			break;
 		case 0xD:
-			gpf_handler(cpu_state, stack_state);
+			gpf_handler(&cpu_state, &stack_state);
 			break;
 		case 0x80:
-			syscall_handler(cpu_state, stack_state);
+			syscall_handler(&cpu_state, &stack_state);
 		default:
 			break;
 	}

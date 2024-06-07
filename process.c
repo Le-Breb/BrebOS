@@ -4,9 +4,10 @@
 #include "gdt.h"
 #include "memory.h"
 #include "system.h"
+#include "interrupts.h"
 
 /** Change current pdt */
-extern void change_pdt(unsigned int pdt_phys_addr);
+extern void change_pdt_asm(unsigned int pdt_phys_addr);
 
 process* running_process = 0x00;
 
@@ -188,7 +189,19 @@ void run_module(unsigned int module, GRUB_module* grub_modules, page_table_t* pa
 		return;
 	}
 
-	// Set process pdt entries
+	// Allocate process stack page
+	unsigned int p_stack_page_entry_id = get_free_page();
+	unsigned int p_stack_pde = p_stack_page_entry_id / PDT_ENTRIES;
+	unsigned int p_stack_pte = p_stack_page_entry_id % PDT_ENTRIES;
+	allocate_page_user(get_free_page(), p_stack_page_entry_id);
+
+	// Allocate syscall handler stack page
+	unsigned int k_stack_page_entry = get_free_page_entry();
+	unsigned int k_stack_pde = k_stack_page_entry / PDT_ENTRIES;
+	unsigned int k_stack_pte = k_stack_page_entry % PDT_ENTRIES;
+	allocate_page(get_free_page(), k_stack_page_entry);
+
+	// Set process pdt entries to target process page tables
 	for (int i = 0; i < PDT_ENTRIES; ++i)
 	{
 		unsigned int pt_virt_addr = (unsigned int) &proc->page_tables[i];
@@ -211,42 +224,31 @@ void run_module(unsigned int module, GRUB_module* grub_modules, page_table_t* pa
 
 		// Swap process pages entries with first page entries to map process at 0x00
 		if (proc->page_tables[page_pde].entries[page_pte] != 0)
-			printf_error("Non empty pt entry\n");
+			printf_error("Non empty pt entry");
 		proc->page_tables[page_pde].entries[page_pte] = proc->page_tables[process_page_pde].entries[process_page_pte];
 		proc->page_tables[process_page_pde].entries[process_page_pte] = 0;
 	}
 
-	// Allocate process stack page. Register it in kernel and process page tables
-	unsigned int p_stack_pde = 767;
-	unsigned int p_stack_pte = 1023;
-	if (proc->page_tables[p_stack_pde].entries[p_stack_pte] != 0)
-		printf_error("Stack page no empty\n");
-	unsigned int stack_page_id = get_free_page();
-	proc->page_tables[p_stack_pde].entries[p_stack_pte] = PTE(get_free_page_entry()) =
-			PAGE_ID_PHYS_ADDR(stack_page_id) | PAGE_USER | PAGE_PRESENT | PAGE_WRITE;
+	// Map process stack at 0xBFFFFFFC = 0xCFFFFFFF - 4 at pde 767 and pte 1023, just below the kernel (move current entry)
+	if (proc->page_tables[767].entries[1023] != 0)
+		printf_error("Process kernel page is not empty");
+	proc->page_tables[767].entries[1023] = PTE(p_stack_page_entry_id); // Copy entry - set correct stack virtual address
+	PTE(p_stack_page_entry_id) = 0; // Remove previous entry
 
-	// Allocate trap handler stack page. Register it in kernel and process page tables
-	unsigned int k_stack_pde = 766;
-	unsigned int k_stack_pte = 1023;
-	if (proc->page_tables[k_stack_pde].entries[k_stack_pte] != 0)
-		printf_error("Kernel stack page not empty\n");
-	proc->page_tables[k_stack_pde].entries[k_stack_pte] = PTE(get_free_page_entry()) =
-			PAGE_ID_PHYS_ADDR(stack_page_id) | PAGE_PRESENT | PAGE_WRITE;
-
-	unsigned int proc_pdt_phys_addr = PHYS_ADDR(((unsigned int) &proc->pdt)); // Process pdt physical address
-	unsigned int p_stack_top = (p_stack_pde << 22 | p_stack_pte << 12) + (PAGE_SIZE - 4); // process stack top
-	unsigned int k_stack_top = (k_stack_pde << 22 | k_stack_pte << 12) + (PAGE_SIZE - 4); // kernel stack top
+	unsigned int p_stack_top = VIRT_ADDR(p_stack_pde, p_stack_pte, (PAGE_SIZE - 4)); // process stack top
+	unsigned int k_stack_top = VIRT_ADDR(k_stack_pde, k_stack_pte, (PAGE_SIZE - 4)); // kernel stack top
 
 	// Set TSS esp0 to point to the trap handler stack (i.e. tell the CPU where is trap handler stack)
 	set_tss_kernel_stack(k_stack_top);
 
 	// Jump
 	running_process = proc;
-	unsigned int user_code_seg_sel = 0x18 | 0x03; // 3rd entry, pl 3
+	unsigned int proc_pdt_phys_addr = PHYS_ADDR(((unsigned int) &proc->pdt)); // Process pdt physical address
+	unsigned int eip = 0; // 0 because process is mapped at 0x00
+	unsigned int user_code_seg_sel = 0x18 | 0x03; // 3rd entry, pl3
 	unsigned int user_data_seg_sel = 0x20 | 0x03; // 4th entry, pl3
 	unsigned int eflags = 0x200; // IF = 1
-	unsigned int eip = 0; // 0 because process is mapped at 0x00
-	user_mode_jump(proc_pdt_phys_addr, eip, user_code_seg_sel, eflags, p_stack_top, user_data_seg_sel);
+	user_mode_jump_asm(proc_pdt_phys_addr, eip, user_code_seg_sel, eflags, p_stack_top, user_data_seg_sel);
 }
 
 void process_exit(pdt_t* pdt, page_table_t* page_tables, const unsigned int* stack_top_ptr)
@@ -265,8 +267,13 @@ void process_exit(pdt_t* pdt, page_table_t* page_tables, const unsigned int* sta
 	asm volatile("mov %0, %%esp" : : "r" (stack_top_ptr));
 
 	// Switch back to kernel pdt
-	change_pdt(PHYS_ADDR((unsigned int) pdt));
+	change_pdt_asm(PHYS_ADDR((unsigned int) pdt));
 	printf_info("Process exited");
 
 	shutdown();
+}
+
+process* get_running_process()
+{
+	return running_process;
 }

@@ -17,14 +17,14 @@
 #define STACK_SIZE 4096
 
 #define PAGE_ID_PHYS_ADDR(i) (i * PAGE_SIZE)
-#define VIRTUAL_ADDRESS(pde, pte, offset) (pde << 22 | pte << 12 | offset)
+#define VIRT_ADDR(pde, pte, offset) (pde << 22 | pte << 12 | offset)
 #define PTE_PHYS_ADDR(i) (PAGE_ID_PHYS_ADDR((PDT_ENTRIES + i)))
-#define PTE_USED(i) (PAGE_ENTRY(i) & PAGE_PRESENT)
+#define PTE_USED(i) (PTE(i) & PAGE_PRESENT)
 #define PTE(i) (page_tables[i / PDT_ENTRIES].entries[i % PDT_ENTRIES])
 #define PAGE_USED(i) page_bitmap[i / 32] & (1 << (i % 32))
 #define PAGE_FREE(i) !(PAGE_USED(i))
-#define MARK_PAGE_AS_ALLOCATED(i) page_bitmap[i / 32] |= 1 << (i % 32)
-#define MARK_PAGE_AS_FREE(i) page_bitmap[i / 32] &= ~(1 << (i % 32))
+#define MARK_PAGE_USED(i) page_bitmap[i / 32] |= 1 << (i % 32)
+#define MARK_PAGE_FREE(i) page_bitmap[i / 32] &= ~(1 << (i % 32))
 #define PHYS_ADDR(virt_addr) (page_tables[virt_addr >> 22].entries[(virt_addr >> 12) & 0x3FF] & ~0x3FF)
 
 //https://wiki.osdev.org/Paging
@@ -119,18 +119,6 @@ void allocate_page_user(unsigned int phys_page_id, unsigned int page_id);
  * @param page_id Page id
  */
 void free_page(unsigned int page_id);
-
-/** Switch to user mode. External assembly function
- *
- * @param pdt PDT physical address
- * @param eip Instruction pointer
- * @param cs Code segment
- * @param eflags Flags
- * @param esp Stack pointer
- * @param ss Stack segment
- */
-void user_mode_jump(unsigned int pdt, unsigned int eip, unsigned int cs, unsigned int eflags, unsigned int esp,
-					unsigned int ss);
 
 /** Get index of lowest free page id and update lowest_free_page to next free page id */
 unsigned int get_free_page();

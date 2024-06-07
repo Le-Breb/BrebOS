@@ -41,7 +41,7 @@ char kbd_US[128] =
 void keyboard_interrupt_handler()
 {
 	unsigned char scan_code = read_scan_code();
-	char c[2] = {kbd_US[scan_code], 0};
-	if ((c[0] >= 'A' && c[0] <= 'Z') || (c[0] >= 'a' && c[0] <= 'z') || c[0] == ' ' || (c[0] >= '1' && c[0] <= '9'))
-		fb_write(c);
+	char c = kbd_US[scan_code];
+	if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == ' ' || (c >= '1' && c <= '9'))
+		fb_write_cell(c);
 }

@@ -30,6 +30,12 @@ void run_module(unsigned int module, GRUB_module* grub_modules, page_table_t* pa
 /** Terminate currently executing program */
 void process_exit(pdt_t* pdt, page_table_t* page_tables, const unsigned int* stack_top_ptr);
 
+/** Get running process
+ *
+ * @return Running process
+ */
+process* get_running_process();
+
 //http://www.skyfree.org/linux/references/ELF_Format.pdf
 #define EI_NIDENT (16)
 

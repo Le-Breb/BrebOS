@@ -5,7 +5,6 @@ extern void boot_page_directory();
 
 extern void boot_page_table1();
 
-unsigned int* asm_pdt = (unsigned int*) boot_page_directory;
 pdt_t* pdt = (pdt_t*) boot_page_directory;
 page_table_t* asm_pt1 = (page_table_t*) boot_page_table1;
 page_table_t* page_tables;
@@ -17,7 +16,7 @@ unsigned int lowest_free_page;
 memory_header base = {.s = {&base, 0}};
 memory_header* freep; /* Lowest free block */
 
-unsigned int loaded_grub_modules = 0;
+[[maybe_unused]] unsigned int loaded_grub_modules = 0;
 GRUB_module* grub_modules;
 
 extern void stack_top();
@@ -40,7 +39,7 @@ void init_page_bitmap();
 memory_header* more_kernel(unsigned int n);
 
 /** Reload cr3 which will acknowledge every pte change and invalidate TLB */
-extern void reload_cr3();
+extern void reload_cr3_asm();
 
 /** Allocate 1024 pages to store the 1024 page tables required to map all the memory. \n
  * 	The page table that maps kernel pages is moved into the newly allocated array of page tables and then freed. \n
@@ -90,7 +89,7 @@ unsigned int get_free_page_entry()
 {
 	unsigned int page_entry = lowest_free_page_entry;
 	unsigned int i = lowest_free_page_entry + 1;
-	while (i < PDT_ENTRIES * PT_ENTRIES && PTE(i) & PAGE_PRESENT)
+	while (i < PDT_ENTRIES * PT_ENTRIES && PTE_USED(i))
 		i++;
 	lowest_free_page_entry = i;
 
@@ -117,7 +116,7 @@ void init_page_bitmap()
 	printf_info("Kernel spans over %u pages", lowest_free_page);
 
 	if (lowest_free_page == PT_ENTRIES)
-		printf_error("Kernel needs more space than available in 1 page table\n");
+		printf_error("Kernel needs more space than available in 1 page table");
 }
 
 void allocate_page_tables()
@@ -131,14 +130,14 @@ void allocate_page_tables()
 
 	// Map it in entry 1022 of asm pt
 	asm_pt1->entries[1022] = new_page_phys_addr | PAGE_WRITE | PAGE_PRESENT;
-	MARK_PAGE_AS_ALLOCATED(new_page_phys_id);
+	MARK_PAGE_USED(new_page_phys_id);
 
 	// Apply changes
-	__asm__("invlpg (%0)" : : "r" (VIRTUAL_ADDRESS(768, 1022, 0)));
+	__asm__ volatile("invlpg (%0)" : : "r" (VIRT_ADDR(768, 1022, 0)));
 
 	// Newly allocated page will be the first of the page tables. It will map itself and the 1023 other page tables.
 	// Get pointer to newly allocated page, casting to page_table*.
-	page_tables = (page_table_t*) VIRTUAL_ADDRESS(768, 1022, 0);
+	page_tables = (page_table_t*) VIRT_ADDR(768, 1022, 0);
 
 	// Allocate pages 1024 to 2047, ie allocate space of all the page tables
 	for (unsigned int i = 0; i < PT_ENTRIES; ++i)
@@ -149,11 +148,11 @@ void allocate_page_tables()
 	asm_pt1->entries[1022] = 0; // Not needed anymore as the page it maps now maps itself as it became a page table
 
 	// Apply changes
-	__asm__("invlpg (%0)" : : "r" (VIRTUAL_ADDRESS(768, 1022, 0)));
-	__asm__("invlpg (%0)" : : "r" (VIRTUAL_ADDRESS(769, 1022, 0)));
+	__asm__ volatile("invlpg (%0)" : : "r" (VIRT_ADDR(768, 1022, 0)));
+	__asm__ volatile("invlpg (%0)" : : "r" (VIRT_ADDR(769, 1022, 0)));
 
 	// Update pointer using pdt[769]
-	page_tables = (page_table_t*) VIRTUAL_ADDRESS(769, 0, 0);
+	page_tables = (page_table_t*) VIRT_ADDR(769, 0, 0);
 
 	// Clear unused pages
 	for (int i = 0; i < PDT_ENTRIES; ++i) // Skip first page as it maps all the page tables' pages
@@ -181,7 +180,7 @@ void allocate_page_tables()
 	// Deallocate asm_pt1's page
 	page_tables[768].entries[asm_pt1_page_table_entry] = 0;
 
-	reload_cr3(); // Apply changes | Full TLB flush is needed because we modified every pdt entry
+	reload_cr3_asm(); // Apply changes | Full TLB flush is needed because we modified every pdt entry
 
 	lowest_free_page_entry = 770 * PDT_ENTRIES; // Kernel is (for now at least) only allowed to allocate in high half
 }
@@ -235,7 +234,7 @@ void* sbrk(unsigned int n)
 
 	unsigned int b = lowest_free_page_entry; /* block beginning page index */
 	unsigned int e; /* block end page index + 1*/
-	unsigned num_pages_requested = n / PAGE_SIZE + (n % PAGE_SIZE == 0 ? 0 : 1);;
+	unsigned num_pages_requested = n / PAGE_SIZE + (n % PAGE_SIZE == 0 ? 0 : 1);
 
 	// Try to find contiguous free virtual block of memory
 	while (1)
@@ -248,7 +247,7 @@ void* sbrk(unsigned int n)
 		unsigned int j = b;
 
 		// Explore contiguous free blocks while explored block size does not fulfill the request
-		while (!(PTE(b) & PAGE_PRESENT) && rem > 0)
+		while (!(PTE_USED(b)) && rem > 0)
 		{
 			j++;
 			rem -= 1;
@@ -271,7 +270,7 @@ void* sbrk(unsigned int n)
 		allocate_page(get_free_page(), i);
 
 	lowest_free_page_entry = e;
-	while (PTE(lowest_free_page_entry) & PAGE_PRESENT)
+	while (PTE_USED(lowest_free_page_entry))
 		lowest_free_page_entry++;
 
 	// Allocated memory block virtually starts at page b. Return it.
@@ -360,13 +359,9 @@ void free(void* ptr)
 
 void allocate_page(unsigned int phys_page_id, unsigned int page_id)
 {
-	// Compute indexes
-	unsigned int pde = page_id / PDT_ENTRIES;
-	unsigned int pte = page_id % PDT_ENTRIES;
-
 	// Write PTE
-	page_tables[pde].entries[pte] = PAGE_ID_PHYS_ADDR(phys_page_id) | PAGE_WRITE | PAGE_PRESENT;
-	MARK_PAGE_AS_ALLOCATED(phys_page_id); // Internal allocation registration
+	PTE(page_id) = PAGE_ID_PHYS_ADDR(phys_page_id) | PAGE_WRITE | PAGE_PRESENT;
+	MARK_PAGE_USED(phys_page_id); // Internal allocation registration
 }
 
 void free_page(unsigned int page_id)
@@ -379,19 +374,15 @@ void free_page(unsigned int page_id)
 
 	// Write PTE
 	page_tables[pde].entries[pte] = 0;
-	__asm__("invlpg (%0)" : : "r" (VIRTUAL_ADDRESS(pde, pte, 0))); // Invalidate TLB entry
-	MARK_PAGE_AS_FREE(phys_page_id); // Internal deallocation registration
+	__asm__ volatile("invlpg (%0)" : : "r" (VIRT_ADDR(pde, pte, 0))); // Invalidate TLB entry
+	MARK_PAGE_FREE(phys_page_id); // Internal deallocation registration
 }
 
 void allocate_page_user(unsigned int phys_page_id, unsigned int page_id)
 {
-	// Compute indexes
-	unsigned int pde = page_id / PDT_ENTRIES;
-	unsigned int pte = page_id % PDT_ENTRIES;
-
 	// Write PTE
-	page_tables[pde].entries[pte] = PAGE_ID_PHYS_ADDR(phys_page_id) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
-	MARK_PAGE_AS_ALLOCATED(phys_page_id); // Internal allocation registration
+	PTE(page_id) = PAGE_ID_PHYS_ADDR(phys_page_id) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
+	MARK_PAGE_USED(phys_page_id); // Internal allocation registration
 }
 
 void* page_aligned_malloc(unsigned int size)

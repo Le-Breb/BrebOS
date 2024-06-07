@@ -61,7 +61,6 @@ struct cpu_state
 	unsigned int esi;
 	unsigned int edi;
 	unsigned int ebp;
-	unsigned int esp;
 } __attribute__((packed));
 
 struct stack_state
@@ -70,6 +69,8 @@ struct stack_state
 	unsigned int eip;
 	unsigned int cs;
 	unsigned int eflags;
+	unsigned int esp;
+	unsigned int ss;
 } __attribute__((packed));
 
 #define KBD_DATA_PORT   0x60
@@ -138,5 +139,24 @@ void disable_interrupts(void);
  * Sets up the PIC
  */
 void setup_pic();
+
+/** Switch to user mode. External assembly function
+ *
+ * @param pdt PDT physical address
+ * @param eip Instruction pointer
+ * @param cs Code segment
+ * @param eflags Flags
+ * @param esp Stack pointer
+ * @param ss Stack segment
+ */
+void user_mode_jump_asm(unsigned int pdt, unsigned int eip, unsigned int cs, unsigned int eflags, unsigned int esp,
+						unsigned int ss);
+
+/** Exit from a syscall and resume user program
+ *
+ * @param cpu_state saved CPU state
+ * @param stack_state saved stack state
+ */
+void syscall_exit_asm(struct cpu_state cpu_state, struct stack_state stack_state);
 
 #endif /* INCLUDE_INTERRUPTS_H */

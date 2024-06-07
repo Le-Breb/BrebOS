@@ -2,10 +2,11 @@
 #include "io.h"
 #include "lib/stdio.h"
 
+extern unsigned int is_running_in_qemu_asm();
+
 int shutdown()
 {
-	extern unsigned int is_running_in_qemu();
-	unsigned int qemu = is_running_in_qemu();
+	unsigned int qemu = is_running_in_qemu_asm();
 
 	if (qemu)
 	{

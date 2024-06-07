@@ -15,6 +15,8 @@ struct idt_descriptor idt_descriptor;
 #include "lib/stdio.h"
 
 //Todo: Return pages to the page frame allocator when enough memory is freed
+//Todo: Investigate about whether page 184 (VGA buffer start address is mapped twice)
+//Todo: same for page pde 771 pte11 at the end of run_module
 int kmain([[maybe_unused]] unsigned int ebx)
 {
 	disable_interrupts();
@@ -52,7 +54,6 @@ int kmain([[maybe_unused]] unsigned int ebx)
 	free(a);*/
 
 	run_module(0, get_grub_modules(), get_page_tables());
-
 	//fb_clear_screen();
 
 	return shutdown();

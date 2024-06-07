@@ -1,7 +1,7 @@
 ; Checks wether the OS is running in QEMU
 ; Returns 1 if true, 0 else
-global is_running_in_qemu
-is_running_in_qemu:
+global is_running_in_qemu_asm
+is_running_in_qemu_asm:
     mov eax, 0x40000000
 
     ; cpuid has weird effects, so registers are saved then restored to not affect anything
