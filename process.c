@@ -106,7 +106,10 @@ process* load_elf(unsigned int module, GRUB_module* grub_modules)
 	}
 
 	if (elf32Ehdr->e_phnum == 0)
+	{
 		printf_error("No program header");
+		return 0x00;
+	}
 
 	// Get program headers
 	Elf32_Phdr* elf32Phdr = (Elf32_Phdr*) (grub_modules[module].start_addr + elf32Ehdr->e_phoff);
@@ -255,7 +258,8 @@ void process_exit(pdt_t* pdt, page_table_t* page_tables, const unsigned int* sta
 {
 	// Free process code
 	for (unsigned int i = 0; i < running_process->num_pages; ++i)
-		free_page(running_process->page_table_entries[i]);
+		free_page(running_process->page_table_entries[i] / PDT_ENTRIES,
+				  running_process->page_table_entries[i] % PDT_ENTRIES);
 
 	// Free process struct
 	free(running_process->page_table_entries);

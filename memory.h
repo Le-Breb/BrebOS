@@ -13,6 +13,7 @@
 
 /* Minimum memory block size to allocate to reduce calls to sbrk */
 #define N_ALLOC 1024
+#define FREE_THRESHOLD (10 * PAGE_SIZE) // Maximum bytes freed before attempting to free pages
 
 #define STACK_SIZE 4096
 
@@ -116,9 +117,10 @@ void allocate_page_user(unsigned int phys_page_id, unsigned int page_id);
 
 /**
  * Free a page
- * @param page_id Page id
+ * @param pde PDE
+ * @param pte PTE
  */
-void free_page(unsigned int page_id);
+void free_page(unsigned int pde, unsigned int pte);
 
 /** Get index of lowest free page id and update lowest_free_page to next free page id */
 unsigned int get_free_page();

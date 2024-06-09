@@ -9,7 +9,8 @@ pdt_t* pdt = (pdt_t*) boot_page_directory;
 page_table_t* asm_pt1 = (page_table_t*) boot_page_table1;
 page_table_t* page_tables;
 
-unsigned int page_bitmap[32 * 1024];
+// Map of used physical pages. 1 = used, 0 = free. Ith page is referenced at (i % 32)th lsb of map[i / 32]
+unsigned int page_bitmap[(PT_ENTRIES / 32) * PDT_ENTRIES];
 unsigned int lowest_free_page_entry;
 unsigned int lowest_free_page;
 
@@ -18,6 +19,8 @@ memory_header* freep; /* Lowest free block */
 
 [[maybe_unused]] unsigned int loaded_grub_modules = 0;
 GRUB_module* grub_modules;
+
+unsigned int free_bytes = 0;
 
 extern void stack_top();
 
@@ -73,6 +76,11 @@ process* load_binary(unsigned int module, GRUB_module* grub_modules);
  * @return process instance
  */
 process* load_elf(unsigned int module, GRUB_module* grub_modules);
+
+/**
+ * Free pages in large free memory blocks
+ */
+void free_release_pages();
 
 unsigned int get_free_page()
 {
@@ -289,7 +297,10 @@ memory_header* more_kernel(unsigned int n)
 
 	h->s.size = n;
 
+	unsigned int byte_size = sizeof(memory_header) * n;
+	free_bytes -= byte_size; // Prevent free from freeing pages we just allocated
 	free((void*) (h + 1));
+	free_bytes += byte_size;
 
 	return freep;
 }
@@ -312,6 +323,7 @@ void* malloc(unsigned int n)
 				c += c->s.size;
 				c->s.size = nunits;
 			}
+			free_bytes -= nunits * sizeof(memory_header);
 			freep = p;
 			return (void*) (c + 1);
 		}
@@ -327,6 +339,7 @@ void free(void* ptr)
 {
 	memory_header* c = (memory_header*) ptr - 1;
 	memory_header* p;
+	free_bytes += c->s.size * sizeof(memory_header);
 
 	// Loop until p < c < p->s.ptr
 	for (p = freep; !(c > p && c < p->s.ptr); p = p->s.ptr)
@@ -335,7 +348,7 @@ void free(void* ptr)
 		if (p >= p->s.ptr && (c < p->s.ptr || c > p))
 			break;
 
-	// Join with upper neighbor
+	// Join with upper neighbor if contiguous
 	if (c + c->s.size == p->s.ptr)
 	{
 		c->s.size += p->s.ptr->s.size;
@@ -344,7 +357,7 @@ void free(void* ptr)
 	else
 		c->s.ptr = p->s.ptr;
 
-	// Join with lower neighbor
+	// Join with lower neighbor if contiguous
 	if (p + p->s.size == c)
 	{
 		p->s.size += c->s.size;
@@ -355,6 +368,82 @@ void free(void* ptr)
 
 	// Set new freep
 	freep = p;
+
+	// Free pages
+	if (free_bytes >= FREE_THRESHOLD)
+		free_release_pages();
+}
+
+void free_release_pages()
+{
+	memory_header* p = freep;
+	for(memory_header* c = freep->s.ptr;; p = c, c = c->s.ptr)
+	{
+		unsigned int block_byte_size = c->s.size * sizeof(memory_header);
+		unsigned mod = ((unsigned int)c & (PAGE_SIZE - 1)); // c % PAGE_SIZE
+		unsigned int aligned_free_bytes = mod > block_byte_size ? 0 : (block_byte_size - mod); // min(0, byte_size - mod)
+		aligned_free_bytes -= aligned_free_bytes & (PAGE_SIZE - 1); // -= aligned_free_bytes % PAGE_SIZE
+
+		// Skip small block
+		if (aligned_free_bytes < PAGE_SIZE)
+		{
+			// Arrived at the end of the list
+			if (c == freep)
+				break;
+			continue;
+		}
+
+		unsigned n_pages = aligned_free_bytes >> 12; // Num pages to free
+		unsigned int aligned_addr_base = ((unsigned int) c + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1); // Start addr of first page
+		unsigned free_size = aligned_free_bytes / sizeof(memory_header); // Freed memory size in sizeof(memory_header)
+		unsigned int remaining_size = c->s.size - free_size;
+
+		// Adjust memory headers
+		// Page aligned block entirely removed (remaining_size can't be 0 if block isn't page aligned)
+		if (remaining_size == 0)
+			p->s.ptr = c->s.ptr; // Simply link previous to next
+		else // The block is split into two blocks: one before freed pages and one after them
+		{
+			unsigned int first_block_size = (aligned_addr_base - (unsigned int)c) / sizeof(memory_header);
+			unsigned int second_block_size = remaining_size - first_block_size;
+
+			// First block - May not exist if block is page aligned, but write anyway
+			// If the block exists, info is useful, otherwise this memory location will simply be deallocated
+			c->s.size -= first_block_size;
+			// For now c->s.ptr points to the next block in the list
+
+			// Second block - May not exist and writing anyway would actually overwrite next block, so we ensure it exists
+			if (second_block_size != 0)
+			{
+				// Link previous block to second block - previous block is p if first block does bot exist
+				(first_block_size == 0 ? p : c)->s.ptr = c + free_size;
+
+				// Setup second block
+				memory_header* next = c->s.ptr; // Save next
+				c += first_block_size + free_size; // Move to second block location
+				c->s.size = second_block_size; // Write size
+				c->s.ptr = next; // Link with next
+			}
+		}
+
+		// Free pages
+		for (unsigned int i = 0; i < n_pages; ++i)
+		{
+			unsigned int aligned_addr = aligned_addr_base + (i << 12);
+			unsigned int pde = aligned_addr >> 22;
+			unsigned int pte = (aligned_addr >> 12) & 0x3FF;
+			free_page(pde, pte);
+		}
+
+		free_bytes -= aligned_free_bytes; // Update free_bytes
+
+		// Arrived at the end of the list
+		if (c == freep + free_size)
+		{
+			freep += free_size;
+			break;
+		}
+	}
 }
 
 void allocate_page(unsigned int phys_page_id, unsigned int page_id)
@@ -364,18 +453,17 @@ void allocate_page(unsigned int phys_page_id, unsigned int page_id)
 	MARK_PAGE_USED(phys_page_id); // Internal allocation registration
 }
 
-void free_page(unsigned int page_id)
+void free_page(unsigned int pde, unsigned int pte)
 {
-	// Compute indexes
-	unsigned int pde = page_id / PDT_ENTRIES;
-	unsigned int pte = page_id % PDT_ENTRIES;
-
-	unsigned int phys_page_id = PTE(page_id) >> 12;
+	unsigned int phys_page_id = page_tables[pde].entries[pte] >> 12;
 
 	// Write PTE
 	page_tables[pde].entries[pte] = 0;
 	__asm__ volatile("invlpg (%0)" : : "r" (VIRT_ADDR(pde, pte, 0))); // Invalidate TLB entry
 	MARK_PAGE_FREE(phys_page_id); // Internal deallocation registration
+
+	if (phys_page_id < lowest_free_page)
+		lowest_free_page = phys_page_id;
 }
 
 void allocate_page_user(unsigned int phys_page_id, unsigned int page_id)
