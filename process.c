@@ -1,10 +1,15 @@
 #include "process.h"
-#include "lib/string.h"
-#include "lib/stdio.h"
+#include "clib/string.h"
+#include "clib/stdio.h"
 #include "gdt.h"
 #include "memory.h"
 #include "system.h"
 #include "interrupts.h"
+
+// Bitmap of available PID. Ith LSB indicates PID state ; 1 = used, 0 = free.
+// PID 0 is reserved to indicate errors
+// Thus, 31 = sizeof(unsigned int) - 1 PIDs are available, allowing up to 32 processes to run concurrently
+unsigned int pid_pool = 1;
 
 /** Change current pdt */
 extern void change_pdt_asm(unsigned int pdt_phys_addr);
@@ -182,8 +187,10 @@ void run_module(unsigned int module, GRUB_module* grub_modules, page_table_t* pa
 	unsigned int elf = elf32Ehdr->e_ident[0] == 0x7F && elf32Ehdr->e_ident[1] == 'E' && elf32Ehdr->e_ident[2] == 'L' &&
 					   elf32Ehdr->e_ident[3] == 'F';
 
-	process* proc = elf ? load_elf(module, grub_modules) : load_binary(module,
-																	   grub_modules); // Load process into memory
+	// Load process into memory
+	process* proc = elf ? load_elf(module, grub_modules) : load_binary(module, grub_modules);
+	proc->pid = get_free_pid();
+	proc->ppid = 0;
 
 	// Ensure process was loaded successfully
 	if (proc == 0x00)
@@ -280,4 +287,15 @@ void process_exit(pdt_t* pdt, page_table_t* page_tables, const unsigned int* sta
 process* get_running_process()
 {
 	return running_process;
+}
+
+pid get_free_pid()
+{
+	for (unsigned int i = 1; i < sizeof(unsigned int); ++i)
+	{
+		if (!(pid_pool & (1 << i)))
+			return i;
+	}
+
+	return 0;
 }

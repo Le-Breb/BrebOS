@@ -1,5 +1,6 @@
 #include "memory.h"
-#include "lib/stdio.h"
+#include "process.h"
+#include "clib/stdio.h"
 
 extern void boot_page_directory();
 

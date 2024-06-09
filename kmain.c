@@ -12,7 +12,7 @@ gdt_descriptor_t gdt_descriptor;
 struct idt_entry idt[256];
 struct idt_descriptor idt_descriptor;
 
-#include "lib/stdio.h"
+#include "clib/stdio.h"
 
 //Todo: Investigate about whether page 184 (VGA buffer start address is mapped twice)
 //Todo: same for page pde 771 pte11 at the end of run_module

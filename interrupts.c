@@ -2,7 +2,7 @@
 #include "fb.h"
 #include "keyboard.h"
 #include "memory.h"
-#include "lib/stdio.h"
+#include "clib/stdio.h"
 #include "process.h"
 
 extern void interrupt_handler_0();

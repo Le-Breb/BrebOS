@@ -7,7 +7,10 @@ CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfile
 LDFLAGS = -T link.ld -melf_i386 -g
 AS = nasm
 ASFLAGS = -f elf -F dwarf -g
+
 BUILD_DIR=build
+PROGRAM_BUILD_DIR=program/build
+KLIB_BUILD_DIR=klib/build
 
 OUT_NAME=kernel
 OUT_BIN=$(OUT_NAME).elf
@@ -22,11 +25,7 @@ all: $(OS_ISO)
 .PHONY: program
 
 program:
-	#nasm -f bin -g program.s -o $(BUILD_DIR)/program
-	#ld  -T program/link_program.ld $(BUILD_DIR)/start_program.o $(BUILD_DIR)/program.o -melf_i386 -o $(BUILD_DIR)/program
-	nasm -f elf32 program/start_program.s -o $(BUILD_DIR)/start_program.o
-	$(CC) $(CFLAGS) program/program.c -o $(BUILD_DIR)/program.o
-	ld  -T program/link_program.ld $(BUILD_DIR)/start_program.o $(BUILD_DIR)/program.o $(BUILD_DIR)/string.o -melf_i386 -o $(BUILD_DIR)/program
+	make -C program
 
 
 kernel.elf: $(OBJECTS)
@@ -52,7 +51,7 @@ $(OS_ISO): kernel.elf program
 	echo } >> grub.cfg
 
 	cp $(BUILD_DIR)/$(OUT_BIN) isodir/boot/$(OUT_BIN)
-	cp $(BUILD_DIR)/program isodir/modules/program
+	cp $(PROGRAM_BUILD_DIR)/program isodir/modules/program
 	cp grub.cfg isodir/boot/grub/grub.cfg
 
 	echo "Building ISO..."
@@ -70,12 +69,14 @@ $(BUILD_DIR)/%.o: %.c
 $(BUILD_DIR)/%.o: %.s
 	$(AS) $(ASFLAGS) $< -o $@
 
-$(BUILD_DIR)/%.o: lib/%.c
+$(BUILD_DIR)/%.o: clib/%.c
 	$(CC) $(CFLAGS) $< -o $@
-$(BUILD_DIR)/%.o: lib/%.s
+$(BUILD_DIR)/%.o: clib/%.s
 	$(AS) $(ASFLAGS) $< -o $@
 clean:
 	rm -rf *.o $(OUT_BIN) $(OS_ISO)
 	rm -rf isodir
 	rm -rf $(BUILD_DIR)/*
 	rm -rf $(OS_ISO)
+	make -C program clean
+	make -C klib clean

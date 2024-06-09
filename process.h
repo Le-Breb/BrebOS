@@ -3,6 +3,20 @@
 
 #include "memory.h"
 
+typedef unsigned int pid;
+
+typedef struct
+{
+	page_table_t page_tables[PDT_ENTRIES];
+	pdt_t pdt;
+	multiboot_module_t* module;
+	unsigned int num_pages; // Num pages over which the process code spans
+	unsigned int* page_table_entries; // Array of pte where the process code is loaded to
+	pid pid; // PID
+	pid ppid; // Parent PID
+} process;
+
+
 /**
  * Load a flat binary in memory
  *
@@ -35,6 +49,12 @@ void process_exit(pdt_t* pdt, page_table_t* page_tables, const unsigned int* sta
  * @return Running process
  */
 process* get_running_process();
+
+/**
+ * Tries to get a free PID from pid_pool
+ * @return 0 if all PIDs are used, a valid PID otherwise
+ */
+pid get_free_pid();
 
 //http://www.skyfree.org/linux/references/ELF_Format.pdf
 #define EI_NIDENT (16)

@@ -1,6 +1,6 @@
 #include "fb.h"
 #include "io.h"
-#include "lib/string.h"
+#include "clib/string.h"
 
 unsigned int caret_pos = 0; /* Framebuffer index */
 short* const fb = (short*) FB_ADDR;

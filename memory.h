@@ -54,15 +54,6 @@ typedef union memory_header /* memory block header */
 
 typedef struct
 {
-	page_table_t page_tables[PDT_ENTRIES];
-	pdt_t pdt;
-	multiboot_module_t* module;
-	unsigned int num_pages; // Num pages over which the process code spans
-	unsigned int* page_table_entries; // Array of pte where the process code is loaded to
-} process;
-
-typedef struct
-{
 	unsigned int start_addr, size;
 } GRUB_module;
 
