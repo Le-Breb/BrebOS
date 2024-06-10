@@ -44,14 +44,6 @@ struct idt_entry
 
 typedef struct idt_entry idt_entry_t;
 
-/**
- * pic_acknowledge:
- *  Acknowledges an interrupt from either PIC 1 or PIC 2.
- *
- *  @param num The number of the interrupt
- */
-void pic_acknowledge(unsigned int interrupt);
-
 struct cpu_state
 {
 	unsigned int eax;
@@ -63,6 +55,8 @@ struct cpu_state
 	unsigned int ebp;
 } __attribute__((packed));
 
+typedef struct cpu_state cpu_state_t;
+
 struct stack_state
 {
 	unsigned int error_code;
@@ -73,14 +67,9 @@ struct stack_state
 	unsigned int ss;
 } __attribute__((packed));
 
-#define KBD_DATA_PORT   0x60
+typedef struct stack_state stack_state_t;
 
-/**
- *  Reads a scan code from the keyboard
- *
- *  @return The scan code (NOT an ASCII character!)
- */
-unsigned char read_scan_code(void);
+#define KBD_DATA_PORT   0x60
 
 /**
  * Initializes the IDT
@@ -115,7 +104,7 @@ void load_idt(idt_descriptor_t * idt_ptr);
  * @param interrupt The interrupt number
  * @param stack_state Stack state
  */
-void interrupt_handler([[maybe_unused]] struct cpu_state cpu_state, unsigned int interrupt, [[maybe_unused]] struct stack_state stack_state);
+void interrupt_handler([[maybe_unused]] cpu_state_t cpu_state, unsigned int interrupt, [[maybe_unused]] struct stack_state stack_state);
 
 /**
  * Remaps the PIC interrupts
@@ -124,6 +113,13 @@ void interrupt_handler([[maybe_unused]] struct cpu_state cpu_state, unsigned int
  * @param offset2 The offset for the second PIC
  */
 void pic_remap(int offset1, int offset2);
+
+/**
+ *  Reads a scan code from the keyboard
+ *
+ *  @return The scan code (NOT an ASCII character!)
+ */
+unsigned char read_scan_code(void);
 
 /**
  * Enables interrupts
@@ -138,25 +134,13 @@ void disable_interrupts(void);
 /**
  * Sets up the PIC
  */
-void setup_pic();
-
-/** Switch to user mode. External assembly function
- *
- * @param pdt PDT physical address
- * @param eip Instruction pointer
- * @param cs Code segment
- * @param eflags Flags
- * @param esp Stack pointer
- * @param ss Stack segment
- */
-void user_mode_jump_asm(unsigned int pdt, unsigned int eip, unsigned int cs, unsigned int eflags, unsigned int esp,
-						unsigned int ss);
+void pic_init();
 
 /** Exit from a syscall and resume user program
  *
  * @param cpu_state saved CPU state
  * @param stack_state saved stack state
  */
-void syscall_exit_asm(struct cpu_state cpu_state, struct stack_state stack_state);
+void user_process_jump_asm(cpu_state_t cpu_state, struct stack_state stack_state);
 
 #endif /* INCLUDE_INTERRUPTS_H */

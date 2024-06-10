@@ -9,8 +9,8 @@
 gdt_entry_t gdt[GDT_ENTRIES];
 gdt_descriptor_t gdt_descriptor;
 
-struct idt_entry idt[256];
-struct idt_descriptor idt_descriptor;
+idt_entry_t idt[256];
+idt_descriptor_t idt_descriptor;
 
 #include "clib/stdio.h"
 
@@ -29,7 +29,7 @@ int kmain([[maybe_unused]] unsigned int ebx)
 	fb_ok();
 
 	printf("Remapping PIC\n");
-	setup_pic();
+	pic_init();
 	fb_ok();
 	
 	printf("Setting up IDT\n");
@@ -44,6 +44,10 @@ int kmain([[maybe_unused]] unsigned int ebx)
 	init_mem((multiboot_info_t*) (ebx + 0xC0000000));
 	fb_ok();
 
+	printf("Setting up process handling\n");
+	processes_init();
+	fb_ok();
+
 	// Do stuff
 	const unsigned int N = 100000;
 	int* a = malloc(N * sizeof (int));
@@ -55,7 +59,8 @@ int kmain([[maybe_unused]] unsigned int ebx)
 	free(b);
 	free(a);
 
-	run_module(0, get_grub_modules(), get_page_tables());
+	start_module(0,  0);
+	schedule();
 	//fb_clear_screen();
 
 	return shutdown();

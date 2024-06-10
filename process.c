@@ -7,14 +7,15 @@
 #include "interrupts.h"
 
 // Bitmap of available PID. Ith LSB indicates PID state ; 1 = used, 0 = free.
-// PID 0 is reserved to indicate errors
-// Thus, 31 = sizeof(unsigned int) - 1 PIDs are available, allowing up to 32 processes to run concurrently
-unsigned int pid_pool = 1;
+// Thus, 32 = sizeof(unsigned int) PIDs are available, allowing up to 32 processes to run concurrently
+unsigned int pid_pool = 0;
+
+pid running_process = 0x00;
+ready_queue_t ready_queue;
+process* processes[MAX_PROCESSES];
 
 /** Change current pdt */
 extern void change_pdt_asm(unsigned int pdt_phys_addr);
-
-process* running_process = 0x00;
 
 process* load_binary(unsigned int module, GRUB_module* grub_modules)
 {
@@ -180,8 +181,23 @@ process* load_elf(unsigned int module, GRUB_module* grub_modules)
 	return proc;
 }
 
-void run_module(unsigned int module, GRUB_module* grub_modules, page_table_t* page_tables)
+void start_module(unsigned int module, pid ppid)
 {
+	if (ready_queue.count == MAX_PROCESSES)
+	{
+		printf_error("Max process are already running");
+		return;
+	}
+
+	pid pid = get_free_pid();
+	if (pid == MAX_PROCESSES)
+	{
+		printf_error("No more PID available");
+		return;
+	}
+
+	GRUB_module* grub_modules = get_grub_modules();
+
 	// Check whether file is an elf
 	Elf32_Ehdr* elf32Ehdr = (Elf32_Ehdr*) grub_modules[module].start_addr;
 	unsigned int elf = elf32Ehdr->e_ident[0] == 0x7F && elf32Ehdr->e_ident[1] == 'E' && elf32Ehdr->e_ident[2] == 'L' &&
@@ -189,8 +205,6 @@ void run_module(unsigned int module, GRUB_module* grub_modules, page_table_t* pa
 
 	// Load process into memory
 	process* proc = elf ? load_elf(module, grub_modules) : load_binary(module, grub_modules);
-	proc->pid = get_free_pid();
-	proc->ppid = 0;
 
 	// Ensure process was loaded successfully
 	if (proc == 0x00)
@@ -201,8 +215,6 @@ void run_module(unsigned int module, GRUB_module* grub_modules, page_table_t* pa
 
 	// Allocate process stack page
 	unsigned int p_stack_page_entry_id = get_free_page();
-	unsigned int p_stack_pde = p_stack_page_entry_id / PDT_ENTRIES;
-	unsigned int p_stack_pte = p_stack_page_entry_id % PDT_ENTRIES;
 	allocate_page_user(get_free_page(), p_stack_page_entry_id);
 
 	// Allocate syscall handler stack page
@@ -212,6 +224,7 @@ void run_module(unsigned int module, GRUB_module* grub_modules, page_table_t* pa
 	allocate_page(get_free_page(), k_stack_page_entry);
 
 	// Set process pdt entries to target process page tables
+	page_table_t* page_tables = get_page_tables();
 	for (int i = 0; i < PDT_ENTRIES; ++i)
 	{
 		unsigned int pt_virt_addr = (unsigned int) &proc->page_tables[i];
@@ -245,57 +258,118 @@ void run_module(unsigned int module, GRUB_module* grub_modules, page_table_t* pa
 	proc->page_tables[767].entries[1023] = PTE(p_stack_page_entry_id); // Copy entry - set correct stack virtual address
 	PTE(p_stack_page_entry_id) = 0; // Remove previous entry
 
-	unsigned int p_stack_top = VIRT_ADDR(p_stack_pde, p_stack_pte, (PAGE_SIZE - 4)); // process stack top
-	unsigned int k_stack_top = VIRT_ADDR(k_stack_pde, k_stack_pte, (PAGE_SIZE - 4)); // kernel stack top
+	// Setup PCB
+	processes[pid] = proc;
+	proc->pid = pid;
+	proc->ppid = ppid;
+	proc->k_stack_top = VIRT_ADDR(k_stack_pde, k_stack_pte, (PAGE_SIZE - 4));
+	proc->stack_state.eip = 0;
+	proc->stack_state.ss = 0x20 | 0x03;
+	proc->stack_state.cs = 0x18 | 0x03;
+	proc->stack_state.esp = 0xBFFFFFFC;
+	proc->stack_state.eflags = 0x200;
+	proc->stack_state.error_code = 0;
+	memset(&proc->cpu_state, 0, sizeof(proc->cpu_state));
 
-	// Set TSS esp0 to point to the trap handler stack (i.e. tell the CPU where is trap handler stack)
-	set_tss_kernel_stack(k_stack_top);
-
-	// Jump
-	running_process = proc;
-	unsigned int proc_pdt_phys_addr = PHYS_ADDR(((unsigned int) &proc->pdt)); // Process pdt physical address
-	unsigned int eip = 0; // 0 because process is mapped at 0x00
-	unsigned int user_code_seg_sel = 0x18 | 0x03; // 3rd entry, pl3
-	unsigned int user_data_seg_sel = 0x20 | 0x03; // 4th entry, pl3
-	unsigned int eflags = 0x200; // IF = 1
-	user_mode_jump_asm(proc_pdt_phys_addr, eip, user_code_seg_sel, eflags, p_stack_top, user_data_seg_sel);
+	// Set process ready
+	add_process_to_ready_queue(pid);
 }
 
-void process_exit(pdt_t* pdt, page_table_t* page_tables, const unsigned int* stack_top_ptr)
+void process_exit(pid pid, const unsigned int* stack_top_ptr)
 {
-	// Free process code
-	for (unsigned int i = 0; i < running_process->num_pages; ++i)
-		free_page(running_process->page_table_entries[i] / PDT_ENTRIES,
-				  running_process->page_table_entries[i] % PDT_ENTRIES);
+	process* process = processes[pid];
 
-	// Free process struct
-	free(running_process->page_table_entries);
-	page_aligned_free(running_process);
-
-	running_process = 0x00;
+	if (process == 0x00)
+	{
+		printf_error("No process with PID %u", pid);
+		return;
+	}
 
 	// Switch back to kernel stack (as we are currently on process' interrupt stack)
 	asm volatile("mov %0, %%esp" : : "r" (stack_top_ptr));
-
 	// Switch back to kernel pdt
-	change_pdt_asm(PHYS_ADDR((unsigned int) pdt));
-	printf_info("Process exited");
+	page_table_t* page_tables = get_page_tables();
+	change_pdt_asm(PHYS_ADDR((unsigned int) get_pdt()));
 
-	shutdown();
-}
+	// Free process code
+	for (unsigned int i = 0; i < process->num_pages; ++i)
+		free_page(process->page_table_entries[i] / PDT_ENTRIES,
+				  process->page_table_entries[i] % PDT_ENTRIES);
 
-process* get_running_process()
-{
-	return running_process;
+	// Free process struct
+	free(process->page_table_entries);
+	page_aligned_free(process);
+
+	release_pid(pid);
+	printf_info("Process %u exited", pid);
 }
 
 pid get_free_pid()
 {
-	for (unsigned int i = 1; i < sizeof(unsigned int); ++i)
+	for (unsigned int i = 0; i < MAX_PROCESSES; ++i)
 	{
 		if (!(pid_pool & (1 << i)))
+		{
+			pid_pool |= (1 << i); // Mark PID as used
 			return i;
+		}
 	}
 
-	return 0;
+	return MAX_PROCESSES; // No PID available
+}
+
+void processes_init()
+{
+	for (unsigned int i = 0; i < MAX_PROCESSES; ++i)
+	{
+		ready_queue.arr[i] = -1;
+		processes[i] = 0x00;
+	}
+	ready_queue.start = ready_queue.count = 0;
+}
+
+pid get_running_process_pid()
+{
+	return running_process;
+}
+
+process* get_running_process()
+{
+	return processes[running_process];
+}
+
+void schedule()
+{
+	// Nothing to run
+	if (ready_queue.count == 0)
+		shutdown();
+
+	// Get process
+	pid pid = running_process = ready_queue.arr[ready_queue.start];
+	process* p = processes[pid];
+
+	// Update queue
+	ready_queue.count--;
+	ready_queue.start = (ready_queue.start + 1) % MAX_PROCESSES;
+
+	// Use process' pdt
+	page_table_t* page_tables = get_page_tables();
+	unsigned int pdt_phys_addr = PHYS_ADDR((unsigned int) &p->pdt);
+	change_pdt_asm(pdt_phys_addr);
+
+	// Set TSS esp0 to point to the trap handler stack (i.e. tell the CPU where is trap handler stack)
+	set_tss_kernel_stack(p->k_stack_top);
+
+	// Jump
+	user_process_jump_asm(p->cpu_state, p->stack_state);
+}
+
+void add_process_to_ready_queue(pid pid)
+{
+	ready_queue.arr[(ready_queue.start + ready_queue.count++) % MAX_PROCESSES] = pid;
+}
+
+void release_pid(pid pid)
+{
+	pid_pool |= 1 << pid;
 }

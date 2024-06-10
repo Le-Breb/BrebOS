@@ -2,10 +2,10 @@ extern interrupt_handler
 
 ; Exit from a syscall and resume user program
 ; [esp + 0] = call function ret addr
-; [esp + 4] = struct cpu_state
-; [esp + 4 + sizeof(struct cpu_state)] = struct stack_state
-global syscall_exit_asm
-syscall_exit_asm:
+; [esp + 4] = cpu_state_t
+; [esp + 4 + sizeof(cpu_state_t)] = struct stack_state
+global user_process_jump_asm
+user_process_jump_asm:
 .restore_regs:
     mov ebx, [esp + 08]
     mov ecx, [esp + 12]
@@ -16,65 +16,22 @@ syscall_exit_asm:
 
 .jump:
     ;push ss
-    mov eax, [esp + 52] ; 13 * 4
+    mov eax, [esp + 52]
     push eax
 	;push esp
-    mov eax, [esp + 32] ; (7 + 1) * 4
+    mov eax, [esp + 52]
     push eax
 	;push eflags
-	mov eax, [esp + 52] ; (11 + 2) * 4
+	mov eax, [esp + 52]
 	push eax
     ; push cs
-    mov eax, [esp + 52] ; (10 + 3) * 4
+    mov eax, [esp + 52]
     push eax
     ; push eip
-    mov eax, [esp + 52] ; (9 + 4) * 4
+    mov eax, [esp + 52]
     push eax
 
-    mov eax, [esp + 24] ; restore eax (kinda useless as it contains syscall id but it feels right to do it)
-
-	; jump
-	iret
-
-; Run a program in user mode
-; Doc: //https://web.archive.org/web/20220426003110/http://www.jamesmolloy.co.uk/tutorial_html/10.-User%20Mode.html
-; [esp +  0] = call function ret addr
-; [esp +  4] = program pdt physical addr
-; [esp +  8] = program eip (must be 0)
-; [esp + 12] = program cs
-; [esp + 16] = program eflags
-; [esp + 20] = program esp (must be 0xBFFFFFFC)
-; [esp + 24] = program ss
-global user_mode_jump_asm
-user_mode_jump_asm:
-.change_to_process_pdt:
-    mov eax, [esp + 4]
-    mov cr3, eax
-
-
-.set_data_segments:
     mov eax, [esp + 24]
-    mov ds, eax
-    mov es, eax
-    mov fs, eax
-    mov gs, eax
-
-.jump:
-    ;push ss
-    ;mov eax, [esp + 24] // eax already contains ss
-    push eax
-	;push esp
-    mov eax, [esp + 24]
-    push eax
-	;push eflags
-	mov eax, [esp + 24]
-	push eax
-    ; push cs
-    mov eax, [esp + 24]
-    push eax
-    ; push eip
-    mov eax, [esp + 24]
-    push eax
 
 	; jump
 	iret

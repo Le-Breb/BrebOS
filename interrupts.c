@@ -5,6 +5,7 @@
 #include "clib/stdio.h"
 #include "process.h"
 
+#pragma region ints
 extern void interrupt_handler_0();
 
 extern void interrupt_handler_1();
@@ -517,9 +518,64 @@ extern void interrupt_handler_254();
 
 extern void interrupt_handler_255();
 
-void syscall_handler(struct cpu_state* cpu_state, struct stack_state* stack_state);
+#pragma endregion ints
 
-void gpf_handler([[maybe_unused]] struct cpu_state* cpu_state, [[maybe_unused]] struct stack_state* stack_state);
+/**
+ * Changes current pdt
+ *
+ * @param pdt_phys_addr New PDT physical address
+ * */
+extern void change_pdt_asm(unsigned int pdt_phys_addr);
+
+/**
+ * Handles a syscall
+ *
+ * @param cpu_state CPU state
+ * @param stack_state Stack state
+ * */
+void syscall_handler(cpu_state_t* cpu_state, struct stack_state* stack_state);
+
+/**
+ * Handles a GPF
+ *
+ * @param cpu_state CPU state
+ * @param stack_state Stack state
+ * */
+void gpf_handler([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] struct stack_state* stack_state);
+
+/**
+ *  Acknowledges an interrupt from either PIC 1 or PIC 2.
+ *
+ *  @param num The number of the interrupt
+ */
+void pic_acknowledge(unsigned int interrupt);
+
+/**
+ * Handles a page fault
+ *
+ * @param cpu_state CPU state
+ * @param stack_state Stack state
+ */
+void page_fault_handler([[maybe_unused]] cpu_state_t cpu_state, [[maybe_unused]] struct stack_state stack_state);
+
+/**
+ * Starts a GRUB module as a child of current process
+ * @param cpu_state CPU state
+ * @param stack_state Stack state
+ */
+void syscall_start_process([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] struct stack_state* stack_state);
+
+/**
+ * Sets a process last in ready queue
+ *
+ * @param cpu_state CPU state
+ * @param stack_state Stack state
+ */
+void syscall_pause([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] stack_state_t* stack_state);
+
+/**
+ * Returns current process' PID  */
+void syscall_get_pid([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] struct stack_state* stack_state);
 
 unsigned char read_scan_code(void)
 {
@@ -537,7 +593,7 @@ void pic_acknowledge(unsigned int interrupt)
 void idt_init(idt_descriptor_t * idt_descriptor, idt_entry_t * idt)
 {
 	// Use the macro to declare all interrupt handlers
-	idt_descriptor->size = (sizeof(struct idt_entry)) * NUM_INTERRUPTS - 1;
+	idt_descriptor->size = (sizeof(idt_entry_t)) * NUM_INTERRUPTS - 1;
 	idt_descriptor->address = idt;
 
 	idt_set_entry(idt, 0, (unsigned int) interrupt_handler_0, 0x08, INTGATE);
@@ -810,7 +866,7 @@ void idt_set_entry(idt_entry_t* idt, int num, unsigned int base, unsigned short 
 	idt[num].offset0_15 = base & 0xFFFF;
 }
 
-void page_fault_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unused]] struct stack_state stack_state)
+void page_fault_handler([[maybe_unused]] cpu_state_t cpu_state, [[maybe_unused]] struct stack_state stack_state)
 {
 	unsigned int err = stack_state.error_code;
 	printf_error("Page fault");
@@ -824,29 +880,78 @@ void page_fault_handler([[maybe_unused]] struct cpu_state cpu_state, [[maybe_unu
 	printf("SGX: %s\n", err & 32768 ? "True": "False");
 }
 
-void syscall_handler(struct cpu_state* cpu_state, struct stack_state* stack_state)
+void syscall_start_process([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] struct stack_state* stack_state)
 {
+	pid pid = get_running_process_pid();
+
+	// Switch back to kernel pdt
+	page_table_t* page_tables = get_page_tables();
+	change_pdt_asm(PHYS_ADDR((unsigned int) get_pdt()));
+
+	// Load child process and set it ready
+	start_module(cpu_state->ebx, pid);
+
+	// Add current process at the end of ready queue so that it will be resumed
+	add_process_to_ready_queue(pid);
+}
+
+void syscall_pause([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] stack_state_t* stack_state)
+{
+	// Add current process at the end of ready queue so that it will be resumed
+	add_process_to_ready_queue(get_running_process_pid());
+}
+
+void syscall_get_pid([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] struct stack_state* stack_state)
+{
+	process* running_process = get_running_process();
+
+	running_process->cpu_state.eax = running_process->pid; // Return PID
+
+	// Add current process at the end of ready queue so that it will be resumed
+	add_process_to_ready_queue(running_process->pid);
+}
+
+void syscall_handler(cpu_state_t* cpu_state, struct stack_state* stack_state)
+{
+	process* p = get_running_process();
+
+	// Update PCB
+	p->cpu_state = *cpu_state;
+	p->stack_state = *stack_state;
+
 	switch (cpu_state->eax) {
 		case 1:
-			process_exit(get_pdt(), get_page_tables(), get_stack_top_ptr());
+			process_exit(get_running_process_pid(), get_stack_top_ptr());
 			break;
 		case 2:
 			fb_write((char*)cpu_state->ebx);
-			syscall_exit_asm(*cpu_state, *stack_state);
+			add_process_to_ready_queue(get_running_process_pid());
+			break;
+		case 3:
+			syscall_start_process(cpu_state, stack_state);
+			break;
+		case 4:
+			syscall_pause(cpu_state, stack_state);
+			break;
+		case 5:
+			syscall_get_pid(cpu_state, stack_state);
 			break;
 		default:
 			printf_info("Received unknown syscall id: %u", cpu_state->eax);
 			break;
 		}
+
+	asm volatile("mov %0, %%esp" : : "r" (get_stack_top_ptr()));
+	schedule();
 }
 
-void gpf_handler([[maybe_unused]] struct cpu_state* cpu_state, [[maybe_unused]] struct stack_state* stack_state)
+void gpf_handler([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] struct stack_state* stack_state)
 {
 	printf_error("General protection fault");
 	printf("Segment selector: %x\n", stack_state->error_code);
 }
 
-void interrupt_handler([[maybe_unused]] struct cpu_state cpu_state, unsigned int interrupt, [[maybe_unused]] struct stack_state stack_state)
+void interrupt_handler([[maybe_unused]] cpu_state_t cpu_state, unsigned int interrupt, [[maybe_unused]] struct stack_state stack_state)
 {
 	switch (interrupt)
 	{
@@ -868,7 +973,7 @@ void interrupt_handler([[maybe_unused]] struct cpu_state cpu_state, unsigned int
 	pic_acknowledge(interrupt);
 }
 
-void setup_pic()
+void pic_init()
 {
 	// Remap the PIC
 	pic_remap(PIC1_START_INTERRUPT, PIC2_START_INTERRUPT);

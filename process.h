@@ -2,18 +2,31 @@
 #define INCLUDE_PROCESS_H
 
 #include "memory.h"
+#include "interrupts.h"
 
 typedef unsigned int pid;
+
+// Maximum concurrent processes. Limit defined by size of pid_pool
+#define MAX_PROCESSES (sizeof(unsigned int) * 8)
+
+typedef struct
+{
+	pid arr[MAX_PROCESSES];
+	unsigned int start, count;
+} ready_queue_t;
 
 typedef struct
 {
 	page_table_t page_tables[PDT_ENTRIES];
 	pdt_t pdt;
-	multiboot_module_t* module;
 	unsigned int num_pages; // Num pages over which the process code spans
 	unsigned int* page_table_entries; // Array of pte where the process code is loaded to
 	pid pid; // PID
 	pid ppid; // Parent PID
+	unsigned int k_stack_top;
+
+	cpu_state_t cpu_state; // Registers
+	stack_state_t stack_state; // Execution context
 } process;
 
 
@@ -35,26 +48,53 @@ process* load_binary(unsigned int module, GRUB_module* grub_modules);
  */
 process* load_elf(unsigned int module, GRUB_module* grub_modules);
 
-/** Run a GRUB module
+/**
+ * Loads a GRUB module and set it ready
  *
  * @param module Grub module id
  */
-void run_module(unsigned int module, GRUB_module* grub_modules, page_table_t* page_tables);
+void start_module(unsigned int module, pid ppid);
 
 /** Terminate currently executing program */
-void process_exit(pdt_t* pdt, page_table_t* page_tables, const unsigned int* stack_top_ptr);
-
-/** Get running process
- *
- * @return Running process
- */
-process* get_running_process();
+void process_exit(pid pid, const unsigned int* stack_top_ptr);
 
 /**
  * Tries to get a free PID from pid_pool
  * @return 0 if all PIDs are used, a valid PID otherwise
  */
 pid get_free_pid();
+
+/**
+ * Indicates that a used PID is now free
+ * @param pid PID to free
+ */
+void release_pid(pid pid);
+
+/** Initialize processes handling data structures */
+void processes_init();
+
+/**
+ * Gets the PID of current running process
+ * @return PID of current running process
+ */
+pid get_running_process_pid();
+
+/**
+ * Gets running process
+ * @return running process
+ */
+process* get_running_process();
+
+/**
+ * Executes next process in the ready queue
+ */
+void schedule();
+
+/**
+ * Adds a process to the ready queue
+ * @param pid Process' PID
+ */
+void add_process_to_ready_queue(pid pid);
 
 //http://www.skyfree.org/linux/references/ELF_Format.pdf
 #define EI_NIDENT (16)
