@@ -214,7 +214,9 @@ void start_module(unsigned int module, pid ppid)
 	}
 
 	// Allocate process stack page
-	unsigned int p_stack_page_entry_id = get_free_page();
+	unsigned int p_stack_page_entry_id = get_free_page_entry();
+	unsigned int p_stack_pde = p_stack_page_entry_id / PDT_ENTRIES;
+	unsigned int p_stack_pte = p_stack_page_entry_id % PDT_ENTRIES;
 	allocate_page_user(get_free_page(), p_stack_page_entry_id);
 
 	// Allocate syscall handler stack page
@@ -256,7 +258,7 @@ void start_module(unsigned int module, pid ppid)
 	if (proc->page_tables[767].entries[1023] != 0)
 		printf_error("Process kernel page is not empty");
 	proc->page_tables[767].entries[1023] = PTE(p_stack_page_entry_id); // Copy entry - set correct stack virtual address
-	PTE(p_stack_page_entry_id) = 0; // Remove previous entry
+	proc->page_tables[p_stack_pde].entries[p_stack_pte] = 0; // Remove previous entry
 
 	// Setup PCB
 	processes[pid] = proc;
@@ -271,11 +273,19 @@ void start_module(unsigned int module, pid ppid)
 	proc->stack_state.error_code = 0;
 	memset(&proc->cpu_state, 0, sizeof(proc->cpu_state));
 
+	process* p = processes[pid];
+	process* pr = processes[ppid];
+
+	// Todo: Don't forget this weird stack fix where child k_stack is manually referenced parent's page tables
+	pr->page_tables[p->k_stack_top >> 22].entries[(p->k_stack_top >> 12) & 0x3FF] = p->page_tables[p->k_stack_top
+			>> 22].entries[(p->k_stack_top >> 12) & 0x3FF];
+
+
 	// Set process ready
 	add_process_to_ready_queue(pid);
 }
 
-void process_exit(pid pid, const unsigned int* stack_top_ptr)
+void free_process(pid pid)
 {
 	process* process = processes[pid];
 
@@ -285,8 +295,12 @@ void process_exit(pid pid, const unsigned int* stack_top_ptr)
 		return;
 	}
 
-	// Switch back to kernel stack (as we are currently on process' interrupt stack)
-	asm volatile("mov %0, %%esp" : : "r" (stack_top_ptr));
+	if (!(process->flags & P_TERMINATED))
+	{
+		printf_error("Process %u is not terminated", pid);
+		return;
+	}
+
 	// Switch back to kernel pdt
 	page_table_t* page_tables = get_page_tables();
 	change_pdt_asm(PHYS_ADDR((unsigned int) get_pdt()));
@@ -301,6 +315,8 @@ void process_exit(pid pid, const unsigned int* stack_top_ptr)
 	page_aligned_free(process);
 
 	release_pid(pid);
+	process->flags |= P_TERMINATED;
+
 	printf_info("Process %u exited", pid);
 }
 
@@ -338,30 +354,51 @@ process* get_running_process()
 	return processes[running_process];
 }
 
-void schedule()
+__attribute__ ((noreturn)) void schedule()
 {
-	// Nothing to run
-	if (ready_queue.count == 0)
-		shutdown();
+	process* p = 0x00;
 
-	// Get process
-	pid pid = running_process = ready_queue.arr[ready_queue.start];
-	process* p = processes[pid];
+	page_table_t* page_tables = get_page_tables();
 
-	// Update queue
-	ready_queue.count--;
-	ready_queue.start = (ready_queue.start + 1) % MAX_PROCESSES;
+	// Switch back to kernel pdt to make sure that new processes are referenced in the pdt we use
+	// Todo: Change things so that we dont have to do that
+	change_pdt_asm(PHYS_ADDR((unsigned int) get_pdt()));
+
+	// Find next process to execute
+	while (p == 0x00)
+	{
+		// Nothing to run
+		if (ready_queue.count == 0)
+			shutdown();
+
+		// Get process
+		pid pid = running_process = ready_queue.arr[ready_queue.start];
+		process* proc = processes[pid];
+
+		if (proc->flags & P_TERMINATED)
+			free_process(proc->pid);
+		else
+			p = proc;
+
+		// Update queue
+		ready_queue.count--;
+		ready_queue.start = (ready_queue.start + 1) % MAX_PROCESSES;
+	}
 
 	// Use process' pdt
-	page_table_t* page_tables = get_page_tables();
-	unsigned int pdt_phys_addr = PHYS_ADDR((unsigned int) &p->pdt);
-	change_pdt_asm(pdt_phys_addr);
+	change_pdt_asm(PHYS_ADDR((unsigned int) &p->pdt));
 
-	// Set TSS esp0 to point to the trap handler stack (i.e. tell the CPU where is trap handler stack)
+	// Set TSS esp0 to point to the syscall handler stack (i.e. tell the CPU where is syscall handler stack)
 	set_tss_kernel_stack(p->k_stack_top);
 
 	// Jump
-	user_process_jump_asm(p->cpu_state, p->stack_state);
+	if (p->flags & P_SYSCALL_INTERRUPTED)
+	{
+		p->flags &= ~P_SYSCALL_INTERRUPTED;
+		resume_syscall_handler_asm(p->k_cpu_state, p->k_stack_state.esp - 12);
+	}
+	else
+		resume_user_process_asm(p->cpu_state, p->stack_state);
 }
 
 void add_process_to_ready_queue(pid pid)
@@ -371,5 +408,10 @@ void add_process_to_ready_queue(pid pid)
 
 void release_pid(pid pid)
 {
-	pid_pool |= 1 << pid;
+	pid_pool &= ~(1 << pid);
+}
+
+void terminate_process(process* p)
+{
+	p->flags |= P_TERMINATED;
 }

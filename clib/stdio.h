@@ -18,4 +18,14 @@ __attribute__ ((format (printf, 1, 2))) int printf_error(const char* format, ...
 
 __attribute__ ((format (printf, 1, 2))) int printf_info(const char* format, ...);
 
+/**
+ * Printf to be called from printf syscall. \n
+ * The difference is that format specifiers are not on this function's stack but rather on the user process stack,
+ * which this function handles appropriately.
+ * @param format format string to print
+ * @param args pointer to format arguments
+ * @return Number of characters written
+ */
+int printf_syscall(const char* format, char* args);
+
 #endif //INCLUDE_STDIO_H

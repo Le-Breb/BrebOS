@@ -15,18 +15,27 @@ typedef struct
 	unsigned int start, count;
 } ready_queue_t;
 
+#define P_TERMINATED 1
+#define P_SYSCALL_INTERRUPTED 2
+
 typedef struct
 {
 	page_table_t page_tables[PDT_ENTRIES];
 	pdt_t pdt;
+
 	unsigned int num_pages; // Num pages over which the process code spans
 	unsigned int* page_table_entries; // Array of pte where the process code is loaded to
+
 	pid pid; // PID
 	pid ppid; // Parent PID
-	unsigned int k_stack_top;
+
+	unsigned int k_stack_top; // Top of syscall handlers' stack
+	unsigned int flags;
 
 	cpu_state_t cpu_state; // Registers
+	cpu_state_t k_cpu_state; // Syscall handler registers
 	stack_state_t stack_state; // Execution context
+	stack_state_t k_stack_state; // Syscall handler execution context
 } process;
 
 
@@ -55,8 +64,13 @@ process* load_elf(unsigned int module, GRUB_module* grub_modules);
  */
 void start_module(unsigned int module, pid ppid);
 
-/** Terminate currently executing program */
-void process_exit(pid pid, const unsigned int* stack_top_ptr);
+/**
+ * Terminates a process
+ */
+void terminate_process(process* p);
+
+/** Frees a terminated process */
+void free_process(pid pid);
 
 /**
  * Tries to get a free PID from pid_pool
@@ -88,7 +102,7 @@ process* get_running_process();
 /**
  * Executes next process in the ready queue
  */
-void schedule();
+__attribute__ ((noreturn)) void schedule();
 
 /**
  * Adds a process to the ready queue

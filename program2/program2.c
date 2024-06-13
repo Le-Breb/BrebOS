@@ -2,13 +2,13 @@
 
 int p_main()
 {
-	char str[] = "Hello from process x\n";
-	str[19] = '0' + (char) get_pid();
+	[[maybe_unused]] unsigned int pid = get_pid();
+	[[maybe_unused]] unsigned int c = 1000;
+	[[maybe_unused]] unsigned int ctr = 0;
 
-	for (int i = 0; i < 5; ++i)
+	while (c--)
 	{
-		print(str);
-		pause();
+		printf("Hello from process %u | c = %u\n", pid, ctr++);
 	}
 
 	return 0;

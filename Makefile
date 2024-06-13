@@ -76,10 +76,10 @@ $(OS_ISO): kernel.elf program program2
 
 run: $(OS_ISO)
 #	bochs -f bochsrc.txt -q
-	qemu-system-i386 -cdrom $(OS_ISO)
+	qemu-system-i386 -device isa-debug-exit -cdrom $(OS_ISO)
 
 debug: $(OS_ISO)
-	qemu-system-i386 -cdrom $(OS_ISO) -gdb tcp::26000 -S
+	qemu-system-i386 -device isa-debug-exit -cdrom $(OS_ISO) -gdb tcp::26000 -S
 
 $(BUILD_DIR)/%.o: %.c
 	$(CC) $(CFLAGS) $< -o $@

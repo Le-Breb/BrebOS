@@ -14,6 +14,7 @@ idt_descriptor_t idt_descriptor;
 
 #include "clib/stdio.h"
 
+//Todo: Implement shared memory
 //Todo: Investigate about whether page 184 (VGA buffer start address is mapped twice)
 //Todo: same for page pde 771 pte11 at the end of run_module
 int kmain([[maybe_unused]] unsigned int ebx)

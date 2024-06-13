@@ -533,7 +533,7 @@ extern void change_pdt_asm(unsigned int pdt_phys_addr);
  * @param cpu_state CPU state
  * @param stack_state Stack state
  * */
-void syscall_handler(cpu_state_t* cpu_state, struct stack_state* stack_state);
+__attribute__ ((noreturn)) void syscall_handler(cpu_state_t* cpu_state, struct stack_state* stack_state);
 
 /**
  * Handles a GPF
@@ -564,18 +564,17 @@ void page_fault_handler([[maybe_unused]] cpu_state_t cpu_state, [[maybe_unused]]
  * @param stack_state Stack state
  */
 void syscall_start_process([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] struct stack_state* stack_state);
-
-/**
- * Sets a process last in ready queue
- *
- * @param cpu_state CPU state
- * @param stack_state Stack state
- */
-void syscall_pause([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] stack_state_t* stack_state);
-
 /**
  * Returns current process' PID  */
 void syscall_get_pid([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] struct stack_state* stack_state);
+
+/**
+ * Handler for preemption timer
+ * @param kesp Kernel ESP (see details in interrupt_handlers declaration)
+ * @param cpu_state CPU state
+ * @param stack_state stack state
+ */
+__attribute__((noreturn)) void interrupt_timer(unsigned int kesp, cpu_state_t* cpu_state, stack_state_t* stack_state);
 
 unsigned char read_scan_code(void)
 {
@@ -891,14 +890,7 @@ void syscall_start_process([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unus
 	// Load child process and set it ready
 	start_module(cpu_state->ebx, pid);
 
-	// Add current process at the end of ready queue so that it will be resumed
-	add_process_to_ready_queue(pid);
-}
-
-void syscall_pause([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] stack_state_t* stack_state)
-{
-	// Add current process at the end of ready queue so that it will be resumed
-	add_process_to_ready_queue(get_running_process_pid());
+	change_pdt_asm(PHYS_ADDR((unsigned int)&get_running_process()->pdt));
 }
 
 void syscall_get_pid([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] struct stack_state* stack_state)
@@ -911,7 +903,7 @@ void syscall_get_pid([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] s
 	add_process_to_ready_queue(running_process->pid);
 }
 
-void syscall_handler(cpu_state_t* cpu_state, struct stack_state* stack_state)
+__attribute__ ((noreturn)) void syscall_handler(cpu_state_t* cpu_state, struct stack_state* stack_state)
 {
 	process* p = get_running_process();
 
@@ -920,18 +912,27 @@ void syscall_handler(cpu_state_t* cpu_state, struct stack_state* stack_state)
 	p->stack_state = *stack_state;
 
 	switch (cpu_state->eax) {
-		case 1:
-			process_exit(get_running_process_pid(), get_stack_top_ptr());
+		case 0:
+			pit_init();
+			enable_preemptive_scheduling();
 			break;
+		case 1:
+			terminate_process(p);
+
+			// We definitely do not want to continue as next step is to resume the process we just terminated !
+			// Instead, we manually raise a timer interrupt which we schedule another process
+			// (The terminated one as its terminated flag set, so it won't be selected by the scheduler)
+			__asm__("int $0x20");
+
+			// We will never resume the code here
+			__builtin_unreachable();
 		case 2:
-			fb_write((char*)cpu_state->ebx);
-			add_process_to_ready_queue(get_running_process_pid());
+			printf_syscall((char*) cpu_state->ebx, (char*)cpu_state->ecx);
 			break;
 		case 3:
+			disable_preemptive_scheduling();
 			syscall_start_process(cpu_state, stack_state);
-			break;
-		case 4:
-			syscall_pause(cpu_state, stack_state);
+			enable_preemptive_scheduling();
 			break;
 		case 5:
 			syscall_get_pid(cpu_state, stack_state);
@@ -941,8 +942,7 @@ void syscall_handler(cpu_state_t* cpu_state, struct stack_state* stack_state)
 			break;
 		}
 
-	asm volatile("mov %0, %%esp" : : "r" (get_stack_top_ptr()));
-	schedule();
+	resume_user_process_asm(p->cpu_state, p->stack_state);
 }
 
 void gpf_handler([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] struct stack_state* stack_state)
@@ -951,10 +951,48 @@ void gpf_handler([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] struc
 	printf("Segment selector: %x\n", stack_state->error_code);
 }
 
-void interrupt_handler([[maybe_unused]] cpu_state_t cpu_state, unsigned int interrupt, [[maybe_unused]] struct stack_state stack_state)
+__attribute__((noreturn)) void interrupt_timer(unsigned int kesp, cpu_state_t* cpu_state, stack_state_t* stack_state)
+{
+	process* p = get_running_process();
+
+	// Did we interrupt a syscall handler ?
+	unsigned int syscall_interrupted = stack_state->cs == 0x08;
+	p->flags |= ((1 << P_SYSCALL_INTERRUPTED) & syscall_interrupted);
+
+	// Don't do anything if the process has been terminated
+	if (!(p->flags & P_TERMINATED))
+	{
+		// Update syscall handler state
+		if (syscall_interrupted)
+		{
+			p->k_cpu_state = *cpu_state;
+			p->k_stack_state = *stack_state;
+
+			// Update ESP and SS manually because the CPU did not push them as no privilege changed occurred
+			p->k_stack_state.esp = kesp;
+			__asm__ volatile("mov %%ss, %0" : "=r"(p->k_stack_state.ss));
+		}
+		else // Update PCB
+		{
+			p->cpu_state = *cpu_state;
+			p->stack_state = *stack_state;
+		}
+
+		add_process_to_ready_queue(p->pid);
+	}
+
+
+	pic_acknowledge(0x20);
+
+	schedule();
+}
+
+void interrupt_handler(unsigned int kesp, cpu_state_t cpu_state, unsigned int interrupt, struct stack_state stack_state)
 {
 	switch (interrupt)
 	{
+		case 0x20:
+			interrupt_timer(kesp, &cpu_state, &stack_state);
 		case 0x21:
 			keyboard_interrupt_handler();
 			break;
@@ -967,6 +1005,7 @@ void interrupt_handler([[maybe_unused]] cpu_state_t cpu_state, unsigned int inte
 		case 0x80:
 			syscall_handler(&cpu_state, &stack_state);
 		default:
+			printf_info("Received unknown interrupt: %u", interrupt);
 			break;
 	}
 
@@ -1016,4 +1055,39 @@ void pic_remap(int offset1, int offset2)
 	outb(PIC1_DATA, a1);
 	outb(PIC2_DATA, a2);
 	io_wait();
+}
+
+/*unsigned int ms_to_divider(unsigned int ms)
+{
+	// 1193182 / div * 1000 = ms
+	// 1193182 / div = ms / 1000
+ 	// div / 1193182 = 1000 / ms
+ 	// div = 1000 / ms / 1193812
+	return 1193182000 / ms;
+}*/
+unsigned int ms_to_divider(unsigned int ms)
+{
+	return 1193182 / (1000 / ms) - 1;
+}
+
+void pit_init()
+{
+	unsigned int divider = 0xFFFF / 10;//ms_to_divider(200);
+
+	outb(0x43, 0b00110110);
+
+	outb(0x40, divider & 0xFF); // Send low byte of divider
+	outb(0x40, (divider >> 8) & 0xFF); // Send high byte of divider
+}
+
+void enable_preemptive_scheduling()
+{
+	unsigned int a = inb(PIC1_DATA) & ~1;
+	outb(PIC1_DATA, a);
+}
+
+void disable_preemptive_scheduling()
+{
+	unsigned int a = inb(PIC1_DATA) | 1;
+	outb(PIC1_DATA, a);
 }

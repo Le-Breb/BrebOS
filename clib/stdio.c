@@ -586,3 +586,11 @@ __attribute__ ((format (printf, 1, 2))) int printf_info(const char* format, ...)
 
 	return i;
 }
+
+int printf_syscall(const char* format, char* args)
+{
+	va_list list = args;
+	int i = vprintf(format, list);
+	va_end (list);
+	return i;
+}

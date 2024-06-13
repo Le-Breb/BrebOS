@@ -1,8 +1,13 @@
 #ifndef INCLUDE_SYSCALLS_H
 #define INCLUDE_SYSCALLS_H
 
-/** Prints a string */
-void print(char* str);
+/**
+ * Prints a formatted string
+ * @param format format string
+ * @param ... format arguments
+ * @return Number of characters written
+ */
+__attribute__ ((format (printf, 1, 2))) int printf(const char* format, ...);
 
 /** Terminates the program */
 void exit();
@@ -12,11 +17,6 @@ void exit();
  * @param module_id Module ID
  */
 void start_process(unsigned int module_id);
-
-/**
- * Sets current process last in ready queue
- */
-void pause();
 
 /**
  * Gets PID

@@ -4,8 +4,8 @@ extern interrupt_handler
 ; [esp + 0] = call function ret addr
 ; [esp + 4] = cpu_state_t
 ; [esp + 4 + sizeof(cpu_state_t)] = struct stack_state
-global user_process_jump_asm
-user_process_jump_asm:
+global resume_user_process_asm
+resume_user_process_asm:
 .restore_regs:
     mov ebx, [esp + 08]
     mov ecx, [esp + 12]
@@ -14,7 +14,7 @@ user_process_jump_asm:
     mov edi, [esp + 24]
     mov ebp, [esp + 28]
 
-.jump:
+.prepare_jump:
     ;push ss
     mov eax, [esp + 52]
     push eax
@@ -31,10 +31,31 @@ user_process_jump_asm:
     mov eax, [esp + 52]
     push eax
 
-    mov eax, [esp + 24]
+    mov eax, [esp + 24] ; restore eax
 
-	; jump
+.jump:
 	iret
+
+; Exit from an interrupt and resume a syscall handler
+; [esp + 0] = call function ret addr
+; [esp + 4] = cpu_state_t
+; [esp + 4 + sizeof(cpu_state_t)] = new ESP value
+global resume_syscall_handler_asm
+resume_syscall_handler_asm:
+.restore_regs:
+    mov eax, [eax + 04]
+    mov ebx, [eax + 08]
+    mov ecx, [esp + 12]
+    mov edx, [esp + 16]
+    mov esi, [esp + 20]
+    mov edi, [esp + 24]
+    mov ebp, [esp + 28]
+
+.set_new_stack:
+    mov esp, [esp + 32]
+
+.jump:
+    iret
 
 global disable_interrupts
 disable_interrupts:
@@ -49,8 +70,6 @@ enable_interrupts:
 ; load_idt - Loads the interrupt descriptor table (IDT).
 ; stack: [esp + 4] the address of the first entry in the IDT
 ;        [esp    ] the return address
-extern idtdbg
-extern idt_dbg
 global load_idt
 load_idt:
     mov     eax, [esp+4]    ; load the address of the IDT into register eax
@@ -95,6 +114,10 @@ interrupt_handler_%1:
 common_interrupt_handler:               ; the common parts of the generic interrupt handler
     ; save the registers
     save_regs
+
+    mov eax, esp
+    add eax, 48
+    push eax
 
     ; call the C function
     call    interrupt_handler
