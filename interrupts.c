@@ -576,6 +576,13 @@ void syscall_get_pid([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] s
  */
 __attribute__((noreturn)) void interrupt_timer(unsigned int kesp, cpu_state_t* cpu_state, stack_state_t* stack_state);
 
+/**
+ * Computes the divider to send to PIT to make it send interrupts every ms milliseconds
+ * @param ms desired PIT delay
+ * @return PIT divider
+ */
+unsigned int ms_to_pit_divider(unsigned int ms);
+
 unsigned char read_scan_code(void)
 {
 	return inb(KBD_DATA_PORT);
@@ -881,16 +888,8 @@ void page_fault_handler([[maybe_unused]] cpu_state_t cpu_state, [[maybe_unused]]
 
 void syscall_start_process([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] struct stack_state* stack_state)
 {
-	pid pid = get_running_process_pid();
-
-	// Switch back to kernel pdt
-	page_table_t* page_tables = get_page_tables();
-	change_pdt_asm(PHYS_ADDR((unsigned int) get_pdt()));
-
 	// Load child process and set it ready
-	start_module(cpu_state->ebx, pid);
-
-	change_pdt_asm(PHYS_ADDR((unsigned int)&get_running_process()->pdt));
+	start_module(cpu_state->ebx, get_running_process_pid());
 }
 
 void syscall_get_pid([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] struct stack_state* stack_state)
@@ -898,9 +897,6 @@ void syscall_get_pid([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] s
 	process* running_process = get_running_process();
 
 	running_process->cpu_state.eax = running_process->pid; // Return PID
-
-	// Add current process at the end of ready queue so that it will be resumed
-	add_process_to_ready_queue(running_process->pid);
 }
 
 __attribute__ ((noreturn)) void syscall_handler(cpu_state_t* cpu_state, struct stack_state* stack_state)
@@ -912,10 +908,6 @@ __attribute__ ((noreturn)) void syscall_handler(cpu_state_t* cpu_state, struct s
 	p->stack_state = *stack_state;
 
 	switch (cpu_state->eax) {
-		case 0:
-			pit_init();
-			enable_preemptive_scheduling();
-			break;
 		case 1:
 			terminate_process(p);
 
@@ -1057,22 +1049,19 @@ void pic_remap(int offset1, int offset2)
 	io_wait();
 }
 
-/*unsigned int ms_to_divider(unsigned int ms)
+unsigned int ms_to_pit_divider(unsigned int ms)
 {
-	// 1193182 / div * 1000 = ms
-	// 1193182 / div = ms / 1000
- 	// div / 1193182 = 1000 / ms
- 	// div = 1000 / ms / 1193812
-	return 1193182000 / ms;
-}*/
-unsigned int ms_to_divider(unsigned int ms)
-{
-	return 1193182 / (1000 / ms) - 1;
+	// 1000 / f = ms
+	// 1193182 / div = f
+	// => div / 1193192 = 1 / f
+	// => 1000 * div / 1193182 = 1000 / f = ms
+	// div = 1193182ms / 1000
+	return 1193182 * ms / 1000 ;
 }
 
 void pit_init()
 {
-	unsigned int divider = 0xFFFF / 10;//ms_to_divider(200);
+	unsigned int divider = ms_to_pit_divider(5);
 
 	outb(0x43, 0b00110110);
 

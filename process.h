@@ -20,7 +20,8 @@ typedef struct
 
 typedef struct
 {
-	page_table_t page_tables[PDT_ENTRIES];
+	// Process page tables. Process can use all virtual addresses below the kernel virtual location at pde 768
+	page_table_t page_tables[768];
 	pdt_t pdt;
 
 	unsigned int num_pages; // Num pages over which the process code spans

@@ -1,6 +1,7 @@
 #include "memory.h"
 #include "process.h"
 #include "clib/stdio.h"
+#include "clib/string.h"
 
 extern void boot_page_directory();
 
@@ -13,7 +14,7 @@ page_table_t* page_tables;
 // Map of used physical pages. 1 = used, 0 = free. Ith page is referenced at (i % 32)th lsb of map[i / 32]
 unsigned int page_bitmap[(PT_ENTRIES / 32) * PDT_ENTRIES];
 unsigned int lowest_free_page_entry;
-unsigned int lowest_free_page;
+unsigned int lowest_free_page = 0;
 
 memory_header base = {.s = {&base, 0}};
 memory_header* freep; /* Lowest free block */
@@ -107,25 +108,29 @@ unsigned int get_free_page_entry()
 
 void init_page_bitmap()
 {
-	for (int i = 0; i < 32 * 1024; ++i)
-		page_bitmap[i] = 0;
+	// Clear bitmap
+	memset(page_bitmap, 0, 32 * 1024 * sizeof(int));
 
+	// Scan memory and set bitmap accordingly
 	for (int i = 0; i < PT_ENTRIES; i++)
 	{
 		if (!(asm_pt1->entries[i] & PAGE_PRESENT))
 			continue;
 
-		unsigned int page_id = asm_pt1->entries[i] >> 12;
+		unsigned int page_id = (asm_pt1->entries[i] >> 12) & 0x3FF;
 		page_bitmap[i / 32] |= 1 << (page_id % 32);
-		i++;
 	}
 
-	lowest_free_page = 0;
-	for (; asm_pt1->entries[lowest_free_page] & PAGE_PRESENT; lowest_free_page++);
-	printf_info("Kernel spans over %u pages", lowest_free_page);
+	// Display kernel size
+	unsigned int c = 0;
+	for (; asm_pt1->entries[c] & PAGE_PRESENT; c++);
+	printf_info("Kernel spans over %u pages", c);
 
-	if (lowest_free_page == PT_ENTRIES)
+	if (c == PT_ENTRIES)
 		printf_error("Kernel needs more space than available in 1 page table");
+
+	// Compute lowest_free_page
+	for (lowest_free_page = 0; PAGE_USED(lowest_free_page); lowest_free_page++);
 }
 
 void allocate_page_tables()

@@ -136,10 +136,12 @@ process* load_elf(unsigned int module, GRUB_module* grub_modules)
 
 	// Allocate process struct
 	process* proc = page_aligned_malloc(sizeof(process));
-	unsigned int proc_code_pages =
-			proc_size / PAGE_SIZE + ((proc_size % PAGE_SIZE) ? 1 : 0); // Num pages code spans over
-	proc->num_pages = proc_code_pages;
+	memset(proc, 0, sizeof(process));
 	proc->page_table_entries = malloc(proc->num_pages * sizeof(unsigned int));
+
+	// Num pages code spans over
+	unsigned int proc_code_pages = proc_size / PAGE_SIZE + ((proc_size % PAGE_SIZE) ? 1 : 0);
+	proc->num_pages = proc_code_pages;
 
 	// Allocate process code pages
 	for (unsigned int k = 0; k < proc_code_pages; ++k)
@@ -215,8 +217,6 @@ void start_module(unsigned int module, pid ppid)
 
 	// Allocate process stack page
 	unsigned int p_stack_page_entry_id = get_free_page_entry();
-	unsigned int p_stack_pde = p_stack_page_entry_id / PDT_ENTRIES;
-	unsigned int p_stack_pte = p_stack_page_entry_id % PDT_ENTRIES;
 	allocate_page_user(get_free_page(), p_stack_page_entry_id);
 
 	// Allocate syscall handler stack page
@@ -225,17 +225,17 @@ void start_module(unsigned int module, pid ppid)
 	unsigned int k_stack_pte = k_stack_page_entry % PDT_ENTRIES;
 	allocate_page(get_free_page(), k_stack_page_entry);
 
+	// Set process PDT entries: entries 0 to 767 map the process address space using its own page tables
+	// Entries 768 to 1024 point to kernel page tables, so that kernel is mapped. Moreover, syscall handlers
+	// will not need to switch to kernel pdt to make changes in kernel memory as it is mapped the same way
+	// in every process' PDT
 	// Set process pdt entries to target process page tables
 	page_table_t* page_tables = get_page_tables();
-	for (int i = 0; i < PDT_ENTRIES; ++i)
-	{
-		unsigned int pt_virt_addr = (unsigned int) &proc->page_tables[i];
-		unsigned int pt_phys_addr = PHYS_ADDR(pt_virt_addr);
-		proc->pdt.entries[i] = pt_phys_addr | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
-	}
-
-	// Copy kernel page tables into process' ones
-	memcpy(&proc->page_tables[0].entries[0], &page_tables[0].entries[0], PDT_ENTRIES * sizeof(page_table_t));
+	for (int i = 0; i < 768; ++i)
+		proc->pdt.entries[i] = PHYS_ADDR((unsigned int) &proc->page_tables[i]) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
+	// Use kernel page tables for the rest
+	for (int i = 768; i < PDT_ENTRIES; ++i)
+		proc->pdt.entries[i] = PHYS_ADDR((unsigned int) &page_tables[i]) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
 
 	// Map process code at 0x00
 	for (unsigned int i = 0; i < proc->num_pages; ++i)
@@ -247,24 +247,21 @@ void start_module(unsigned int module, pid ppid)
 		unsigned int process_page_pde = process_page_id / PDT_ENTRIES;
 		unsigned int process_page_pte = process_page_id % PDT_ENTRIES;
 
-		// Swap process pages entries with first page entries to map process at 0x00
 		if (proc->page_tables[page_pde].entries[page_pte] != 0)
 			printf_error("Non empty pt entry");
-		proc->page_tables[page_pde].entries[page_pte] = proc->page_tables[process_page_pde].entries[process_page_pte];
-		proc->page_tables[process_page_pde].entries[process_page_pte] = 0;
+		proc->page_tables[page_pde].entries[page_pte] = page_tables[process_page_pde].entries[process_page_pte];
 	}
 
-	// Map process stack at 0xBFFFFFFC = 0xCFFFFFFF - 4 at pde 767 and pte 1023, just below the kernel (move current entry)
+	// Map process stack at 0xBFFFFFFC = 0xCFFFFFFF - 4 at pde 767 and pte 1023, just below the kernel
 	if (proc->page_tables[767].entries[1023] != 0)
-		printf_error("Process kernel page is not empty");
-	proc->page_tables[767].entries[1023] = PTE(p_stack_page_entry_id); // Copy entry - set correct stack virtual address
-	proc->page_tables[p_stack_pde].entries[p_stack_pte] = 0; // Remove previous entry
+		printf_error("Process kernel page entry is not empty");
+	proc->page_tables[767].entries[1023] = PTE(p_stack_page_entry_id);
 
 	// Setup PCB
 	processes[pid] = proc;
 	proc->pid = pid;
 	proc->ppid = ppid;
-	proc->k_stack_top = VIRT_ADDR(k_stack_pde, k_stack_pte, (PAGE_SIZE - 4));
+	proc->k_stack_top = VIRT_ADDR(k_stack_pde, k_stack_pte, (PAGE_SIZE - sizeof(int)));
 	proc->stack_state.eip = 0;
 	proc->stack_state.ss = 0x20 | 0x03;
 	proc->stack_state.cs = 0x18 | 0x03;
@@ -272,14 +269,6 @@ void start_module(unsigned int module, pid ppid)
 	proc->stack_state.eflags = 0x200;
 	proc->stack_state.error_code = 0;
 	memset(&proc->cpu_state, 0, sizeof(proc->cpu_state));
-
-	process* p = processes[pid];
-	process* pr = processes[ppid];
-
-	// Todo: Don't forget this weird stack fix where child k_stack is manually referenced parent's page tables
-	pr->page_tables[p->k_stack_top >> 22].entries[(p->k_stack_top >> 12) & 0x3FF] = p->page_tables[p->k_stack_top
-			>> 22].entries[(p->k_stack_top >> 12) & 0x3FF];
-
 
 	// Set process ready
 	add_process_to_ready_queue(pid);
@@ -300,10 +289,6 @@ void free_process(pid pid)
 		printf_error("Process %u is not terminated", pid);
 		return;
 	}
-
-	// Switch back to kernel pdt
-	page_table_t* page_tables = get_page_tables();
-	change_pdt_asm(PHYS_ADDR((unsigned int) get_pdt()));
 
 	// Free process code
 	for (unsigned int i = 0; i < process->num_pages; ++i)
@@ -360,10 +345,6 @@ __attribute__ ((noreturn)) void schedule()
 
 	page_table_t* page_tables = get_page_tables();
 
-	// Switch back to kernel pdt to make sure that new processes are referenced in the pdt we use
-	// Todo: Change things so that we dont have to do that
-	change_pdt_asm(PHYS_ADDR((unsigned int) get_pdt()));
-
 	// Find next process to execute
 	while (p == 0x00)
 	{
@@ -385,11 +366,11 @@ __attribute__ ((noreturn)) void schedule()
 		ready_queue.start = (ready_queue.start + 1) % MAX_PROCESSES;
 	}
 
-	// Use process' pdt
-	change_pdt_asm(PHYS_ADDR((unsigned int) &p->pdt));
-
 	// Set TSS esp0 to point to the syscall handler stack (i.e. tell the CPU where is syscall handler stack)
 	set_tss_kernel_stack(p->k_stack_top);
+
+	// Use process' address space
+	change_pdt_asm(PHYS_ADDR((unsigned int) &p->pdt));
 
 	// Jump
 	if (p->flags & P_SYSCALL_INTERRUPTED)

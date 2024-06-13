@@ -36,12 +36,16 @@ int kmain([[maybe_unused]] unsigned int ebx)
 	printf("Setting up IDT\n");
 	idt_init(&idt_descriptor, idt);
 	fb_ok();
+
+	printf("Initializing PIT\n");
+	pit_init();
+	fb_ok();
 	
 	printf("Enabling interrupts\n");
 	enable_interrupts();
 	fb_ok();
 	
-	printf("Initialize memory\n");
+	printf("Initialize memory ");
 	init_mem((multiboot_info_t*) (ebx + 0xC0000000));
 	fb_ok();
 
@@ -49,7 +53,7 @@ int kmain([[maybe_unused]] unsigned int ebx)
 	processes_init();
 	fb_ok();
 
-	// Do stuff
+	// Do stuff - make sure malloc and free work
 	const unsigned int N = 100000;
 	int* a = malloc(N * sizeof (int));
 	for (unsigned int i = 0; i < N; i++)
@@ -60,9 +64,11 @@ int kmain([[maybe_unused]] unsigned int ebx)
 	free(b);
 	free(a);
 
+	// Set INIT process ready
 	start_module(0,  0);
-	schedule();
-	//fb_clear_screen();
+
+	// Run processes! :D
+	enable_preemptive_scheduling();
 
 	return shutdown();
 }

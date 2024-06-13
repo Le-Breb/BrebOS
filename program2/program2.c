@@ -2,9 +2,9 @@
 
 int p_main()
 {
-	[[maybe_unused]] unsigned int pid = get_pid();
-	[[maybe_unused]] unsigned int c = 1000;
-	[[maybe_unused]] unsigned int ctr = 0;
+	unsigned int pid = get_pid();
+	unsigned int c = 10;
+	unsigned int ctr = 0;
 
 	while (c--)
 	{
