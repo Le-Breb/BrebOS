@@ -3,7 +3,7 @@
 int p_main()
 {
 	unsigned int pid = get_pid();
-	unsigned int c = 10;
+	unsigned int c = 1000;
 	unsigned int ctr = 1;
 
 	start_process(1);

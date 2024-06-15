@@ -17,6 +17,12 @@ process* processes[MAX_PROCESSES];
 /** Change current pdt */
 extern void change_pdt_asm(unsigned int pdt_phys_addr);
 
+/**
+ * Round-robin scheduler
+ * @return next process to run, NULL if there is no process to run
+ */
+process* get_next_process();
+
 process* load_binary(unsigned int module, GRUB_module* grub_modules)
 {
 	unsigned int mod_size = grub_modules[module].size;
@@ -137,11 +143,11 @@ process* load_elf(unsigned int module, GRUB_module* grub_modules)
 	// Allocate process struct
 	process* proc = page_aligned_malloc(sizeof(process));
 	memset(proc, 0, sizeof(process));
-	proc->page_table_entries = malloc(proc->num_pages * sizeof(unsigned int));
 
 	// Num pages code spans over
 	unsigned int proc_code_pages = proc_size / PAGE_SIZE + ((proc_size % PAGE_SIZE) ? 1 : 0);
 	proc->num_pages = proc_code_pages;
+	proc->page_table_entries = malloc(proc->num_pages * sizeof(unsigned int));
 
 	// Allocate process code pages
 	for (unsigned int k = 0; k < proc_code_pages; ++k)
@@ -261,6 +267,7 @@ void start_module(unsigned int module, pid ppid)
 	processes[pid] = proc;
 	proc->pid = pid;
 	proc->ppid = ppid;
+	proc->priority = 1;
 	proc->k_stack_top = VIRT_ADDR(k_stack_pde, k_stack_pte, (PAGE_SIZE - sizeof(int)));
 	proc->stack_state.eip = 0;
 	proc->stack_state.ss = 0x20 | 0x03;
@@ -271,36 +278,36 @@ void start_module(unsigned int module, pid ppid)
 	memset(&proc->cpu_state, 0, sizeof(proc->cpu_state));
 
 	// Set process ready
-	add_process_to_ready_queue(pid);
+	set_process_ready(pid);
 }
 
 void free_process(pid pid)
 {
-	process* process = processes[pid];
+	process* p = processes[pid];
 
-	if (process == 0x00)
+	if (p == 0x00)
 	{
 		printf_error("No process with PID %u", pid);
 		return;
 	}
 
-	if (!(process->flags & P_TERMINATED))
+	if (!(p->flags & P_TERMINATED))
 	{
 		printf_error("Process %u is not terminated", pid);
 		return;
 	}
 
 	// Free process code
-	for (unsigned int i = 0; i < process->num_pages; ++i)
-		free_page(process->page_table_entries[i] / PDT_ENTRIES,
-				  process->page_table_entries[i] % PDT_ENTRIES);
+	for (unsigned int i = 0; i < p->num_pages; ++i)
+		free_page(p->page_table_entries[i] / PDT_ENTRIES,
+				  p->page_table_entries[i] % PDT_ENTRIES);
 
 	// Free process struct
-	free(process->page_table_entries);
-	page_aligned_free(process);
+	free(p->page_table_entries);
+	page_aligned_free(p);
 
 	release_pid(pid);
-	process->flags |= P_TERMINATED;
+	p->flags |= P_TERMINATED;
 
 	printf_info("Process %u exited", pid);
 }
@@ -339,32 +346,53 @@ process* get_running_process()
 	return processes[running_process];
 }
 
-__attribute__ ((noreturn)) void schedule()
+process* get_next_process()
 {
 	process* p = 0x00;
-
-	page_table_t* page_tables = get_page_tables();
 
 	// Find next process to execute
 	while (p == 0x00)
 	{
 		// Nothing to run
 		if (ready_queue.count == 0)
-			shutdown();
+			return 0x00;
 
 		// Get process
 		pid pid = running_process = ready_queue.arr[ready_queue.start];
 		process* proc = processes[pid];
 
 		if (proc->flags & P_TERMINATED)
+		{
 			free_process(proc->pid);
+			ready_queue.start = (ready_queue.start + 1) % MAX_PROCESSES;
+			ready_queue.count--;
+		}
 		else
+		{
 			p = proc;
-
-		// Update queue
-		ready_queue.count--;
-		ready_queue.start = (ready_queue.start + 1) % MAX_PROCESSES;
+			// Update queue
+			if (p->quantum)
+				p->quantum -= CLOCK_TICK_MS;
+			else
+			{
+				ready_queue.arr[(ready_queue.start + ready_queue.count) % MAX_PROCESSES] = p->pid;
+				REST_QUANTUM(p);
+				ready_queue.start = (ready_queue.start + 1) % MAX_PROCESSES;
+			}
+		}
 	}
+
+	return p;
+}
+
+_Noreturn void schedule()
+{
+	process* p = get_next_process();
+
+	if (p == 0x00)
+		shutdown();
+
+	page_table_t* page_tables = get_page_tables();
 
 	// Set TSS esp0 to point to the syscall handler stack (i.e. tell the CPU where is syscall handler stack)
 	set_tss_kernel_stack(p->k_stack_top);
@@ -382,9 +410,10 @@ __attribute__ ((noreturn)) void schedule()
 		resume_user_process_asm(p->cpu_state, p->stack_state);
 }
 
-void add_process_to_ready_queue(pid pid)
+void set_process_ready(pid pid)
 {
 	ready_queue.arr[(ready_queue.start + ready_queue.count++) % MAX_PROCESSES] = pid;
+	REST_QUANTUM(processes[pid]);
 }
 
 void release_pid(pid pid)

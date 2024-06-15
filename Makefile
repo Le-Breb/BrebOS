@@ -1,6 +1,6 @@
 OBJECTS = $(BUILD_DIR)/loader.o $(BUILD_DIR)/io.o $(BUILD_DIR)/kmain.o $(BUILD_DIR)/fb.o $(BUILD_DIR)/gdt.o \
 $(BUILD_DIR)/gdt_.o $(BUILD_DIR)/interrupts_.o $(BUILD_DIR)/interrupts.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/memory.o \
-$(BUILD_DIR)/memory_.o $(BUILD_DIR)/shutdown.o $(BUILD_DIR)/system.o $(BUILD_DIR)/process.o
+$(BUILD_DIR)/memory_.o $(BUILD_DIR)/shutdown.o $(BUILD_DIR)/system.o $(BUILD_DIR)/process.o $(BUILD_DIR)/syscalls.o
 CC = /home/mat/opt/cross/bin/i686-elf-gcc # For some reason CLion does not read PATH entry where cross gcc path is set
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -c -g
 LDFLAGS = -T link.ld -melf_i386 -g
@@ -29,6 +29,7 @@ all: $(OS_ISO)
 directories:
 	mkdir -p $(BUILD_DIR)
 	mkdir -p $(PROGRAM_BUILD_DIR)
+	mkdir -p $(PROGRAM2_BUILD_DIR)
 	mkdir -p $(KLIB_BUILD_DIR)
 	mkdir -p $(CLIB_BUILD_DIR)
 
@@ -43,8 +44,6 @@ clib:
 
 
 kernel.elf: directories $(OBJECTS) clib
-	echo $(OBJECTS)
-	echo $(KLIB_OBJECTS)
 	ld $(LDFLAGS) $(OBJECTS) -Iclib/ $(KLIB_OBJECTS) -o $(BUILD_DIR)/kernel.elf
 
 $(OS_ISO): kernel.elf program program2

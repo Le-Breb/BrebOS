@@ -1,9 +1,8 @@
 #include "interrupts.h"
-#include "fb.h"
 #include "keyboard.h"
-#include "memory.h"
 #include "clib/stdio.h"
 #include "process.h"
+#include "syscalls.h"
 
 #pragma region ints
 extern void interrupt_handler_0();
@@ -528,14 +527,6 @@ extern void interrupt_handler_255();
 extern void change_pdt_asm(unsigned int pdt_phys_addr);
 
 /**
- * Handles a syscall
- *
- * @param cpu_state CPU state
- * @param stack_state Stack state
- * */
-__attribute__ ((noreturn)) void syscall_handler(cpu_state_t* cpu_state, struct stack_state* stack_state);
-
-/**
  * Handles a GPF
  *
  * @param cpu_state CPU state
@@ -557,16 +548,6 @@ void pic_acknowledge(unsigned int interrupt);
  * @param stack_state Stack state
  */
 void page_fault_handler([[maybe_unused]] cpu_state_t cpu_state, [[maybe_unused]] struct stack_state stack_state);
-
-/**
- * Starts a GRUB module as a child of current process
- * @param cpu_state CPU state
- * @param stack_state Stack state
- */
-void syscall_start_process([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] struct stack_state* stack_state);
-/**
- * Returns current process' PID  */
-void syscall_get_pid([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] struct stack_state* stack_state);
 
 /**
  * Handler for preemption timer
@@ -886,57 +867,6 @@ void page_fault_handler([[maybe_unused]] cpu_state_t cpu_state, [[maybe_unused]]
 	printf("SGX: %s\n", err & 32768 ? "True": "False");
 }
 
-void syscall_start_process([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] struct stack_state* stack_state)
-{
-	// Load child process and set it ready
-	start_module(cpu_state->ebx, get_running_process_pid());
-}
-
-void syscall_get_pid([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] struct stack_state* stack_state)
-{
-	process* running_process = get_running_process();
-
-	running_process->cpu_state.eax = running_process->pid; // Return PID
-}
-
-__attribute__ ((noreturn)) void syscall_handler(cpu_state_t* cpu_state, struct stack_state* stack_state)
-{
-	process* p = get_running_process();
-
-	// Update PCB
-	p->cpu_state = *cpu_state;
-	p->stack_state = *stack_state;
-
-	switch (cpu_state->eax) {
-		case 1:
-			terminate_process(p);
-
-			// We definitely do not want to continue as next step is to resume the process we just terminated !
-			// Instead, we manually raise a timer interrupt which we schedule another process
-			// (The terminated one as its terminated flag set, so it won't be selected by the scheduler)
-			__asm__("int $0x20");
-
-			// We will never resume the code here
-			__builtin_unreachable();
-		case 2:
-			printf_syscall((char*) cpu_state->ebx, (char*)cpu_state->ecx);
-			break;
-		case 3:
-			disable_preemptive_scheduling();
-			syscall_start_process(cpu_state, stack_state);
-			enable_preemptive_scheduling();
-			break;
-		case 5:
-			syscall_get_pid(cpu_state, stack_state);
-			break;
-		default:
-			printf_info("Received unknown syscall id: %u", cpu_state->eax);
-			break;
-		}
-
-	resume_user_process_asm(p->cpu_state, p->stack_state);
-}
-
 void gpf_handler([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] struct stack_state* stack_state)
 {
 	printf_error("General protection fault");
@@ -969,8 +899,6 @@ __attribute__((noreturn)) void interrupt_timer(unsigned int kesp, cpu_state_t* c
 			p->cpu_state = *cpu_state;
 			p->stack_state = *stack_state;
 		}
-
-		add_process_to_ready_queue(p->pid);
 	}
 
 
@@ -1061,7 +989,7 @@ unsigned int ms_to_pit_divider(unsigned int ms)
 
 void pit_init()
 {
-	unsigned int divider = ms_to_pit_divider(5);
+	unsigned int divider = ms_to_pit_divider(CLOCK_TICK_MS);
 
 	outb(0x43, 0b00110110);
 

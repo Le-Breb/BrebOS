@@ -18,11 +18,15 @@ typedef struct
 #define P_TERMINATED 1
 #define P_SYSCALL_INTERRUPTED 2
 
+#define REST_QUANTUM(p) (p->quantum = p->priority * CLOCK_TICK_MS)
+
 typedef struct
 {
 	// Process page tables. Process can use all virtual addresses below the kernel virtual location at pde 768
 	page_table_t page_tables[768];
 	pdt_t pdt;
+
+	unsigned int quantum, priority;
 
 	unsigned int num_pages; // Num pages over which the process code spans
 	unsigned int* page_table_entries; // Array of pte where the process code is loaded to
@@ -103,13 +107,13 @@ process* get_running_process();
 /**
  * Executes next process in the ready queue
  */
-__attribute__ ((noreturn)) void schedule();
+_Noreturn void schedule();
 
 /**
  * Adds a process to the ready queue
  * @param pid Process' PID
  */
-void add_process_to_ready_queue(pid pid);
+void set_process_ready(pid pid);
 
 //http://www.skyfree.org/linux/references/ELF_Format.pdf
 #define EI_NIDENT (16)

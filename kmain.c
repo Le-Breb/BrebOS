@@ -70,5 +70,5 @@ int kmain([[maybe_unused]] unsigned int ebx)
 	// Run processes! :D
 	enable_preemptive_scheduling();
 
-	return shutdown();
+	shutdown();
 }

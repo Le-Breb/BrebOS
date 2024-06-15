@@ -4,7 +4,7 @@
 
 extern unsigned int is_running_in_qemu_asm();
 
-int shutdown()
+_Noreturn int shutdown()
 {
 	unsigned int qemu = is_running_in_qemu_asm();
 
@@ -12,10 +12,12 @@ int shutdown()
 	{
 		outb(0x501, 0x31);
 		io_wait();
+		__builtin_unreachable();
 	}
 	else
+	{
 		printf_info("System halted (Hardware shutdown not implemented)");
-
-
-	return 0;
+		while (1)
+		{};
+	}
 }

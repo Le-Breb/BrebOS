@@ -25,6 +25,8 @@
 #define SYSCALL  0xEF00
 #define NUM_INTERRUPTS 0xFF
 
+#define CLOCK_TICK_MS 10
+
 // Interrupt Descriptor Table
 struct idt_descriptor
 {
@@ -151,7 +153,7 @@ void pit_init();
  * @param cpu_state process CPU state
  * @param stack_state process stack state
  */
-__attribute__ ((noreturn)) void resume_user_process_asm(cpu_state_t cpu_state, struct stack_state stack_state);
+_Noreturn void resume_user_process_asm(cpu_state_t cpu_state, struct stack_state stack_state);
 
 /**
  * Exits from an interrupt and a resume an interrupted syscall handler
@@ -160,7 +162,7 @@ __attribute__ ((noreturn)) void resume_user_process_asm(cpu_state_t cpu_state, s
  * IRET expects to find eip cs and eflags on the stack, which are pushed on the interrupted system handler' stack.
  * iret_esp should then be whatever ESP was when the syscall handler was interrupted minus 12 = 3 * sizeof(int)
  */
-__attribute__ ((noreturn)) extern void resume_syscall_handler_asm(cpu_state_t cpu_state, unsigned int iret_esp);
+_Noreturn extern void resume_syscall_handler_asm(cpu_state_t cpu_state, unsigned int iret_esp);
 
 void enable_preemptive_scheduling();
 
