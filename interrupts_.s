@@ -43,8 +43,8 @@ resume_user_process_asm:
 global resume_syscall_handler_asm
 resume_syscall_handler_asm:
 .restore_regs:
-    mov eax, [eax + 04]
-    mov ebx, [eax + 08]
+    mov eax, [esp + 04]
+    mov ebx, [esp + 08]
     mov ecx, [esp + 12]
     mov edx, [esp + 16]
     mov esi, [esp + 20]
@@ -115,6 +115,8 @@ common_interrupt_handler:               ; the common parts of the generic interr
     ; save the registers
     save_regs
 
+    ; push kesp, i.e. ESP value before the interrupt was fired. Useful when CPU doesn't push ESP (nor SS) because the
+    ; interrupt did not involve a privilege level change
     mov eax, esp
     add eax, 48
     push eax

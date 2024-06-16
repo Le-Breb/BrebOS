@@ -9,9 +9,10 @@
  * @param stack_state Stack state
  */
 void syscall_start_process(cpu_state_t* cpu_state);
+
 /**
  * Returns current process' PID  */
-void syscall_get_pid(cpu_state_t* cpu_state);
+void syscall_get_pid();
 
 /**
  * Prints a formatted string
@@ -27,10 +28,10 @@ void syscall_start_process(cpu_state_t* cpu_state)
 
 void syscall_printf(cpu_state_t* cpu_state)
 {
-	printf_syscall((char*) cpu_state->ebx, (char*)cpu_state->ecx);
+	printf_syscall((char*) cpu_state->ebx, (char*) cpu_state->ecx);
 }
 
-void syscall_get_pid([[maybe_unused]] cpu_state_t* cpu_state)
+void syscall_get_pid()
 {
 	process* running_process = get_running_process();
 
@@ -45,7 +46,8 @@ _Noreturn void syscall_handler(cpu_state_t* cpu_state, struct stack_state* stack
 	p->cpu_state = *cpu_state;
 	p->stack_state = *stack_state;
 
-	switch (cpu_state->eax) {
+	switch (cpu_state->eax)
+	{
 		case 1:
 			terminate_process(p);
 
@@ -65,7 +67,7 @@ _Noreturn void syscall_handler(cpu_state_t* cpu_state, struct stack_state* stack
 			enable_preemptive_scheduling();
 			break;
 		case 5:
-			syscall_get_pid(cpu_state);
+			syscall_get_pid();
 			break;
 		default:
 			printf_error("Received unknown syscall id: %u", cpu_state->eax);

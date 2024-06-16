@@ -18,7 +18,7 @@ typedef struct
 #define P_TERMINATED 1
 #define P_SYSCALL_INTERRUPTED 2
 
-#define REST_QUANTUM(p) (p->quantum = p->priority * CLOCK_TICK_MS)
+#define RESET_QUANTUM(p) (p->quantum = p->priority * CLOCK_TICK_MS)
 
 typedef struct
 {

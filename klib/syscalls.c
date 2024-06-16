@@ -1,10 +1,5 @@
 #include "syscalls.h"
 
-void print(char* str)
-{
-	__asm__ volatile("int $0x80" : : "a"(2), "b"(str));
-}
-
 __attribute__ ((format (printf, 1, 2))) int printf(const char* format, ...)
 {
 	char* list = (char*) &format + sizeof(format);

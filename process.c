@@ -10,7 +10,7 @@
 // Thus, 32 = sizeof(unsigned int) PIDs are available, allowing up to 32 processes to run concurrently
 unsigned int pid_pool = 0;
 
-pid running_process = 0x00;
+pid running_process = MAX_PROCESSES;
 ready_queue_t ready_queue;
 process* processes[MAX_PROCESSES];
 
@@ -108,6 +108,7 @@ process* load_elf(unsigned int module, GRUB_module* grub_modules)
 		{
 			case SHT_NULL:
 			case SHT_PROGBITS:
+			case SHT_NOBITS:
 			case SHT_SYMTAB:
 			case SHT_STRTAB:
 				break;
@@ -129,15 +130,11 @@ process* load_elf(unsigned int module, GRUB_module* grub_modules)
 	unsigned proc_size = 0; // Code size in bytes
 	for (int k = 0; k < elf32Ehdr->e_phnum; ++k)
 	{
-		if (elf32Phdr[k].p_type != PT_LOAD)
+		Elf32_Phdr* h = &elf32Phdr[k];
+		if (h->p_type != PT_LOAD)
 			continue;
 
-		/*for (unsigned int l = 0; l < elf32Phdr[k].p_filesz; ++l)
-			printf("%02x ", *(unsigned char*) (grub_modules[module].start_addr + elf32Phdr[k].p_offset + l));
-		for (unsigned int l = 0; l < elf32Phdr[k].p_memsz - elf32Phdr[k].p_filesz; ++l)
-			printf("%02x ", 0);*/
-
-		proc_size += elf32Phdr[k].p_memsz;
+		proc_size += h->p_memsz;
 	}
 
 	// Allocate process struct
@@ -160,30 +157,31 @@ process* load_elf(unsigned int module, GRUB_module* grub_modules)
 	// Copy process code in allocated space
 	for (int k = 0; k < elf32Ehdr->e_phnum; ++k)
 	{
-		if (elf32Phdr[k].p_type != PT_LOAD)
+		Elf32_Phdr* h = &elf32Phdr[k];
+		if (h->p_type != PT_LOAD)
 			continue;
 
 		unsigned int proc_page_entry_id = 0;
 		unsigned int sys_page_entry_id = proc->page_table_entries[proc_page_entry_id];
 		unsigned int code_page_start_addr =
-				grub_modules[module].start_addr + elf32Phdr[k].p_offset + proc_page_entry_id * PAGE_SIZE;
+				grub_modules[module].start_addr + h->p_offset + proc_page_entry_id * PAGE_SIZE;
 		unsigned int dest_page_start_addr =
 				(sys_page_entry_id / PDT_ENTRIES) << 22 | (sys_page_entry_id % PDT_ENTRIES) << 12;
 
 		// Copy whole pages
-		for (; proc_page_entry_id < elf32Phdr[k].p_filesz / PAGE_SIZE; ++proc_page_entry_id)
+		for (; proc_page_entry_id < h->p_filesz / PAGE_SIZE; ++proc_page_entry_id)
 		{
 			code_page_start_addr =
-					grub_modules[module].start_addr + elf32Phdr[k].p_offset + proc_page_entry_id * PAGE_SIZE;
+					grub_modules[module].start_addr + h->p_offset + proc_page_entry_id * PAGE_SIZE;
 			sys_page_entry_id = proc->page_table_entries[proc_page_entry_id];
 			dest_page_start_addr = (sys_page_entry_id / PDT_ENTRIES) << 22 | (sys_page_entry_id % PDT_ENTRIES) << 12;
 			memcpy((void*) dest_page_start_addr, (void*) (grub_modules[module].start_addr + code_page_start_addr),
 				   PAGE_SIZE);
 		}
 		// Handle data that does not fit a whole page. First copy the remaining bytes then fill the rest with 0
-		memcpy((void*) dest_page_start_addr, (void*) code_page_start_addr, elf32Phdr[k].p_filesz % PAGE_SIZE);
-		memset((void*) (dest_page_start_addr + elf32Phdr[k].p_filesz % PAGE_SIZE), 0,
-			   PAGE_SIZE - elf32Phdr[k].p_filesz % PAGE_SIZE);
+		memcpy((void*) dest_page_start_addr, (void*) code_page_start_addr, h->p_filesz % PAGE_SIZE);
+		memset((void*) (dest_page_start_addr + h->p_filesz % PAGE_SIZE), 0,
+			   PAGE_SIZE - h->p_filesz % PAGE_SIZE);
 	}
 
 	return proc;
@@ -343,7 +341,7 @@ pid get_running_process_pid()
 
 process* get_running_process()
 {
-	return processes[running_process];
+	return running_process == MAX_PROCESSES ? 0x00 : processes[running_process];
 }
 
 process* get_next_process()
@@ -376,7 +374,7 @@ process* get_next_process()
 			else
 			{
 				ready_queue.arr[(ready_queue.start + ready_queue.count) % MAX_PROCESSES] = p->pid;
-				REST_QUANTUM(p);
+				RESET_QUANTUM(p);
 				ready_queue.start = (ready_queue.start + 1) % MAX_PROCESSES;
 			}
 		}
@@ -413,7 +411,7 @@ _Noreturn void schedule()
 void set_process_ready(pid pid)
 {
 	ready_queue.arr[(ready_queue.start + ready_queue.count++) % MAX_PROCESSES] = pid;
-	REST_QUANTUM(processes[pid]);
+	RESET_QUANTUM(processes[pid]);
 }
 
 void release_pid(pid pid)

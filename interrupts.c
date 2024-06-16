@@ -5,6 +5,7 @@
 #include "syscalls.h"
 
 #pragma region ints
+
 extern void interrupt_handler_0();
 
 extern void interrupt_handler_1();
@@ -532,7 +533,7 @@ extern void change_pdt_asm(unsigned int pdt_phys_addr);
  * @param cpu_state CPU state
  * @param stack_state Stack state
  * */
-void gpf_handler([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] struct stack_state* stack_state);
+void gpf_handler(struct stack_state* stack_state);
 
 /**
  *  Acknowledges an interrupt from either PIC 1 or PIC 2.
@@ -547,7 +548,7 @@ void pic_acknowledge(unsigned int interrupt);
  * @param cpu_state CPU state
  * @param stack_state Stack state
  */
-void page_fault_handler([[maybe_unused]] cpu_state_t cpu_state, [[maybe_unused]] struct stack_state stack_state);
+void page_fault_handler(struct stack_state* stack_state);
 
 /**
  * Handler for preemption timer
@@ -555,7 +556,7 @@ void page_fault_handler([[maybe_unused]] cpu_state_t cpu_state, [[maybe_unused]]
  * @param cpu_state CPU state
  * @param stack_state stack state
  */
-__attribute__((noreturn)) void interrupt_timer(unsigned int kesp, cpu_state_t* cpu_state, stack_state_t* stack_state);
+_Noreturn void interrupt_timer(unsigned int kesp, cpu_state_t* cpu_state, stack_state_t* stack_state);
 
 /**
  * Computes the divider to send to PIT to make it send interrupts every ms milliseconds
@@ -571,13 +572,13 @@ unsigned char read_scan_code(void)
 
 void pic_acknowledge(unsigned int interrupt)
 {
-    if (interrupt < PIC1_START_INTERRUPT || interrupt > PIC2_END_INTERRUPT)
+	if (interrupt < PIC1_START_INTERRUPT || interrupt > PIC2_END_INTERRUPT)
 		return;
 
 	outb(interrupt < PIC2_START_INTERRUPT ? PIC1 : PIC2, PIC_ACK);
 }
 
-void idt_init(idt_descriptor_t * idt_descriptor, idt_entry_t * idt)
+void idt_init(idt_descriptor_t* idt_descriptor, idt_entry_t* idt)
 {
 	// Use the macro to declare all interrupt handlers
 	idt_descriptor->size = (sizeof(idt_entry_t)) * NUM_INTERRUPTS - 1;
@@ -853,51 +854,54 @@ void idt_set_entry(idt_entry_t* idt, int num, unsigned int base, unsigned short 
 	idt[num].offset0_15 = base & 0xFFFF;
 }
 
-void page_fault_handler([[maybe_unused]] cpu_state_t cpu_state, [[maybe_unused]] struct stack_state stack_state)
+void page_fault_handler(struct stack_state* stack_state)
 {
-	unsigned int err = stack_state.error_code;
+	unsigned int err = stack_state->error_code;
 	printf_error("Page fault");
-	printf("Present: %s\n", (err & 1 ? "True": "False"));
-	printf("Write: %s\n", err & 2 ? "True": "False");
-	printf("User mode: %s\n", err & 4 ? "True": "False");
-	printf("Reserved: %s\n", err & 8 ? "True": "False");
-	printf("Instruction fetch: %s\n", err & 16 ? "True": "False");
-	printf("Protection key violation: %s\n", err & 32 ? "True": "False");
-	printf("Shadow stack: %s\n", err & 64 ? "True": "False");
-	printf("SGX: %s\n", err & 32768 ? "True": "False");
+	printf("Present: %s\n", (err & 1 ? "True" : "False"));
+	printf("Write: %s\n", err & 2 ? "True" : "False");
+	printf("User mode: %s\n", err & 4 ? "True" : "False");
+	printf("Reserved: %s\n", err & 8 ? "True" : "False");
+	printf("Instruction fetch: %s\n", err & 16 ? "True" : "False");
+	printf("Protection key violation: %s\n", err & 32 ? "True" : "False");
+	printf("Shadow stack: %s\n", err & 64 ? "True" : "False");
+	printf("SGX: %s\n", err & 32768 ? "True" : "False");
 }
 
-void gpf_handler([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] struct stack_state* stack_state)
+void gpf_handler(struct stack_state* stack_state)
 {
 	printf_error("General protection fault");
 	printf("Segment selector: %x\n", stack_state->error_code);
 }
 
-__attribute__((noreturn)) void interrupt_timer(unsigned int kesp, cpu_state_t* cpu_state, stack_state_t* stack_state)
+_Noreturn void interrupt_timer(unsigned int kesp, cpu_state_t* cpu_state, stack_state_t* stack_state)
 {
 	process* p = get_running_process();
 
-	// Did we interrupt a syscall handler ?
-	unsigned int syscall_interrupted = stack_state->cs == 0x08;
-	p->flags |= ((1 << P_SYSCALL_INTERRUPTED) & syscall_interrupted);
-
-	// Don't do anything if the process has been terminated
-	if (!(p->flags & P_TERMINATED))
+	if (p != 0x00)
 	{
-		// Update syscall handler state
-		if (syscall_interrupted)
-		{
-			p->k_cpu_state = *cpu_state;
-			p->k_stack_state = *stack_state;
+		// Did we interrupt a syscall handler ?
+		unsigned int syscall_interrupted = stack_state->cs == 0x08;
+		p->flags |= syscall_interrupted << (P_SYSCALL_INTERRUPTED - 1);
 
-			// Update ESP and SS manually because the CPU did not push them as no privilege changed occurred
-			p->k_stack_state.esp = kesp;
-			__asm__ volatile("mov %%ss, %0" : "=r"(p->k_stack_state.ss));
-		}
-		else // Update PCB
+		// Don't do anything if the process has been terminated
+		if (!(p->flags & P_TERMINATED))
 		{
-			p->cpu_state = *cpu_state;
-			p->stack_state = *stack_state;
+			// Update syscall handler state
+			if (syscall_interrupted)
+			{
+				p->k_cpu_state = *cpu_state;
+				p->k_stack_state = *stack_state;
+
+				// Update ESP and SS manually because the CPU did not push them as no privilege level change occurred
+				p->k_stack_state.esp = kesp;
+				__asm__ volatile("mov %%ss, %0" : "=r"(p->k_stack_state.ss));
+			}
+			else // Update PCB
+			{
+				p->cpu_state = *cpu_state;
+				p->stack_state = *stack_state;
+			}
 		}
 	}
 
@@ -917,10 +921,10 @@ void interrupt_handler(unsigned int kesp, cpu_state_t cpu_state, unsigned int in
 			keyboard_interrupt_handler();
 			break;
 		case 0x0e:
-			page_fault_handler(cpu_state, stack_state);
+			page_fault_handler(&stack_state);
 			break;
 		case 0xD:
-			gpf_handler(&cpu_state, &stack_state);
+			gpf_handler(&stack_state);
 			break;
 		case 0x80:
 			syscall_handler(&cpu_state, &stack_state);
@@ -984,7 +988,7 @@ unsigned int ms_to_pit_divider(unsigned int ms)
 	// => div / 1193192 = 1 / f
 	// => 1000 * div / 1193182 = 1000 / f = ms
 	// div = 1193182ms / 1000
-	return 1193182 * ms / 1000 ;
+	return 1193182 * ms / 1000;
 }
 
 void pit_init()
