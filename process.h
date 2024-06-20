@@ -17,6 +17,7 @@ typedef struct
 
 #define P_TERMINATED 1
 #define P_SYSCALL_INTERRUPTED 2
+#define P_WAITING_KEY 4
 
 #define RESET_QUANTUM(p) (p->quantum = p->priority * CLOCK_TICK_MS)
 
@@ -114,6 +115,12 @@ _Noreturn void schedule();
  * @param pid Process' PID
  */
 void set_process_ready(pid pid);
+
+/**
+ * Remove processes waiting for a key press from waiting list and add them to ready queue
+ * @param key Key pressed
+ */
+void wake_up_key_waiting_processes(char key);
 
 //http://www.skyfree.org/linux/references/ELF_Format.pdf
 #define EI_NIDENT (16)

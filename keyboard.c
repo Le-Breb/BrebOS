@@ -1,6 +1,6 @@
 #include "keyboard.h"
-#include "fb.h"
 #include "interrupts.h"
+#include "process.h"
 
 char kbd_US[128] =
 		{
@@ -42,6 +42,7 @@ void keyboard_interrupt_handler()
 {
 	unsigned char scan_code = read_scan_code();
 	char c = kbd_US[scan_code];
-	if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == ' ' || (c >= '1' && c <= '9'))
-		fb_write_cell(c);
+
+	if ((c >= 'a' && c <= 'z') || c == ' ' || (c >= '1' && c <= '9') || c == '\n')
+		wake_up_key_waiting_processes(c);
 }

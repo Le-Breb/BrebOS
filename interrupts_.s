@@ -124,6 +124,9 @@ common_interrupt_handler:               ; the common parts of the generic interr
     ; call the C function
     call    interrupt_handler
 
+    ; pop kesp
+    add esp, 4
+
     ; restore the registers
     restore_regs
 

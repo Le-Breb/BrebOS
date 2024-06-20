@@ -5,15 +5,16 @@
 #include "memory.h"
 #include "system.h"
 #include "process.h"
-
-gdt_entry_t gdt[GDT_ENTRIES];
-gdt_descriptor_t gdt_descriptor;
-
-idt_entry_t idt[256];
-idt_descriptor_t idt_descriptor;
-
 #include "clib/stdio.h"
 
+gdt_entry_t gdt[GDT_ENTRIES];
+
+gdt_descriptor_t gdt_descriptor;
+idt_entry_t idt[256];
+
+idt_descriptor_t idt_descriptor;
+
+//Todo: Make printf run mostly in user mode
 //Todo: Implement shared memory
 //Todo: Investigate about whether page 184 (VGA buffer start address is mapped twice)
 //Todo: same for page pde 771 pte11 at the end of run_module

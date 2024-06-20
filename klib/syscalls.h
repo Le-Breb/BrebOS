@@ -24,4 +24,12 @@ void start_process(unsigned int module_id);
  */
 unsigned int get_pid();
 
+/**
+ * Blocks the process until a key is pressed and return it
+ * @return pressed key
+ */
+char get_keystroke();
+
+_Noreturn void shutdown();
+
 #endif //INCLUDE_SYSCALLS_H

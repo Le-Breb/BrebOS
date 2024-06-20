@@ -25,3 +25,18 @@ unsigned int get_pid()
 	__asm__ volatile("int $0x80" : "=a"(pid) : "a"(5));
 	return pid;
 }
+
+char get_keystroke()
+{
+	int keystroke;
+	__asm__ volatile ("int $0x80" : "=a"(keystroke) : "a"(4));
+
+	return (char) keystroke;
+}
+
+_Noreturn void shutdown()
+{
+	__asm__ volatile("int $0x80" : : "a"(6));
+
+	__builtin_unreachable();
+}

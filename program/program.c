@@ -1,17 +1,49 @@
 #include "../klib/syscalls.h"
 
+#define MAX_CMD_LEN 10
+
+char cmd[MAX_CMD_LEN];
+unsigned int c_id = 0;
+
+void clear_cmd()
+{
+	c_id = 0;
+	for (int i = 0; i < MAX_CMD_LEN; ++i)
+		cmd[i] = 0;
+}
+
 int p_main()
 {
-	unsigned int pid = get_pid();
-	unsigned int c = 1000;
-	unsigned int ctr = 1;
-
-	start_process(1);
-
-	while (c--)
+	while (1)
 	{
-		printf("Hello from process %u | c = %u\n", pid, ctr++);
-	}
+		printf(">>> ");
 
+		while (1)
+		{
+			if (c_id == MAX_CMD_LEN)
+			{
+				printf("Command should be less than %u characters long\n", MAX_CMD_LEN);
+				break;
+			}
+
+			char c = get_keystroke();
+
+			if (c == '\n')
+				break;
+
+			cmd[c_id++] = c;
+			printf("%c", c);
+		}
+
+		if (c_id == 3 && (cmd[0] == 'p' || cmd[1] == ' '))
+			start_process(cmd[2] - '0');
+		else if (c_id == 1 && cmd[0] == 'q')
+			shutdown();
+		else
+		{
+			clear_cmd();
+			printf("Unknown command\n");
+		};
+	}
 	return 0;
 }

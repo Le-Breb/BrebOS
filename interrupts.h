@@ -26,6 +26,7 @@
 #define NUM_INTERRUPTS 0xFF
 
 #define CLOCK_TICK_MS 10
+#define TICKS_PER_SEC (1000 / CLOCK_TICK_MS)
 
 // Interrupt Descriptor Table
 struct idt_descriptor
@@ -167,5 +168,7 @@ _Noreturn extern void resume_syscall_handler_asm(cpu_state_t cpu_state, unsigned
 void enable_preemptive_scheduling();
 
 void disable_preemptive_scheduling();
+
+unsigned int get_tick();
 
 #endif /* INCLUDE_INTERRUPTS_H */

@@ -565,6 +565,8 @@ _Noreturn void interrupt_timer(unsigned int kesp, cpu_state_t* cpu_state, stack_
  */
 unsigned int ms_to_pit_divider(unsigned int ms);
 
+unsigned int ticks = 0;
+
 unsigned char read_scan_code(void)
 {
 	return inb(KBD_DATA_PORT);
@@ -876,6 +878,10 @@ void gpf_handler(struct stack_state* stack_state)
 
 _Noreturn void interrupt_timer(unsigned int kesp, cpu_state_t* cpu_state, stack_state_t* stack_state)
 {
+	// Update time
+	ticks++;
+
+
 	process* p = get_running_process();
 
 	if (p != 0x00)
@@ -929,11 +935,19 @@ void interrupt_handler(unsigned int kesp, cpu_state_t cpu_state, unsigned int in
 		case 0x80:
 			syscall_handler(&cpu_state, &stack_state);
 		default:
-			printf_info("Received unknown interrupt: %u", interrupt);
+			printf_error("Received unknown interrupt: %u", interrupt);
 			break;
 	}
 
 	pic_acknowledge(interrupt);
+
+	// Handle the case where no process was running when the interrupt occurred. This typically happens when the CPU is
+	// halted because all processes are waiting.
+	// We do not want to return from the interrupt handler as we have nowhere to return to, so we trigger timer interrupt
+	// which will run a process if one is ready once schedule is executed, or halt if all processes are waiting,
+	// or shutdown if there is no more active processes
+	if (!get_running_process())
+		__asm__ volatile("int $0x20");
 }
 
 void pic_init()
@@ -1011,4 +1025,9 @@ void disable_preemptive_scheduling()
 {
 	unsigned int a = inb(PIC1_DATA) | 1;
 	outb(PIC1_DATA, a);
+}
+
+unsigned int get_tick()
+{
+	return ticks;
 }

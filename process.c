@@ -12,6 +12,7 @@ unsigned int pid_pool = 0;
 
 pid running_process = MAX_PROCESSES;
 ready_queue_t ready_queue;
+ready_queue_t waiting_queue;
 process* processes[MAX_PROCESSES];
 
 /** Change current pdt */
@@ -344,9 +345,26 @@ process* get_running_process()
 	return running_process == MAX_PROCESSES ? 0x00 : processes[running_process];
 }
 
+void wake_up_key_waiting_processes(char key)
+{
+	for (unsigned int i = 0; i < waiting_queue.count; ++i)
+	{
+		// Add process to ready queue
+		pid pid = waiting_queue.arr[(waiting_queue.start + waiting_queue.count) % MAX_PROCESSES];
+		ready_queue.arr[(ready_queue.start + ready_queue.count++) % MAX_PROCESSES] = pid;
+
+		processes[pid]->cpu_state.eax = (unsigned int) key; // Return key
+		processes[pid]->flags &= ~P_WAITING_KEY; // Clear flag
+	}
+
+	// Clear waiting queue
+	waiting_queue.count = 0;
+}
+
 process* get_next_process()
 {
 	process* p = 0x00;
+	running_process = MAX_PROCESSES;
 
 	// Find next process to execute
 	while (p == 0x00)
@@ -365,9 +383,17 @@ process* get_next_process()
 			ready_queue.start = (ready_queue.start + 1) % MAX_PROCESSES;
 			ready_queue.count--;
 		}
+		else if (proc->flags & P_WAITING_KEY)
+		{
+			ready_queue.start = (ready_queue.start + 1) % MAX_PROCESSES;
+			ready_queue.count--;
+			waiting_queue.arr[(waiting_queue.start + waiting_queue.count) % MAX_PROCESSES] = proc->pid;
+			waiting_queue.count++;
+		}
 		else
 		{
 			p = proc;
+
 			// Update queue
 			if (p->quantum)
 				p->quantum -= CLOCK_TICK_MS;
@@ -388,7 +414,19 @@ _Noreturn void schedule()
 	process* p = get_next_process();
 
 	if (p == 0x00)
-		shutdown();
+	{
+		if (waiting_queue.count == 0)
+			shutdown();
+		else
+		{
+			// All processes are waiting for a key press. Thus, we can halt the CPU
+			running_process = MAX_PROCESSES; // Indicate that no process is running
+
+			__asm__ volatile("mov %0, %%esp" : : "r"(get_stack_top_ptr())); // Use global kernel stack
+			__asm__ volatile("sti"); // Make sure interrupts are enabled
+			__asm__ volatile("hlt"); // Halt
+		}
+	}
 
 	page_table_t* page_tables = get_page_tables();
 
