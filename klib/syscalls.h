@@ -10,7 +10,7 @@
 __attribute__ ((format (printf, 1, 2))) int printf(const char* format, ...);
 
 /** Terminates the program */
-void exit();
+_Noreturn void exit();
 
 /** Executes a GRUB module
  *

@@ -1,5 +1,5 @@
 OBJECTS = $(BUILD_DIR)/program.o $(BUILD_DIR)/start_program.o
-CC = /home/mat/opt/cross/bin/i686-elf-gcc # For some reason CLion does not read PATH entry where cross gcc path is set
+CC = i686-elf-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -c -g
 INCLUDE = -I../klib/build
 LDFLAGS = -T link_program.ld -melf_i386 -g

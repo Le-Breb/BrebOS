@@ -1,6 +1,6 @@
 OBJECTS = $(BUILD_DIR)/string.o $(BUILD_DIR)/stdio.o $(BUILD_DIR)/cstddef.o $(BUILD_DIR)/ctype.o $(BUILD_DIR)/wchar.o \
 $(BUILD_DIR)/stdint.o
-CC = /home/mat/opt/cross/bin/i686-elf-gcc # For some reason CLion does not read PATH entry where cross gcc path is set
+CC = i686-elf-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -c -g
 LDFLAGS = -T link.ld -melf_i386 -g
 AS = nasm

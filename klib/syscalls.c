@@ -1,5 +1,6 @@
 #include "syscalls.h"
 
+
 __attribute__ ((format (printf, 1, 2))) int printf(const char* format, ...)
 {
 	char* list = (char*) &format + sizeof(format);
@@ -9,9 +10,10 @@ __attribute__ ((format (printf, 1, 2))) int printf(const char* format, ...)
 	return i;
 }
 
-void exit()
+_Noreturn void exit()
 {
 	__asm__ volatile("int $0x80" : : "a"(1));
+	__builtin_unreachable();
 }
 
 void start_process(unsigned int module_id)

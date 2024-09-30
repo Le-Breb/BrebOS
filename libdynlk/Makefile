@@ -1,22 +1,12 @@
-OBJECTS = $(BUILD_DIR)/syscalls.a $(BUILD_DIR)/libsyscalls.so
+OBJECTS = $(BUILD_DIR)/libdynlk.so
 CC = i686-elf-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -g
 LIBFLAGS = -fPIC -Wl,-shared
 BUILD_DIR=build
 
-all: klib
+all: $(OBJECTS)
 
-.PHONY: klib
-
-
-klib: $(OBJECTS)
-
-# static
-$(BUILD_DIR)/syscalls.a: syscalls.c
-	$(CC) $(CFLAGS) -c $< -o $@
-
-#dynamic
-$(BUILD_DIR)/libsyscalls.so: syscalls.c
+$(BUILD_DIR)/%.so: %.c
 	$(CC) $(CFLAGS) $(LIBFLAGS) $< -o $@
 
 clean:

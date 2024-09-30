@@ -38,3 +38,10 @@ void memcpy(void* dest, const void* src, unsigned long num)
 	for (unsigned long i = 0; i < num; i++)
 		d[i] = s[i];
 }
+
+int strcmp(const char* str1, const char* str2)
+{
+	for (; *str1 && *str2 && *str1 == *str2; str1++, str2++);
+	
+	return *str1 - *str2;
+}

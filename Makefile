@@ -1,7 +1,8 @@
 OBJECTS = $(BUILD_DIR)/loader.o $(BUILD_DIR)/io.o $(BUILD_DIR)/kmain.o $(BUILD_DIR)/fb.o $(BUILD_DIR)/gdt.o \
 $(BUILD_DIR)/gdt_.o $(BUILD_DIR)/interrupts_.o $(BUILD_DIR)/interrupts.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/memory.o \
-$(BUILD_DIR)/memory_.o $(BUILD_DIR)/shutdown.o $(BUILD_DIR)/system.o $(BUILD_DIR)/process.o $(BUILD_DIR)/syscalls.o
-CC = /home/mat/opt/cross/bin/i686-elf-gcc # For some reason CLion does not read PATH entry where cross gcc path is set
+$(BUILD_DIR)/memory_.o $(BUILD_DIR)/shutdown.o $(BUILD_DIR)/system.o $(BUILD_DIR)/process.o $(BUILD_DIR)/syscalls.o \
+$(BUILD_DIR)/elf_tools.o
+CC = i686-elf-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -c -g
 LDFLAGS = -T link.ld -melf_i386 -g
 AS = nasm
@@ -13,6 +14,7 @@ PROGRAM_BUILD_DIR=program/build
 PROGRAM2_BUILD_DIR=program2/build
 KLIB_BUILD_DIR=klib/build
 CLIB_BUILD_DIR=clib/build
+LIBDYNLK_BUILD_DIR=libdynlk/build
 
 OUT_NAME=kernel
 OUT_BIN=$(OUT_NAME).elf
@@ -24,7 +26,7 @@ GRUB_TIMEOUT=0
 
 all: $(OS_ISO)
 
-.PHONY: program program2 clib
+.PHONY: program program2 clib libdynlk
 
 directories:
 	mkdir -p $(BUILD_DIR)
@@ -32,12 +34,16 @@ directories:
 	mkdir -p $(PROGRAM2_BUILD_DIR)
 	mkdir -p $(KLIB_BUILD_DIR)
 	mkdir -p $(CLIB_BUILD_DIR)
+	mkdir -p $(LIBDYNLK_BUILD_DIR)
 
 program:
 	make -C program
 
 program2:
 	make -C program2
+
+libdynlk:
+	make -C libdynlk
 
 clib:
 	make -C clib
@@ -46,7 +52,7 @@ clib:
 kernel.elf: directories $(OBJECTS) clib
 	ld $(LDFLAGS) $(OBJECTS) -Iclib/ $(KLIB_OBJECTS) -o $(BUILD_DIR)/kernel.elf
 
-$(OS_ISO): kernel.elf program program2
+$(OS_ISO): kernel.elf program program2 libdynlk
 #	Create directories
 	mkdir -p isodir
 	mkdir -p isodir/boot
@@ -63,11 +69,15 @@ $(OS_ISO): kernel.elf program program2
 	echo "	multiboot /boot/$(OUT_BIN)" >> grub.cfg
 	echo "	module /modules/program" >> grub.cfg
 	echo "	module /modules/program2" >> grub.cfg
+	echo "	module /modules/libdynlk.so" >> grub.cfg
+	echo "	module /modules/libsyscalls.so" >> grub.cfg
 	echo } >> grub.cfg
 
 	cp $(BUILD_DIR)/$(OUT_BIN) isodir/boot/$(OUT_BIN)
 	cp $(PROGRAM_BUILD_DIR)/program isodir/modules/program
 	cp $(PROGRAM2_BUILD_DIR)/program2 isodir/modules/program2
+	cp $(LIBDYNLK_BUILD_DIR)/libdynlk.so isodir/modules/libdynlk.so
+	cp $(KLIB_BUILD_DIR)/libsyscalls.so isodir/modules/libsyscalls.so
 	cp grub.cfg isodir/boot/grub/grub.cfg
 
 	echo "Building ISO..."
@@ -94,3 +104,4 @@ clean:
 	make -C program2 clean
 	make -C klib clean
 	make -C clib clean
+	make -C libdynlk clean

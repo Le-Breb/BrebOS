@@ -29,7 +29,10 @@ int p_main()
 			char c = get_keystroke();
 
 			if (c == '\n')
+			{
+				printf("\n");
 				break;
+			}
 
 			cmd[c_id++] = c;
 			printf("%c", c);
@@ -38,12 +41,12 @@ int p_main()
 		if (c_id == 3 && (cmd[0] == 'p' || cmd[1] == ' '))
 			start_process(cmd[2] - '0');
 		else if (c_id == 1 && cmd[0] == 'q')
-			shutdown();
+			break;
 		else
-		{
-			clear_cmd();
 			printf("Unknown command\n");
-		};
+
+		clear_cmd();
 	}
+
 	return 0;
 }

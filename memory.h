@@ -17,15 +17,15 @@
 
 #define STACK_SIZE 4096
 
-#define PAGE_ID_PHYS_ADDR(i) (i * PAGE_SIZE)
+#define FRAME_ID_ADDR(i) (i * PAGE_SIZE)
 #define VIRT_ADDR(pde, pte, offset) (pde << 22 | pte << 12 | offset)
-#define PTE_PHYS_ADDR(i) (PAGE_ID_PHYS_ADDR((PDT_ENTRIES + i)))
+#define PTE_PHYS_ADDR(i) (FRAME_ID_ADDR((PDT_ENTRIES + i)))
 #define PTE_USED(i) (PTE(i) & PAGE_PRESENT)
 #define PTE(i) (page_tables[i / PDT_ENTRIES].entries[i % PDT_ENTRIES])
-#define PAGE_USED(i) page_bitmap[i / 32] & (1 << (i % 32))
-#define PAGE_FREE(i) !(PAGE_USED(i))
-#define MARK_PAGE_USED(i) page_bitmap[i / 32] |= 1 << (i % 32)
-#define MARK_PAGE_FREE(i) page_bitmap[i / 32] &= ~(1 << (i % 32))
+#define FRAME_USED(i) frame_bitmap[i / 32] & (1 << (i % 32))
+#define FRAME_FREE(i) !(FRAME_USED(i))
+#define MARK_FRAME_USED(i) frame_bitmap[i / 32] |= 1 << (i % 32)
+#define MARK_FRAME_FREE(i) frame_bitmap[i / 32] &= ~(1 << (i % 32))
 #define PHYS_ADDR(virt_addr) (page_tables[virt_addr >> 22].entries[(virt_addr >> 12) & 0x3FF] & ~0x3FF)
 
 //https://wiki.osdev.org/Paging
@@ -94,17 +94,17 @@ void page_aligned_free(void* ptr);
 
 /** Allocate a page
  *
- * @param phys_page_id Physical page id
+ * @param frame_id Physical page id
  * @param page_id Page id
  */
-void allocate_page(unsigned int phys_page_id, unsigned int page_id);
+void allocate_page(unsigned int frame_id, unsigned int page_id);
 
 /** Allocate a page with user permissions
  *
- * @param phys_page_id Physical page id
+ * @param frame_id Physical page id
  * @param page_id Page id
  */
-void allocate_page_user(unsigned int phys_page_id, unsigned int page_id);
+void allocate_page_user(unsigned int frame_id, unsigned int page_id);
 
 /**
  * Free a page
@@ -116,8 +116,8 @@ void free_page(unsigned int pde, unsigned int pte);
 /** Get index of lowest free page id and update lowest_free_page to next free page id */
 unsigned int get_free_page();
 
-/** Get index of lowest free page entry id and update lowest_free_page_entry to next free page id */
-unsigned int get_free_page_entry();
+/** Get index of lowest free page entry id and update lowest_free_pe to next free page id */
+unsigned int get_free_pe();
 
 /** Get pdt */
 pdt_t* get_pdt();

@@ -11,10 +11,10 @@ pdt_t* pdt = (pdt_t*) boot_page_directory;
 page_table_t* asm_pt1 = (page_table_t*) boot_page_table1;
 page_table_t* page_tables;
 
-// Map of used physical pages. 1 = used, 0 = free. Ith page is referenced at (i % 32)th lsb of map[i / 32]
-unsigned int page_bitmap[(PT_ENTRIES / 32) * PDT_ENTRIES];
-unsigned int lowest_free_page_entry;
-unsigned int lowest_free_page = 0;
+// Map of used frames. 1 = used, 0 = free. Ith page is referenced at (i % 32)th lsb of map[i / 32]
+unsigned int frame_bitmap[(PT_ENTRIES / 32) * PDT_ENTRIES];
+unsigned int lowest_free_pe;
+unsigned int lowest_free_frame = 0;
 
 memory_header base = {.s = {&base, 0}};
 memory_header* freep; /* Lowest free block */
@@ -50,7 +50,7 @@ extern void reload_cr3_asm();
  * 	The page table that maps kernel pages is moved into the newly allocated array of page tables and then freed. \n
  * 	This function also set page_tables to point to the array of newly allocated page tables
  * 	@details
- *  Page tables will be written in physical pages 0 to 1023. \n
+ *  Page tables will be written in frames 0 to 1023. \n
  *	Page tables are virtually located on pages 1024*769 to 1024*769+1023. \n
  *	@note Any call to malloc will never return 0 on a successful allocation, as virtual address 0 maps the first page
  *	table, and will consequently never be returned by malloc if allocation is successful. \n
@@ -66,50 +66,36 @@ void allocate_page_tables();
 void load_grub_modules(struct multiboot_info* multibootInfo);
 
 /**
- * Load a flat binary file in memory
- * @param module GRUB module id
- * @return process instance
- */
-process* load_binary(unsigned int module, GRUB_module* grub_modules);
-
-/**
- * Load an elf in memory
- * @param module GRUB module id
- * @return process instance
- */
-process* load_elf(unsigned int module, GRUB_module* grub_modules);
-
-/**
  * Free pages in large free memory blocks
  */
 void free_release_pages();
 
 unsigned int get_free_page()
 {
-	unsigned int page = lowest_free_page;
-	unsigned int i = lowest_free_page + 1;
-	while (i < PDT_ENTRIES * PT_ENTRIES && PAGE_USED(i))
+	unsigned int page = lowest_free_frame;
+	unsigned int i = lowest_free_frame + 1;
+	while (i < PDT_ENTRIES * PT_ENTRIES && FRAME_USED(i))
 		i++;
-	lowest_free_page = i;
+	lowest_free_frame = i;
 
 	return page;
 }
 
-unsigned int get_free_page_entry()
+unsigned int get_free_pe()
 {
-	unsigned int page_entry = lowest_free_page_entry;
-	unsigned int i = lowest_free_page_entry + 1;
+	unsigned int pe = lowest_free_pe;
+	unsigned int i = lowest_free_pe + 1;
 	while (i < PDT_ENTRIES * PT_ENTRIES && PTE_USED(i))
 		i++;
-	lowest_free_page_entry = i;
+	lowest_free_pe = i;
 
-	return page_entry;
+	return pe;
 }
 
 void init_page_bitmap()
 {
 	// Clear bitmap
-	memset(page_bitmap, 0, 32 * 1024 * sizeof(int));
+	memset(frame_bitmap, 0, PDT_ENTRIES * PT_ENTRIES / (sizeof(unsigned int) * 8) * sizeof(unsigned int));
 
 	// Scan memory and set bitmap accordingly
 	for (int i = 0; i < PT_ENTRIES; i++)
@@ -118,7 +104,7 @@ void init_page_bitmap()
 			continue;
 
 		unsigned int page_id = (asm_pt1->entries[i] >> 12) & 0x3FF;
-		page_bitmap[i / 32] |= 1 << (page_id % 32);
+		frame_bitmap[i / 32] |= 1 << (page_id % 32);
 	}
 
 	// Display kernel size
@@ -129,8 +115,8 @@ void init_page_bitmap()
 	if (c == PT_ENTRIES)
 		printf_error("Kernel needs more space than available in 1 page table");
 
-	// Compute lowest_free_page
-	for (lowest_free_page = 0; PAGE_USED(lowest_free_page); lowest_free_page++);
+	// Compute lowest_free_frame
+	for (lowest_free_frame = 0; FRAME_USED(lowest_free_frame); lowest_free_frame++);
 }
 
 void allocate_page_tables()
@@ -139,12 +125,12 @@ void allocate_page_tables()
 	unsigned int asm_pt1_page_table_entry = ((unsigned int) asm_pt1 >> 12) & 0x3FF;
 
 	// Allocate page 1024 + 769
-	unsigned int new_page_phys_id = PDT_ENTRIES + 769;
-	unsigned int new_page_phys_addr = PAGE_ID_PHYS_ADDR(new_page_phys_id);
+	unsigned int new_page_frame_id = PDT_ENTRIES + 769;
+	unsigned int new_page_phys_addr = FRAME_ID_ADDR(new_page_frame_id);
 
 	// Map it in entry 1022 of asm pt
 	asm_pt1->entries[1022] = new_page_phys_addr | PAGE_WRITE | PAGE_PRESENT;
-	MARK_PAGE_USED(new_page_phys_id);
+	MARK_FRAME_USED(new_page_frame_id);
 
 	// Apply changes
 	__asm__ volatile("invlpg (%0)" : : "r" (VIRT_ADDR(768, 1022, 0)));
@@ -186,7 +172,7 @@ void allocate_page_tables()
 		pdt->entries[i] = PTE_PHYS_ADDR(i) | PAGE_PRESENT | PAGE_WRITE;
 
 	// Update pdt[entry] to point to new location of kernel page table
-	pdt->entries[768] = PAGE_ID_PHYS_ADDR((PDT_ENTRIES + 768)) | (pdt->entries[768] & 0x3FF);
+	pdt->entries[768] = FRAME_ID_ADDR((PDT_ENTRIES + 768)) | (pdt->entries[768] & 0x3FF);
 
 	for (int i = 770; i < PDT_ENTRIES; ++i)
 		pdt->entries[i] = PTE_PHYS_ADDR(i) | PAGE_PRESENT | PAGE_WRITE;
@@ -196,7 +182,7 @@ void allocate_page_tables()
 
 	reload_cr3_asm(); // Apply changes | Full TLB flush is needed because we modified every pdt entry
 
-	lowest_free_page_entry = 770 * PDT_ENTRIES; // Kernel is (for now at least) only allowed to allocate in high half
+	lowest_free_pe = 770 * PDT_ENTRIES; // Kernel is (for now at least) only allowed to allocate in higher half
 }
 
 void load_grub_modules(struct multiboot_info* multibootInfo)
@@ -208,25 +194,25 @@ void load_grub_modules(struct multiboot_info* multibootInfo)
 		multiboot_module_t* module = &((multiboot_module_t*) (multibootInfo->mods_addr + 0xC0000000))[i];
 
 		// Set module page as present
-		unsigned int module_phys_start_page_id = (unsigned int) module->mod_start / PAGE_SIZE;
+		unsigned int module_start_frame_id = (unsigned int) module->mod_start / PAGE_SIZE;
 		unsigned int mod_size = module->mod_end - module->mod_start;
 		unsigned int required_pages = mod_size / PAGE_SIZE + (mod_size % PAGE_SIZE == 0 ? 0 : 1);
 
-		unsigned int page_entry_id = lowest_free_page_entry;
+		unsigned int pe_id = lowest_free_pe;
 
-		grub_modules[i].start_addr = ((page_entry_id / PDT_ENTRIES) << 22) | ((page_entry_id % PDT_ENTRIES) << 12);
+		grub_modules[i].start_addr = ((pe_id / PDT_ENTRIES) << 22) | ((pe_id % PDT_ENTRIES) << 12);
 		grub_modules[i].size = mod_size;
 
 		// Mark module's code pages as allocated and user accessible
 		for (unsigned int j = 0; j < required_pages; ++j)
 		{
-			unsigned int phys_page_id = module_phys_start_page_id + j;
-			allocate_page_user(phys_page_id, page_entry_id);
+			unsigned int frame_id = module_start_frame_id + j;
+			allocate_page_user(frame_id, pe_id);
 
-			page_entry_id++;
+			pe_id++;
 		}
 
-		lowest_free_page_entry = page_entry_id;
+		lowest_free_pe = pe_id;
 	}
 
 	loaded_grub_modules = multibootInfo->mods_count;
@@ -243,10 +229,10 @@ void init_mem(struct multiboot_info* multibootInfo)
 void* sbrk(unsigned int n)
 {
 	// Memory full
-	if (lowest_free_page == PT_ENTRIES * PDT_ENTRIES)
+	if (lowest_free_frame == PT_ENTRIES * PDT_ENTRIES)
 		return 0x00;
 
-	unsigned int b = lowest_free_page_entry; /* block beginning page index */
+	unsigned int b = lowest_free_pe; /* block beginning page index */
 	unsigned int e; /* block end page index + 1*/
 	unsigned num_pages_requested = n / PAGE_SIZE + (n % PAGE_SIZE == 0 ? 0 : 1);
 
@@ -283,9 +269,9 @@ void* sbrk(unsigned int n)
 	for (unsigned int i = b; i < e; ++i)
 		allocate_page(get_free_page(), i);
 
-	lowest_free_page_entry = e;
-	while (PTE_USED(lowest_free_page_entry))
-		lowest_free_page_entry++;
+	lowest_free_pe = e;
+	while (PTE_USED(lowest_free_pe))
+		lowest_free_pe++;
 
 	// Allocated memory block virtually starts at page b. Return it.
 	return (void*) (((b / PDT_ENTRIES) << 22) | ((b % PDT_ENTRIES) << 12));
@@ -452,31 +438,31 @@ void free_release_pages()
 	}
 }
 
-void allocate_page(unsigned int phys_page_id, unsigned int page_id)
+void allocate_page(unsigned int frame_id, unsigned int page_id)
 {
 	// Write PTE
-	PTE(page_id) = PAGE_ID_PHYS_ADDR(phys_page_id) | PAGE_WRITE | PAGE_PRESENT;
-	MARK_PAGE_USED(phys_page_id); // Internal allocation registration
+	PTE(page_id) = FRAME_ID_ADDR(frame_id) | PAGE_WRITE | PAGE_PRESENT;
+	MARK_FRAME_USED(frame_id); // Internal allocation registration
 }
 
 void free_page(unsigned int pde, unsigned int pte)
 {
-	unsigned int phys_page_id = page_tables[pde].entries[pte] >> 12;
+	unsigned int frame_id = page_tables[pde].entries[pte] >> 12;
 
 	// Write PTE
 	page_tables[pde].entries[pte] = 0;
 	__asm__ volatile("invlpg (%0)" : : "r" (VIRT_ADDR(pde, pte, 0))); // Invalidate TLB entry
-	MARK_PAGE_FREE(phys_page_id); // Internal deallocation registration
+	MARK_FRAME_FREE(frame_id); // Internal deallocation registration
 
-	if (phys_page_id < lowest_free_page)
-		lowest_free_page = phys_page_id;
+	if (frame_id < lowest_free_frame)
+		lowest_free_frame = frame_id;
 }
 
-void allocate_page_user(unsigned int phys_page_id, unsigned int page_id)
+void allocate_page_user(unsigned int frame_id, unsigned int page_id)
 {
 	// Write PTE
-	PTE(page_id) = PAGE_ID_PHYS_ADDR(phys_page_id) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
-	MARK_PAGE_USED(phys_page_id); // Internal allocation registration
+	PTE(page_id) = FRAME_ID_ADDR(frame_id) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
+	MARK_FRAME_USED(frame_id); // Internal allocation registration
 }
 
 void* page_aligned_malloc(unsigned int size)

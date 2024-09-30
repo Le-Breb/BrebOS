@@ -20,7 +20,7 @@ void fb_scroll()
 void fb_write_cell(char c)
 {
 	// Scroll if buffer full
-	if (caret_pos == FB_WIDTH * FB_HEIGHT)
+	while (caret_pos >= FB_WIDTH * FB_HEIGHT)
 	{
 		fb_scroll();
 		caret_pos -= FB_WIDTH;
@@ -28,13 +28,6 @@ void fb_write_cell(char c)
 	if (c == '\n')
 	{
 		caret_pos = (caret_pos / FB_WIDTH + 1) * FB_WIDTH;
-
-		// Scroll if necessary
-		if (caret_pos >= FB_WIDTH * FB_HEIGHT)
-		{
-			fb_scroll();
-			caret_pos -= FB_WIDTH;
-		}
 		return;
 	}
 

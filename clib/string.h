@@ -11,4 +11,6 @@ void strcpy(char* dest, const char* src);
 
 void strcat(char* dest, const char* src);
 
+int strcmp(const char* str1, const char* str2);
+
 #endif //INCLUDE_OS_STRING_H
