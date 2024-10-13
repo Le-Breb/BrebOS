@@ -155,8 +155,8 @@ void start_module(unsigned int module, pid ppid)
 	proc->stack_state.esp = 0xBFFFFFFC;
 	proc->stack_state.eflags = 0x200;
 	proc->stack_state.error_code = 0;
+	proc->allocs = list_init();
 	memset(&proc->cpu_state, 0, sizeof(proc->cpu_state));
-	//memset((void*) (((p_stack_pe_id / 1024) << 22) | ((p_stack_pe_id % 1024) << 12)), 0xff, PAGE_SIZE);
 
 	// Set process ready
 	set_process_ready(pid);
@@ -343,4 +343,29 @@ void release_pid(pid pid)
 void terminate_process(process* p)
 {
 	p->flags |= P_TERMINATED;
+}
+
+void* process_allocate_dyn_memory(process* p, uint n)
+{
+	void* mem = malloc(n);
+
+	if (mem)
+	{
+		if (!list_push_front(p->allocs, mem))
+		{
+			free(mem);
+			return NULL;
+		}
+	}
+
+	return mem;
+}
+
+void process_free_dyn_memory(process* p, void* ptr)
+{
+	int pos = list_find(p->allocs, ptr);
+	if (pos == -1)
+		printf_error("Process dyn memory ptr not found in process allocs");
+	list_remove_at(p->allocs, pos);
+	free(ptr);
 }

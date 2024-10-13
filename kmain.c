@@ -14,6 +14,8 @@ idt_entry_t idt[256];
 
 idt_descriptor_t idt_descriptor;
 
+extern void _init(void); // NOLINT(*-reserved-identifier)
+
 //Todo: Make printf run mostly in user mode
 //Todo: Make load_elf unload process if an error occurs
 //Todo: Implement shared memory
@@ -21,6 +23,7 @@ idt_descriptor_t idt_descriptor;
 //Todo: same for page pde 771 pte11 at the end of run_module
 int kmain(unsigned int ebx)
 {
+	_init(); // Execute constructors
 	disable_interrupts();
 
 	// Initialize framebuffer

@@ -1,6 +1,7 @@
 OBJECTS = $(BUILD_DIR)/program.o $(BUILD_DIR)/start_program.o
 CC = i686-elf-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -c -g
+libgcc=$(shell i686-elf-gcc $(CFLAGS) -print-libgcc-file-name)
 INCLUDE = -I../klib/build
 LDFLAGS = -T link_program.ld -melf_i386 -g
 AS = nasm
@@ -15,7 +16,7 @@ klib:
 	make -C ../klib
 
 program: $(OBJECTS) klib
-	ld $(LDFLAGS) -o $(BUILD_DIR)/program $(INCLUDE) $(OBJECTS) ../klib/build/*.a
+	ld $(LDFLAGS) -o $(BUILD_DIR)/program $(INCLUDE) $(OBJECTS) $(libgcc) ../klib/build/*.a
 
 $(BUILD_DIR)/%.o: %.c
 	$(CC) $(CFLAGS) $< -o $@

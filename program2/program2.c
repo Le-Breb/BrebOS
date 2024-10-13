@@ -8,5 +8,9 @@ int p_main()
 	unsigned int pid2 = get_pid();
 	printf("test:%i", pid2);
 
+	char* a = malloc(10);
+	printf("%p\n", a);
+	free(a);
+
 	return 0;
 }

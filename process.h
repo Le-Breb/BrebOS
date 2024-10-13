@@ -4,6 +4,8 @@
 #include "memory.h"
 #include "interrupts.h"
 #include "elf.h"
+#include "list.h"
+#include "clib/stddef.h"
 
 typedef unsigned int pid;
 
@@ -55,6 +57,8 @@ typedef struct
 	cpu_state_t k_cpu_state; // Syscall handler registers
 	stack_state_t stack_state; // Execution context
 	stack_state_t k_stack_state; // Syscall handler execution context
+
+	list* allocs; // list of memory blocks allocated by the process
 
 	elf_info* elfi;
 } process;
@@ -127,5 +131,9 @@ void set_process_ready(pid pid);
  * @param key Key pressed
  */
 void wake_up_key_waiting_processes(char key);
+
+void* process_allocate_dyn_memory(process* p, uint n);
+
+void process_free_dyn_memory(process* p, void* ptr);
 
 #endif //INCLUDE_PROCESS_H

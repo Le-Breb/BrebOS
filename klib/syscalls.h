@@ -32,4 +32,17 @@ char get_keystroke();
 
 _Noreturn void shutdown();
 
+/**
+ * Tries to allocate n contiguous bytes of memory on the heap
+ * @param n number of bytes to allocate
+ * @return pointer to beginning of allocated memory block or NULL if allocation failed
+ */
+void* malloc(unsigned int n);
+
+/**
+ * Frees a memory block
+ * @param ptr pointer to the beginning of the block
+ */
+void free(void* ptr);
+
 #endif //INCLUDE_SYSCALLS_H

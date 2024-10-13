@@ -1,9 +1,16 @@
 OBJECTS = $(BUILD_DIR)/loader.o $(BUILD_DIR)/io.o $(BUILD_DIR)/kmain.o $(BUILD_DIR)/fb.o $(BUILD_DIR)/gdt.o \
 $(BUILD_DIR)/gdt_.o $(BUILD_DIR)/interrupts_.o $(BUILD_DIR)/interrupts.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/memory.o \
 $(BUILD_DIR)/memory_.o $(BUILD_DIR)/shutdown.o $(BUILD_DIR)/system.o $(BUILD_DIR)/process.o $(BUILD_DIR)/syscalls.o \
-$(BUILD_DIR)/elf_tools.o
+$(BUILD_DIR)/elf_tools.o $(BUILD_DIR)/list.o
 CC = i686-elf-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -c -g
+libgcc=$(shell i686-elf-gcc $(CFLAGS) -print-libgcc-file-name)
+CRTI_OBJ=$(BUILD_DIR)/crti.o
+CRTBEGIN_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtbegin.o)
+CRTEND_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtend.o)
+CRTN_OBJ=$(BUILD_DIR)/crtn.o
+OBJ_LIST=$(CRTI_OBJ) $(CRTBEGIN_OBJ) $(OBJECTS) $(CRTEND_OBJ) $(CRTN_OBJ)
+INTERNAL_OBJS=$(CRTI_OBJ) $(OBJECTS) $(CRTN_OBJ)
 LDFLAGS = -T link.ld -melf_i386 -g
 AS = nasm
 ASFLAGS = -f elf -F dwarf -g
@@ -49,8 +56,8 @@ clib:
 	make -C clib
 
 
-kernel.elf: directories $(OBJECTS) clib
-	ld $(LDFLAGS) $(OBJECTS) -Iclib/ $(KLIB_OBJECTS) -o $(BUILD_DIR)/kernel.elf
+kernel.elf: directories $(INTERNAL_OBJS) clib
+	ld $(LDFLAGS) $(OBJ_LIST) $(libgcc) -Iclib/ $(KLIB_OBJECTS) -o $(BUILD_DIR)/kernel.elf
 
 $(OS_ISO): kernel.elf program program2 libdynlk
 #	Create directories

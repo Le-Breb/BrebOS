@@ -28,6 +28,20 @@ void syscall_printf(cpu_state_t* cpu_state);
  */
 _Noreturn void syscall_terminate_process(process* p);
 
+/**
+ * Tries to allocate dynamic memory for a given process
+ * @param p calling process
+ * @param cpu_state process CPU state
+ */
+void syscall_malloc(process* p, cpu_state_t* cpu_state);
+
+/**
+ * Frees dynamic memory of a given process
+ * @param p calling process
+ * @param cpu_state process CPU state
+ */
+void syscall_free(process* p, cpu_state_t* cpu_state);
+
 void syscall_start_process(cpu_state_t* cpu_state)
 {
 	// Load child process and set it ready
@@ -57,6 +71,16 @@ _Noreturn void syscall_terminate_process(process* p)
 
 	// We will never resume the code here
 	__builtin_unreachable();
+}
+
+void syscall_malloc(process* p, cpu_state_t* cpu_state)
+{
+	cpu_state->eax = (uint) process_allocate_dyn_memory(p, cpu_state->ebx);
+}
+
+void syscall_free(process* p, cpu_state_t* cpu_state)
+{
+	process_free_dyn_memory(p, (void*) cpu_state->ebx);
 }
 
 void syscall_dynlk(cpu_state_t* cpu_state)
@@ -154,7 +178,7 @@ _Noreturn void syscall_handler(cpu_state_t* cpu_state, struct stack_state* stack
 			syscall_printf(cpu_state);
 			break;
 		case 3:
-			disable_preemptive_scheduling();
+			disable_preemptive_scheduling(); // Is it necessary ? Isn't timer interrupt disabled when this runs ?
 			syscall_start_process(cpu_state);
 			enable_preemptive_scheduling();
 			break;
@@ -168,6 +192,12 @@ _Noreturn void syscall_handler(cpu_state_t* cpu_state, struct stack_state* stack
 			shutdown();
 		case 7:
 			syscall_dynlk(cpu_state);
+			break;
+		case 8:
+			syscall_malloc(p, &p->cpu_state);
+			break;
+		case 9:
+			syscall_free(p, &p->cpu_state);
 			break;
 		default:
 			printf_error("Received unknown syscall id: %u", cpu_state->eax);

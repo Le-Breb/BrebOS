@@ -42,3 +42,15 @@ _Noreturn void shutdown()
 
 	__builtin_unreachable();
 }
+
+void* malloc(unsigned int n)
+{
+	void* ptr;
+	__asm__ volatile("int $0x80" : "=a"(ptr): "a"(8), "b"(n));
+	return ptr;
+}
+
+void free(void* ptr)
+{
+	__asm__ volatile("int $0x80" : : "a"(9), "b"(ptr));
+}

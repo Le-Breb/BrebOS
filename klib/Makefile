@@ -1,6 +1,7 @@
 OBJECTS = $(BUILD_DIR)/syscalls.a $(BUILD_DIR)/libsyscalls.so
 CC = i686-elf-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -g
+libgcc=$(shell i686-elf-gcc $(CFLAGS) -print-libgcc-file-name)
 LIBFLAGS = -fPIC -Wl,-shared
 BUILD_DIR=build
 
@@ -17,7 +18,7 @@ $(BUILD_DIR)/syscalls.a: syscalls.c
 
 #dynamic
 $(BUILD_DIR)/libsyscalls.so: syscalls.c
-	$(CC) $(CFLAGS) $(LIBFLAGS) $< -o $@
+	$(CC) $(CFLAGS) $(libgcc) $(LIBFLAGS) $< -o $@
 
 clean:
 	rm -rf build/*

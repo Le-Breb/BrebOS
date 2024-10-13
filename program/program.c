@@ -39,7 +39,11 @@ int p_main()
 		}
 
 		if (c_id == 3 && (cmd[0] == 'p' || cmd[1] == ' '))
-			start_process(cmd[2] - '0');
+		{
+			if (!(cmd[2] >= '0' && cmd[2] <= '9'))
+				printf("Invalid program index: %c\n", cmd[2]);
+			else start_process(cmd[2] - '0');
+		}
 		else if (c_id == 1 && cmd[0] == 'q')
 			break;
 		else
