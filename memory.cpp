@@ -3,9 +3,9 @@
 #include "clib/stdio.h"
 #include "clib/string.h"
 
-extern void boot_page_directory();
+extern "C" void boot_page_directory();
 
-extern void boot_page_table1();
+extern "C" void boot_page_table1();
 
 pdt_t* pdt = (pdt_t*) boot_page_directory;
 page_table_t* asm_pt1 = (page_table_t*) boot_page_table1;
@@ -24,7 +24,7 @@ GRUB_module* grub_modules;
 
 unsigned int free_bytes = 0;
 
-extern void stack_top();
+extern "C" void stack_top();
 
 unsigned int* stack_top_ptr = (unsigned int*) stack_top;
 
@@ -44,7 +44,7 @@ void init_page_bitmap();
 memory_header* more_kernel(unsigned int n);
 
 /** Reload cr3 which will acknowledge every pte change and invalidate TLB */
-extern void reload_cr3_asm();
+extern "C" void reload_cr3_asm();
 
 /** Allocate 1024 pages to store the 1024 page tables required to map all the memory. \n
  * 	The page table that maps kernel pages is moved into the newly allocated array of page tables and then freed. \n
@@ -69,6 +69,36 @@ void load_grub_modules(struct multiboot_info* multibootInfo);
  * Free pages in large free memory blocks
  */
 void free_release_pages();
+
+void* operator new(size_t size)
+{
+	return malloc(size);
+}
+
+void* operator new[](size_t size)
+{
+	return malloc(size);
+}
+
+void operator delete(void* p)
+{
+	free(p);
+}
+
+void operator delete[](void* p)
+{
+	free(p);
+}
+
+void operator delete(void* p, [[maybe_unused]] long unsigned int size)
+{
+	free(p);
+}
+
+void operator delete[]([[maybe_unused]] void* p, [[maybe_unused]]  long unsigned int size)
+{
+	printf_error("this operator shouldn't be used");
+}
 
 unsigned int get_free_page()
 {
@@ -187,7 +217,7 @@ void allocate_page_tables()
 
 void load_grub_modules(struct multiboot_info* multibootInfo)
 {
-	grub_modules = malloc(multibootInfo->mods_count * sizeof(GRUB_module));
+	grub_modules = (GRUB_module*) malloc(multibootInfo->mods_count * sizeof(GRUB_module));
 
 	for (unsigned int i = 0; i < multibootInfo->mods_count; ++i)
 	{
@@ -282,7 +312,7 @@ memory_header* more_kernel(unsigned int n)
 	if (n < N_ALLOC)
 		n = N_ALLOC;
 
-	memory_header* h = sbrk(sizeof(memory_header) * n);
+	memory_header* h = (memory_header*) sbrk(sizeof(memory_header) * n);
 
 	if ((int*) h == 0x00)
 		return 0x00;
@@ -297,7 +327,7 @@ memory_header* more_kernel(unsigned int n)
 	return freep;
 }
 
-void* malloc(unsigned int n)
+extern "C" void* malloc(unsigned int n)
 {
 	memory_header* c;
 	memory_header* p = freep;
@@ -321,13 +351,13 @@ void* malloc(unsigned int n)
 		}
 		if (c == freep) /* wrapped around free list */
 		{
-			if ((c = more_kernel(nunits)) == 0x00)
-				return 0x00; /* none left */
+			if ((c = more_kernel(nunits)) == nullptr)
+				return nullptr; /* none left */
 		}
 	}
 }
 
-void free(void* ptr)
+extern "C" void free(void* ptr)
 {
 	memory_header* c = (memory_header*) ptr - 1;
 	memory_header* p;
@@ -369,11 +399,12 @@ void free(void* ptr)
 void free_release_pages()
 {
 	memory_header* p = freep;
-	for(memory_header* c = freep->s.ptr;; p = c, c = c->s.ptr)
+	for (memory_header* c = freep->s.ptr;; p = c, c = c->s.ptr)
 	{
 		unsigned int block_byte_size = c->s.size * sizeof(memory_header);
-		unsigned mod = ((unsigned int)c & (PAGE_SIZE - 1)); // c % PAGE_SIZE
-		unsigned int aligned_free_bytes = mod > block_byte_size ? 0 : (block_byte_size - mod); // min(0, byte_size - mod)
+		unsigned mod = ((unsigned int) c & (PAGE_SIZE - 1)); // c % PAGE_SIZE
+		unsigned int aligned_free_bytes =
+				mod > block_byte_size ? 0 : (block_byte_size - mod); // min(0, byte_size - mod)
 		aligned_free_bytes -= aligned_free_bytes & (PAGE_SIZE - 1); // -= aligned_free_bytes % PAGE_SIZE
 
 		// Skip small block
@@ -386,7 +417,8 @@ void free_release_pages()
 		}
 
 		unsigned n_pages = aligned_free_bytes >> 12; // Num pages to free
-		unsigned int aligned_addr_base = ((unsigned int) c + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1); // Start addr of first page
+		unsigned int aligned_addr_base =
+				((unsigned int) c + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1); // Start addr of first page
 		unsigned free_size = aligned_free_bytes / sizeof(memory_header); // Freed memory size in sizeof(memory_header)
 		unsigned int remaining_size = c->s.size - free_size;
 
@@ -396,7 +428,7 @@ void free_release_pages()
 			p->s.ptr = c->s.ptr; // Simply link previous to next
 		else // The block is split into two blocks: one before freed pages and one after them
 		{
-			unsigned int first_block_size = (aligned_addr_base - (unsigned int)c) / sizeof(memory_header);
+			unsigned int first_block_size = (aligned_addr_base - (unsigned int) c) / sizeof(memory_header);
 			unsigned int second_block_size = remaining_size - first_block_size;
 
 			// First block - May not exist if block is page aligned, but write anyway
@@ -469,6 +501,8 @@ void* page_aligned_malloc(unsigned int size)
 {
 	unsigned int total_size = size + sizeof(void*) + PAGE_SIZE;
 	void* base_addr = malloc(total_size);
+	if (base_addr == nullptr)
+		return nullptr;
 
 	unsigned int aligned_addr = ((unsigned int) base_addr + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
 	((void**) aligned_addr)[-1] = base_addr;

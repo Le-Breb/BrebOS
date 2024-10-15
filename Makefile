@@ -1,9 +1,9 @@
-OBJECTS = $(BUILD_DIR)/loader.o $(BUILD_DIR)/io.o $(BUILD_DIR)/kmain.o $(BUILD_DIR)/fb.o $(BUILD_DIR)/gdt.o \
-$(BUILD_DIR)/gdt_.o $(BUILD_DIR)/interrupts_.o $(BUILD_DIR)/interrupts.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/memory.o \
-$(BUILD_DIR)/memory_.o $(BUILD_DIR)/shutdown.o $(BUILD_DIR)/system.o $(BUILD_DIR)/process.o $(BUILD_DIR)/syscalls.o \
-$(BUILD_DIR)/elf_tools.o $(BUILD_DIR)/list.o
+OBJS = loader.o io.o kmain.o fb.o gdt.o gdt_.o interrupts_.o interrupts.o keyboard.o memory.o memory_.o shutdown.o \
+system.o process.o syscalls.o list.o PIT.o PIC.o IDT.o ELF.o scheduler.o
+OBJECTS= $(OBJS:%.o=$(BUILD_DIR)/%.o)
 CC = i686-elf-gcc
-CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -c -g
+CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
+-c -g -fno-exceptions -fno-rtti
 libgcc=$(shell i686-elf-gcc $(CFLAGS) -print-libgcc-file-name)
 CRTI_OBJ=$(BUILD_DIR)/crti.o
 CRTBEGIN_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtbegin.o)
@@ -57,7 +57,7 @@ clib:
 
 
 kernel.elf: directories $(INTERNAL_OBJS) clib
-	ld $(LDFLAGS) $(OBJ_LIST) $(libgcc) -Iclib/ $(KLIB_OBJECTS) -o $(BUILD_DIR)/kernel.elf
+	ld $(LDFLAGS) $(OBJ_LIST) -Iclib/ $(KLIB_OBJECTS) -o $(BUILD_DIR)/kernel.elf $(libgcc)
 
 $(OS_ISO): kernel.elf program program2 libdynlk
 #	Create directories
@@ -97,7 +97,7 @@ run: $(OS_ISO)
 debug: $(OS_ISO)
 	qemu-system-i386 -device isa-debug-exit -cdrom $(OS_ISO) -gdb tcp::26000 -S
 
-$(BUILD_DIR)/%.o: %.c
+$(BUILD_DIR)/%.o: %.cpp
 	$(CC) $(CFLAGS) $< -o $@
 $(BUILD_DIR)/%.o: %.s
 	$(AS) $(ASFLAGS) $< -o $@

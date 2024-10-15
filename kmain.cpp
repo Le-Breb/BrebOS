@@ -4,76 +4,71 @@
 #include "multiboot.h"
 #include "memory.h"
 #include "system.h"
-#include "process.h"
+#include "scheduler.h"
 #include "clib/stdio.h"
+#include "PIT.h"
+#include "PIC.h"
+#include "IDT.h"
 
-gdt_entry_t gdt[GDT_ENTRIES];
-
-gdt_descriptor_t gdt_descriptor;
-idt_entry_t idt[256];
-
-idt_descriptor_t idt_descriptor;
-
-extern void _init(void); // NOLINT(*-reserved-identifier)
+extern "C" void _init(void); // NOLINT(*-reserved-identifier)
 
 //Todo: Make printf run mostly in user mode
 //Todo: Make load_elf unload process if an error occurs
 //Todo: Implement shared memory
 //Todo: Investigate about whether page 184 (VGA buffer start address is mapped twice)
 //Todo: same for page pde 771 pte11 at the end of run_module
-int kmain(unsigned int ebx)
+extern "C" int kmain(unsigned int ebx)
 {
 	_init(); // Execute constructors
-	disable_interrupts();
+	Interrupts::disable_asm();
 
 	// Initialize framebuffer
-	fb_clear_screen();
-
+	FB::clear_screen();
 
 	printf("Setting up GDT\n");
-	gdt_init(&gdt_descriptor, gdt);
-	fb_ok();
+	GDT::init();
+	FB::ok();
 
 	printf("Remapping PIC\n");
-	pic_init();
-	fb_ok();
+	PIC::init();
+	FB::ok();
 
 	printf("Setting up IDT\n");
-	idt_init(&idt_descriptor, idt);
-	fb_ok();
+	IDT::init();
+	FB::ok();
 
 	printf("Initializing PIT\n");
-	pit_init();
-	fb_ok();
+	PIT::init();
+	FB::ok();
 
 	printf("Enabling interrupts\n");
-	enable_interrupts();
-	fb_ok();
+	Interrupts::enable_asm();
+	FB::ok();
 
 	printf("Initialize memory ");
 	init_mem((multiboot_info_t*) (ebx + 0xC0000000));
-	fb_ok();
+	FB::ok();
 
 	printf("Setting up process handling\n");
-	processes_init();
-	fb_ok();
+	Scheduler::init();
+	FB::ok();
 
 	// Do stuff - make sure malloc and free work
-	const unsigned int N = 100000;
-	int* a = malloc(N * sizeof(int));
+	const size_t N = 100000;
+	int* a = new int[N];
 	for (unsigned int i = 0; i < N; i++)
 		a[i] = 2;
-	int* b = malloc(sizeof(int));
+	int* b = new int;
 	*b = 2;
 
-	free(b);
-	free(a);
+	delete b;
+	delete[] a;
 
 	// Set INIT process ready
-	start_module(0, 0);
+	Scheduler::start_module(0, 0);
 
 	// Run processes! :D
-	enable_preemptive_scheduling();
+	PIC::enable_preemptive_scheduling();
 
-	shutdown();
+	System::shutdown();
 }

@@ -8,8 +8,8 @@ reload_cr3_asm:
 ; Set a new pdt
 ; [esp + 0] call function ret addr
 ; [esp + 4] new pdt physical address
-global change_pdt_asm
-change_pdt_asm:
+global change_pdt_asm_
+change_pdt_asm_:
     mov eax, [esp + 4]
     mov cr3, eax
     ret

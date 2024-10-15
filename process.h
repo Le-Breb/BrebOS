@@ -3,137 +3,147 @@
 
 #include "memory.h"
 #include "interrupts.h"
-#include "elf.h"
+#include "ELF.h"
 #include "list.h"
 #include "clib/stddef.h"
 
-typedef unsigned int pid;
+typedef unsigned int pid_t;
 
-// Maximum concurrent processes. Limit defined by size of pid_pool
-#define MAX_PROCESSES (sizeof(unsigned int) * 8)
-
-typedef struct
-{
-	pid arr[MAX_PROCESSES];
-	unsigned int start, count;
-} ready_queue_t;
-
+// Process is terminated but not freed
 #define P_TERMINATED 1
+// Process has been interrupted during a syscall
 #define P_SYSCALL_INTERRUPTED 2
+// Process is waiting for a key press
 #define P_WAITING_KEY 4
 
-#define RESET_QUANTUM(p) (p->quantum = p->priority * CLOCK_TICK_MS)
+class Scheduler;
 
-#define OS_INTERPR ("/dynlk") // OS default interpreter, used to run dynamically linked programs
-#define OS_LIB ("libsyscalls.so") // OS lib, allowing programs to use syscalls
-
-
-typedef struct
+class Process
 {
-	Elf32_Ehdr* elf32Ehdr;
-	Elf32_Phdr* elf32Phdr;
-	Elf32_Shdr* elf32Shdr;
-	GRUB_module* mod;
-} elf_info;
+	friend class Scheduler;
 
-typedef struct
-{
+private:
 	// Process page tables. Process can use all virtual addresses below the kernel virtual location at pde 768
 	page_table_t page_tables[768];
-	pdt_t pdt;
+	pdt_t pdt; // process page directory table
 
 	unsigned int quantum, priority;
 
 	unsigned int num_pages; // Num pages over which the process code spans
 	unsigned int* pte; // Array of pte where the process code is loaded to
 
-	pid pid; // PID
-	pid ppid; // Parent PID
+	pid_t pid; // PID
+	pid_t ppid; // Parent PID
 
 	unsigned int k_stack_top; // Top of syscall handlers' stack
-	unsigned int flags;
+	unsigned int flags; // Process state
 
+	list* allocs; // list of memory blocks allocated by the process
+public:
 	cpu_state_t cpu_state; // Registers
 	cpu_state_t k_cpu_state; // Syscall handler registers
 	stack_state_t stack_state; // Execution context
 	stack_state_t k_stack_state; // Syscall handler execution context
 
-	list* allocs; // list of memory blocks allocated by the process
+	ELF* elf;
+private:
 
-	elf_info* elfi;
-} process;
+	/** Page aligned allocator **/
+	void* operator new(size_t size);
 
+	/** Page aligned allocator **/
+	void* operator new[](size_t size);
 
-/**
- * Load a flat binary in memory
- *
- * @param module Grub module id
- * @param grub_modules grub modules
- * @return program's process
- */
-process* load_binary(unsigned int module, GRUB_module* grub_modules);
+	/** Page aligned free **/
+	void operator delete(void* p);
 
-/**
- * Loads a GRUB module and set it ready
- *
- * @param module Grub module id
- */
-void start_module(unsigned int module, pid ppid);
+	/** Page aligned free **/
+	void operator delete[](void* p);
 
-/**
- * Terminates a process
- */
-void terminate_process(process* p);
+	/** Frees a terminated process */
+	~Process();
 
-/** Frees a terminated process */
-void free_process(pid pid);
+	/**
+	 * Sets up a dynamically linked process
+	 * @param proc process
+	 * @param grub_modules grub modules
+	 * @return process set up, NULL if an error occurred
+	 */
+	bool dynamic_loading();
 
-/**
- * Tries to get a free PID from pid_pool
- * @return 0 if all PIDs are used, a valid PID otherwise
- */
-pid get_free_pid();
+	/**
+	* Load a lib in a process' address soace
+	* @param p process to add libynlk to
+	* @param lib_mod GRUB modules
+	* @return libdynlk runtime entry point address
+	*/
+	bool load_lib(GRUB_module* lib_mod);
 
-/**
- * Indicates that a used PID is now free
- * @param pid PID to free
- */
-void release_pid(pid pid);
+	/**
+	 * Allocate space for libydnlk and add it to a process' address space
+	 * @param elf32Ehdr ELF heder
+	 * @param elf32Phdr program table header
+	 * @param p process to add libdynlk to
+	 * @return boolean indicating success state
+	 */
+	bool alloc_and_add_lib_pages_to_process(ELF& lib_elf);
 
-/** Initialize processes handling data structures */
-void processes_init();
+	/**
+	 * Allocate a process containing an ELF
+	 * @return process struct, NULL if an error occurred
+	 */
+	static Process* allocate_proc_for_elf_module(GRUB_module* module);
 
-/**
- * Gets the PID of current running process
- * @return PID of current running process
- */
-pid get_running_process_pid();
+public:
+	/** Gets the process' PID */
+	[[nodiscard]] pid_t get_pid() const;
 
-/**
- * Gets running process
- * @return running process
- */
-process* get_running_process();
+	/**
+	 * Terminates a process
+	 */
+	void terminate();
 
-/**
- * Executes next process in the ready queue
- */
-_Noreturn void schedule();
+	/**
+	 * Contiguous heap memory allocator
+	 * @param n required memory quantity
+	 * @return pointer to beginning of allocated heap memory, NULL if an error occurred
+	 */
+	[[nodiscard]] void* allocate_dyn_memory(uint n) const;
 
-/**
- * Adds a process to the ready queue
- * @param pid Process' PID
- */
-void set_process_ready(pid pid);
+	/**
+	 * Contiguous heap memory free
+	 * @param ptr pointer to beginning of allocated heap memory
+	 */
+	void free_dyn_memory(void* ptr) const;
 
-/**
- * Remove processes waiting for a key press from waiting list and add them to ready queue
- * @param key Key pressed
- */
-void wake_up_key_waiting_processes(char key);
+	/**
+	 * Create a process to run an ELF executable
+	 *
+	 * @param module ELF Grub module id
+	 * @return program's process
+	 */
+	static Process* from_ELF(GRUB_module* module);
 
-void* process_allocate_dyn_memory(process* p, uint n);
+	/**
+	 * Sets a flag
+	 * @param flag flag to set
+	 */
+	void set_flag(uint flag);
 
-void process_free_dyn_memory(process* p, void* ptr);
+	/** Checks whether the program is terminated */
+	[[nodiscard]] bool is_terminated() const;
+
+	/** Checks whether the program is waiting for a key press */
+	[[nodiscard]] bool is_waiting_key() const;
+
+	/**
+	 * Loads a flat binary in memory
+	 *
+	 * @param module Grub module id
+	 * @param grub_modules grub modules
+	 * @return program's process, NULL if an error occurred
+	 */
+	static Process* from_binary(unsigned int module, GRUB_module* grub_modules);
+};
 
 #endif //INCLUDE_PROCESS_H

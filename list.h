@@ -4,42 +4,47 @@
 #include "clib/stddef.h"
 #include "memory.h"
 
-struct list_item
+struct list_item_
 {
 	void* data;
-	struct list_item* next;
-	struct list_item* prev;
+	struct list_item_* next;
+	struct list_item_* prev;
 };
 
-typedef struct
+typedef struct list_item_ list_item;
+
+class list
 {
 	size_t size;
-	struct list_item* head;
-	struct list_item* tail;
-} list;
+	list_item* head;
+	list_item* tail;
 
-list* list_init(void);
+public:
+	~list();
 
-void* list_push_front(list* list, void* element);
+	list();
 
-void* list_push_back(list* list, void* element);
+	void* push_front(void* element);
 
-size_t list_size(const list* list);
+	void* push_back(void* element);
 
-void* list_get(const list* list, size_t index);
+	size_t get_size() const;
 
-void* list_insert_at(list* list, void* element, size_t index);
+	void* get_at(size_t index) const;
 
-int list_find(const list* list, void* element);
+	void* insert_at(void* element, size_t index);
 
-void* list_remove_at(list* list, size_t index);
+	int find(void* element) const;
 
-void list_clear(list* list);
+	void* remove_at(size_t index);
 
-void list_reverse(list* list);
+	void clear();
 
-list* list_split_at(list* l, size_t index);
+	void reverse();
 
-void list_concat(list* list1, list* list2);
+	list* split_at(size_t index);
+
+	void concat(list* list2);
+};
 
 #endif /* !INCLUDE_LIST_H */

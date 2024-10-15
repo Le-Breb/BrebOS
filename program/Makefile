@@ -1,6 +1,8 @@
-OBJECTS = $(BUILD_DIR)/program.o $(BUILD_DIR)/start_program.o
+OBJS = program.o start_program.o cpp_start.o
+OBJECTS= $(OBJS:%.o=$(BUILD_DIR)/%.o)
 CC = i686-elf-gcc
-CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -c -g
+CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
+-c -g -fno-exceptions -fno-rtti
 libgcc=$(shell i686-elf-gcc $(CFLAGS) -print-libgcc-file-name)
 INCLUDE = -I../klib/build
 LDFLAGS = -T link_program.ld -melf_i386 -g
@@ -16,9 +18,9 @@ klib:
 	make -C ../klib
 
 program: $(OBJECTS) klib
-	ld $(LDFLAGS) -o $(BUILD_DIR)/program $(INCLUDE) $(OBJECTS) $(libgcc) ../klib/build/*.a
+	ld $(LDFLAGS) -o $(BUILD_DIR)/program $(INCLUDE) $(OBJECTS) ../klib/build/*.a $(libgcc)
 
-$(BUILD_DIR)/%.o: %.c
+$(BUILD_DIR)/%.o: %.cpp
 	$(CC) $(CFLAGS) $< -o $@
 $(BUILD_DIR)/%.o: %.s
 	$(AS) $(ASFLAGS) $< -o $@

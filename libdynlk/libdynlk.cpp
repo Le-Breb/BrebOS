@@ -1,4 +1,4 @@
-_Noreturn void lib_main()
+extern "C" [[noreturn]] void lib_main()
 {
 	/* Expected memory layout:
 	 * ESP

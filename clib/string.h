@@ -1,11 +1,11 @@
 #ifndef INCLUDE_OS_STRING_H
 #define INCLUDE_OS_STRING_H
 
-unsigned long strlen(const char* str);
+extern "C" unsigned long strlen(char const* str);
 
-void memset(void* ptr, unsigned char value, unsigned long num);
+extern "C" void memset(void* ptr, int value, unsigned long num);
 
-void memcpy(void* dest, const void* src, unsigned long num);
+extern "C" void memcpy(void* dest, const void* src, unsigned long num);
 
 void strcpy(char* dest, const char* src);
 

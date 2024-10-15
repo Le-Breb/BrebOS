@@ -1,9 +1,9 @@
 section .text
-global load_gdt ; make the label outb visible outside this file
+global load_gdt_asm_ ; make the label outb visible outside this file
                 ; load_gdt - load the gdt
                 ; stack: [esp + 4] gdt descriptor struct
                 ;        [esp    ] return address
-load_gdt:
+load_gdt_asm_:
     ; Load the GDT
     mov eax, [esp+4] ; Get the address of the gdt_descriptor
     lgdt [eax]       ; Load the gdt
@@ -23,8 +23,8 @@ load_gdt:
     ; Return from the function
     ret
 
-global load_tss
-load_tss:
+global load_tss_asm_
+load_tss_asm_:
    mov ax, 0x2B      ; Load the index of our TSS structure - The index is
                      ; 0x28, as it is the 5th selector and each is 8 bytes
                      ; long, but we set the bottom two bits (making 0x2B)

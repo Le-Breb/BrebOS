@@ -8,7 +8,7 @@
 * @param data The data to send to the I/O port
 25
 */
-void outb(unsigned short port, unsigned char data);
+extern "C" void outb(unsigned short port, unsigned char data);
 
 /** inb:
 * Read a byte from an I/O port.
@@ -17,8 +17,8 @@ void outb(unsigned short port, unsigned char data);
 * @return
 The read byte
 */
-unsigned char inb(unsigned short port);
+extern "C" unsigned char inb(unsigned short port);
 
-void io_wait(void);
+extern "C" void io_wait(void);
 
 #endif /* INCLUDE_IO_H */

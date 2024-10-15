@@ -4,8 +4,8 @@ extern interrupt_handler
 ; [esp + 0] = call function ret addr
 ; [esp + 4] = cpu_state_t
 ; [esp + 4 + sizeof(cpu_state_t)] = struct stack_state
-global resume_user_process_asm
-resume_user_process_asm:
+global resume_user_process_asm_
+resume_user_process_asm_:
 .restore_regs:
     mov ebx, [esp + 08]
     mov ecx, [esp + 12]
@@ -40,8 +40,8 @@ resume_user_process_asm:
 ; [esp + 0] = call function ret addr
 ; [esp + 4] = cpu_state_t
 ; [esp + 4 + sizeof(cpu_state_t)] = new ESP value
-global resume_syscall_handler_asm
-resume_syscall_handler_asm:
+global resume_syscall_handler_asm_
+resume_syscall_handler_asm_:
 .restore_regs:
     mov eax, [esp + 04]
     mov ebx, [esp + 08]
@@ -57,36 +57,36 @@ resume_syscall_handler_asm:
 .jump:
     iret
 
-global disable_interrupts
-disable_interrupts:
+global disable_interrupts_asm_
+disable_interrupts_asm_:
     cli
     ret
 
-global enable_interrupts
-enable_interrupts:
+global enable_interrupts_asm_
+enable_interrupts_asm_:
     sti
     ret
 
 ; load_idt - Loads the interrupt descriptor table (IDT).
 ; stack: [esp + 4] the address of the first entry in the IDT
 ;        [esp    ] the return address
-global load_idt
-load_idt:
+global load_idt_asm_
+load_idt_asm_:
     mov     eax, [esp+4]    ; load the address of the IDT into register eax
     lidt    [eax]           ; load the IDT
     ret                     ; return to the calling function
 
 %macro no_error_code_interrupt_handler 1
-global interrupt_handler_%1
-interrupt_handler_%1:
+global interrupt_handler_%1_asm_
+interrupt_handler_%1_asm_:
     push    dword 0                     ; push 0 as error code
     push    dword %1                    ; push the interrupt number
     jmp     common_interrupt_handler    ; jump to the common handler
 %endmacro
 
 %macro error_code_interrupt_handler 1
-global interrupt_handler_%1
-interrupt_handler_%1:
+global interrupt_handler_%1_asm_
+interrupt_handler_%1_asm_:
     push    dword %1                    ; push the interrupt number
     jmp     common_interrupt_handler    ; jump to the common handler
 %endmacro

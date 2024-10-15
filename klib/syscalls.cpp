@@ -10,7 +10,7 @@ __attribute__ ((format (printf, 1, 2))) int printf(const char* format, ...)
 	return i;
 }
 
-_Noreturn void exit()
+extern "C" [[noreturn]] void exit()
 {
 	__asm__ volatile("int $0x80" : : "a"(1));
 	__builtin_unreachable();
@@ -36,7 +36,7 @@ char get_keystroke()
 	return (char) keystroke;
 }
 
-_Noreturn void shutdown()
+[[noreturn]] void shutdown()
 {
 	__asm__ volatile("int $0x80" : : "a"(6));
 

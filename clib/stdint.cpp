@@ -1,8 +1,7 @@
+/*
 #include "stdint.h"
 
-typedef long long int int64_t;
-
-int64_t __divdi3(int64_t num, int64_t den) // NOLINT(*-reserved-identifier)
+int64_t __divdi3(int64_t num, int64_t den)
 {
 	int64_t quot = 0, temp = 0;
 	int neg = 0;
@@ -32,7 +31,7 @@ int64_t __divdi3(int64_t num, int64_t den) // NOLINT(*-reserved-identifier)
 	return (neg ? -quot : quot);
 }
 
-int64_t __moddi3(int64_t num, int64_t den) // NOLINT(*-reserved-identifier)
+int64_t __moddi3(int64_t num, int64_t den)
 {
 	int64_t temp = 0;
 	int neg = 0;
@@ -59,3 +58,4 @@ int64_t __moddi3(int64_t num, int64_t den) // NOLINT(*-reserved-identifier)
 
 	return (neg ? -temp : temp);
 }
+*/

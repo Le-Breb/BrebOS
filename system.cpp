@@ -2,9 +2,9 @@
 #include "io.h"
 #include "clib/stdio.h"
 
-extern unsigned int is_running_in_qemu_asm();
+extern "C" unsigned int is_running_in_qemu_asm();
 
-_Noreturn int shutdown()
+[[noreturn]] int System::shutdown()
 {
 	unsigned int qemu = is_running_in_qemu_asm();
 

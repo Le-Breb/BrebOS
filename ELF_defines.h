@@ -1,7 +1,9 @@
-#ifndef INCLUDE_ELF_H
-#define INCLUDE_ELF_H
+#ifndef CUSTOM_OS_ELF_DEFINES_H
+#define CUSTOM_OS_ELF_DEFINES_H
 //http://www.skyfree.org/linux/references/ELF_Format.pdf
 //https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779
+#include "memory.h"
+
 #define EI_NIDENT (16)
 
 typedef unsigned int Elf32_Off;
@@ -495,4 +497,4 @@ typedef struct
 #define R_386_RELATIVE 8
 #define R_386_GOTOFF 9
 #define R_386_GOTPC 100
-#endif //INCLUDE_OS_ELF_H
+#endif //CUSTOM_OS_ELF_DEFINES_H

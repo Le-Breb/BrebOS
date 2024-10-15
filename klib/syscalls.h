@@ -9,8 +9,11 @@
  */
 __attribute__ ((format (printf, 1, 2))) int printf(const char* format, ...);
 
-/** Terminates the program */
-_Noreturn void exit();
+/** Terminates the program
+ * @note This function is marked as extern "C" to disable CPP name mangling, thus making the function callable from
+ * assembly
+ * */
+extern "C" [[noreturn]] void exit();
 
 /** Executes a GRUB module
  *
@@ -30,7 +33,7 @@ unsigned int get_pid();
  */
 char get_keystroke();
 
-_Noreturn void shutdown();
+[[noreturn]] void shutdown();
 
 /**
  * Tries to allocate n contiguous bytes of memory on the heap

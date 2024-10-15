@@ -94,11 +94,11 @@ char* __int_str(intmax_t i, char b[], int base, unsigned int plusSignIfNeeded, u
 
 void displayCharacter(char c, int* a)
 {
-	fb_write_char(c);
+	FB::write_cell(c);
 	*a += 1;
 }
 
-void displayString(char* c, int* a)
+void displayString(const char* c, int* a)
 {
 	for (int i = 0; c[i]; ++i)
 	{
@@ -561,28 +561,28 @@ __attribute__ ((format (printf, 1, 2))) int printf(const char* format, ...)
 
 __attribute__ ((format (printf, 1, 2))) int printf_error(const char* format, ...)
 {
-	fb_error_();
-	fb_write_cell(' ');
+	FB::error_decorator();
+	FB::write_cell(' ');
 	va_list list;
 	va_start (list, format);
 	int i = vprintf(format, list);
 	va_end (list);
-	fb_write_cell(' ');
-	fb_error();
+	FB::write_cell(' ');
+	FB::error();
 
 	return i;
 }
 
 __attribute__ ((format (printf, 1, 2))) int printf_info(const char* format, ...)
 {
-	fb_info_();
-	fb_write_cell(' ');
+	FB::info_decorator();
+	FB::write_cell(' ');
 	va_list list;
 	va_start (list, format);
 	int i = vprintf(format, list);
 	va_end (list);
-	fb_write_cell(' ');
-	fb_info();
+	FB::write_cell(' ');
+	FB::info();
 
 	return i;
 }

@@ -68,7 +68,7 @@ void init_mem(multiboot_info_t* minfo);
  * @param n Size of the block in size
  * @return Address of beginning of allocated block if allocation was successful, NULL otherwise
  */
-void* malloc(unsigned int n);
+extern "C" void* malloc(unsigned int n);
 
 /**
  * Allocate page-aligned memory
@@ -83,7 +83,7 @@ void* page_aligned_malloc(unsigned int size);
  *
  * @param ptr Pointer to the memory block to free
  */
-void free(void* ptr);
+extern "C" void free(void* ptr);
 
 /**
  * Free page-aligned memory

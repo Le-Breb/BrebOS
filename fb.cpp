@@ -7,7 +7,7 @@ short* const fb = (short*) FB_ADDR;
 unsigned char BG = FB_BLACK;
 unsigned char FG = FB_WHITE;
 
-void fb_scroll()
+void FB::scroll()
 {
 	// Offset lines
 	for (int i = 0; i < FB_WIDTH * (FB_HEIGHT - 1); ++i)
@@ -17,12 +17,12 @@ void fb_scroll()
 		fb[FB_WIDTH * (FB_HEIGHT - 1) + i] = ' ';
 }
 
-void fb_write_cell(char c)
+void FB::write_cell(char c)
 {
 	// Scroll if buffer full
 	while (caret_pos >= FB_WIDTH * FB_HEIGHT)
 	{
-		fb_scroll();
+		scroll();
 		caret_pos -= FB_WIDTH;
 	}
 	if (c == '\n')
@@ -35,7 +35,7 @@ void fb_write_cell(char c)
 	fb[caret_pos++] = (short) ((((BG & 0x0F) << 4) | (FG & 0x0F)) << 8 | c);
 }
 
-void fb_move_cursor(unsigned short pos)
+void FB::move_cursor(unsigned short pos)
 {
 	outb(FB_COMMAND_PORT, FB_HIGH_BYTE_COMMAND);   /* Send pos high bits command */
 	outb(FB_DATA_PORT, ((pos >> 8) & 0x00FF));     /* Send pos high bits */
@@ -43,76 +43,71 @@ void fb_move_cursor(unsigned short pos)
 	outb(FB_DATA_PORT, pos & 0x00FF);              /* Send pos low bits */
 }
 
-void fb_clear_screen()
+void FB::clear_screen()
 {
 	caret_pos = 0;
 	for (int i = 0; i < FB_HEIGHT * FB_WIDTH; i++)
-		fb_write_cell(' ');
+		write_cell(' ');
 	caret_pos = 0;
 }
 
-void fb_write(char* buf)
+void FB::write(const char* buf)
 {
 	for (unsigned int i = 0; i < strlen(buf); i++)
-		fb_write_cell(buf[i]);
+		write_cell(buf[i]);
 }
 
-void fb_ok()
+void FB::ok()
 {
-	fb_ok_();
-	fb_write_cell('\n');
+	ok_decorator();
+	write_cell('\n');
 }
 
-void fb_error()
+void FB::error()
 {
-	fb_error_();
-	fb_write_cell('\n');
+	error_decorator();
+	write_cell('\n');
 }
 
-void fb_info()
+void FB::info()
 {
-	fb_info_();
-	fb_write_cell('\n');
+	info_decorator();
+	write_cell('\n');
 }
 
-void fb_ok_()
+void FB::ok_decorator()
 {
-	fb_write_cell('[');
-	fb_set_fg(FB_GREEN);
-	fb_write("OK");
-	fb_set_fg(FB_WHITE);
-	fb_write_cell(']');
+	write_cell('[');
+	set_fg(FB_GREEN);
+	write("OK");
+	set_fg(FB_WHITE);
+	write_cell(']');
 }
 
-void fb_error_()
+void FB::error_decorator()
 {
-	fb_write_cell('[');
-	fb_set_fg(FB_RED);
-	fb_write("ERROR");
-	fb_set_fg(FB_WHITE);
-	fb_write_cell(']');
+	write_cell('[');
+	set_fg(FB_RED);
+	write("ERROR");
+	set_fg(FB_WHITE);
+	write_cell(']');
 }
 
-void fb_info_()
+void FB::info_decorator()
 {
-	fb_write_cell('[');
-	fb_set_fg(FB_BLUE);
-	fb_write("INFO");
-	fb_set_fg(FB_WHITE);
-	fb_write_cell(']');
+	write_cell('[');
+	set_fg(FB_BLUE);
+	write("INFO");
+	set_fg(FB_WHITE);
+	write_cell(']');
 }
 
-void fb_write_char(char c)
-{
-	fb_write_cell(c);
-}
-
-void fb_set_fg(unsigned char fg)
+void FB::set_fg(unsigned char fg)
 {
 	FG = fg;
 }
 
-void fb_set_bg(unsigned char bg)
+void FB::set_bg(unsigned char bg)
 {
 	BG = bg;
 }

@@ -1,5 +1,5 @@
-#ifndef INCLUDE_K_H
-#define INCLUDE_K_H
+#ifndef INCLUDE_OS_GDT_H
+#define INCLUDE_OS_GDT_H
 
 #define PL0 0x00
 #define PL1 0x20
@@ -79,46 +79,58 @@ struct tss_entry
 
 typedef struct tss_entry tss_entry_t;
 
-/**
- * Load the GDT
- *
- * @param gdt GDT descriptor
- */
-void load_gdt(struct gdt_descriptor* gdt); // Extern
+class GDT
+{
+private:
+	static gdt_entry_t gdt[GDT_ENTRIES];
 
-/**
- * Load the TSS
- *
- * @warning This function must be called only after the GDT has been loaded with a TSS entry
- */
-void load_tss(); // Extern
+	static gdt_descriptor_t gdt_descriptor;
 
-/**
- * Initialize the GDT and TSS
- *
- * @param gdt_descriptor GDT descriptor
- * @param gdt GDT
- */
-void gdt_init(gdt_descriptor_t* gdt_descriptor, gdt_entry_t* gdt);
+	static void setup_tss(unsigned int gdt_entry, unsigned int ss0, unsigned int esp0);
 
-/**
- * Define kernel stack location for handling interrupts / traps
- *
- * @param esp0 Stack pointer
- */
-void set_tss_kernel_stack(unsigned int esp0);
+	/**
+	 * Write a GDT entry
+	 *
+	 * @param gdt GDT
+	 * @param num Entry number
+	 * @param base Base address
+	 * @param limit Segment limit
+	 * @param access Access rights
+	 * @param granularity Granularity flags
+	 */
+	static void
+	set_entry(unsigned int num, unsigned int base, unsigned int limit, char access, char granularity);
 
-/**
- * Write a GDT entry
- *
- * @param gdt GDT
- * @param num Entry number
- * @param base Base address
- * @param limit Segment limit
- * @param access Access rights
- * @param granularity Granularity flags
- */
-void gdt_set_entry(struct gdt_entry* gdt, unsigned int num, unsigned int base, unsigned int limit, char access,
-				   char granularity);
+	/**
+	 * Load the GDT
+	 *
+	 * @param gdt GDT descriptor
+	 */
+	static void load_asm();
 
-#endif /* INCLUDE_K_H */
+	/**
+	 * Load the TSS
+	 *
+	 * @warning This function must be called only after the GDT has been loaded with a TSS entry
+	 */
+	static void load_tss_asm();
+
+public:
+
+	/**
+	 * Initialize the GDT and TSS
+	 *
+	 * @param gdt_descriptor GDT descriptor
+	 * @param gdt GDT
+	 */
+	static void init();
+
+	/**
+	 * Define kernel stack location for handling interrupts / traps
+	 *
+	 * @param esp0 Stack pointer
+	 */
+	static void set_tss_kernel_stack(unsigned int esp0);
+};
+
+#endif /* INCLUDE_OS_GDT_H */

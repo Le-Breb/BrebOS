@@ -2,6 +2,8 @@
 #define INCLUDE_STDIO_H
 
 // Define va_start macro
+#include "stdint.h"
+
 #define va_start(ap, last_arg) (ap = (va_list)&last_arg + sizeof(last_arg))
 
 // Define va_arg macro
@@ -9,6 +11,9 @@
 
 // Define va_end macro (no-op in this case)
 #define va_end(ap) ((void)0)
+
+char* __int_str(intmax_t i, char b[], int base, unsigned int plusSignIfNeeded, unsigned int spaceSignIfNeeded,
+				int paddingNo, unsigned int justify, unsigned int zeroPad);
 
 typedef char* va_list;
 

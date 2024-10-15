@@ -20,69 +20,64 @@
 
 #define FB_ADDR 0xC03FF000
 
-/**
- * Writes a character in the framebuffer.
-*
-* @param i The location in the framebuffer
-* @param c The character
-* @param bg The foreground color
-* @param fg The background color
-*/
-void fb_write_cell(char c);
+class FB
+{
+	/**
+	 * Set foreground color
+	 * @param fg foreground code
+	 */
+	static void set_fg(unsigned char fg);
+
+	/**
+	 * Set background color
+	 * @param bg foreground code
+	 */
+	static void set_bg(unsigned char bg);
+
+public:
+	/**
+	 * Writes a character in the framebuffer at current cursor position. Scroll if needed.
+	*
+	* @param c The character
+	*/
+	static void write_cell(char c);
 
 
-/** Moves the cursor of the framebuffer to the given position
-*
-* @param pos The new position of the cursor
-*/
-void fb_move_cursor(unsigned short pos);
+	/** Moves the cursor of the framebuffer to the given position
+	*
+	* @param pos The new position of the cursor
+	*/
+	static void move_cursor(unsigned short pos);
 
-/** Clear the screen */
-void fb_clear_screen();
+	/** Clear the screen */
+	static void clear_screen();
 
-/** Write a string
- *
- * @param n String to print
- */
-void fb_write(char* buf);
+	/** Write a string
+	 *
+	 * @param buf String to print
+	 */
+	static void write(const char* buf);
 
-/** Write an ok decorator */
-void fb_ok();
+	/** Write an ok decorator without trailing newline */
+	static void ok_decorator();
 
-/** Write an error decorator */
-void fb_error();
+	/** Write an error decorator without trailing newline */
+	static void error_decorator();
 
-/** Write an info decorator */
-void fb_info();
+	/** Write an info decorator without trailing newline*/
+	static void info_decorator();
 
-/** Write an ok decorator without trailing newline */
-void fb_ok_();
+	/** Write an ok decorator */
+	static void ok();
 
-/** Write an error decorator without trailing newline */
-void fb_error_();
+	/** Write an error decorator */
+	static void error();
 
-/** Write an info decorator without trailing newline*/
-void fb_info_();
+	/** Write an info decorator */
+	static void info();
 
-/** Scroll one line up  */
-void fb_scroll();
-
-/** Write a character to the framebuffer
- *
- * @param c Character to print
- */
-void fb_write_char(char c);
-
-/**
- * Set foreground color
- * @param fg foreground code
- */
-void fb_set_fg(unsigned char fg);
-
-/**
- * Set background color
- * @param bg foreground code
- */
-void fb_set_bg(unsigned char bg);
+	/** Scroll one line up  */
+	static void scroll();
+};
 
 #endif /* INCLUDE_FB_H */

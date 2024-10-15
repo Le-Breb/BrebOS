@@ -1,8 +1,8 @@
 #include "keyboard.h"
 #include "interrupts.h"
-#include "process.h"
+#include "scheduler.h"
 
-char kbd_US[128] =
+char Keyboard::kbd_US[128] =
 		{
 				0, 27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',
 				'\t', /* <-- Tab */
@@ -38,11 +38,16 @@ char kbd_US[128] =
 				0,  /* All other keys are undefined */
 		};
 
-void keyboard_interrupt_handler()
+unsigned char Keyboard::read_scan_code()
+{
+	return inb(KBD_DATA_PORT);
+}
+
+void Keyboard::interrupt_handler()
 {
 	unsigned char scan_code = read_scan_code();
 	char c = kbd_US[scan_code];
 
 	if ((c >= 'a' && c <= 'z') || c == ' ' || (c >= '1' && c <= '9') || c == '\n')
-		wake_up_key_waiting_processes(c);
+		Scheduler::wake_up_key_waiting_processes(c);
 }

@@ -1,12 +1,13 @@
 OBJECTS = $(BUILD_DIR)/libdynlk.so
 CC = i686-elf-gcc
-CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror -g
+CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
+-g -fno-exceptions -fno-rtti
 LIBFLAGS = -fPIC -Wl,-shared
 BUILD_DIR=build
 
 all: $(OBJECTS)
 
-$(BUILD_DIR)/%.so: %.c
+$(BUILD_DIR)/%.so: %.cpp
 	$(CC) $(CFLAGS) $(LIBFLAGS) $< -o $@
 
 clean:

@@ -12,7 +12,7 @@ void clear_cmd()
 		cmd[i] = 0;
 }
 
-int p_main()
+int main()
 {
 	while (1)
 	{
