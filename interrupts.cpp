@@ -36,8 +36,12 @@ extern "C" [[noreturn]] void resume_syscall_handler_asm_(cpu_state_t cpu_state, 
 
 void Interrupts::page_fault_handler(struct stack_state* stack_state)
 {
+	unsigned int addr; // Address of the fault
+	__asm__ volatile("mov %%cr2, %0" : "=r"(addr)); // Get addr from CR2
+	
 	unsigned int err = stack_state->error_code;
-	printf_error("Page fault");
+
+	printf_error("Page fault at address 0x%x", addr);
 	printf("Present: %s\n", (err & 1 ? "True" : "False"));
 	printf("Write: %s\n", err & 2 ? "True" : "False");
 	printf("User mode: %s\n", err & 4 ? "True" : "False");
@@ -62,7 +66,7 @@ void Interrupts::gpf_handler(struct stack_state* stack_state)
 
 	Process* p = Scheduler::get_running_process();
 
-	if (p != 0x00)
+	if (p)
 	{
 		// Did we interrupt a syscall handler ?
 		unsigned int syscall_interrupted = stack_state->cs == 0x08;

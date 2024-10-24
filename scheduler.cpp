@@ -1,7 +1,7 @@
 #include "scheduler.h"
 #include "PIT.h"
 #include "system.h"
-#include "gdt.h"
+#include "GDT.h"
 #include "clib/stdio.h"
 #include "clib/string.h"
 

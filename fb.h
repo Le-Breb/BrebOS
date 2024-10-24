@@ -8,12 +8,24 @@
 /* The I/O port commands */
 #define FB_HIGH_BYTE_COMMAND 14
 #define FB_LOW_BYTE_COMMAND 15
-#define FB_GREEN 2
-#define FB_DARK_GREY 8
-#define FB_BLACK 0
-#define FB_WHITE 15
-#define FB_RED 4
-#define FB_BLUE 1
+#define FB_BLACK        0x00
+#define FB_BLUE         0x01
+#define FB_GREEN        0x02
+#define FB_CYAN         0x03
+#define FB_RED          0x04
+#define FB_MAGENTA      0x05
+#define FB_BROWN        0x06
+#define FB_LIGHTGREY    0x07
+#define FB_LIGHTGRAY    0x07
+#define FB_DARKGREY     0x08
+#define FB_DARKGRAY     0x08
+#define FB_LIGHTBLUE    0x09
+#define FB_LIGHTGREEN   0x0A
+#define FB_LIGHTCYAN    0x0B
+#define FB_LIGHTRED     0x0C
+#define FB_LIGHTMAGENTA 0x0D
+#define FB_YELLOW       0x0E
+#define FB_WHITE        0x0F
 
 #define FB_WIDTH 80
 #define FB_HEIGHT 25
@@ -22,6 +34,7 @@
 
 class FB
 {
+public:
 	/**
 	 * Set foreground color
 	 * @param fg foreground code
@@ -34,13 +47,12 @@ class FB
 	 */
 	static void set_bg(unsigned char bg);
 
-public:
 	/**
 	 * Writes a character in the framebuffer at current cursor position. Scroll if needed.
 	*
 	* @param c The character
 	*/
-	static void write_cell(char c);
+	static void putchar(char c);
 
 
 	/** Moves the cursor of the framebuffer to the given position

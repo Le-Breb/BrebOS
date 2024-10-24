@@ -91,10 +91,10 @@
 
 #ifndef ASM_FILE
 
-typedef unsigned char           multiboot_uint8_t;
-typedef unsigned short          multiboot_uint16_t;
-typedef unsigned int            multiboot_uint32_t;
-typedef unsigned long long      multiboot_uint64_t;
+typedef unsigned char multiboot_uint8_t;
+typedef unsigned short multiboot_uint16_t;
+typedef unsigned int multiboot_uint32_t;
+typedef unsigned long long multiboot_uint64_t;
 
 struct multiboot_header
 {
@@ -270,5 +270,15 @@ struct multiboot_apm_info
 };
 
 #endif /* ! ASM_FILE */
+
+class Multiboot
+{
+public:
+	/**Prints a map of memory by parsing GRUB's multiboot struct
+	 *
+	 * @param ebx EBX passed to kmain containing the physical address of GRUB's multiboot struct
+	 */
+	static void print_mmap(unsigned int ebx);
+};
 
 #endif /* ! MULTIBOOT_HEADER */

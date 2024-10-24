@@ -1,5 +1,5 @@
 #include "PIT.h"
-#include "io.h"
+#include "IO.h"
 
 unsigned int PIT::get_tick()
 {

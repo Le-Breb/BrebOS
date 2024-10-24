@@ -1,5 +1,5 @@
 #include "fb.h"
-#include "gdt.h"
+#include "GDT.h"
 #include "interrupts.h"
 #include "multiboot.h"
 #include "memory.h"
@@ -9,11 +9,14 @@
 #include "PIT.h"
 #include "PIC.h"
 #include "IDT.h"
+#include "ATA.h"
+#include "FAT.h"
 
 extern "C" void _init(void); // NOLINT(*-reserved-identifier)
 
+//Todo: Try to figure out address 0 page faulting (like isn't proc entry point there ?)
+//Todo: Kill process when major issue occurs (such as PAGEFAULT)
 //Todo: Make printf run mostly in user mode
-//Todo: Make load_elf unload process if an error occurs
 //Todo: Implement shared memory
 //Todo: Investigate about whether page 184 (VGA buffer start address is mapped twice)
 //Todo: same for page pde 771 pte11 at the end of run_module
@@ -49,20 +52,24 @@ extern "C" int kmain(unsigned int ebx)
 	init_mem((multiboot_info_t*) (ebx + 0xC0000000));
 	FB::ok();
 
+	printf("Initializing ATA driver\n");
+	ATA::init();
+	FB::ok();
+
 	printf("Setting up process handling\n");
 	Scheduler::init();
 	FB::ok();
 
-	// Do stuff - make sure malloc and free work
-	const size_t N = 100000;
-	int* a = new int[N];
-	for (unsigned int i = 0; i < N; i++)
-		a[i] = 2;
-	int* b = new int;
-	*b = 2;
-
-	delete b;
-	delete[] a;
+	FAT_drive* d0 = FAT_drive::from_drive(0);
+	if (!d0)
+		printf_error("Error instantiating drive 0");
+	else if (!d0->mkdir("/a_folder"))
+		printf_error("error creating /a_folder");
+	else if (!d0->mkdir("/a_folder/bam"))
+		printf_error("error creating /a_folder/bam");
+	else if (!d0->mkdir("/a_folder/bam/badaboum"))
+		printf_error("error creating /a_folder/bam/badaboum");
+	delete d0;
 
 	// Set INIT process ready
 	Scheduler::start_module(0, 0);
@@ -70,5 +77,6 @@ extern "C" int kmain(unsigned int ebx)
 	// Run processes! :D
 	PIC::enable_preemptive_scheduling();
 
+	// Not supposed to be executed, but we never know...
 	System::shutdown();
 }

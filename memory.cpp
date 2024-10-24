@@ -154,13 +154,22 @@ void allocate_page_tables()
 	// Save for later use
 	unsigned int asm_pt1_page_table_entry = ((unsigned int) asm_pt1 >> 12) & 0x3FF;
 
-	// Allocate page 1024 + 769
+	/** Allocate page 1024 + 769
+	 * Kernel is given pages 0 to 1023, we'll allocate page tables at pages 1024 to 2047
+	 * As kernel will be mapped in PDT[768] to be compliant with its start address and as page tables belong to the
+	 * kernel, they are allocated in the next available kernel memory space, at PDT[769]
+	 */
 	unsigned int new_page_frame_id = PDT_ENTRIES + 769;
 	unsigned int new_page_phys_addr = FRAME_ID_ADDR(new_page_frame_id);
 
-	// Map it in entry 1022 of asm pt
+	// Map it in entry 1022 of asm pt (1023 is taken by VGA buffer)
+	if (asm_pt1->entries[1022])
+	{
+		printf_error("Not enough space to initialize memory, kernel is too large");
+		__asm__ volatile("hlt");
+	}
 	asm_pt1->entries[1022] = new_page_phys_addr | PAGE_WRITE | PAGE_PRESENT;
-	MARK_FRAME_USED(new_page_frame_id);
+	//MARK_FRAME_USED(new_page_frame_id); No need, will be done in allocate_page
 
 	// Apply changes
 	__asm__ volatile("invlpg (%0)" : : "r" (VIRT_ADDR(768, 1022, 0)));
@@ -184,27 +193,20 @@ void allocate_page_tables()
 	// Update pointer using pdt[769]
 	page_tables = (page_table_t*) VIRT_ADDR(769, 0, 0);
 
-	// Clear unused pages
-	for (int i = 0; i < PDT_ENTRIES; ++i) // Skip first page as it maps all the page tables' pages
-	{
-		pdt->entries[i] |= PAGE_USER; // Let user access all page tables. Access will be defined in page table entries
-		if (i == 769)
-			continue;
-		for (int j = 0; j < PT_ENTRIES; ++j)
-			page_tables[i].entries[j] = 0;
-	}
+	// Let user access all page tables. Access will be defined in page table entries
+	for (int i = 0; i < PDT_ENTRIES; ++i)
+		pdt->entries[i] |= PAGE_USER;
+	/** Clear unused page tables (all but 769)
+	 * Kernel code is for now referenced in PDT[768] entries, not in page_tables[768], so we can also clear it
+	*/
+	memset(&page_tables[0].entries[0], 0, 769 * PT_ENTRIES * sizeof(unsigned int));
+	memset(&page_tables[770].entries[0], 0, (PDT_ENTRIES - 770) * PT_ENTRIES * sizeof(unsigned int));
 
 	// Copy asm_pt1 (the page table that maps the pages used by the kernel) in appropriated page table
-	for (int i = 0; i < PT_ENTRIES; ++i)
-		page_tables[768].entries[i] = asm_pt1->entries[i];
+	memcpy(&page_tables[768].entries[0], &asm_pt1->entries[0], PT_ENTRIES * sizeof(unsigned int));
 
-	for (int i = 0; i < 768; ++i)
-		pdt->entries[i] = PTE_PHYS_ADDR(i) | PAGE_PRESENT | PAGE_WRITE;
-
-	// Update pdt[entry] to point to new location of kernel page table
-	pdt->entries[768] = FRAME_ID_ADDR((PDT_ENTRIES + 768)) | (pdt->entries[768] & 0x3FF);
-
-	for (int i = 770; i < PDT_ENTRIES; ++i)
+	// Register page tables in PDT
+	for (int i = 0; i < PDT_ENTRIES; ++i)
 		pdt->entries[i] = PTE_PHYS_ADDR(i) | PAGE_PRESENT | PAGE_WRITE;
 
 	// Deallocate asm_pt1's page

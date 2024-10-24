@@ -1,7 +1,7 @@
 #ifndef INCLUDE_INTERRUPTS_H
 #define INCLUDE_INTERRUPTS_H
 
-#include "io.h"
+#include "IO.h"
 
 struct cpu_state
 {

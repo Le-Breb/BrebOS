@@ -1,4 +1,4 @@
-#include "gdt.h"
+#include "GDT.h"
 
 tss_entry_t tss;
 

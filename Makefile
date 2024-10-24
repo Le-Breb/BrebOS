@@ -1,5 +1,5 @@
-OBJS = loader.o io.o kmain.o fb.o gdt.o gdt_.o interrupts_.o interrupts.o keyboard.o memory.o memory_.o shutdown.o \
-system.o process.o syscalls.o list.o PIT.o PIC.o IDT.o ELF.o scheduler.o
+OBJS = loader.o io.o kmain.o fb.o GDT.o gdt_.o interrupts_.o interrupts.o keyboard.o memory.o memory_.o shutdown.o \
+system.o process.o syscalls.o list.o PIT.o PIC.o IDT.o ELF.o scheduler.o ATA.o multiboot.o IO.o FAT.o
 OBJECTS= $(OBJS:%.o=$(BUILD_DIR)/%.o)
 CC = i686-elf-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
@@ -65,6 +65,12 @@ $(OS_ISO): kernel.elf program program2 libdynlk
 	mkdir -p isodir/boot
 	mkdir -p isodir/boot/grub
 	mkdir -p isodir/modules
+	#Create disk
+	#qemu-img create -f raw disk_image.img 100M
+	dd if=/dev/zero of=disk_image.img bs=1M count=100
+	#Install FAT32 on it
+	mkfs.vfat -F 32 -v disk_image.img
+	#cp disk_image.img2 disk_image.img
 
 	echo "set timeout=$(GRUB_TIMEOUT)" > grub.cfg
 	echo "set default=0" >> grub.cfg
@@ -92,10 +98,10 @@ $(OS_ISO): kernel.elf program program2 libdynlk
 
 run: $(OS_ISO)
 #	bochs -f bochsrc.txt -q
-	qemu-system-i386 -device isa-debug-exit -cdrom $(OS_ISO)
+	qemu-system-i386 -device isa-debug-exit -cdrom $(OS_ISO) -drive file=disk_image.img,format=raw,if=ide,index=0 -boot d
 
 debug: $(OS_ISO)
-	qemu-system-i386 -device isa-debug-exit -cdrom $(OS_ISO) -gdb tcp::26000 -S
+	qemu-system-i386 -device isa-debug-exit -cdrom $(OS_ISO) -gdb tcp::26000 -S -drive file=disk_image.img,format=raw,if=ide,index=0 -boot d
 
 $(BUILD_DIR)/%.o: %.cpp
 	$(CC) $(CFLAGS) $< -o $@

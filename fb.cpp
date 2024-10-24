@@ -1,5 +1,5 @@
 #include "fb.h"
-#include "io.h"
+#include "IO.h"
 #include "clib/string.h"
 
 unsigned int caret_pos = 0; /* Framebuffer index */
@@ -17,7 +17,7 @@ void FB::scroll()
 		fb[FB_WIDTH * (FB_HEIGHT - 1) + i] = ' ';
 }
 
-void FB::write_cell(char c)
+void FB::putchar(char c)
 {
 	// Scroll if buffer full
 	while (caret_pos >= FB_WIDTH * FB_HEIGHT)
@@ -47,59 +47,59 @@ void FB::clear_screen()
 {
 	caret_pos = 0;
 	for (int i = 0; i < FB_HEIGHT * FB_WIDTH; i++)
-		write_cell(' ');
+		putchar(' ');
 	caret_pos = 0;
 }
 
 void FB::write(const char* buf)
 {
 	for (unsigned int i = 0; i < strlen(buf); i++)
-		write_cell(buf[i]);
+		putchar(buf[i]);
 }
 
 void FB::ok()
 {
 	ok_decorator();
-	write_cell('\n');
+	putchar('\n');
 }
 
 void FB::error()
 {
 	error_decorator();
-	write_cell('\n');
+	putchar('\n');
 }
 
 void FB::info()
 {
 	info_decorator();
-	write_cell('\n');
+	putchar('\n');
 }
 
 void FB::ok_decorator()
 {
-	write_cell('[');
+	putchar('[');
 	set_fg(FB_GREEN);
 	write("OK");
 	set_fg(FB_WHITE);
-	write_cell(']');
+	putchar(']');
 }
 
 void FB::error_decorator()
 {
-	write_cell('[');
+	putchar('[');
 	set_fg(FB_RED);
 	write("ERROR");
 	set_fg(FB_WHITE);
-	write_cell(']');
+	putchar(']');
 }
 
 void FB::info_decorator()
 {
-	write_cell('[');
+	putchar('[');
 	set_fg(FB_BLUE);
 	write("INFO");
 	set_fg(FB_WHITE);
-	write_cell(']');
+	putchar(']');
 }
 
 void FB::set_fg(unsigned char fg)

@@ -1,5 +1,5 @@
 #include "system.h"
-#include "io.h"
+#include "IO.h"
 #include "clib/stdio.h"
 
 extern "C" unsigned int is_running_in_qemu_asm();
