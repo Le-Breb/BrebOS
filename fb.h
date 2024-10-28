@@ -32,9 +32,18 @@
 
 #define FB_ADDR 0xC03FF000
 
+#define CURSOR_END_LINE 0x0B
+#define CURSOR_BEGIN_LINE 0x0A
+
 class FB
 {
+	static unsigned int caret_pos; /* Framebuffer index */
+	static short* const fb;
+	static unsigned char BG;
+	static unsigned char FG;
 public:
+	static void init();
+
 	/**
 	 * Set foreground color
 	 * @param fg foreground code

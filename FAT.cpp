@@ -4,6 +4,8 @@
 #include "clib/string.h"
 #include "clib/stdio.h"
 
+FAT_drive* FAT_drive::drives[] = {};
+
 char* LongDirEntry::utf16_to_utf8_cautionless_cast(const char* str, uint len)
 {
 	char* res = new char[len / 2];
@@ -48,7 +50,6 @@ FAT_drive* FAT_drive::from_drive(unsigned char drive)
 	unsigned char buf[ATA_SECTOR_SIZE];
 	if (ATA::read_sectors(drive, 1, 0, 0x10, (uint) buf))
 		return nullptr;
-
 	fat_BS_t* fat_boot = new fat_BS_t;
 	memcpy(fat_boot, buf, sizeof(*fat_boot));
 
@@ -145,7 +146,8 @@ bool FAT_drive::mkdir(const char* path)
 	}
 
 	uint dir_content_cluster = get_free_cluster(ATA_SECTOR_SIZE * extBS_32.table_size_32/* /
-																			bs.sectors_per_cluster*/);
+																			bs.sectors_per_cluster*/ /
+												sizeof(DirEntry));
 	if (!dir_content_cluster)
 	{
 		printf_error("no free cluster found");
@@ -378,6 +380,160 @@ bool FAT_drive::browse_to_folder_parent(const char** path, uint num_tokens, uint
 	return found;
 }
 
+bool FAT_drive::touch(const char* path)
+{
+	// Make sure path makes sense
+	if (!path || path[0] != '/')
+		return false;
+	// Tokenise path
+	uint num_tokens;
+	const char** tokens = split_at_slashes(path, &num_tokens);
+	if (!num_tokens || !tokens)
+		return false;
+	// Get file name
+	const char* file_name = tokens[num_tokens - 1];
+	uint l = strlen(file_name);
+	if (l > 11)
+	{
+		printf_error("Dir name requires LFN support");
+		return false;
+	}
+	// Find dot
+	uint last_dot_pos = l;
+	for (uint i = l; i > 0; --i)
+		if (file_name[i] == '.')
+		{
+			last_dot_pos = i;
+			break;
+		}
+	if (last_dot_pos >= 8)
+	{
+		printf_error("extension is too long");
+		return false;
+	}
+
+	uint active_cluster, active_sector, FAT_offset, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
+	if (!browse_to_folder_parent(tokens + 1, num_tokens - 2, active_cluster, active_sector,
+								 FAT_entry_offset, FAT_offset, FAT_sector, table_value, dir_entry_id))
+		return false;
+
+	// ~= cd wd
+	uint wd_cluster = num_tokens == 2 ? extBS_32.root_cluster : entries[dir_entry_id].first_cluster_addr();
+	if (!change_active_cluster(wd_cluster, active_cluster, active_sector, FAT_entry_offset, FAT_offset,
+							   FAT_sector, table_value, dir_entry_id))
+		return false;
+
+	// Skip used dir entries, aka files/folders inside wd
+	while (dir_entry_id * sizeof(DirEntry) < FAT_Buf_size && !entries[dir_entry_id].is_free())
+		dir_entry_id++;
+
+	// No free entry in wd cluster
+	if (dir_entry_id * sizeof(DirEntry) == bs.bytes_per_sector * 1/*bs.sectors_per_cluster*/)
+	{
+		printf_error("Working directory cluster is full, chaining implementation is needed");
+		return false;
+	}
+
+	// Get a free cluster for file content
+	uint file_content_cluster = get_free_cluster(ATA_SECTOR_SIZE * bs.bytes_per_sector / sizeof(DirEntry));
+	if (!file_content_cluster)
+	{
+		printf_error("No free cluster found");
+		return false;
+	}
+
+	// Write file entry
+	DirEntry new_entry(file_name, 0, file_content_cluster, 0);
+	memcpy(&entries[dir_entry_id], &new_entry, sizeof(DirEntry));
+	if (ATA::write_sectors(id, 1, active_sector, 0x10, (uint) buf))
+	{
+		printf_error("Drive write error");
+		return false;
+	}
+
+	// ~= cd inside file
+	if (!change_active_cluster(file_content_cluster, active_cluster, active_sector, FAT_entry_offset, FAT_offset,
+							   FAT_sector, table_value, dir_entry_id))
+		return false;
+
+	// Indicate that dir content cluster is the end of the cluster chain it belongs to
+	*(unsigned int*) &FAT[FAT_entry_offset] = CLUSTER_EOC;
+	if (ATA::write_sectors(id, 1, FAT_sector, 0x10, (uint) FAT)) // Write new FAT
+	{
+		printf_error("drive write error");
+		return false;
+	}
+
+	return true;
+}
+
+void FAT_drive::init()
+{
+	ATA::init();
+	for (uint i = 0; i < 4; ++i)
+		drives[i] = ATA::drive_present(i) && IDE::devices[i].Type == IDE_ATA ? FAT_drive::from_drive(i) : nullptr;
+}
+
+bool FAT_drive::mkdir(uint drive_id, const char* path)
+{
+	return drives[drive_id] && drives[drive_id]->mkdir(path);
+}
+
+void FAT_drive::shutdown()
+{
+	for (uint i = 0; i < 4; ++i)
+		delete drives[i];
+}
+
+bool FAT_drive::touch(uint drive_id, const char* path)
+{
+	return drives[drive_id] && drives[drive_id]->touch(path);
+}
+
+bool FAT_drive::ls(uint drive_id, const char* path)
+{
+	return drives[drive_id] && drives[drive_id]->ls(path);
+}
+
+bool FAT_drive::ls(const char* path)
+{
+	if (!path || path[0] != '/')
+		return false;
+	bool is_root = !strcmp(path, "/");
+
+	uint num_tokens;
+	const char** tokens = split_at_slashes(path, &num_tokens);
+	if (!num_tokens || !tokens)
+		return false;
+
+	uint active_cluster, active_sector, FAT_offset, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
+	if (!browse_to_folder_parent(tokens + 1, is_root ? num_tokens - 2 : num_tokens - 1,
+								 active_cluster, active_sector, FAT_entry_offset, FAT_offset,
+								 FAT_sector, table_value, dir_entry_id))
+		return false;
+
+	// ~= cd wd
+	uint wd_cluster = is_root ? extBS_32.root_cluster : entries[dir_entry_id].first_cluster_addr();
+	if (!change_active_cluster(wd_cluster, active_cluster, active_sector, FAT_entry_offset,
+							   FAT_offset, FAT_sector, table_value, dir_entry_id))
+		return false;
+
+	while (dir_entry_id * sizeof(DirEntry) < FAT_Buf_size && !entries[dir_entry_id].is_free())
+	{
+		char* n = entries[dir_entry_id].is_LFN()
+				  ? ((LongDirEntry*) &entries[dir_entry_id])->get_uglily_converted_utf8_name()
+				  : entries[dir_entry_id].get_name();
+
+		printf("%s ", n);
+		delete n;
+		dir_entry_id++;
+	}
+
+	printf("\n");
+
+	return true;
+}
+
 bool DirEntry::is_directory() const
 {
 	return attrs & DIRECTORY;
@@ -418,29 +574,38 @@ DirEntry::DirEntry(const char* name, uint8_t attrs, uint32_t first_cluster_addr,
 															 first_cluster_low(first_cluster_addr & 0xFFFF),
 															 file_size(fileSize)
 {
-	memcpy(this->name, name, strlen(name) + 1);
+	memset(this->name, NAME_PADDING_BYTE, 10);
+	if (attrs & DIRECTORY)
+		memcpy(this->name, name, strlen(name) + 1);
+	else
+	{
+		uint l = strlen(name);
+		uint i = l - 1;
+		for (; name[i] != '.'; i--)
+			this->name[10 - (l - 1 - i)] = name[i];
+		for (uint j = 0; j < i; j++)
+			this->name[j] = name[j];
+	}
 }
 
 char* DirEntry::get_name() const
 {
-	char* n = new char[13];
+	char* n = new char[12];
 	memset(n, 0, 12);
 	uint i = 0;
 	for (int j = 0; j < 8; ++j)
 	{
-		if (!name[j])
+		if (name[j] == NAME_PADDING_BYTE)
 			break;
-		if (name[j] != ' ')
-			n[i++] = name[j];
+		n[i++] = name[j];
 	}
-	if (name[8])
+	if (!is_directory())
 		n[i++] = '.';
 	for (int j = 8; j < 11; ++j)
 	{
-		if (!name[j])
+		if (name[j] == NAME_PADDING_BYTE)
 			break;
-		if (name[j] != ' ')
-			n[i++] = name[j];
+		n[i++] = name[j];
 	}
 
 

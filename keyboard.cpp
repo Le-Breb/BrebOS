@@ -46,8 +46,8 @@ unsigned char Keyboard::read_scan_code()
 void Keyboard::interrupt_handler()
 {
 	unsigned char scan_code = read_scan_code();
-	char c = kbd_US[scan_code];
+	char c = scan_code < 128 && scan_code != 14 ? kbd_US[scan_code] : 0;
 
-	if ((c >= 'a' && c <= 'z') || c == ' ' || (c >= '1' && c <= '9') || c == '\n')
+	if (c)
 		Scheduler::wake_up_key_waiting_processes(c);
 }

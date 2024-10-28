@@ -48,6 +48,12 @@ class Syscall
 
 	static void dynlk(cpu_state_t* cpu_state);
 
+	static void mkdir(cpu_state_t* cpu_state);
+
+	static void touch(cpu_state_t* cpu_state);
+
+	static void ls(cpu_state_t* cpu_state);
+
 public:
 	/**
 	 * Handles a syscall

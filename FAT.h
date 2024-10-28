@@ -23,6 +23,7 @@
 #define BAD_SECTOR 0x0FFFFFF7
 #define LAST_LONG_ENTRY 0x40
 
+#define NAME_PADDING_BYTE 0x20
 
 enum FAT_type
 {
@@ -136,6 +137,8 @@ struct directory
 /* FAT32 ATA drive handler */
 class FAT_drive
 {
+	static FAT_drive* drives[4];
+
 	const fat_BS_t bs; // BPB
 	const fat_extBS_32_t extBS_32; // Extended BPB
 
@@ -186,10 +189,24 @@ class FAT_drive
 								 uint& FAT_entry_offset, uint& FAT_offset, uint& FAT_sector, uint& table_value,
 								 uint& dir_entry_id);
 
-public:
+	bool mkdir(const char* path);
+
+	bool touch(const char* path);
+
+	bool ls(const char* path);
+
 	static FAT_drive* from_drive(unsigned char drive);
 
-	bool mkdir(const char* path);
+public:
+	static void init();
+
+	static void shutdown();
+
+	static bool mkdir(uint drive_id, const char* path);
+
+	static bool touch(uint drive_id, const char* path);
+
+	static bool ls(uint drive_id, const char* path);
 
 	~FAT_drive();
 };

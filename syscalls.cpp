@@ -4,6 +4,7 @@
 #include "clib/stdio.h"
 #include "system.h"
 #include "PIC.h"
+#include "FAT.h"
 
 void Syscall::start_process(cpu_state_t* cpu_state)
 {
@@ -160,10 +161,43 @@ void Syscall::get_key()
 		case 9:
 			free(p, &p->cpu_state);
 			break;
+		case 10:
+			mkdir(&p->cpu_state);
+			break;
+		case 11:
+			touch(&p->cpu_state);
+			break;
+		case 12:
+			ls(&p->cpu_state);
+			break;
 		default:
 			printf_error("Received unknown syscall id: %u", cpu_state->eax);
 			break;
 	}
 
 	Interrupts::resume_user_process_asm(p->cpu_state, p->stack_state);
+}
+
+void Syscall::mkdir(cpu_state_t* cpu_state)
+{
+	uint drive_id = cpu_state->ebx;
+	const char* path = (const char*) cpu_state->ecx;
+
+	cpu_state->eax = (uint) FAT_drive::mkdir(drive_id, path);
+}
+
+void Syscall::touch(cpu_state_t* cpu_state)
+{
+	uint drive_id = cpu_state->ebx;
+	const char* path = (const char*) cpu_state->ecx;
+
+	cpu_state->eax = (uint) FAT_drive::touch(drive_id, path);
+}
+
+void Syscall::ls(cpu_state_t* cpu_state)
+{
+	uint drive_id = cpu_state->ebx;
+	const char* path = (const char*) cpu_state->ecx;
+
+	cpu_state->eax = (uint) FAT_drive::ls(drive_id, path);
 }

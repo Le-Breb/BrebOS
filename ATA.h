@@ -112,9 +112,13 @@ typedef struct
 	unsigned char Model[41];   // Model in string.
 } ide_device;
 
+class FAT_drive;
+
 class IDE
 {
 	friend class ATA;
+
+	friend class FAT_drive;
 
 	static IDEChannelRegisters channels[2];
 	static volatile unsigned char irq_invoked;
@@ -136,7 +140,8 @@ class IDE
 
 class ATA
 {
-public:
+	friend class FAT_drive;
+
 	/**Read/Write an ATA device
 	 *
 	 * @param direction read = 0, write = 1
@@ -150,9 +155,9 @@ public:
 	static unsigned char access(unsigned char direction, unsigned char drive, unsigned int lba,
 								unsigned char numsects, unsigned short selector, unsigned int edi);
 
-public:
-
 	static void init();
+
+public:
 
 	static int read_sectors(unsigned char drive, unsigned char numsects, unsigned int lba,
 							unsigned short es, unsigned int edi);

@@ -2,10 +2,10 @@
 #include "IO.h"
 #include "clib/string.h"
 
-unsigned int caret_pos = 0; /* Framebuffer index */
-short* const fb = (short*) FB_ADDR;
-unsigned char BG = FB_BLACK;
-unsigned char FG = FB_WHITE;
+unsigned int FB::caret_pos = 0;
+short* const FB::fb = (short*) FB_ADDR;
+unsigned char FB::BG = FB_BLACK;
+unsigned char FB::FG = FB_WHITE;
 
 void FB::scroll()
 {
@@ -14,29 +14,35 @@ void FB::scroll()
 		fb[i] = fb[i + FB_WIDTH];
 	// Clear last line
 	for (int i = 0; i < FB_WIDTH; i++)
-		fb[FB_WIDTH * (FB_HEIGHT - 1) + i] = ' ';
+		fb[FB_WIDTH * (FB_HEIGHT - 1) + i] = ((((BG & 0x0F) << 4) | (FG & 0x0F)) << 8 | ' ');
 }
 
 void FB::putchar(char c)
 {
+	if (c == '\n')
+	{
+		caret_pos = (caret_pos / FB_WIDTH + 1) * FB_WIDTH;
+		move_cursor(caret_pos + 1);
+
+		return;
+	}
 	// Scroll if buffer full
 	while (caret_pos >= FB_WIDTH * FB_HEIGHT)
 	{
 		scroll();
 		caret_pos -= FB_WIDTH;
-	}
-	if (c == '\n')
-	{
-		caret_pos = (caret_pos / FB_WIDTH + 1) * FB_WIDTH;
-		return;
+		move_cursor(caret_pos);
 	}
 
 	// Write to fb
+	move_cursor(caret_pos + 1);
 	fb[caret_pos++] = (short) ((((BG & 0x0F) << 4) | (FG & 0x0F)) << 8 | c);
 }
 
 void FB::move_cursor(unsigned short pos)
 {
+	if (pos >= 2000)
+		return;
 	outb(FB_COMMAND_PORT, FB_HIGH_BYTE_COMMAND);   /* Send pos high bits command */
 	outb(FB_DATA_PORT, ((pos >> 8) & 0x00FF));     /* Send pos high bits */
 	outb(FB_COMMAND_PORT, FB_LOW_BYTE_COMMAND);    /* Send pos low bits command */
@@ -110,4 +116,14 @@ void FB::set_fg(unsigned char fg)
 void FB::set_bg(unsigned char bg)
 {
 	BG = bg;
+}
+
+void FB::init()
+{
+	outb(FB_COMMAND_PORT, CURSOR_END_LINE); // set the cursor end line to 15
+	outb(FB_DATA_PORT, 0x0F);
+
+	outb(FB_COMMAND_PORT, CURSOR_BEGIN_LINE); // set the cursor start line to 14 and enable cursor visibility
+	outb(FB_DATA_PORT, 0x0E);
+	clear_screen();
 }

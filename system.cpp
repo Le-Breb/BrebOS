@@ -1,11 +1,13 @@
 #include "system.h"
 #include "IO.h"
 #include "clib/stdio.h"
+#include "FAT.h"
 
 extern "C" unsigned int is_running_in_qemu_asm();
 
 [[noreturn]] int System::shutdown()
 {
+	FAT_drive::shutdown();
 	unsigned int qemu = is_running_in_qemu_asm();
 
 	if (qemu)

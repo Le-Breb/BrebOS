@@ -26,7 +26,7 @@ extern "C" int kmain(unsigned int ebx)
 	Interrupts::disable_asm();
 
 	// Initialize framebuffer
-	FB::clear_screen();
+	FB::init();
 
 	printf("Setting up GDT\n");
 	GDT::init();
@@ -52,24 +52,25 @@ extern "C" int kmain(unsigned int ebx)
 	init_mem((multiboot_info_t*) (ebx + 0xC0000000));
 	FB::ok();
 
-	printf("Initializing ATA driver\n");
-	ATA::init();
+	printf("Initializing FAT drives and ATA driver\n");
+	FAT_drive::init();
 	FB::ok();
 
 	printf("Setting up process handling\n");
 	Scheduler::init();
 	FB::ok();
 
-	FAT_drive* d0 = FAT_drive::from_drive(0);
-	if (!d0)
-		printf_error("Error instantiating drive 0");
-	else if (!d0->mkdir("/a_folder"))
-		printf_error("error creating /a_folder");
-	else if (!d0->mkdir("/a_folder/bam"))
-		printf_error("error creating /a_folder/bam");
-	else if (!d0->mkdir("/a_folder/bam/badaboum"))
-		printf_error("error creating /a_folder/bam/badaboum");
-	delete d0;
+
+	/*if (!FAT_drive::mkdir(0, "/afolder"))
+		printf_error("error creating /afolder");
+	else if (!FAT_drive::mkdir(0, "/afolder/bam"))
+		printf_error("error creating /afolder/bam");
+	else if (!FAT_drive::mkdir(0, "/afolder/bam/badaboum"))
+		printf_error("error creating /afolder/bam/badaboum");
+	else if (!FAT_drive::touch(0, "/afolder/bam/touch.txt"))
+		printf_error("error creating /afolder/bam/touch.txt");
+	if (!FAT_drive::ls(0, "/"))
+		printf_error("ls error");*/
 
 	// Set INIT process ready
 	Scheduler::start_module(0, 0);
