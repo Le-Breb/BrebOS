@@ -1,4 +1,4 @@
-OBJECTS = $(BUILD_DIR)/syscalls.a $(BUILD_DIR)/libsyscalls.so
+OBJECTS = $(BUILD_DIR)/libsyscalls.so
 CC = i686-elf-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
 -g -fno-exceptions -fno-rtti
@@ -15,7 +15,7 @@ klib: $(OBJECTS)
 
 # static
 $(BUILD_DIR)/syscalls.a: syscalls.cpp
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@ $(libgcc)
 
 #dynamic
 $(BUILD_DIR)/libsyscalls.so: syscalls.cpp
