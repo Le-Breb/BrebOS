@@ -164,26 +164,15 @@ bool Process::dynamic_loading()
 			case DT_HASH:
 				dynsyntab_num_entries = *(((unsigned int*) (elf->mod->start_addr + d->d_un.d_val)) + 1); // nchain
 				break;
-			case DT_GNU_HASH:
-				printf("GNU hash\n");
-				break;
-			case DT_STRSZ:
-				printf("string table size\n");
-				break;
 			case DT_SYMENT:
 				dynsymtab_ent_size = d->d_un.d_val;
 				break;
+			case DT_GNU_HASH:
+			case DT_STRSZ:
 			case DT_DEBUG:
-				printf("debug stuff\n");
-				break;
 			case DT_PLTRELSZ:
-				printf("size of PLT relocs (\?\?)\n");
-				break;
 			case DT_PLTREL:
-				printf("PLT reloc type: %s (\?\?)\n", d->d_un.d_val == DT_REL ? "DT_REL" : "DT_RELA");
-				break;
 			case DT_JMPREL:
-				printf("address of PLT relocs (\?\?)\n");
 				break;
 			default:
 				printf_error("Unknown dynamic table entry: %u|%x", d->d_tag, d->d_tag);
@@ -410,8 +399,8 @@ size_t Process::write_args_to_stack(size_t stack_top_v_addr, int argc, const cha
 	}
 
 	// Write argc and argv
-	argv_ptr = (char**) (((uint) argv_ptr - 0x10) & ~0xF); // ABI 16 bytes alignment
 	char* argv0_addr = (char*) 0xC0000000 - ((char*) stack_top_v_addr - (char*) argv_ptr);
+	argv_ptr = (char**) (((uint) argv_ptr - 0x10) & ~0xF); // ABI 16 bytes alignment
 	*(argv_ptr + 1) = argv0_addr; // Argv
 	*(uint*) (argv_ptr) = argc; // Argc
 

@@ -8,12 +8,11 @@ extern "C" int main(int argc, char** argv)
 
 	// Testing lazy binding - first call triggers libdynkl, next calls have the relocation resolved
 	unsigned int pid = get_pid();
-	printf("test:%i", pid);
 	unsigned int pid2 = get_pid();
-	printf("test:%i", pid2);
+	printf("PID:%i - Lazy binding functional: %s\n", pid2, pid == pid2 ? "True" : "False");
 
 	char* a = (char*) malloc(10);
-	printf("%p\n", a);
+	printf("Userland malloc functional: %s\n", a ? "True" : "False");
 	free(a);
 
 	return 0;

@@ -32,8 +32,11 @@ void start_program()
 				beg = &cmd[i + 1]; // Update beg to point to next arg
 			}
 		}
-		cmd[c_id] = '\0'; // Terminate final arg
-		argv[argc++] = beg; // Add ptr to argv and update argc
+		if (c_id != 3)
+		{
+			cmd[c_id] = '\0'; // Terminate final arg
+			argv[argc++] = beg; // Add ptr to argv and update argc
+		}
 
 		start_process(cmd[2] - '0', argc, (const char**) argv);
 	}
