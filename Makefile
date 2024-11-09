@@ -66,8 +66,8 @@ $(OS_ISO): kernel.elf program program2 libdynlk
 	mkdir -p isodir/boot/grub
 	mkdir -p isodir/modules
 	#Create disk
-	#qemu-img create -f raw disk_image.img 100M
-	dd if=/dev/zero of=disk_image.img bs=1M count=100
+	#qemu-img create -f raw disk_image.img 1M
+	dd if=/dev/zero of=disk_image.img bs=1M count=1
 	#Install FAT32 on it
 	mkfs.vfat -F 32 -v disk_image.img
 	#cp disk_image.img2 disk_image.img

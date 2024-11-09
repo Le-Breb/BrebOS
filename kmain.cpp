@@ -60,20 +60,8 @@ extern "C" int kmain(unsigned int ebx)
 	Scheduler::init();
 	FB::ok();
 
-
-	/*if (!FAT_drive::mkdir(0, "/afolder"))
-		printf_error("error creating /afolder");
-	else if (!FAT_drive::mkdir(0, "/afolder/bam"))
-		printf_error("error creating /afolder/bam");
-	else if (!FAT_drive::mkdir(0, "/afolder/bam/badaboum"))
-		printf_error("error creating /afolder/bam/badaboum");
-	else if (!FAT_drive::touch(0, "/afolder/bam/touch.txt"))
-		printf_error("error creating /afolder/bam/touch.txt");
-	if (!FAT_drive::ls(0, "/"))
-		printf_error("ls error");*/
-
 	// Set INIT process ready
-	Scheduler::start_module(0, 0);
+	Scheduler::start_module(0, 0, 0, (const char**) nullptr);
 
 	// Run processes! :D
 	PIC::enable_preemptive_scheduling();

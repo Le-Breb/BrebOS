@@ -1,4 +1,4 @@
-OBJS = program.o start_program.o cpp_start.o
+OBJS = program.o start_program.o
 OBJECTS= $(OBJS:%.o=$(BUILD_DIR)/%.o)
 CC = i686-elf-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \

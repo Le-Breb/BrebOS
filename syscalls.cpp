@@ -9,7 +9,8 @@
 void Syscall::start_process(cpu_state_t* cpu_state)
 {
 	// Load child process and set it ready
-	Scheduler::start_module(cpu_state->ebx, Scheduler::get_running_process_pid());
+	Scheduler::start_module(cpu_state->ebx, Scheduler::get_running_process_pid(), cpu_state->ecx,
+							(const char**) cpu_state->edx);
 }
 
 void Syscall::printf(cpu_state_t* cpu_state)
@@ -29,8 +30,8 @@ void Syscall::get_pid()
 	p->terminate();
 
 	// We definitely do not want to continue as next step is to resume the process we just terminated !
-	// Instead, we manually raise a timer interrupt which we schedule another process
-	// (The terminated one as its terminated flag set, so it won't be selected by the scheduler)
+	// Instead, we manually raise a timer interrupt which will schedule another process
+	// (The terminated one has its terminated flag set, so it won't be selected by the scheduler)
 	__asm__ volatile("int $0x20");
 
 	// We will never resume the code here

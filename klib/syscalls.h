@@ -19,7 +19,7 @@ extern "C" [[noreturn]] void exit();
  *
  * @param module_id Module ID
  */
-void start_process(unsigned int module_id);
+void start_process(unsigned int module_id, int argc, const char** argv);
 
 /**
  * Gets PID

@@ -1,6 +1,5 @@
 #include "syscalls.h"
 
-
 __attribute__ ((format (printf, 1, 2))) int printf(const char* format, ...)
 {
 	char* list = (char*) &format + sizeof(format);
@@ -16,9 +15,9 @@ extern "C" [[noreturn]] void exit()
 	__builtin_unreachable();
 }
 
-void start_process(unsigned int module_id)
+void start_process(unsigned int module_id, int argc, const char** argv)
 {
-	__asm__ volatile("int $0x80" : : "a"(3), "b"(module_id));
+	__asm__ volatile("int $0x80" : : "a"(3), "b"(module_id), "c"(argc), "d"(argv));
 }
 
 unsigned int get_pid()

@@ -144,6 +144,13 @@ public:
 	 * @return program's process, NULL if an error occurred
 	 */
 	static Process* from_binary(unsigned int module, GRUB_module* grub_modules);
+
+	/**
+	 * Writes argc, argv array pointer, argv pointer array and argv contents to stack
+	 * @param stack_top_v_addr Virtual address of process stack top in kernel address space
+	 * @return ESP in process address space ready to be used
+	 */
+	size_t write_args_to_stack(size_t stack_top_v_addr, int argc, const char** argv);
 };
 
 #endif //INCLUDE_PROCESS_H

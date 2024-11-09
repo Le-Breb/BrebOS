@@ -98,7 +98,7 @@ Process* Scheduler::get_next_process()
 		Interrupts::resume_user_process_asm(p->cpu_state, p->stack_state);
 }
 
-void Scheduler::start_module(unsigned int module, pid_t ppid)
+void Scheduler::start_module(unsigned int module, pid_t ppid, int argc, const char** argv)
 {
 	if (ready_queue.count == MAX_PROCESSES)
 	{
@@ -133,6 +133,7 @@ void Scheduler::start_module(unsigned int module, pid_t ppid)
 	// Allocate process stack page
 	unsigned int p_stack_pe_id = get_free_pe();
 	allocate_page_user(get_free_page(), p_stack_pe_id);
+	unsigned int p_stack_top_v_addr = p_stack_pe_id * PAGE_SIZE + PAGE_SIZE;
 
 	// Allocate syscall handler stack page
 	unsigned int k_stack_pe = get_free_pe();
@@ -159,12 +160,11 @@ void Scheduler::start_module(unsigned int module, pid_t ppid)
 		unsigned int page_pte = i % PDT_ENTRIES;
 
 		unsigned int process_page_id = proc->pte[i];
-		unsigned int process_page_pde = process_page_id / PDT_ENTRIES;
-		unsigned int process_page_pte = process_page_id % PDT_ENTRIES;
+		unsigned int pte = PTE(process_page_id);
 
 		if (proc->page_tables[page_pde].entries[page_pte] != 0)
 			printf_error("Non empty pt entry");
-		proc->page_tables[page_pde].entries[page_pte] = page_tables[process_page_pde].entries[process_page_pte];
+		proc->page_tables[page_pde].entries[page_pte] = pte;
 	}
 
 	// Map process stack at 0xBFFFFFFC = 0xCFFFFFFF - 4 at pde 767 and pte 1023, just below the kernel
@@ -181,7 +181,7 @@ void Scheduler::start_module(unsigned int module, pid_t ppid)
 	//proc->stack_state.eip = 0;
 	proc->stack_state.ss = 0x20 | 0x03;
 	proc->stack_state.cs = 0x18 | 0x03;
-	proc->stack_state.esp = 0xBFFFFFFC;
+	proc->stack_state.esp = proc->write_args_to_stack(p_stack_top_v_addr, argc, argv);
 	proc->stack_state.eflags = 0x200;
 	proc->stack_state.error_code = 0;
 	memset(&proc->cpu_state, 0, sizeof(proc->cpu_state));

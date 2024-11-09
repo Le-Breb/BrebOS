@@ -43,7 +43,7 @@ public:
 	 */
 	[[noreturn]] static void schedule();
 
-	static void start_module(unsigned int module, pid_t ppid);
+	static void start_module(unsigned int module, pid_t ppid, int argc, const char** argv);
 
 	static void init();
 

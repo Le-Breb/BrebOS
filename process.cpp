@@ -387,3 +387,33 @@ bool Process::is_waiting_key() const
 {
 	return flags & P_WAITING_KEY;
 }
+
+size_t Process::write_args_to_stack(size_t stack_top_v_addr, int argc, const char** argv)
+{
+	char* stack_top = (char*) stack_top_v_addr;
+
+	size_t args_len = 0; // Actual size of all args combined
+	for (int i = 0; i < argc; ++i)
+		args_len += strlen(argv[i]) + 1;
+	// Word aligned total args size
+	size_t args_occupied_space =
+			args_len & (sizeof(int) - 1) ? (args_len & ~(sizeof(int) - 1)) + sizeof(int) : args_len;
+
+	char** argv_ptr = (char**) ((uint) (stack_top - args_occupied_space));
+	for (int i = argc - 1; i >= 0; --i)
+	{
+		size_t l = strlen(argv[i]) + 1; // Current arg len
+		stack_top -= l; // Point to beginning of string
+		argv_ptr -= 1; // Point to argv[i] location
+		*argv_ptr = (char*) (0xC0000000 - ((char*) stack_top_v_addr - stack_top)); // Write argv[i]
+		memcpy(stack_top, argv[i], l); // Write ith string
+	}
+
+	// Write argc and argv
+	argv_ptr = (char**) (((uint) argv_ptr - 0x10) & ~0xF); // ABI 16 bytes alignment
+	char* argv0_addr = (char*) 0xC0000000 - ((char*) stack_top_v_addr - (char*) argv_ptr);
+	*(argv_ptr + 1) = argv0_addr; // Argv
+	*(uint*) (argv_ptr) = argc; // Argc
+
+	return 0xC0000000 - ((char*) stack_top_v_addr - (char*) argv_ptr);
+}
