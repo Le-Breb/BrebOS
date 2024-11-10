@@ -94,7 +94,25 @@ private:
 	 */
 	static Process* allocate_proc_for_elf_module(GRUB_module* module);
 
+	/**
+	 * Create a process to run an ELF executable
+	 *
+	 * @param module ELF Grub module id
+	 * @return program's process
+	 */
+	static Process* from_ELF(GRUB_module* module);
+
+	/**
+	 * Loads a flat binary in memory
+	 *
+	 * @param module Grub module id
+	 * @param module grub modules
+	 * @return program's process, NULL if an error occurred
+	 */
+	static Process* from_binary(GRUB_module* module);
+
 public:
+
 	/** Gets the process' PID */
 	[[nodiscard]] pid_t get_pid() const;
 
@@ -117,12 +135,15 @@ public:
 	void free_dyn_memory(void* ptr) const;
 
 	/**
-	 * Create a process to run an ELF executable
-	 *
-	 * @param module ELF Grub module id
-	 * @return program's process
+	 * Create a process from a GRUB module
+	 * @param module module
+	 * @param pid process ID
+	 * @param ppid parent process ID
+	 * @param argc num args
+	 * @param argv args
+	 * @return process, nullptr if an error ocurred
 	 */
-	static Process* from_ELF(GRUB_module* module);
+	static Process* from_module(GRUB_module* module, pid_t pid, pid_t ppid, int argc, const char** argv);
 
 	/**
 	 * Sets a flag
@@ -135,15 +156,6 @@ public:
 
 	/** Checks whether the program is waiting for a key press */
 	[[nodiscard]] bool is_waiting_key() const;
-
-	/**
-	 * Loads a flat binary in memory
-	 *
-	 * @param module Grub module id
-	 * @param grub_modules grub modules
-	 * @return program's process, NULL if an error occurred
-	 */
-	static Process* from_binary(unsigned int module, GRUB_module* grub_modules);
 
 	/**
 	 * Writes argc, argv array pointer, argv pointer array and argv contents to stack

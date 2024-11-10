@@ -7,9 +7,9 @@
 /** Change current pdt */
 extern "C" void change_pdt_asm_(unsigned int pdt_phys_addr);
 
-Process* Process::from_binary(unsigned int module, GRUB_module* grub_modules)
+Process* Process::from_binary(GRUB_module* module)
 {
-	unsigned int mod_size = grub_modules[module].size;
+	unsigned int mod_size = module->size;
 	unsigned int mod_code_pages = mod_size / PAGE_SIZE + ((mod_size % PAGE_SIZE) ? 1 : 0); // Num pages code spans over
 
 	// Allocate process memory
@@ -29,17 +29,17 @@ Process* Process::from_binary(unsigned int module, GRUB_module* grub_modules)
 
 	unsigned int proc_pe_id = 0;
 	unsigned int sys_pe_id = proc->pte[proc_pe_id];
-	unsigned int code_page_start_addr = grub_modules[module].start_addr + proc_pe_id * PAGE_SIZE;
+	unsigned int code_page_start_addr = module->start_addr + proc_pe_id * PAGE_SIZE;
 	unsigned int dest_page_start_addr =
 			(sys_pe_id / PDT_ENTRIES) << 22 | (sys_pe_id % PDT_ENTRIES) << 12;
 
 	// Copy whole pages
 	for (; proc_pe_id < mod_size / PAGE_SIZE; ++proc_pe_id)
 	{
-		code_page_start_addr = grub_modules[module].start_addr + proc_pe_id * PAGE_SIZE;
+		code_page_start_addr = module->start_addr + proc_pe_id * PAGE_SIZE;
 		sys_pe_id = proc->pte[proc_pe_id];
 		dest_page_start_addr = (sys_pe_id / PDT_ENTRIES) << 22 | (sys_pe_id % PDT_ENTRIES) << 12;
-		memcpy((void*) dest_page_start_addr, (void*) (grub_modules[module].start_addr + code_page_start_addr),
+		memcpy((void*) dest_page_start_addr, (void*) (module->start_addr + code_page_start_addr),
 			   PAGE_SIZE);
 	}
 	// Handle data that does not fit a whole page. First copy the remaining bytes then fill the rest with 0
@@ -58,7 +58,7 @@ Process::~Process()
 	}
 
 	// Free process code
-	for (unsigned int i = 0; i < num_pages; ++i)
+	for (unsigned int i = 1; i < num_pages; ++i) // Skip page 0 as it is unmapped, use for segfaults
 		free_page(pte[i] / PDT_ENTRIES,
 				  pte[i] % PDT_ENTRIES);
 
@@ -137,6 +137,17 @@ bool Process::dynamic_loading()
 	Elf32_Dyn* dyn_table = elf->get_dyn_table();
 	if (dyn_table == nullptr)
 		return false;
+	size_t base_addr = elf->base_address();
+	if (base_addr < PAGE_SIZE)
+	{
+		printf_error("Process base address (%zu) < PAGE_SIZE (%u). Aborting", base_addr, PAGE_SIZE);
+		return false;
+	}
+	if (base_addr == (size_t) -1)
+	{
+		printf_error("Cannot compute base address. Aborting");
+		return false;
+	}
 
 	// Get dynamic linking info
 	unsigned int lib_name_idx = 0; // lib name string table index
@@ -145,24 +156,27 @@ bool Process::dynamic_loading()
 	unsigned int dynsyntab_num_entries; // Dynamic symbols table number of entries
 	unsigned int dynsymtab_ent_size; // Dynamic symbols table entry size
 	unsigned int* file_got_addr; // Address of GOT within the ELF file (not where it is loaded nor its runtime address)
+	// In order to know whether base address should be retrieved from values, refer to Figure 2-10: Dynamic Array Tags
+	// in http://www.skyfree.org/linux/references/ELF_Format.pdf
 	for (Elf32_Dyn* d = dyn_table; d->d_tag != DT_NULL; d++)
 	{
 		switch (d->d_tag)
 		{
 			case DT_STRTAB:
-				dyn_str_table = (char*) (elf->mod->start_addr + d->d_un.d_ptr);
+				dyn_str_table = (char*) (elf->mod->start_addr + d->d_un.d_ptr - base_addr);
 				break;
 			case DT_SYMTAB:
-				dynsymtab = (void*) (elf->mod->start_addr + d->d_un.d_ptr);
+				dynsymtab = (void*) (elf->mod->start_addr + d->d_un.d_ptr - base_addr);
 				break;
 			case DT_NEEDED:
 				lib_name_idx = d->d_un.d_val;
 				break;
 			case DT_PLTGOT:
-				file_got_addr = (unsigned int*) (elf->mod->start_addr + d->d_un.d_val);
+				file_got_addr = (unsigned int*) (elf->mod->start_addr + d->d_un.d_val - base_addr);
 				break;
 			case DT_HASH:
-				dynsyntab_num_entries = *(((unsigned int*) (elf->mod->start_addr + d->d_un.d_val)) + 1); // nchain
+				dynsyntab_num_entries = *(((unsigned int*) (elf->mod->start_addr + d->d_un.d_val - base_addr)) +
+										  1); // nchain
 				break;
 			case DT_SYMENT:
 				dynsymtab_ent_size = d->d_un.d_val;
@@ -201,7 +215,7 @@ bool Process::dynamic_loading()
 		printf_error("Missing library: %s\n", lib_name);
 
 	// Ensure dynamic symbols are supported
-	for (unsigned int i = 1; i < dynsyntab_num_entries; ++i) // First entry has to be null, we skip it
+	for (uint i = 1; i < dynsyntab_num_entries; ++i) // First entry has to be null, we skip it
 	{
 		Elf32_Sym* dd = (Elf32_Sym*) ((uint) dynsymtab + i * dynsymtab_ent_size);
 		//printf("%s\n", &dyn_str_table[dd->st_name]);
@@ -321,9 +335,10 @@ Process* Process::allocate_proc_for_elf_module(GRUB_module* module)
 		printf_error("Unable to allocate memory for process");
 		return nullptr;
 	}
+	proc->pte[0] = 0;
 
 	// Allocate process code pages
-	for (unsigned int k = 0; k < proc_code_pages; ++k)
+	for (unsigned int k = 1; k < proc_code_pages; ++k) // Do not map first page, it is unmap for null dereferences
 	{
 		unsigned int pe = get_free_pe(); // Get PTE id
 		proc->pte[k] = pe;  // Reference PTE
@@ -405,4 +420,86 @@ size_t Process::write_args_to_stack(size_t stack_top_v_addr, int argc, const cha
 	*(uint*) (argv_ptr) = argc; // Argc
 
 	return 0xC0000000 - ((char*) stack_top_v_addr - (char*) argv_ptr);
+}
+
+Process* Process::from_module(GRUB_module* module, pid_t pid, pid_t ppid, int argc, const char** argv)
+{
+	// Check whether file is an elf
+	Elf32_Ehdr* elf32Ehdr = (Elf32_Ehdr*) module->start_addr;
+	unsigned int elf = elf32Ehdr->e_ident[0] == 0x7F && elf32Ehdr->e_ident[1] == 'E' && elf32Ehdr->e_ident[2] == 'L' &&
+					   elf32Ehdr->e_ident[3] == 'F';
+
+	// Load process into memory
+	Process* proc = elf ? Process::from_ELF(module) : Process::from_binary(module);
+
+	// Ensure process was loaded successfully
+	if (proc == nullptr)
+	{
+		printf_error("Error while loading program. Aborting");
+		return nullptr;
+	}
+	size_t base_address = proc->elf->base_address();
+	if (base_address != PAGE_SIZE)
+	{
+		printf_error("ELF base address (%zu) != PAGE_SIZE (%u). Not supported yet. Aborting", base_address, PAGE_SIZE);
+		delete proc;
+		return nullptr;
+	}
+
+	// Allocate process stack page
+	unsigned int p_stack_pe_id = get_free_pe();
+	allocate_page_user(get_free_page(), p_stack_pe_id);
+	unsigned int p_stack_top_v_addr = p_stack_pe_id * PAGE_SIZE + PAGE_SIZE;
+
+	// Allocate syscall handler stack page
+	unsigned int k_stack_pe = get_free_pe();
+	unsigned int k_stack_pde = k_stack_pe / PDT_ENTRIES;
+	unsigned int k_stack_pte = k_stack_pe % PDT_ENTRIES;
+	allocate_page(get_free_page(), k_stack_pe);
+
+	// Set process PDT entries: entries 0 to 767 map the process address space using its own page tables
+	// Entries 768 to 1024 point to kernel page tables, so that kernel is mapped. Moreover, syscall handlers
+	// will not need to switch to kernel pdt to make changes in kernel memory as it is mapped the same way
+	// in every process' PDT
+	// Set process pdt entries to target process page tables
+	page_table_t* page_tables = get_page_tables();
+	for (int i = 0; i < 768; ++i)
+		proc->pdt.entries[i] = PHYS_ADDR((unsigned int) &proc->page_tables[i]) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
+	// Use kernel page tables for the rest
+	for (int i = 768; i < PDT_ENTRIES; ++i)
+		proc->pdt.entries[i] = PHYS_ADDR((unsigned int) &page_tables[i]) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
+
+	// Map process code at 0x00
+	for (unsigned int i = 1; i < proc->num_pages; ++i) // Start at page 1 as page 0 is unmapped for segfaults
+	{
+		unsigned int page_pde = i / PDT_ENTRIES;
+		unsigned int page_pte = i % PDT_ENTRIES;
+
+		unsigned int process_page_id = proc->pte[i];
+		unsigned int pte = PTE(process_page_id);
+
+		if (proc->page_tables[page_pde].entries[page_pte] != 0)
+			printf_error("Non empty pt entry");
+		proc->page_tables[page_pde].entries[page_pte] = pte;
+	}
+
+	// Map process stack at 0xBFFFFFFC = 0xCFFFFFFF - 4 at pde 767 and pte 1023, just below the kernel
+	if (proc->page_tables[767].entries[1023] != 0)
+		printf_error("Process kernel page entry is not empty");
+	proc->page_tables[767].entries[1023] = PTE(p_stack_pe_id);
+
+	// Setup PCB
+	proc->pid = pid;
+	proc->ppid = ppid;
+	proc->priority = 1;
+	proc->k_stack_top = VIRT_ADDR(k_stack_pde, k_stack_pte, (PAGE_SIZE - sizeof(int)));
+	//proc->stack_state.eip = 0;
+	proc->stack_state.ss = 0x20 | 0x03;
+	proc->stack_state.cs = 0x18 | 0x03;
+	proc->stack_state.esp = proc->write_args_to_stack(p_stack_top_v_addr, argc, argv);
+	proc->stack_state.eflags = 0x200;
+	proc->stack_state.error_code = 0;
+	memset(&proc->cpu_state, 0, sizeof(proc->cpu_state));
+
+	return proc;
 }

@@ -283,3 +283,20 @@ ELF::ELF(GRUB_module* mod) : ELF((Elf32_Ehdr*) mod->start_addr,
 								 (Elf32_Shdr*) (mod->start_addr + ((Elf32_Ehdr*) mod->start_addr)->e_shoff), mod)
 {
 }
+
+size_t ELF::base_address()
+{
+	size_t lowest_address = -1;
+	for (int k = 0; k < elf32Ehdr->e_phnum; ++k)
+	{
+		Elf32_Phdr* h = (Elf32_Phdr*) ((unsigned int) elf32Phdr + elf32Ehdr->e_phentsize * k);
+		if (h->p_type != PT_LOAD)
+			continue;
+
+		unsigned int addr = h->p_vaddr;
+		if (addr < lowest_address)
+			lowest_address = addr;
+	}
+
+	return lowest_address & ~(PAGE_SIZE - 1); // Truncate to nearest page size multiple
+}

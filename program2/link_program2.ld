@@ -11,10 +11,7 @@ PHDRS
 
 SECTIONS
 {
-    . = 0; /* relocate to address 0 */
-
-    /* PHDR segment */
-    . = SIZEOF_HEADERS;
+    . = 0x1000 + SIZEOF_HEADERS; /* relocate to address 0x1000 to segfault on address 0 */
     .interp ALIGN(4) :
     {
         *(.interp)

@@ -2,6 +2,7 @@
 #define INCLUDE_ELF_H
 
 #include "ELF_defines.h"
+#include "clib/stddef.h"
 
 #define OS_INTERPR ("/dynlk") // OS default interpreter, used to run dynamically linked programs
 #define OS_LIB ("libsyscalls.so") // OS lib, allowing programs to use syscalls
@@ -92,7 +93,7 @@ public:
 	 */
 	Elf32_Phdr* get_GOT_segment(const unsigned int* file_got_addr);
 
-
+	[[nodiscard]] size_t base_address();
 };
 
 #endif //INCLUDE_OS_ELF_H

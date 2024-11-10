@@ -38,7 +38,7 @@ void Interrupts::page_fault_handler(struct stack_state* stack_state)
 {
 	unsigned int addr; // Address of the fault
 	__asm__ volatile("mov %%cr2, %0" : "=r"(addr)); // Get addr from CR2
-	
+
 	unsigned int err = stack_state->error_code;
 
 	printf_error("Page fault at address 0x%x", addr);
@@ -50,6 +50,8 @@ void Interrupts::page_fault_handler(struct stack_state* stack_state)
 	printf("Protection key violation: %s\n", err & 32 ? "True" : "False");
 	printf("Shadow stack: %s\n", err & 64 ? "True" : "False");
 	printf("SGX: %s\n", err & 32768 ? "True" : "False");
+
+	Scheduler::get_running_process()->terminate();
 }
 
 void Interrupts::gpf_handler(struct stack_state* stack_state)
