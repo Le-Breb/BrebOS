@@ -29,7 +29,7 @@ private:
 
 	unsigned int quantum, priority;
 
-	unsigned int num_pages; // Num pages over which the process code spans
+	unsigned int num_pages; // Num pages over which the process code spans, including unmapped pages
 	unsigned int* pte; // Array of pte where the process code is loaded to
 
 	pid_t pid; // PID
@@ -111,6 +111,21 @@ private:
 	 */
 	static Process* from_binary(GRUB_module* module);
 
+	/**
+	 * Load part of an ELF segment into the process address space and maps it.
+	 *
+	 * @param bytes_ptr pointer to bytes to copy
+	 * @param n num bytes to copy
+	 * @param no_write whether the segment has write permissions
+	 * @param h PT_LOAD segment header
+	 * @param pte_offset offset to consider when referring to process pte, ie index of ELF first PTE entry
+	 * @param copied_bytes counter of bytes processed in current segment
+	 * @param sys_page_tables kernel page tables
+	 */
+	void
+	copy_elf_subsegment_to_address_space(void* bytes_ptr, uint n, bool no_write, Elf32_Phdr* h, uint& pte_offset,
+										 uint& copied_bytes, page_table_t* sys_page_tables);
+
 public:
 
 	/** Gets the process' PID */
@@ -141,7 +156,7 @@ public:
 	 * @param ppid parent process ID
 	 * @param argc num args
 	 * @param argv args
-	 * @return process, nullptr if an error ocurred
+	 * @return process, nullptr if an error occurred
 	 */
 	static Process* from_module(GRUB_module* module, pid_t pid, pid_t ppid, int argc, const char** argv);
 
@@ -163,6 +178,12 @@ public:
 	 * @return ESP in process address space ready to be used
 	 */
 	size_t write_args_to_stack(size_t stack_top_v_addr, int argc, const char** argv);
+
+	/**
+	 * Load ELF file code and data into a process' address space and maps it
+	 * @param load_elf ELF to load
+	 */
+	void load_elf(ELF* load_elf);
 };
 
 #endif //INCLUDE_PROCESS_H

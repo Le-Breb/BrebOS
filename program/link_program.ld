@@ -4,8 +4,8 @@ PHDRS
 {
     headers PT_PHDR PHDRS;
     interp PT_INTERP;
-    text PT_LOAD FILEHDR PHDRS;
-    data PT_LOAD;
+    text PT_LOAD FILEHDR PHDRS FLAGS(5);
+    data PT_LOAD FLAGS(6);
     dynamic PT_DYNAMIC;
 }
 
@@ -18,7 +18,7 @@ SECTIONS
         *(.interp)
     } :interp :text
 
-    .text ALIGN(4) :
+    .text ALIGN(0x1000) :
     {
         start_program.o(.text) /* include the .text section of start.o */
         *(.text) /* include all other .text sections */
@@ -29,7 +29,7 @@ SECTIONS
         *(.rodata*)
     } :text
 
-    .data ALIGN(4) :
+    .data ALIGN(0x1000) :
     {
         *(.data)
     } :data

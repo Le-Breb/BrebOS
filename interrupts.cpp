@@ -58,6 +58,8 @@ void Interrupts::gpf_handler(struct stack_state* stack_state)
 {
 	printf_error("General protection fault");
 	printf("Segment selector: %x\n", stack_state->error_code);
+
+	Scheduler::get_running_process()->terminate();
 }
 
 [[noreturn]] void Interrupts::interrupt_timer(unsigned int kesp, cpu_state_t* cpu_state, stack_state_t* stack_state)

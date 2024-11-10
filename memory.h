@@ -2,6 +2,7 @@
 #define INCLUDE_MEMORY_H
 
 #include "multiboot.h"
+#include "clib/stddef.h"
 
 #define PAGE_SIZE 4096
 #define PAGE_PRESENT 0x1
@@ -70,6 +71,8 @@ void init_mem(multiboot_info_t* minfo);
  */
 extern "C" void* malloc(unsigned int n);
 
+extern "C" void* calloc(size_t nmemb, size_t size);
+
 /**
  * Allocate page-aligned memory
  *
@@ -104,7 +107,7 @@ void allocate_page(unsigned int frame_id, unsigned int page_id);
  * @param frame_id Physical page id
  * @param page_id Page id
  */
-void allocate_page_user(unsigned int frame_id, unsigned int page_id);
+void allocate_page_user(uint frame_id, uint page_id);
 
 /**
  * Free a page

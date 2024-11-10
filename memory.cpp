@@ -235,11 +235,11 @@ void load_grub_modules(struct multiboot_info* multibootInfo)
 		grub_modules[i].start_addr = ((pe_id / PDT_ENTRIES) << 22) | ((pe_id % PDT_ENTRIES) << 12);
 		grub_modules[i].size = mod_size;
 
-		// Mark module's code pages as allocated and user accessible
+		// Mark module's code pages as allocated
 		for (unsigned int j = 0; j < required_pages; ++j)
 		{
 			unsigned int frame_id = module_start_frame_id + j;
-			allocate_page_user(frame_id, pe_id);
+			allocate_page(frame_id, pe_id);
 
 			pe_id++;
 		}
@@ -357,6 +357,22 @@ extern "C" void* malloc(unsigned int n)
 				return nullptr; /* none left */
 		}
 	}
+}
+
+extern "C" void* calloc(size_t nmemb, size_t size)
+{
+	if (!nmemb || !size)
+		return malloc(1);
+	size_t total_size;
+	if (__builtin_mul_overflow(nmemb, size, &total_size))
+		return NULL;
+
+	void* mem = malloc(total_size);
+	if (!mem)
+		return NULL;
+	memset((char*) mem, 0, total_size);
+
+	return mem;
 }
 
 extern "C" void free(void* ptr)
@@ -492,7 +508,7 @@ void free_page(unsigned int pde, unsigned int pte)
 		lowest_free_frame = frame_id;
 }
 
-void allocate_page_user(unsigned int frame_id, unsigned int page_id)
+void allocate_page_user(uint frame_id, uint page_id)
 {
 	// Write PTE
 	PTE(page_id) = FRAME_ID_ADDR(frame_id) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;

@@ -4,18 +4,18 @@
 
 bool ELF::is_valid(GRUB_module* mod, enum ELF_type expected_type)
 {
-	Elf32_Ehdr* elf32Ehdr = (Elf32_Ehdr*) mod->start_addr;
+	ELF elf(mod);
 
 	// Ensure this is an ELF
-	if (elf32Ehdr->e_ident[0] != 0x7F || elf32Ehdr->e_ident[1] != 'E' || elf32Ehdr->e_ident[2] != 'L' ||
-		elf32Ehdr->e_ident[3] != 'F')
+	if (elf.elf32Ehdr->e_ident[0] != 0x7F || elf.elf32Ehdr->e_ident[1] != 'E' || elf.elf32Ehdr->e_ident[2] != 'L' ||
+		elf.elf32Ehdr->e_ident[3] != 'F')
 	{
 		printf_error("Not an ELF\n");
 		return false;
 	}
 
 	// Ensure program is 32 bits
-	if (elf32Ehdr->e_ident[4] != 1)
+	if (elf.elf32Ehdr->e_ident[4] != 1)
 	{
 		printf_error("Not a 32 bit program");
 		return false;
@@ -24,21 +24,21 @@ bool ELF::is_valid(GRUB_module* mod, enum ELF_type expected_type)
 	switch (expected_type)
 	{
 		case Executable:
-			if (elf32Ehdr->e_type != ET_EXEC)
+			if (elf.elf32Ehdr->e_type != ET_EXEC)
 			{
 				printf_error("Not an executable ELF");
 				return false;
 			}
 			break;
 		case SharedObject:
-			if (elf32Ehdr->e_type != ET_DYN)
+			if (elf.elf32Ehdr->e_type != ET_DYN)
 			{
 				printf_error("Not an executable ELF");
 				return false;
 			}
 			break;
 		case Relocatable:
-			if (elf32Ehdr->e_type != ET_REL)
+			if (elf.elf32Ehdr->e_type != ET_REL)
 			{
 				printf_error("Not an executable ELF");
 				return false;
@@ -47,20 +47,17 @@ bool ELF::is_valid(GRUB_module* mod, enum ELF_type expected_type)
 	}
 	//printf("Endianness: %s\n", elf32Ehdr->e_ident[5] == 1 ? "Little" : "Big");
 
-	// Get section headers
-	Elf32_Shdr* elf32Shdr = (Elf32_Shdr*) (mod->start_addr + elf32Ehdr->e_shoff);
-
 	// ELF imposes that first section header is null
-	if (elf32Shdr->sh_type != SHT_NULL)
+	if (elf.elf32Shdr->sh_type != SHT_NULL)
 	{
 		printf_error("Not a valid ELF file");
 		return false;
 	}
 
 	// Ensure program is supported
-	for (int k = 0; k < elf32Ehdr->e_shnum; ++k)
+	for (int k = 0; k < elf.elf32Ehdr->e_shnum; ++k)
 	{
-		Elf32_Shdr* h = (Elf32_Shdr*) ((unsigned int) elf32Shdr + elf32Ehdr->e_shentsize * k);
+		Elf32_Shdr* h = (Elf32_Shdr*) ((unsigned int) elf.elf32Shdr + elf.elf32Ehdr->e_shentsize * k);
 		switch (h->sh_type)
 		{
 			case SHT_NULL:
@@ -80,11 +77,39 @@ bool ELF::is_valid(GRUB_module* mod, enum ELF_type expected_type)
 		}
 	}
 
-	if (elf32Ehdr->e_phnum == 0)
+	if (elf.elf32Ehdr->e_phnum == 0)
 	{
 		printf_error("No program header");
 		return false;
 	}
+
+	// Check that no read-only page overlaps with a write-allowed page
+	uint elf_num_pages = elf.num_pages();
+	bool* ro_pages = (bool*) calloc(elf_num_pages, sizeof(bool));
+	for (int k = 0; k < elf.elf32Ehdr->e_phnum; ++k)
+	{
+		Elf32_Phdr* h = (Elf32_Phdr*) ((unsigned int) elf.elf32Phdr + elf.elf32Ehdr->e_phentsize * k);
+		if (h->p_type != PT_LOAD)
+			continue;
+
+		bool segment_write = h->p_flags & PF_W;
+
+		for (size_t j = 0; j < (h->p_memsz + PAGE_SIZE - 1) / PAGE_SIZE; ++j)
+		{
+			uint page_id = h->p_vaddr / PAGE_SIZE + j;
+			if (segment_write)
+			{
+				if (ro_pages[page_id])
+				{
+					free(ro_pages);
+					return false;
+				}
+			}
+			else
+				ro_pages[page_id] = true;
+		}
+	}
+	free(ro_pages);
 
 	return true;
 }
@@ -126,53 +151,6 @@ char* ELF::get_interpreter_name()
 	}
 
 	return nullptr;
-}
-
-void ELF::load_into_process_address_space(const unsigned int* proc_pte)
-{
-	// Copy lib code in allocated space
-	for (int k = 0; k < elf32Ehdr->e_phnum; ++k)
-	{
-		Elf32_Phdr* h = (Elf32_Phdr*) ((unsigned int) elf32Phdr + elf32Ehdr->e_phentsize * k);
-		if (h->p_type != PT_LOAD)
-			continue;
-
-		unsigned int copied_bytes = 0;
-		unsigned int sys_pe_id = proc_pte[h->p_vaddr / PAGE_SIZE];
-		unsigned int rem_bytes_addr = mod->start_addr + h->p_offset;
-		unsigned int dest_page_start_addr = VIRT_ADDR(sys_pe_id / PDT_ENTRIES, sys_pe_id % PT_ENTRIES,
-													  h->p_vaddr % PAGE_SIZE);
-
-		// Copy first bytes if they are not page aligned
-		if (h->p_vaddr % PAGE_SIZE)
-		{
-			unsigned int rem = PAGE_SIZE - h->p_vaddr % PAGE_SIZE;
-			unsigned int first_bytes = h->p_filesz > rem ? rem : h->p_filesz;
-			memcpy((void*) dest_page_start_addr, (void*) rem_bytes_addr, first_bytes);
-			copied_bytes += first_bytes;
-		}
-
-		// Copy whole pages
-		while (copied_bytes + PAGE_SIZE < h->p_filesz)
-		{
-			printf_info("code inside this loop is not guaranteed to work, it hasn\'t been tested yet");
-			rem_bytes_addr = mod->start_addr + h->p_offset + copied_bytes;
-			sys_pe_id = proc_pte[(h->p_vaddr + copied_bytes) / PAGE_SIZE];
-			dest_page_start_addr = VIRT_ADDR(sys_pe_id / PDT_ENTRIES, sys_pe_id % PDT_ENTRIES, 0);
-			memcpy((void*) dest_page_start_addr, (void*) rem_bytes_addr, PAGE_SIZE);
-			copied_bytes += PAGE_SIZE;
-		}
-
-		// Handle data that does not fit a whole page. First copy the remaining bytes then fill the rest with 0
-		rem_bytes_addr = mod->start_addr + h->p_offset + copied_bytes;
-		sys_pe_id = proc_pte[(h->p_vaddr + copied_bytes) / PAGE_SIZE];
-		dest_page_start_addr = VIRT_ADDR(sys_pe_id / PDT_ENTRIES, sys_pe_id % PDT_ENTRIES, 0);
-		unsigned int num_final_bytes = h->p_filesz - copied_bytes;
-		memcpy((void*) dest_page_start_addr, (void*) rem_bytes_addr, num_final_bytes);
-		copied_bytes += h->p_filesz % PAGE_SIZE;
-		if (num_final_bytes)
-			memset((void*) (dest_page_start_addr + num_final_bytes), 0, PAGE_SIZE - num_final_bytes);
-	}
 }
 
 void* ELF::get_libdynlk_main_runtime_addr(unsigned int proc_num_pages)
@@ -299,4 +277,9 @@ size_t ELF::base_address()
 	}
 
 	return lowest_address & ~(PAGE_SIZE - 1); // Truncate to nearest page size multiple
+}
+
+size_t ELF::num_pages()
+{
+	return (get_highest_runtime_addr() + PAGE_SIZE - 1) / PAGE_SIZE;
 }

@@ -73,12 +73,6 @@ public:
 	char* get_interpreter_name();
 
 	/**
-	 * Load ELF file code and data into a process' address space
-	 * @param proc_pte page table entry array, ie where to load stuff
-	 */
-	void load_into_process_address_space(const unsigned int* proc_pte);
-
-	/**
 	 * Get entry point of libdynlk in a process' runtime address space
 	 * @param proc_num_pages number of pages the process (without libdynl) spans over
 	 * @return libdynlk runtime address, NULL if an error occured
@@ -94,6 +88,8 @@ public:
 	Elf32_Phdr* get_GOT_segment(const unsigned int* file_got_addr);
 
 	[[nodiscard]] size_t base_address();
+
+	[[nodiscard]] size_t num_pages();
 };
 
 #endif //INCLUDE_OS_ELF_H

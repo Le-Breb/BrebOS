@@ -58,9 +58,12 @@ Process::~Process()
 	}
 
 	// Free process code
-	for (unsigned int i = 1; i < num_pages; ++i) // Skip page 0 as it is unmapped, use for segfaults
-		free_page(pte[i] / PDT_ENTRIES,
-				  pte[i] % PDT_ENTRIES);
+	for (unsigned int i = 0; i < num_pages; ++i)
+	{
+		if (!pte[i])
+			continue;
+		free_page(pte[i] / PDT_ENTRIES, pte[i] % PDT_ENTRIES);
+	}
 
 	// Free process fields
 	delete pte;
@@ -271,14 +274,13 @@ bool Process::load_lib(GRUB_module* lib_mod)
 	if (!ELF::is_valid(lib_mod, SharedObject))
 		return false;
 
-	unsigned int proc_num_pages = num_pages;
 	ELF lib_elf(lib_mod);
 
 	// Allocate space for lib int process' address space
 	if (!alloc_and_add_lib_pages_to_process(lib_elf))
 		return false;
 	// Load lib into newly allocated space
-	lib_elf.load_into_process_address_space(pte + proc_num_pages);
+	load_elf(&lib_elf);
 
 	return true;
 }
@@ -290,7 +292,7 @@ bool Process::alloc_and_add_lib_pages_to_process(ELF& lib_elf)
 	unsigned int lib_num_code_pages = highest_addr / PAGE_SIZE + ((highest_addr % PAGE_SIZE) ? 1 : 0);
 
 	// Adjust proc pte array - add space for lib code
-	unsigned int* new_pte = (uint*) malloc((num_pages + lib_num_code_pages) * sizeof(unsigned int));
+	unsigned int* new_pte = (uint*) calloc((num_pages + lib_num_code_pages), sizeof(unsigned int));
 	if (new_pte == nullptr)
 	{
 		printf_error("Unable to allocate memory for process");
@@ -301,11 +303,22 @@ bool Process::alloc_and_add_lib_pages_to_process(ELF& lib_elf)
 	pte = new_pte;
 
 	// Allocate lib code pages
-	for (unsigned int k = 0; k < lib_num_code_pages; ++k)
+	for (int i = 0; i < lib_elf.elf32Ehdr->e_phnum; ++i)
 	{
-		unsigned int pe = get_free_pe(); // Get PTE id
-		allocate_page_user(get_free_page(), pe); // Allocate page
-		pte[num_pages + k] = pe;  // Reference PTE
+		Elf32_Phdr* h = (Elf32_Phdr*) ((unsigned int) lib_elf.elf32Phdr + lib_elf.elf32Ehdr->e_phentsize * i);
+		if (h->p_type != PT_LOAD)
+			continue;
+
+		uint num_segment_pages = (h->p_memsz + PAGE_SIZE - 1) / PAGE_SIZE;
+		for (size_t j = 0; j < num_segment_pages; ++j)
+		{
+			uint pte_id = num_pages + h->p_vaddr / PAGE_SIZE + j;
+			if (pte[pte_id])
+				continue;
+			unsigned int pe = get_free_pe(); // Get PTE id
+			pte[pte_id] = pe;  // Reference PTE
+			allocate_page_user(get_free_page(), pe); // Allocate page
+		}
 	}
 	num_pages += lib_num_code_pages;
 
@@ -328,21 +341,31 @@ Process* Process::allocate_proc_for_elf_module(GRUB_module* module)
 	// Num pages code spans over
 	unsigned int proc_code_pages = highest_addr / PAGE_SIZE + ((highest_addr % PAGE_SIZE) ? 1 : 0);
 	proc->num_pages = proc_code_pages;
-	proc->pte = (uint*) malloc(proc->num_pages * sizeof(unsigned int));
+	proc->pte = (uint*) calloc(proc->num_pages, sizeof(unsigned int));
 	proc->allocs = new list();
 	if (proc->pte == nullptr)
 	{
 		printf_error("Unable to allocate memory for process");
 		return nullptr;
 	}
-	proc->pte[0] = 0;
 
 	// Allocate process code pages
-	for (unsigned int k = 1; k < proc_code_pages; ++k) // Do not map first page, it is unmap for null dereferences
+	for (int i = 0; i < proc->elf->elf32Ehdr->e_phnum; ++i)
 	{
-		unsigned int pe = get_free_pe(); // Get PTE id
-		proc->pte[k] = pe;  // Reference PTE
-		allocate_page_user(get_free_page(), pe); // Allocate page
+		Elf32_Phdr* h = (Elf32_Phdr*) ((unsigned int) proc->elf->elf32Phdr + proc->elf->elf32Ehdr->e_phentsize * i);
+		if (h->p_type != PT_LOAD)
+			continue;
+
+		uint num_segment_pages = (h->p_memsz + PAGE_SIZE - 1) / PAGE_SIZE;
+		for (size_t j = 0; j < num_segment_pages; ++j)
+		{
+			uint pte_id = h->p_vaddr / PAGE_SIZE + j;
+			if (proc->pte[pte_id])
+				continue;
+			unsigned int pe = get_free_pe(); // Get PTE id
+			proc->pte[pte_id] = pe;  // Reference PTE
+			allocate_page_user(get_free_page(), pe); // Allocate page
+		}
 	}
 
 	return proc;
@@ -357,10 +380,10 @@ Process* Process::from_ELF(GRUB_module* module)
 	if (proc == nullptr)
 		return nullptr;
 
-	proc->elf->load_into_process_address_space(proc->pte);
+	proc->load_elf(proc->elf);
 
 	char* interpereter_name = proc->elf->get_interpreter_name();
-	unsigned int dynamic = interpereter_name != nullptr;
+	bool dynamic = interpereter_name != nullptr;
 
 	if (dynamic)
 	{
@@ -438,13 +461,6 @@ Process* Process::from_module(GRUB_module* module, pid_t pid, pid_t ppid, int ar
 		printf_error("Error while loading program. Aborting");
 		return nullptr;
 	}
-	size_t base_address = proc->elf->base_address();
-	if (base_address != PAGE_SIZE)
-	{
-		printf_error("ELF base address (%zu) != PAGE_SIZE (%u). Not supported yet. Aborting", base_address, PAGE_SIZE);
-		delete proc;
-		return nullptr;
-	}
 
 	// Allocate process stack page
 	unsigned int p_stack_pe_id = get_free_pe();
@@ -469,20 +485,6 @@ Process* Process::from_module(GRUB_module* module, pid_t pid, pid_t ppid, int ar
 	for (int i = 768; i < PDT_ENTRIES; ++i)
 		proc->pdt.entries[i] = PHYS_ADDR((unsigned int) &page_tables[i]) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
 
-	// Map process code at 0x00
-	for (unsigned int i = 1; i < proc->num_pages; ++i) // Start at page 1 as page 0 is unmapped for segfaults
-	{
-		unsigned int page_pde = i / PDT_ENTRIES;
-		unsigned int page_pte = i % PDT_ENTRIES;
-
-		unsigned int process_page_id = proc->pte[i];
-		unsigned int pte = PTE(process_page_id);
-
-		if (proc->page_tables[page_pde].entries[page_pte] != 0)
-			printf_error("Non empty pt entry");
-		proc->page_tables[page_pde].entries[page_pte] = pte;
-	}
-
 	// Map process stack at 0xBFFFFFFC = 0xCFFFFFFF - 4 at pde 767 and pte 1023, just below the kernel
 	if (proc->page_tables[767].entries[1023] != 0)
 		printf_error("Process kernel page entry is not empty");
@@ -502,4 +504,75 @@ Process* Process::from_module(GRUB_module* module, pid_t pid, pid_t ppid, int ar
 	memset(&proc->cpu_state, 0, sizeof(proc->cpu_state));
 
 	return proc;
+}
+
+void
+Process::copy_elf_subsegment_to_address_space(void* bytes_ptr, uint n, bool no_write, Elf32_Phdr* h, uint& pte_offset,
+											  uint& copied_bytes, page_table_t* sys_page_tables)
+{
+	// Compute indexes
+	uint* elf_pte = pte + pte_offset;
+	uint ppte_id = (h->p_vaddr + copied_bytes) / PAGE_SIZE;
+	uint sys_pe_id = elf_pte[ppte_id];
+	uint sys_pde_id = sys_pe_id / PDT_ENTRIES;
+	uint sys_pte_id = sys_pe_id % PT_ENTRIES;
+	uint proc_pde_id = (pte_offset + ppte_id) / PT_ENTRIES;
+	uint proc_pte_id = (pte_offset + ppte_id) % PT_ENTRIES;
+
+	// Map code
+	page_tables[proc_pde_id].entries[proc_pte_id] = sys_page_tables[sys_pde_id].entries[sys_pte_id];
+	if (no_write)
+		page_tables[sys_pde_id].entries[sys_pte_id] &= ~PAGE_WRITE;
+
+	// Copy code
+	uint dest_page_start_addr = VIRT_ADDR(sys_pe_id / PDT_ENTRIES, sys_pe_id % PDT_ENTRIES, 0);
+	memcpy((void*) dest_page_start_addr, bytes_ptr, n);
+
+	// Update counter
+	copied_bytes += n;
+}
+
+void Process::load_elf(ELF* load_elf)
+{
+	unsigned int elf_num_pages = load_elf->num_pages();
+	uint pte_offset = num_pages - elf_num_pages;
+	page_table_t* sys_page_tables = get_page_tables();
+
+	// Copy lib code in allocated space and map it
+	for (int k = 0; k < load_elf->elf32Ehdr->e_phnum; ++k)
+	{
+		Elf32_Phdr* h = (Elf32_Phdr*) ((unsigned int) load_elf->elf32Phdr + load_elf->elf32Ehdr->e_phentsize * k);
+		if (h->p_type != PT_LOAD)
+			continue;
+
+		bool no_write = !(h->p_flags & PF_W); // Segment has no write permissions
+
+		uint copied_bytes = 0;
+		void* bytes_ptr = (void*) (load_elf->mod->start_addr + h->p_offset);
+
+		// Copy first bytes if they are not page aligned
+		if (h->p_vaddr % PAGE_SIZE)
+		{
+			unsigned int rem = PAGE_SIZE - h->p_vaddr % PAGE_SIZE;
+			unsigned int num_first_bytes = rem > h->p_filesz ? h->p_filesz : rem;
+			copy_elf_subsegment_to_address_space(bytes_ptr, num_first_bytes, no_write, h, pte_offset, copied_bytes,
+												 sys_page_tables);
+		}
+
+		// Copy whole pages
+		while (copied_bytes + PAGE_SIZE < h->p_filesz)
+		{
+			bytes_ptr = (void*) (load_elf->mod->start_addr + h->p_offset + copied_bytes);
+			copy_elf_subsegment_to_address_space(bytes_ptr, PAGE_SIZE, no_write, h, pte_offset, copied_bytes,
+												 sys_page_tables);
+		}
+
+		// Handle data that does not fit a whole page. First copy the remaining bytes then fill the rest with 0
+		unsigned int num_final_bytes = h->p_filesz - copied_bytes;
+		if (!num_final_bytes)
+			continue;
+		bytes_ptr = (void*) (load_elf->mod->start_addr + h->p_offset + copied_bytes);
+		copy_elf_subsegment_to_address_space(bytes_ptr, num_final_bytes, no_write, h, pte_offset, copied_bytes,
+											 sys_page_tables);
+	}
 }

@@ -4,7 +4,7 @@
 
 #include "ctype.h"
 
-unsigned int isdigit(unsigned int c)
+bool isdigit(unsigned int c)
 {
 	return c >= '0' && c <= '9';
 }
