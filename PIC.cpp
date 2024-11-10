@@ -46,7 +46,7 @@ void PIC::remap(int offset1, int offset2)
 	io_wait();
 }
 
-void PIC::acknowledge(unsigned int interrupt)
+void PIC::acknowledge(uint interrupt)
 {
 	if (interrupt < PIC1_START_INTERRUPT || interrupt > PIC2_END_INTERRUPT)
 		return;
@@ -56,12 +56,12 @@ void PIC::acknowledge(unsigned int interrupt)
 
 void PIC::enable_preemptive_scheduling()
 {
-	unsigned int a = inb(PIC1_DATA) & ~1;
+	uint a = inb(PIC1_DATA) & ~1;
 	outb(PIC1_DATA, a);
 }
 
 void PIC::disable_preemptive_scheduling()
 {
-	unsigned int a = inb(PIC1_DATA) | 1;
+	uint a = inb(PIC1_DATA) | 1;
 	outb(PIC1_DATA, a);
 }

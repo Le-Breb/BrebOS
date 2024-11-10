@@ -48,8 +48,8 @@ typedef struct fat_BS
 	unsigned short table_size_16;
 	unsigned short sectors_per_track;
 	unsigned short head_side_count;
-	unsigned int hidden_sector_count; // Num sectors before the partition containing the FAT volume
-	unsigned int total_sectors_32;
+	uint hidden_sector_count; // Num sectors before the partition containing the FAT volume
+	uint total_sectors_32;
 
 	// this will be cast to it's specific type once the driver actually knows what type of FAT this is.
 	unsigned char extended_section[54];
@@ -58,17 +58,17 @@ typedef struct fat_BS
 
 typedef struct fat_extBS_32
 {
-	unsigned int table_size_32;
+	uint table_size_32;
 	unsigned short extended_flags;
 	unsigned short fat_version;
-	unsigned int root_cluster;
+	uint root_cluster;
 	unsigned short fat_info;
 	unsigned short backup_BS_sector; // Optional sector index in reserved area of a copy of BPB
 	unsigned char reserved_0[12];
 	unsigned char drive_number;
 	unsigned char reserved_1;
 	unsigned char boot_signature;
-	unsigned int volume_id;
+	uint volume_id;
 	unsigned char volume_label[11];
 	unsigned char fat_type_label[8];
 

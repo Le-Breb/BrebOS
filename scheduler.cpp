@@ -5,7 +5,7 @@
 #include "clib/stdio.h"
 #include "clib/string.h"
 
-unsigned int Scheduler::pid_pool = 0;
+uint Scheduler::pid_pool = 0;
 pid_t Scheduler::running_process = MAX_PROCESSES;
 ready_queue_t Scheduler::ready_queue;
 ready_queue_t Scheduler::waiting_queue;
@@ -86,7 +86,7 @@ Process* Scheduler::get_next_process()
 	GDT::set_tss_kernel_stack(p->k_stack_top);
 
 	// Use process' address space
-	Interrupts::change_pdt_asm(PHYS_ADDR((unsigned int) &p->pdt));
+	Interrupts::change_pdt_asm(PHYS_ADDR((uint) &p->pdt));
 
 	// Jump
 	if (p->flags & P_SYSCALL_INTERRUPTED)
@@ -98,7 +98,7 @@ Process* Scheduler::get_next_process()
 		Interrupts::resume_user_process_asm(p->cpu_state, p->stack_state);
 }
 
-void Scheduler::start_module(unsigned int module, pid_t ppid, int argc, const char** argv)
+void Scheduler::start_module(uint module, pid_t ppid, int argc, const char** argv)
 {
 	if (ready_queue.count == MAX_PROCESSES)
 	{
@@ -115,7 +115,7 @@ void Scheduler::start_module(unsigned int module, pid_t ppid, int argc, const ch
 	Process* proc = Process::from_module(&get_grub_modules()[module], pid, ppid, argc, argv);
 	if (!proc)
 		return;
-	
+
 	processes[pid] = proc;
 	set_process_ready(proc);
 }
@@ -123,7 +123,7 @@ void Scheduler::start_module(unsigned int module, pid_t ppid, int argc, const ch
 
 pid_t Scheduler::get_free_pid()
 {
-	for (unsigned int i = 0; i < MAX_PROCESSES; ++i)
+	for (uint i = 0; i < MAX_PROCESSES; ++i)
 	{
 		if (!(pid_pool & (1 << i)))
 		{
@@ -137,7 +137,7 @@ pid_t Scheduler::get_free_pid()
 
 void Scheduler::init()
 {
-	for (unsigned int i = 0; i < MAX_PROCESSES; ++i)
+	for (uint i = 0; i < MAX_PROCESSES; ++i)
 	{
 		ready_queue.arr[i] = -1;
 		processes[i] = 0x00;
@@ -157,13 +157,13 @@ Process* Scheduler::get_running_process()
 
 void Scheduler::wake_up_key_waiting_processes(char key)
 {
-	for (unsigned int i = 0; i < waiting_queue.count; ++i)
+	for (uint i = 0; i < waiting_queue.count; ++i)
 	{
 		// Add process to ready queue
 		pid_t pid = waiting_queue.arr[(waiting_queue.start + waiting_queue.count) % MAX_PROCESSES];
 		ready_queue.arr[(ready_queue.start + ready_queue.count++) % MAX_PROCESSES] = pid;
 
-		processes[pid]->cpu_state.eax = (unsigned int) key; // Return key
+		processes[pid]->cpu_state.eax = (uint) key; // Return key
 		processes[pid]->flags &= ~P_WAITING_KEY; // Clear flag
 	}
 

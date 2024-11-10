@@ -5,32 +5,32 @@
 #include "PIT.h"
 
 /** Change current pdt */
-extern "C" void change_pdt_asm_(unsigned int pdt_phys_addr);
+extern "C" void change_pdt_asm_(uint pdt_phys_addr);
 
 Process* Process::from_binary(GRUB_module* module)
 {
-	unsigned int mod_size = module->size;
-	unsigned int mod_code_pages = mod_size / PAGE_SIZE + ((mod_size % PAGE_SIZE) ? 1 : 0); // Num pages code spans over
+	uint mod_size = module->size;
+	uint mod_code_pages = mod_size / PAGE_SIZE + ((mod_size % PAGE_SIZE) ? 1 : 0); // Num pages code spans over
 
 	// Allocate process memory
 	Process* proc = new Process();
 	proc->stack_state.eip = 0;
 	proc->num_pages = mod_code_pages;
-	proc->pte = (uint*) malloc(mod_code_pages * sizeof(unsigned int));
+	proc->pte = (uint*) malloc(mod_code_pages * sizeof(uint));
 
 	// Allocate process code pages
-	for (unsigned int k = 0; k < mod_code_pages; ++k)
+	for (uint k = 0; k < mod_code_pages; ++k)
 	{
-		unsigned int pe = get_free_pe();
+		uint pe = get_free_pe();
 		proc->pte[k] = pe;
 		allocate_page_user(get_free_page(), pe);
 	}
 
 
-	unsigned int proc_pe_id = 0;
-	unsigned int sys_pe_id = proc->pte[proc_pe_id];
-	unsigned int code_page_start_addr = module->start_addr + proc_pe_id * PAGE_SIZE;
-	unsigned int dest_page_start_addr =
+	uint proc_pe_id = 0;
+	uint sys_pe_id = proc->pte[proc_pe_id];
+	uint code_page_start_addr = module->start_addr + proc_pe_id * PAGE_SIZE;
+	uint dest_page_start_addr =
 			(sys_pe_id / PDT_ENTRIES) << 22 | (sys_pe_id % PDT_ENTRIES) << 12;
 
 	// Copy whole pages
@@ -58,7 +58,7 @@ Process::~Process()
 	}
 
 	// Free process code
-	for (unsigned int i = 0; i < num_pages; ++i)
+	for (uint i = 0; i < num_pages; ++i)
 	{
 		if (!pte[i])
 			continue;
@@ -153,12 +153,12 @@ bool Process::dynamic_loading()
 	}
 
 	// Get dynamic linking info
-	unsigned int lib_name_idx = 0; // lib name string table index
+	uint lib_name_idx = 0; // lib name string table index
 	char* dyn_str_table = nullptr; // string table
 	void* dynsymtab = nullptr; // Dynamic symbols table
-	unsigned int dynsyntab_num_entries; // Dynamic symbols table number of entries
-	unsigned int dynsymtab_ent_size; // Dynamic symbols table entry size
-	unsigned int* file_got_addr; // Address of GOT within the ELF file (not where it is loaded nor its runtime address)
+	uint dynsyntab_num_entries; // Dynamic symbols table number of entries
+	uint dynsymtab_ent_size; // Dynamic symbols table entry size
+	uint* file_got_addr; // Address of GOT within the ELF file (not where it is loaded nor its runtime address)
 	// In order to know whether base address should be retrieved from values, refer to Figure 2-10: Dynamic Array Tags
 	// in http://www.skyfree.org/linux/references/ELF_Format.pdf
 	for (Elf32_Dyn* d = dyn_table; d->d_tag != DT_NULL; d++)
@@ -175,10 +175,10 @@ bool Process::dynamic_loading()
 				lib_name_idx = d->d_un.d_val;
 				break;
 			case DT_PLTGOT:
-				file_got_addr = (unsigned int*) (elf->mod->start_addr + d->d_un.d_val - base_addr);
+				file_got_addr = (uint*) (elf->mod->start_addr + d->d_un.d_val - base_addr);
 				break;
 			case DT_HASH:
-				dynsyntab_num_entries = *(((unsigned int*) (elf->mod->start_addr + d->d_un.d_val - base_addr)) +
+				dynsyntab_num_entries = *(((uint*) (elf->mod->start_addr + d->d_un.d_val - base_addr)) +
 										  1); // nchain
 				break;
 			case DT_SYMENT:
@@ -222,7 +222,7 @@ bool Process::dynamic_loading()
 	{
 		Elf32_Sym* dd = (Elf32_Sym*) ((uint) dynsymtab + i * dynsymtab_ent_size);
 		//printf("%s\n", &dyn_str_table[dd->st_name]);
-		unsigned int type = ELF32_ST_TYPE(dd->st_info);
+		uint type = ELF32_ST_TYPE(dd->st_info);
 		if (type != STT_FUNC)
 		{
 			printf_error("Unsupported symbol type: %u", type);
@@ -235,18 +235,18 @@ bool Process::dynamic_loading()
 		return false;
 
 	// Compute GOT runtime address and loaded GOT address
-	unsigned int got_runtime_addr =
-			(unsigned int) file_got_addr - (elf->mod->start_addr + got_segment_hdr->p_offset) +
+	uint got_runtime_addr =
+			(uint) file_got_addr - (elf->mod->start_addr + got_segment_hdr->p_offset) +
 			got_segment_hdr->p_vaddr;
-	unsigned int got_sys_pe_id = pte[got_runtime_addr / PAGE_SIZE];
-	unsigned int* got_addr = (unsigned int*) VIRT_ADDR(got_sys_pe_id / PDT_ENTRIES, got_sys_pe_id % PT_ENTRIES,
+	uint got_sys_pe_id = pte[got_runtime_addr / PAGE_SIZE];
+	uint* got_addr = (uint*) VIRT_ADDR(got_sys_pe_id / PDT_ENTRIES, got_sys_pe_id % PT_ENTRIES,
 													   got_runtime_addr % PAGE_SIZE);
 
 	// Load klib
 	if (!load_lib(&grub_modules[3]))
 		return false;
 	// Load libdynlk
-	unsigned int proc_num_pages = num_pages;
+	uint proc_num_pages = num_pages;
 	if (!load_lib(&grub_modules[2]))
 		return false;
 
@@ -287,25 +287,25 @@ bool Process::load_lib(GRUB_module* lib_mod)
 
 bool Process::alloc_and_add_lib_pages_to_process(ELF& lib_elf)
 {
-	unsigned int highest_addr = lib_elf.get_highest_runtime_addr();
+	uint highest_addr = lib_elf.get_highest_runtime_addr();
 	// Num pages lib  code spans over
-	unsigned int lib_num_code_pages = highest_addr / PAGE_SIZE + ((highest_addr % PAGE_SIZE) ? 1 : 0);
+	uint lib_num_code_pages = highest_addr / PAGE_SIZE + ((highest_addr % PAGE_SIZE) ? 1 : 0);
 
 	// Adjust proc pte array - add space for lib code
-	unsigned int* new_pte = (uint*) calloc((num_pages + lib_num_code_pages), sizeof(unsigned int));
+	uint* new_pte = (uint*) calloc((num_pages + lib_num_code_pages), sizeof(uint));
 	if (new_pte == nullptr)
 	{
 		printf_error("Unable to allocate memory for process");
 		return false;
 	}
-	memcpy(new_pte, pte, num_pages * sizeof(unsigned int));
+	memcpy(new_pte, pte, num_pages * sizeof(uint));
 	delete pte;
 	pte = new_pte;
 
 	// Allocate lib code pages
 	for (int i = 0; i < lib_elf.elf32Ehdr->e_phnum; ++i)
 	{
-		Elf32_Phdr* h = (Elf32_Phdr*) ((unsigned int) lib_elf.elf32Phdr + lib_elf.elf32Ehdr->e_phentsize * i);
+		Elf32_Phdr* h = (Elf32_Phdr*) ((uint) lib_elf.elf32Phdr + lib_elf.elf32Ehdr->e_phentsize * i);
 		if (h->p_type != PT_LOAD)
 			continue;
 
@@ -315,7 +315,7 @@ bool Process::alloc_and_add_lib_pages_to_process(ELF& lib_elf)
 			uint pte_id = num_pages + h->p_vaddr / PAGE_SIZE + j;
 			if (pte[pte_id])
 				continue;
-			unsigned int pe = get_free_pe(); // Get PTE id
+			uint pe = get_free_pe(); // Get PTE id
 			pte[pte_id] = pe;  // Reference PTE
 			allocate_page_user(get_free_page(), pe); // Allocate page
 		}
@@ -337,11 +337,11 @@ Process* Process::allocate_proc_for_elf_module(GRUB_module* module)
 	memset(proc, 0, sizeof(Process));
 	proc->elf = new ELF(module);
 
-	unsigned int highest_addr = proc->elf->get_highest_runtime_addr();
+	uint highest_addr = proc->elf->get_highest_runtime_addr();
 	// Num pages code spans over
-	unsigned int proc_code_pages = highest_addr / PAGE_SIZE + ((highest_addr % PAGE_SIZE) ? 1 : 0);
+	uint proc_code_pages = highest_addr / PAGE_SIZE + ((highest_addr % PAGE_SIZE) ? 1 : 0);
 	proc->num_pages = proc_code_pages;
-	proc->pte = (uint*) calloc(proc->num_pages, sizeof(unsigned int));
+	proc->pte = (uint*) calloc(proc->num_pages, sizeof(uint));
 	proc->allocs = new list();
 	if (proc->pte == nullptr)
 	{
@@ -352,7 +352,7 @@ Process* Process::allocate_proc_for_elf_module(GRUB_module* module)
 	// Allocate process code pages
 	for (int i = 0; i < proc->elf->elf32Ehdr->e_phnum; ++i)
 	{
-		Elf32_Phdr* h = (Elf32_Phdr*) ((unsigned int) proc->elf->elf32Phdr + proc->elf->elf32Ehdr->e_phentsize * i);
+		Elf32_Phdr* h = (Elf32_Phdr*) ((uint) proc->elf->elf32Phdr + proc->elf->elf32Ehdr->e_phentsize * i);
 		if (h->p_type != PT_LOAD)
 			continue;
 
@@ -362,7 +362,7 @@ Process* Process::allocate_proc_for_elf_module(GRUB_module* module)
 			uint pte_id = h->p_vaddr / PAGE_SIZE + j;
 			if (proc->pte[pte_id])
 				continue;
-			unsigned int pe = get_free_pe(); // Get PTE id
+			uint pe = get_free_pe(); // Get PTE id
 			proc->pte[pte_id] = pe;  // Reference PTE
 			allocate_page_user(get_free_page(), pe); // Allocate page
 		}
@@ -449,7 +449,7 @@ Process* Process::from_module(GRUB_module* module, pid_t pid, pid_t ppid, int ar
 {
 	// Check whether file is an elf
 	Elf32_Ehdr* elf32Ehdr = (Elf32_Ehdr*) module->start_addr;
-	unsigned int elf = elf32Ehdr->e_ident[0] == 0x7F && elf32Ehdr->e_ident[1] == 'E' && elf32Ehdr->e_ident[2] == 'L' &&
+	uint elf = elf32Ehdr->e_ident[0] == 0x7F && elf32Ehdr->e_ident[1] == 'E' && elf32Ehdr->e_ident[2] == 'L' &&
 					   elf32Ehdr->e_ident[3] == 'F';
 
 	// Load process into memory
@@ -463,14 +463,14 @@ Process* Process::from_module(GRUB_module* module, pid_t pid, pid_t ppid, int ar
 	}
 
 	// Allocate process stack page
-	unsigned int p_stack_pe_id = get_free_pe();
+	uint p_stack_pe_id = get_free_pe();
 	allocate_page_user(get_free_page(), p_stack_pe_id);
-	unsigned int p_stack_top_v_addr = p_stack_pe_id * PAGE_SIZE + PAGE_SIZE;
+	uint p_stack_top_v_addr = p_stack_pe_id * PAGE_SIZE + PAGE_SIZE;
 
 	// Allocate syscall handler stack page
-	unsigned int k_stack_pe = get_free_pe();
-	unsigned int k_stack_pde = k_stack_pe / PDT_ENTRIES;
-	unsigned int k_stack_pte = k_stack_pe % PDT_ENTRIES;
+	uint k_stack_pe = get_free_pe();
+	uint k_stack_pde = k_stack_pe / PDT_ENTRIES;
+	uint k_stack_pte = k_stack_pe % PDT_ENTRIES;
 	allocate_page(get_free_page(), k_stack_pe);
 
 	// Set process PDT entries: entries 0 to 767 map the process address space using its own page tables
@@ -480,10 +480,10 @@ Process* Process::from_module(GRUB_module* module, pid_t pid, pid_t ppid, int ar
 	// Set process pdt entries to target process page tables
 	page_table_t* page_tables = get_page_tables();
 	for (int i = 0; i < 768; ++i)
-		proc->pdt.entries[i] = PHYS_ADDR((unsigned int) &proc->page_tables[i]) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
+		proc->pdt.entries[i] = PHYS_ADDR((uint) &proc->page_tables[i]) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
 	// Use kernel page tables for the rest
 	for (int i = 768; i < PDT_ENTRIES; ++i)
-		proc->pdt.entries[i] = PHYS_ADDR((unsigned int) &page_tables[i]) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
+		proc->pdt.entries[i] = PHYS_ADDR((uint) &page_tables[i]) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
 
 	// Map process stack at 0xBFFFFFFC = 0xCFFFFFFF - 4 at pde 767 and pte 1023, just below the kernel
 	if (proc->page_tables[767].entries[1023] != 0)
@@ -534,14 +534,14 @@ Process::copy_elf_subsegment_to_address_space(void* bytes_ptr, uint n, bool no_w
 
 void Process::load_elf(ELF* load_elf)
 {
-	unsigned int elf_num_pages = load_elf->num_pages();
+	uint elf_num_pages = load_elf->num_pages();
 	uint pte_offset = num_pages - elf_num_pages;
 	page_table_t* sys_page_tables = get_page_tables();
 
 	// Copy lib code in allocated space and map it
 	for (int k = 0; k < load_elf->elf32Ehdr->e_phnum; ++k)
 	{
-		Elf32_Phdr* h = (Elf32_Phdr*) ((unsigned int) load_elf->elf32Phdr + load_elf->elf32Ehdr->e_phentsize * k);
+		Elf32_Phdr* h = (Elf32_Phdr*) ((uint) load_elf->elf32Phdr + load_elf->elf32Ehdr->e_phentsize * k);
 		if (h->p_type != PT_LOAD)
 			continue;
 
@@ -553,8 +553,8 @@ void Process::load_elf(ELF* load_elf)
 		// Copy first bytes if they are not page aligned
 		if (h->p_vaddr % PAGE_SIZE)
 		{
-			unsigned int rem = PAGE_SIZE - h->p_vaddr % PAGE_SIZE;
-			unsigned int num_first_bytes = rem > h->p_filesz ? h->p_filesz : rem;
+			uint rem = PAGE_SIZE - h->p_vaddr % PAGE_SIZE;
+			uint num_first_bytes = rem > h->p_filesz ? h->p_filesz : rem;
 			copy_elf_subsegment_to_address_space(bytes_ptr, num_first_bytes, no_write, h, pte_offset, copied_bytes,
 												 sys_page_tables);
 		}
@@ -568,7 +568,7 @@ void Process::load_elf(ELF* load_elf)
 		}
 
 		// Handle data that does not fit a whole page. First copy the remaining bytes then fill the rest with 0
-		unsigned int num_final_bytes = h->p_filesz - copied_bytes;
+		uint num_final_bytes = h->p_filesz - copied_bytes;
 		if (!num_final_bytes)
 			continue;
 		bytes_ptr = (void*) (load_elf->mod->start_addr + h->p_offset + copied_bytes);

@@ -5,6 +5,8 @@
 
 #pragma region defines
 
+#include "clib/stddef.h"
+
 #define BAR0 (0x1F0) // start of the I/O ports used by the primary channel.
 #define BAR1 (0x3F6) // start of the I/O ports which control the primary channel.
 #define BAR2 (0x170) // start of the I/O ports used by secondary channel.
@@ -107,8 +109,8 @@ typedef struct
 	unsigned short Type;        // 0: ATA, 1:ATAPI.
 	unsigned short Signature;   // Drive Signature
 	unsigned short Capabilities;// Features.
-	unsigned int CommandSets; // Command Sets Supported.
-	unsigned int Size;        // Size in Sectors.
+	uint CommandSets; // Command Sets Supported.
+	uint Size;        // Size in Sectors.
 	unsigned char Model[41];   // Model in string.
 } ide_device;
 
@@ -131,11 +133,11 @@ class IDE
 	static void write(unsigned char channel, unsigned char reg, unsigned char data);
 
 	static void read_buffer(unsigned char channel, unsigned char reg, void* buffer,
-							unsigned int quads);
+							uint quads);
 
-	static unsigned char polling(unsigned char channel, unsigned int advanced_check);
+	static unsigned char polling(unsigned char channel, uint advanced_check);
 
-	static unsigned char print_error(unsigned int drive, unsigned char err);
+	static unsigned char print_error(uint drive, unsigned char err);
 };
 
 class ATA
@@ -152,20 +154,20 @@ class ATA
 	 * @param edi segment offset, ie buffer address
 	 * @return
 	 */
-	static unsigned char access(unsigned char direction, unsigned char drive, unsigned int lba,
-								unsigned char numsects, unsigned short selector, unsigned int edi);
+	static unsigned char access(unsigned char direction, unsigned char drive, uint lba,
+								unsigned char numsects, unsigned short selector, uint edi);
 
 	static void init();
 
 public:
 
-	static int read_sectors(unsigned char drive, unsigned char numsects, unsigned int lba,
-							unsigned short es, unsigned int edi);
+	static int read_sectors(unsigned char drive, unsigned char numsects, uint lba,
+							unsigned short es, uint edi);
 
-	static int write_sectors(unsigned char drive, unsigned char numsects, unsigned int lba,
-							 unsigned short es, unsigned int edi);
+	static int write_sectors(unsigned char drive, unsigned char numsects, uint lba,
+							 unsigned short es, uint edi);
 
-	static unsigned int get_drive_size(unsigned char drive);
+	static uint get_drive_size(unsigned char drive);
 
 	static bool drive_present(unsigned char drive);
 };

@@ -6,10 +6,10 @@
 
 #define EI_NIDENT (16)
 
-typedef unsigned int Elf32_Off;
-typedef unsigned int Elf32_Word;
+typedef uint Elf32_Off;
+typedef uint Elf32_Word;
 typedef signed int Elf32_Sword;
-typedef unsigned int Elf32_Addr;
+typedef uint Elf32_Addr;
 typedef unsigned short Elf32_Half;
 typedef unsigned short Elf32_Section;
 

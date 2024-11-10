@@ -57,7 +57,7 @@ bool ELF::is_valid(GRUB_module* mod, enum ELF_type expected_type)
 	// Ensure program is supported
 	for (int k = 0; k < elf.elf32Ehdr->e_shnum; ++k)
 	{
-		Elf32_Shdr* h = (Elf32_Shdr*) ((unsigned int) elf.elf32Shdr + elf.elf32Ehdr->e_shentsize * k);
+		Elf32_Shdr* h = (Elf32_Shdr*) ((uint) elf.elf32Shdr + elf.elf32Ehdr->e_shentsize * k);
 		switch (h->sh_type)
 		{
 			case SHT_NULL:
@@ -88,7 +88,7 @@ bool ELF::is_valid(GRUB_module* mod, enum ELF_type expected_type)
 	bool* ro_pages = (bool*) calloc(elf_num_pages, sizeof(bool));
 	for (int k = 0; k < elf.elf32Ehdr->e_phnum; ++k)
 	{
-		Elf32_Phdr* h = (Elf32_Phdr*) ((unsigned int) elf.elf32Phdr + elf.elf32Ehdr->e_phentsize * k);
+		Elf32_Phdr* h = (Elf32_Phdr*) ((uint) elf.elf32Phdr + elf.elf32Ehdr->e_phentsize * k);
 		if (h->p_type != PT_LOAD)
 			continue;
 
@@ -115,16 +115,16 @@ bool ELF::is_valid(GRUB_module* mod, enum ELF_type expected_type)
 }
 
 //Todo: Represent the whole PT_LOAD layout to accurately compute the size of the loaded parts
-unsigned int ELF::get_highest_runtime_addr()
+uint ELF::get_highest_runtime_addr()
 {
-	unsigned int highest_addr = 0;
+	uint highest_addr = 0;
 	for (int k = 0; k < elf32Ehdr->e_phnum; ++k)
 	{
-		Elf32_Phdr* h = (Elf32_Phdr*) ((unsigned int) elf32Phdr + elf32Ehdr->e_phentsize * k);
+		Elf32_Phdr* h = (Elf32_Phdr*) ((uint) elf32Phdr + elf32Ehdr->e_phentsize * k);
 		if (h->p_type != PT_LOAD)
 			continue;
 
-		unsigned int high_addr = h->p_vaddr + h->p_memsz;
+		uint high_addr = h->p_vaddr + h->p_memsz;
 		if (high_addr > highest_addr)
 			highest_addr = high_addr;
 	}
@@ -136,7 +136,7 @@ char* ELF::get_interpreter_name()
 {
 	for (int k = 0; k < elf32Ehdr->e_phnum; ++k)
 	{
-		Elf32_Phdr* h = (Elf32_Phdr*) ((unsigned int) elf32Phdr + elf32Ehdr->e_phentsize * k);
+		Elf32_Phdr* h = (Elf32_Phdr*) ((uint) elf32Phdr + elf32Ehdr->e_phentsize * k);
 
 		if (h->p_type != PT_INTERP)
 			continue;
@@ -153,7 +153,7 @@ char* ELF::get_interpreter_name()
 	return nullptr;
 }
 
-void* ELF::get_libdynlk_main_runtime_addr(unsigned int proc_num_pages)
+void* ELF::get_libdynlk_main_runtime_addr(uint proc_num_pages)
 {
 	// Find and return main's address
 	Elf32_Sym* s = get_symbol("lib_main");
@@ -161,16 +161,16 @@ void* ELF::get_libdynlk_main_runtime_addr(unsigned int proc_num_pages)
 	return s == nullptr ? (void*) s : (void*) (proc_num_pages * PAGE_SIZE + s->st_value);
 }
 
-Elf32_Phdr* ELF::get_GOT_segment(const unsigned int* file_got_addr)
+Elf32_Phdr* ELF::get_GOT_segment(const uint* file_got_addr)
 {
 	Elf32_Phdr* got_segment_hdr = nullptr;
 	for (int k = 0; k < elf32Ehdr->e_phnum; ++k)
 	{
-		Elf32_Phdr* h = (Elf32_Phdr*) ((unsigned int) elf32Phdr + elf32Ehdr->e_phentsize * k);
+		Elf32_Phdr* h = (Elf32_Phdr*) ((uint) elf32Phdr + elf32Ehdr->e_phentsize * k);
 		if (h->p_type != PT_LOAD)
 			continue;
-		if (h->p_offset <= (unsigned int) file_got_addr - mod->start_addr &&
-			h->p_offset + h->p_memsz >= (unsigned int) file_got_addr - mod->start_addr)
+		if (h->p_offset <= (uint) file_got_addr - mod->start_addr &&
+			h->p_offset + h->p_memsz >= (uint) file_got_addr - mod->start_addr)
 		{
 			got_segment_hdr = h;
 			break;
@@ -189,7 +189,7 @@ Elf32_Dyn* ELF::get_dyn_table()
 {
 	for (int k = 0; k < elf32Ehdr->e_shnum; ++k)
 	{
-		Elf32_Shdr* h = (Elf32_Shdr*) ((unsigned int) elf32Shdr + elf32Ehdr->e_shentsize * k);
+		Elf32_Shdr* h = (Elf32_Shdr*) ((uint) elf32Shdr + elf32Ehdr->e_shentsize * k);
 
 		if (h->sh_type != SHT_DYNAMIC)
 			continue;
@@ -201,12 +201,12 @@ Elf32_Dyn* ELF::get_dyn_table()
 
 Elf32_Rel* ELF::get_rel_plt()
 {
-	Elf32_Shdr* sh_strtab_h = (Elf32_Shdr*) ((unsigned int) elf32Shdr +
+	Elf32_Shdr* sh_strtab_h = (Elf32_Shdr*) ((uint) elf32Shdr +
 											 elf32Ehdr->e_shentsize * elf32Ehdr->e_shstrndx);
 	char* strtab = (char*) (mod->start_addr + sh_strtab_h->sh_offset);
 	for (int k = 0; k < elf32Ehdr->e_shnum; ++k)
 	{
-		Elf32_Shdr* h = (Elf32_Shdr*) ((unsigned int) elf32Shdr + elf32Ehdr->e_shentsize * k);
+		Elf32_Shdr* h = (Elf32_Shdr*) ((uint) elf32Shdr + elf32Ehdr->e_shentsize * k);
 		if (h->sh_type != SHT_REL || strcmp(".rel.plt", &strtab[h->sh_name]) != 0)
 			continue;
 		return (Elf32_Rel*) (mod->start_addr + h->sh_offset);
@@ -219,7 +219,7 @@ Elf32_Shdr* ELF::get_dynsym_hdr()
 {
 	for (int k = 0; k < elf32Ehdr->e_shnum; ++k)
 	{
-		Elf32_Shdr* h = (Elf32_Shdr*) ((unsigned int) elf32Shdr + elf32Ehdr->e_shentsize * k);
+		Elf32_Shdr* h = (Elf32_Shdr*) ((uint) elf32Shdr + elf32Ehdr->e_shentsize * k);
 
 		if (h->sh_type != SHT_DYNSYM)
 			continue;
@@ -233,11 +233,11 @@ Elf32_Sym* ELF::get_symbol(const char* symbol_name)
 {
 	Elf32_Shdr* lib_dynsym_hdr = get_dynsym_hdr();
 	char* strtab = (char*) (mod->start_addr +
-							((Elf32_Shdr*) ((unsigned int) elf32Shdr +
+							((Elf32_Shdr*) ((uint) elf32Shdr +
 											elf32Ehdr->e_shentsize * lib_dynsym_hdr->sh_link))->sh_offset);
-	unsigned int lib_dynsym_num_entries = lib_dynsym_hdr->sh_size / lib_dynsym_hdr->sh_entsize;
+	uint lib_dynsym_num_entries = lib_dynsym_hdr->sh_size / lib_dynsym_hdr->sh_entsize;
 
-	for (unsigned int i = 1; i < lib_dynsym_num_entries; i++)
+	for (uint i = 1; i < lib_dynsym_num_entries; i++)
 	{
 		Elf32_Sym* lib_symbol_entry = (Elf32_Sym*) (mod->start_addr + lib_dynsym_hdr->sh_offset +
 													i * lib_dynsym_hdr->sh_entsize);
@@ -267,11 +267,11 @@ size_t ELF::base_address()
 	size_t lowest_address = -1;
 	for (int k = 0; k < elf32Ehdr->e_phnum; ++k)
 	{
-		Elf32_Phdr* h = (Elf32_Phdr*) ((unsigned int) elf32Phdr + elf32Ehdr->e_phentsize * k);
+		Elf32_Phdr* h = (Elf32_Phdr*) ((uint) elf32Phdr + elf32Ehdr->e_phentsize * k);
 		if (h->p_type != PT_LOAD)
 			continue;
 
-		unsigned int addr = h->p_vaddr;
+		uint addr = h->p_vaddr;
 		if (addr < lowest_address)
 			lowest_address = addr;
 	}

@@ -52,7 +52,7 @@ void Syscall::dynlk(cpu_state_t* cpu_state)
 {
 	// Get calling process and verify its identity is as expected
 	Process* p = Scheduler::get_running_process();
-	if ((unsigned int) p != cpu_state->ecx)
+	if ((uint) p != cpu_state->ecx)
 		printf_error("running process address does not match calling process address");
 
 	// Get relocation table
@@ -64,9 +64,9 @@ void Syscall::dynlk(cpu_state_t* cpu_state)
 	}
 
 	// Check required symbol's relocation
-	Elf32_Rel* rel = (Elf32_Rel*) ((unsigned int) reloc_table + cpu_state->ebx);
-	unsigned int symbol = ELF32_R_SYM(rel->r_info);
-	unsigned int type = ELF32_R_TYPE(rel->r_info);
+	Elf32_Rel* rel = (Elf32_Rel*) ((uint) reloc_table + cpu_state->ebx);
+	uint symbol = ELF32_R_SYM(rel->r_info);
+	uint type = ELF32_R_TYPE(rel->r_info);
 	if (type != R_386_JMP_SLOT)
 	{
 		printf_error("Unhandled relocation type: %d", type);
@@ -81,12 +81,12 @@ void Syscall::dynlk(cpu_state_t* cpu_state)
 		terminate_process(p);
 	}
 
-	Elf32_Shdr* strtab_h = ((Elf32_Shdr*) ((unsigned int) p->elf->elf32Shdr +
+	Elf32_Shdr* strtab_h = ((Elf32_Shdr*) ((uint) p->elf->elf32Shdr +
 										   p->elf->elf32Ehdr->e_shentsize * dynsym_hdr->sh_link));
 	char* strtab = (char*) (p->elf->mod->start_addr + strtab_h->sh_offset);
 
 	// Check symbol index makes sense
-	unsigned int dynsym_num_entries = dynsym_hdr->sh_size / dynsym_hdr->sh_entsize;
+	uint dynsym_num_entries = dynsym_hdr->sh_size / dynsym_hdr->sh_entsize;
 	if (symbol + 1 > dynsym_num_entries)
 		printf_error("Required symbol has index %d while symtab only contains %d entries", symbol,
 					 dynsym_num_entries);
@@ -109,13 +109,13 @@ void Syscall::dynlk(cpu_state_t* cpu_state)
 	}
 
 	// Compute symbol address
-	unsigned int lib_runtime_start_addr =
+	uint lib_runtime_start_addr =
 			(Scheduler::get_running_process()->elf->get_highest_runtime_addr() + (PAGE_SIZE - 1)) &
 			~(PAGE_SIZE - 1);
 	void* symbol_addr = (void*) (lib_runtime_start_addr + lib_s->st_value);
 
 	*((void**) rel->r_offset) = symbol_addr; // Write symbol address to GOT
-	Scheduler::get_running_process()->cpu_state.eax = (unsigned int) symbol_addr; // Return symbol address
+	Scheduler::get_running_process()->cpu_state.eax = (uint) symbol_addr; // Return symbol address
 }
 
 void Syscall::get_key()

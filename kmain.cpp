@@ -20,7 +20,7 @@ extern "C" void _init(void); // NOLINT(*-reserved-identifier)
 //Todo: Implement shared memory
 //Todo: Investigate about whether page 184 (VGA buffer start address is mapped twice)
 //Todo: same for page pde 771 pte11 at the end of run_module
-extern "C" int kmain(unsigned int ebx)
+extern "C" int kmain(uint ebx)
 {
 	_init(); // Execute constructors
 	Interrupts::disable_asm();

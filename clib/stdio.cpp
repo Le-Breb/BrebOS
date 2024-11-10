@@ -6,8 +6,8 @@
 #include "stdint.h"
 #include "../fb.h"
 
-char* __int_str(intmax_t i, char b[], int base, unsigned int plusSignIfNeeded, unsigned int spaceSignIfNeeded,
-				int paddingNo, unsigned int justify, unsigned int zeroPad)
+char* __int_str(intmax_t i, char b[], int base, uint plusSignIfNeeded, uint spaceSignIfNeeded,
+				int paddingNo, uint justify, uint zeroPad)
 {
 
 	char digit[32] = {0};
@@ -119,19 +119,19 @@ int vprintf(const char* format, va_list list)
 
 		int lengthSpec = 0;
 		int precSpec = 0;
-		unsigned int leftJustify = 0;
-		unsigned int zeroPad = 0;
-		unsigned int spaceNoSign = 0;
-		unsigned int altForm = 0;
-		unsigned int plusSign = 0;
-		unsigned int emode = 0;
+		uint leftJustify = 0;
+		uint zeroPad = 0;
+		uint spaceNoSign = 0;
+		uint altForm = 0;
+		uint plusSign = 0;
+		uint emode = 0;
 		int expo = 0;
 
 		if (format[i] == '%')
 		{
 			++i;
 
-			unsigned int extBreak = 0;
+			uint extBreak = 0;
 			while (1)
 			{
 
@@ -257,7 +257,7 @@ int vprintf(const char* format, va_list list)
 					{
 						case 0:
 						{
-							unsigned int integer = va_arg(list, unsigned int);
+							uint integer = va_arg(list, uint);
 							__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
 									  zeroPad);
 							displayString(intStrBuffer, &chars);
@@ -265,7 +265,7 @@ int vprintf(const char* format, va_list list)
 						}
 						case 'H':
 						{
-							unsigned char integer = (unsigned char) va_arg(list, unsigned int);
+							unsigned char integer = (unsigned char) va_arg(list, uint);
 							__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
 									  zeroPad);
 							displayString(intStrBuffer, &chars);
@@ -273,7 +273,7 @@ int vprintf(const char* format, va_list list)
 						}
 						case 'h':
 						{
-							unsigned short int integer = va_arg(list, unsigned int);
+							unsigned short int integer = va_arg(list, uint);
 							__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
 									  zeroPad);
 							displayString(intStrBuffer, &chars);

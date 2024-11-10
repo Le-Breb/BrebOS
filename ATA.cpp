@@ -81,15 +81,15 @@ void IDE::init()
 			devices[n].Drive        = j;
 			devices[n].Signature    = *((unsigned short *)(buf + ATA_IDENT_DEVICETYPE));
 			devices[n].Capabilities = *((unsigned short *)(buf + ATA_IDENT_CAPABILITIES));
-			devices[n].CommandSets  = *((unsigned int *)(buf + ATA_IDENT_COMMANDSETS));
+			devices[n].CommandSets  = *((uint *)(buf + ATA_IDENT_COMMANDSETS));
 
 			// (VII) Get Size:
 			if (devices[n].CommandSets & (1 << 26))
 				// Device uses 48-Bit Addressing:
-				devices[n].Size   = *((unsigned int *)(buf + ATA_IDENT_MAX_LBA_EXT));
+				devices[n].Size   = *((uint *)(buf + ATA_IDENT_MAX_LBA_EXT));
 			else
 				// Device uses CHS or 28-bit Addressing:
-				devices[n].Size   = *((unsigned int *)(buf + ATA_IDENT_MAX_LBA));
+				devices[n].Size   = *((uint *)(buf + ATA_IDENT_MAX_LBA));
 
 			// (VIII) String indicates model of device (like Western Digital HDD and SONY DVD-RW...):
 			for(k = 0; k < 40; k += 2) {
@@ -149,7 +149,7 @@ void IDE::write(unsigned char channel, unsigned char reg, unsigned char data)
 		write(channel, ATA_REG_CONTROL, channels[channel].nIEN);
 }
 
-void IDE::read_buffer(unsigned char channel, unsigned char reg, void* buffer, unsigned int quads)
+void IDE::read_buffer(unsigned char channel, unsigned char reg, void* buffer, uint quads)
 {
 	/* WARNING: This code contains a serious bug. The inline assembly trashes ES and
 	 *           ESP for all of the code the compiler generates between the inline
@@ -171,7 +171,7 @@ void IDE::read_buffer(unsigned char channel, unsigned char reg, void* buffer, un
 		write(channel, ATA_REG_CONTROL, channels[channel].nIEN);
 }
 
-unsigned char IDE::polling(unsigned char channel, unsigned int advanced_check) {
+unsigned char IDE::polling(unsigned char channel, uint advanced_check) {
 
 	// (I) Delay 400 nanosecond for BSY to be set:
 	// -------------------------------------------------
@@ -207,7 +207,7 @@ unsigned char IDE::polling(unsigned char channel, unsigned int advanced_check) {
 	return 0; // No Error.
 }
 
-unsigned char IDE::print_error(unsigned int drive, unsigned char err) {
+unsigned char IDE::print_error(uint drive, unsigned char err) {
 	if (err == 0)
 		return err;
 
@@ -233,15 +233,15 @@ unsigned char IDE::print_error(unsigned int drive, unsigned char err) {
 	return err;
 }
 
-unsigned char ATA::access(unsigned char direction, unsigned char drive, unsigned int lba, unsigned char numsects,
-						  unsigned short selector, unsigned int edi)
+unsigned char ATA::access(unsigned char direction, unsigned char drive, uint lba, unsigned char numsects,
+						  unsigned short selector, uint edi)
 {
 	unsigned char lba_mode /* 0: CHS, 1:LBA28, 2: LBA48 */, dma /* 0: No DMA, 1: DMA */, cmd;
 	unsigned char lba_io[6];
-	unsigned int  channel      = IDE::devices[drive].Channel; // Read the Channel.
-	unsigned int  slavebit      = IDE::devices[drive].Drive; // Read the Drive [Master/Slave]
-	unsigned int  bus = IDE::channels[channel].base; // Bus Base, like 0x1F0 which is also data port.
-	unsigned int  words      = 256; // Almost every ATA drive has a sector-size of 512-byte.
+	uint  channel      = IDE::devices[drive].Channel; // Read the Channel.
+	uint  slavebit      = IDE::devices[drive].Drive; // Read the Drive [Master/Slave]
+	uint  bus = IDE::channels[channel].base; // Bus Base, like 0x1F0 which is also data port.
+	uint  words      = 256; // Almost every ATA drive has a sector-size of 512-byte.
 	unsigned short cyl, i;
 	unsigned char head, sect, err;
 
@@ -385,8 +385,8 @@ unsigned char ATA::access(unsigned char direction, unsigned char drive, unsigned
 	return 0; // Easy, isn't it?
 }
 
-int ATA::read_sectors(unsigned char drive, unsigned char numsects, unsigned int lba,
-					  unsigned short es, unsigned int edi) {
+int ATA::read_sectors(unsigned char drive, unsigned char numsects, uint lba,
+					  unsigned short es, uint edi) {
 
 	// 1: Check if the drive presents:
 	// ==================================
@@ -409,8 +409,8 @@ int ATA::read_sectors(unsigned char drive, unsigned char numsects, unsigned int 
 	}
 }
 
-int ATA::write_sectors(unsigned char drive, unsigned char numsects, unsigned int lba,
-					   unsigned short es, unsigned int edi) {
+int ATA::write_sectors(unsigned char drive, unsigned char numsects, uint lba,
+					   unsigned short es, uint edi) {
 
 	// 1: Check if the drive presents:
 	// ==================================
@@ -437,7 +437,7 @@ void ATA::init()
 	IDE::init();
 }
 
-unsigned int ATA::get_drive_size(unsigned char drive)
+uint ATA::get_drive_size(unsigned char drive)
 {
 	if (drive > 3 || IDE::devices[drive].Reserved == 0)
 		return 0;      // Drive Not Found!

@@ -7,7 +7,7 @@
 #include "list.h"
 #include "clib/stddef.h"
 
-typedef unsigned int pid_t;
+typedef uint pid_t;
 
 // Process is terminated but not freed
 #define P_TERMINATED 1
@@ -27,16 +27,16 @@ private:
 	page_table_t page_tables[768];
 	pdt_t pdt; // process page directory table
 
-	unsigned int quantum, priority;
+	uint quantum, priority;
 
-	unsigned int num_pages; // Num pages over which the process code spans, including unmapped pages
-	unsigned int* pte; // Array of pte where the process code is loaded to
+	uint num_pages; // Num pages over which the process code spans, including unmapped pages
+	uint* pte; // Array of pte where the process code is loaded to
 
 	pid_t pid; // PID
 	pid_t ppid; // Parent PID
 
-	unsigned int k_stack_top; // Top of syscall handlers' stack
-	unsigned int flags; // Process state
+	uint k_stack_top; // Top of syscall handlers' stack
+	uint flags; // Process state
 
 	list* allocs; // list of memory blocks allocated by the process
 public:

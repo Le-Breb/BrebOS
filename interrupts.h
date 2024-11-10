@@ -5,25 +5,25 @@
 
 struct cpu_state
 {
-	unsigned int eax;
-	unsigned int ebx;
-	unsigned int ecx;
-	unsigned int edx;
-	unsigned int esi;
-	unsigned int edi;
-	unsigned int ebp;
+	uint eax;
+	uint ebx;
+	uint ecx;
+	uint edx;
+	uint esi;
+	uint edi;
+	uint ebp;
 } __attribute__((packed));
 
 typedef struct cpu_state cpu_state_t;
 
 struct stack_state
 {
-	unsigned int error_code;
-	unsigned int eip;
-	unsigned int cs;
-	unsigned int eflags;
-	unsigned int esp;
-	unsigned int ss;
+	uint error_code;
+	uint eip;
+	uint cs;
+	uint eflags;
+	uint esp;
+	uint ss;
 } __attribute__((packed));
 
 typedef struct stack_state stack_state_t;
@@ -53,7 +53,7 @@ public:
 	 * @param cpu_state CPU state
 	 * @param stack_state stack state
 	 */
-	[[noreturn]] static void interrupt_timer(unsigned int kesp, cpu_state_t* cpu_state, stack_state_t* stack_state);
+	[[noreturn]] static void interrupt_timer(uint kesp, cpu_state_t* cpu_state, stack_state_t* stack_state);
 
 	/**
 	 * Enables interrupts
@@ -80,9 +80,9 @@ public:
 	 * IRET expects to find eip cs and eflags on the stack, which are pushed on the interrupted system dispatcher' stack.
 	 * iret_esp should then be whatever ESP was when the syscall dispatcher was interrupted minus 12 = 3 * sizeof(int)
 	 */
-	[[noreturn]] static void resume_syscall_handler_asm(cpu_state_t cpu_state, unsigned int iret_esp);
+	[[noreturn]] static void resume_syscall_handler_asm(cpu_state_t cpu_state, uint iret_esp);
 
-	static void change_pdt_asm(unsigned int pdt_phys_addr);
+	static void change_pdt_asm(uint pdt_phys_addr);
 };
 
 #endif /* INCLUDE_INTERRUPTS_H */

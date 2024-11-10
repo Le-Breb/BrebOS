@@ -2,7 +2,7 @@
 #include "IO.h"
 #include "clib/string.h"
 
-unsigned int FB::caret_pos = 0;
+uint FB::caret_pos = 0;
 short* const FB::fb = (short*) FB_ADDR;
 unsigned char FB::BG = FB_BLACK;
 unsigned char FB::FG = FB_WHITE;
@@ -59,7 +59,7 @@ void FB::clear_screen()
 
 void FB::write(const char* buf)
 {
-	for (unsigned int i = 0; i < strlen(buf); i++)
+	for (uint i = 0; i < strlen(buf); i++)
 		putchar(buf[i]);
 }
 

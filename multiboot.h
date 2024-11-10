@@ -23,6 +23,8 @@
 #define MULTIBOOT_HEADER 1
 
 /* How many bytes from the start of the file we search for the header. */
+#include "clib/stddef.h"
+
 #define MULTIBOOT_SEARCH                        8192
 #define MULTIBOOT_HEADER_ALIGN                  4
 
@@ -93,7 +95,7 @@
 
 typedef unsigned char multiboot_uint8_t;
 typedef unsigned short multiboot_uint16_t;
-typedef unsigned int multiboot_uint32_t;
+typedef uint multiboot_uint32_t;
 typedef unsigned long long multiboot_uint64_t;
 
 struct multiboot_header
@@ -278,7 +280,7 @@ public:
 	 *
 	 * @param ebx EBX passed to kmain containing the physical address of GRUB's multiboot struct
 	 */
-	static void print_mmap(unsigned int ebx);
+	static void print_mmap(uint ebx);
 };
 
 #endif /* ! MULTIBOOT_HEADER */

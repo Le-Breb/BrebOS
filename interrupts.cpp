@@ -11,7 +11,7 @@
  *
  * @param pdt_phys_addr New PDT physical address
  * */
-extern "C" void change_pdt_asm_(unsigned int pdt_phys_addr);
+extern "C" void change_pdt_asm_(uint pdt_phys_addr);
 
 /**
  * Generic interrupt handler that calls the appropriate interrupt dispatcher
@@ -24,7 +24,7 @@ extern "C" void change_pdt_asm_(unsigned int pdt_phys_addr);
  * @param stack_state Stack state
  */
 extern "C" void
-interrupt_handler(unsigned int kesp, cpu_state_t cpu_state, unsigned int interrupt, struct stack_state stack_state);
+interrupt_handler(uint kesp, cpu_state_t cpu_state, uint interrupt, struct stack_state stack_state);
 
 extern "C" void enable_interrupts_asm_(void);
 
@@ -32,14 +32,14 @@ extern "C" void disable_interrupts_asm_(void);
 
 extern "C" [[noreturn]] void resume_user_process_asm_(cpu_state_t cpu_state, struct stack_state stack_state);
 
-extern "C" [[noreturn]] void resume_syscall_handler_asm_(cpu_state_t cpu_state, unsigned int iret_esp);
+extern "C" [[noreturn]] void resume_syscall_handler_asm_(cpu_state_t cpu_state, uint iret_esp);
 
 void Interrupts::page_fault_handler(struct stack_state* stack_state)
 {
-	unsigned int addr; // Address of the fault
+	uint addr; // Address of the fault
 	__asm__ volatile("mov %%cr2, %0" : "=r"(addr)); // Get addr from CR2
 
-	unsigned int err = stack_state->error_code;
+	uint err = stack_state->error_code;
 
 	printf_error("Page fault at address 0x%x", addr);
 	printf("Present: %s\n", (err & 1 ? "True" : "False"));
@@ -62,7 +62,7 @@ void Interrupts::gpf_handler(struct stack_state* stack_state)
 	Scheduler::get_running_process()->terminate();
 }
 
-[[noreturn]] void Interrupts::interrupt_timer(unsigned int kesp, cpu_state_t* cpu_state, stack_state_t* stack_state)
+[[noreturn]] void Interrupts::interrupt_timer(uint kesp, cpu_state_t* cpu_state, stack_state_t* stack_state)
 {
 	// Update time
 	PIT::ticks++;
@@ -73,7 +73,7 @@ void Interrupts::gpf_handler(struct stack_state* stack_state)
 	if (p)
 	{
 		// Did we interrupt a syscall handler ?
-		unsigned int syscall_interrupted = stack_state->cs == 0x08;
+		uint syscall_interrupted = stack_state->cs == 0x08;
 		if (syscall_interrupted)
 			p->set_flag(P_SYSCALL_INTERRUPTED);
 
@@ -105,7 +105,7 @@ void Interrupts::gpf_handler(struct stack_state* stack_state)
 }
 
 extern "C" void
-interrupt_handler(unsigned int kesp, cpu_state_t cpu_state, unsigned int interrupt, struct stack_state stack_state)
+interrupt_handler(uint kesp, cpu_state_t cpu_state, uint interrupt, struct stack_state stack_state)
 {
 	switch (interrupt)
 	{
@@ -153,12 +153,12 @@ void Interrupts::disable_asm()
 	resume_user_process_asm_(cpu_state, stack_state);
 }
 
-void Interrupts::resume_syscall_handler_asm(cpu_state_t cpu_state, unsigned int iret_esp)
+void Interrupts::resume_syscall_handler_asm(cpu_state_t cpu_state, uint iret_esp)
 {
 	resume_syscall_handler_asm_(cpu_state, iret_esp);
 }
 
-void Interrupts::change_pdt_asm(unsigned int pdt_phys_addr)
+void Interrupts::change_pdt_asm(uint pdt_phys_addr)
 {
 	change_pdt_asm_(pdt_phys_addr);
 }

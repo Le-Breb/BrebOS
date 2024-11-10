@@ -38,7 +38,7 @@ public:
 	 * Get the highest address in the runtime address space of an ELF file
 	 * @return highest runtime address
 	 */
-	unsigned int get_highest_runtime_addr();
+	uint get_highest_runtime_addr();
 
 	/**
 	 * Get PLT relocation table of an ELF file
@@ -77,7 +77,7 @@ public:
 	 * @param proc_num_pages number of pages the process (without libdynl) spans over
 	 * @return libdynlk runtime address, NULL if an error occured
 	 */
-	void* get_libdynlk_main_runtime_addr(unsigned int proc_num_pages);
+	void* get_libdynlk_main_runtime_addr(uint proc_num_pages);
 
 
 	/**
@@ -85,7 +85,7 @@ public:
 	 * @param file_got_addr GOT address (in the ELF)
 	 * @return GOT segment header, NULL if an error occurred
 	 */
-	Elf32_Phdr* get_GOT_segment(const unsigned int* file_got_addr);
+	Elf32_Phdr* get_GOT_segment(const uint* file_got_addr);
 
 	[[nodiscard]] size_t base_address();
 

@@ -33,12 +33,12 @@
 
 typedef struct
 {
-	unsigned int entries[PT_ENTRIES];
+	uint entries[PT_ENTRIES];
 } page_table_t;
 
 typedef struct
 {
-	unsigned int entries[PDT_ENTRIES];
+	uint entries[PDT_ENTRIES];
 } pdt_t;
 
 typedef double Align;
@@ -48,14 +48,14 @@ typedef union memory_header /* memory block header */
 	struct
 	{
 		union memory_header* ptr; /* next block */
-		unsigned int size; /* size of this block */
+		uint size; /* size of this block */
 	} s;
 	Align x; /* force alignment of blocks */
 } memory_header;
 
 typedef struct
 {
-	unsigned int start_addr, size;
+	uint start_addr, size;
 } GRUB_module;
 
 /** Initialize memory, by referencing free pages, allocating pages to store 1024 pages tables
@@ -69,7 +69,7 @@ void init_mem(multiboot_info_t* minfo);
  * @param n Size of the block in size
  * @return Address of beginning of allocated block if allocation was successful, NULL otherwise
  */
-extern "C" void* malloc(unsigned int n);
+extern "C" void* malloc(uint n);
 
 extern "C" void* calloc(size_t nmemb, size_t size);
 
@@ -80,7 +80,7 @@ extern "C" void* calloc(size_t nmemb, size_t size);
  *
  * @return Pointer to page-aligned memory
  */
-void* page_aligned_malloc(unsigned int size);
+void* page_aligned_malloc(uint size);
 
 /** Frees some memory
  *
@@ -100,7 +100,7 @@ void page_aligned_free(void* ptr);
  * @param frame_id Physical page id
  * @param page_id Page id
  */
-void allocate_page(unsigned int frame_id, unsigned int page_id);
+void allocate_page(uint frame_id, uint page_id);
 
 /** Allocate a page with user permissions
  *
@@ -114,13 +114,13 @@ void allocate_page_user(uint frame_id, uint page_id);
  * @param pde PDE
  * @param pte PTE
  */
-void free_page(unsigned int pde, unsigned int pte);
+void free_page(uint pde, uint pte);
 
 /** Get index of lowest free page id and update lowest_free_page to next free page id */
-unsigned int get_free_page();
+uint get_free_page();
 
 /** Get index of lowest free page entry id and update lowest_free_pe to next free page id */
-unsigned int get_free_pe();
+uint get_free_pe();
 
 /** Get pdt */
 pdt_t* get_pdt();
@@ -132,6 +132,6 @@ page_table_t* get_page_tables();
 GRUB_module* get_grub_modules();
 
 /** Get pointer to top of kernel stack */
-unsigned int* get_stack_top_ptr();
+uint* get_stack_top_ptr();
 
 #endif //INCLUDE_MEMORY_H

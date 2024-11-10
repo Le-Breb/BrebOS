@@ -1,6 +1,8 @@
 #ifndef CUSTOM_OS_PIC_H
 #define CUSTOM_OS_PIC_H
 
+#include "clib/stddef.h"
+
 #define ICW1_INIT    0x10
 #define ICW1_ICW4    0x01
 #define ICW4_8086    0x01
@@ -40,7 +42,7 @@ public:
 	 *
 	 *  @param num The number of the interrupt
 	 */
-	static void acknowledge(unsigned int interrupt);
+	static void acknowledge(uint interrupt);
 
 	static void enable_preemptive_scheduling();
 

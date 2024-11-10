@@ -1,6 +1,8 @@
 #ifndef CUSTOM_OS_IDT_H
 #define CUSTOM_OS_IDT_H
 
+#include "clib/stddef.h"
+
 #define INTGATE  0x8E00
 #define SYSCALL  0xEF00
 #define NUM_INTERRUPTS 0xFF
@@ -40,7 +42,7 @@ private:
 	 * @param select The selector
 	 * @param type The type of the interrupt
 	 */
-	static void set_entry(int num, unsigned int base, unsigned short select, unsigned short type);
+	static void set_entry(int num, uint base, unsigned short select, unsigned short type);
 
 	/**
 	 * Loads the IDT

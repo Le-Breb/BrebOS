@@ -12,27 +12,27 @@ page_table_t* asm_pt1 = (page_table_t*) boot_page_table1;
 page_table_t* page_tables;
 
 // Map of used frames. 1 = used, 0 = free. Ith page is referenced at (i % 32)th lsb of map[i / 32]
-unsigned int frame_bitmap[(PT_ENTRIES / 32) * PDT_ENTRIES];
-unsigned int lowest_free_pe;
-unsigned int lowest_free_frame = 0;
+uint frame_bitmap[(PT_ENTRIES / 32) * PDT_ENTRIES];
+uint lowest_free_pe;
+uint lowest_free_frame = 0;
 
 memory_header base = {.s = {&base, 0}};
 memory_header* freep; /* Lowest free block */
 
-[[maybe_unused]] unsigned int loaded_grub_modules = 0;
+[[maybe_unused]] uint loaded_grub_modules = 0;
 GRUB_module* grub_modules;
 
-unsigned int free_bytes = 0;
+uint free_bytes = 0;
 
 extern "C" void stack_top();
 
-unsigned int* stack_top_ptr = (unsigned int*) stack_top;
+uint* stack_top_ptr = (uint*) stack_top;
 
 /** Tries to allocate a contiguous block of memory
  * @param n Size of the block in bytes
  *  @return A pointer to a contiguous block of n bytes or NULL if memory is full
  */
-void* sbrk(unsigned int n);
+void* sbrk(uint n);
 
 void init_page_bitmap();
 
@@ -41,7 +41,7 @@ void init_page_bitmap();
  * @param n Size to allocate. Unit: sizeof(mem_header)
  * @return Pointer to allocated memory if allocation was successful, NULL otherwise
  */
-memory_header* more_kernel(unsigned int n);
+memory_header* more_kernel(uint n);
 
 /** Reload cr3 which will acknowledge every pte change and invalidate TLB */
 extern "C" void reload_cr3_asm();
@@ -95,15 +95,15 @@ void operator delete(void* p, [[maybe_unused]] long unsigned int size)
 	free(p);
 }
 
-void operator delete[]([[maybe_unused]] void* p, [[maybe_unused]]  long unsigned int size)
+void operator delete[]([[maybe_unused]] void* p, [[maybe_unused]] long unsigned int size)
 {
 	printf_error("this operator shouldn't be used");
 }
 
-unsigned int get_free_page()
+uint get_free_page()
 {
-	unsigned int page = lowest_free_frame;
-	unsigned int i = lowest_free_frame + 1;
+	uint page = lowest_free_frame;
+	uint i = lowest_free_frame + 1;
 	while (i < PDT_ENTRIES * PT_ENTRIES && FRAME_USED(i))
 		i++;
 	lowest_free_frame = i;
@@ -111,10 +111,10 @@ unsigned int get_free_page()
 	return page;
 }
 
-unsigned int get_free_pe()
+uint get_free_pe()
 {
-	unsigned int pe = lowest_free_pe;
-	unsigned int i = lowest_free_pe + 1;
+	uint pe = lowest_free_pe;
+	uint i = lowest_free_pe + 1;
 	while (i < PDT_ENTRIES * PT_ENTRIES && PTE_USED(i))
 		i++;
 	lowest_free_pe = i;
@@ -125,7 +125,7 @@ unsigned int get_free_pe()
 void init_page_bitmap()
 {
 	// Clear bitmap
-	memset(frame_bitmap, 0, PDT_ENTRIES * PT_ENTRIES / (sizeof(unsigned int) * 8) * sizeof(unsigned int));
+	memset(frame_bitmap, 0, PDT_ENTRIES * PT_ENTRIES / (sizeof(uint) * 8) * sizeof(uint));
 
 	// Scan memory and set bitmap accordingly
 	for (int i = 0; i < PT_ENTRIES; i++)
@@ -133,12 +133,12 @@ void init_page_bitmap()
 		if (!(asm_pt1->entries[i] & PAGE_PRESENT))
 			continue;
 
-		unsigned int page_id = (asm_pt1->entries[i] >> 12) & 0x3FF;
+		uint page_id = (asm_pt1->entries[i] >> 12) & 0x3FF;
 		frame_bitmap[i / 32] |= 1 << (page_id % 32);
 	}
 
 	// Display kernel size
-	unsigned int c = 0;
+	uint c = 0;
 	for (; asm_pt1->entries[c] & PAGE_PRESENT; c++);
 	printf_info("Kernel spans over %u pages", c);
 
@@ -152,15 +152,15 @@ void init_page_bitmap()
 void allocate_page_tables()
 {
 	// Save for later use
-	unsigned int asm_pt1_page_table_entry = ((unsigned int) asm_pt1 >> 12) & 0x3FF;
+	uint asm_pt1_page_table_entry = ((uint) asm_pt1 >> 12) & 0x3FF;
 
 	/** Allocate page 1024 + 769
 	 * Kernel is given pages 0 to 1023, we'll allocate page tables at pages 1024 to 2047
 	 * As kernel will be mapped in PDT[768] to be compliant with its start address and as page tables belong to the
 	 * kernel, they are allocated in the next available kernel memory space, at PDT[769]
 	 */
-	unsigned int new_page_frame_id = PDT_ENTRIES + 769;
-	unsigned int new_page_phys_addr = FRAME_ID_ADDR(new_page_frame_id);
+	uint new_page_frame_id = PDT_ENTRIES + 769;
+	uint new_page_phys_addr = FRAME_ID_ADDR(new_page_frame_id);
 
 	// Map it in entry 1022 of asm pt (1023 is taken by VGA buffer)
 	if (asm_pt1->entries[1022])
@@ -179,7 +179,7 @@ void allocate_page_tables()
 	page_tables = (page_table_t*) VIRT_ADDR(768, 1022, 0);
 
 	// Allocate pages 1024 to 2047, ie allocate space of all the page tables
-	for (unsigned int i = 0; i < PT_ENTRIES; ++i)
+	for (uint i = 0; i < PT_ENTRIES; ++i)
 		allocate_page(PDT_ENTRIES + i, i);
 
 	// Indicate that newly allocated page is a page table. Map it in pdt[769]
@@ -199,11 +199,11 @@ void allocate_page_tables()
 	/** Clear unused page tables (all but 769)
 	 * Kernel code is for now referenced in PDT[768] entries, not in page_tables[768], so we can also clear it
 	*/
-	memset(&page_tables[0].entries[0], 0, 769 * PT_ENTRIES * sizeof(unsigned int));
-	memset(&page_tables[770].entries[0], 0, (PDT_ENTRIES - 770) * PT_ENTRIES * sizeof(unsigned int));
+	memset(&page_tables[0].entries[0], 0, 769 * PT_ENTRIES * sizeof(uint));
+	memset(&page_tables[770].entries[0], 0, (PDT_ENTRIES - 770) * PT_ENTRIES * sizeof(uint));
 
 	// Copy asm_pt1 (the page table that maps the pages used by the kernel) in appropriated page table
-	memcpy(&page_tables[768].entries[0], &asm_pt1->entries[0], PT_ENTRIES * sizeof(unsigned int));
+	memcpy(&page_tables[768].entries[0], &asm_pt1->entries[0], PT_ENTRIES * sizeof(uint));
 
 	// Register page tables in PDT
 	for (int i = 0; i < PDT_ENTRIES; ++i)
@@ -221,24 +221,24 @@ void load_grub_modules(struct multiboot_info* multibootInfo)
 {
 	grub_modules = (GRUB_module*) malloc(multibootInfo->mods_count * sizeof(GRUB_module));
 
-	for (unsigned int i = 0; i < multibootInfo->mods_count; ++i)
+	for (uint i = 0; i < multibootInfo->mods_count; ++i)
 	{
 		multiboot_module_t* module = &((multiboot_module_t*) (multibootInfo->mods_addr + 0xC0000000))[i];
 
 		// Set module page as present
-		unsigned int module_start_frame_id = (unsigned int) module->mod_start / PAGE_SIZE;
-		unsigned int mod_size = module->mod_end - module->mod_start;
-		unsigned int required_pages = mod_size / PAGE_SIZE + (mod_size % PAGE_SIZE == 0 ? 0 : 1);
+		uint module_start_frame_id = (uint) module->mod_start / PAGE_SIZE;
+		uint mod_size = module->mod_end - module->mod_start;
+		uint required_pages = mod_size / PAGE_SIZE + (mod_size % PAGE_SIZE == 0 ? 0 : 1);
 
-		unsigned int pe_id = lowest_free_pe;
+		uint pe_id = lowest_free_pe;
 
 		grub_modules[i].start_addr = ((pe_id / PDT_ENTRIES) << 22) | ((pe_id % PDT_ENTRIES) << 12);
 		grub_modules[i].size = mod_size;
 
 		// Mark module's code pages as allocated
-		for (unsigned int j = 0; j < required_pages; ++j)
+		for (uint j = 0; j < required_pages; ++j)
 		{
-			unsigned int frame_id = module_start_frame_id + j;
+			uint frame_id = module_start_frame_id + j;
 			allocate_page(frame_id, pe_id);
 
 			pe_id++;
@@ -258,14 +258,14 @@ void init_mem(struct multiboot_info* multibootInfo)
 	load_grub_modules(multibootInfo);
 }
 
-void* sbrk(unsigned int n)
+void* sbrk(uint n)
 {
 	// Memory full
 	if (lowest_free_frame == PT_ENTRIES * PDT_ENTRIES)
 		return 0x00;
 
-	unsigned int b = lowest_free_pe; /* block beginning page index */
-	unsigned int e; /* block end page index + 1*/
+	uint b = lowest_free_pe; /* block beginning page index */
+	uint e; /* block end page index + 1*/
 	unsigned num_pages_requested = n / PAGE_SIZE + (n % PAGE_SIZE == 0 ? 0 : 1);
 
 	// Try to find contiguous free virtual block of memory
@@ -275,8 +275,8 @@ void* sbrk(unsigned int n)
 		if (b + num_pages_requested > PDT_ENTRIES * PT_ENTRIES)
 			return 0x00;
 
-		unsigned int rem = num_pages_requested;
-		unsigned int j = b;
+		uint rem = num_pages_requested;
+		uint j = b;
 
 		// Explore contiguous free blocks while explored block size does not fulfill the request
 		while (!(PTE_USED(b)) && rem > 0)
@@ -298,7 +298,7 @@ void* sbrk(unsigned int n)
 	}
 
 	// Allocate pages
-	for (unsigned int i = b; i < e; ++i)
+	for (uint i = b; i < e; ++i)
 		allocate_page(get_free_page(), i);
 
 	lowest_free_pe = e;
@@ -309,7 +309,7 @@ void* sbrk(unsigned int n)
 	return (void*) (((b / PDT_ENTRIES) << 22) | ((b % PDT_ENTRIES) << 12));
 }
 
-memory_header* more_kernel(unsigned int n)
+memory_header* more_kernel(uint n)
 {
 	if (n < N_ALLOC)
 		n = N_ALLOC;
@@ -321,7 +321,7 @@ memory_header* more_kernel(unsigned int n)
 
 	h->s.size = n;
 
-	unsigned int byte_size = sizeof(memory_header) * n;
+	uint byte_size = sizeof(memory_header) * n;
 	free_bytes -= byte_size; // Prevent free from freeing pages we just allocated
 	free((void*) (h + 1));
 	free_bytes += byte_size;
@@ -329,7 +329,7 @@ memory_header* more_kernel(unsigned int n)
 	return freep;
 }
 
-extern "C" void* malloc(unsigned int n)
+extern "C" void* malloc(uint n)
 {
 	memory_header* c;
 	memory_header* p = freep;
@@ -419,9 +419,9 @@ void free_release_pages()
 	memory_header* p = freep;
 	for (memory_header* c = freep->s.ptr;; p = c, c = c->s.ptr)
 	{
-		unsigned int block_byte_size = c->s.size * sizeof(memory_header);
-		unsigned mod = ((unsigned int) c & (PAGE_SIZE - 1)); // c % PAGE_SIZE
-		unsigned int aligned_free_bytes =
+		uint block_byte_size = c->s.size * sizeof(memory_header);
+		unsigned mod = ((uint) c & (PAGE_SIZE - 1)); // c % PAGE_SIZE
+		uint aligned_free_bytes =
 				mod > block_byte_size ? 0 : (block_byte_size - mod); // min(0, byte_size - mod)
 		aligned_free_bytes -= aligned_free_bytes & (PAGE_SIZE - 1); // -= aligned_free_bytes % PAGE_SIZE
 
@@ -435,10 +435,10 @@ void free_release_pages()
 		}
 
 		unsigned n_pages = aligned_free_bytes >> 12; // Num pages to free
-		unsigned int aligned_addr_base =
-				((unsigned int) c + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1); // Start addr of first page
+		uint aligned_addr_base =
+				((uint) c + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1); // Start addr of first page
 		unsigned free_size = aligned_free_bytes / sizeof(memory_header); // Freed memory size in sizeof(memory_header)
-		unsigned int remaining_size = c->s.size - free_size;
+		uint remaining_size = c->s.size - free_size;
 
 		// Adjust memory headers
 		// Page aligned block entirely removed (remaining_size can't be 0 if block isn't page aligned)
@@ -446,8 +446,8 @@ void free_release_pages()
 			p->s.ptr = c->s.ptr; // Simply link previous to next
 		else // The block is split into two blocks: one before freed pages and one after them
 		{
-			unsigned int first_block_size = (aligned_addr_base - (unsigned int) c) / sizeof(memory_header);
-			unsigned int second_block_size = remaining_size - first_block_size;
+			uint first_block_size = (aligned_addr_base - (uint) c) / sizeof(memory_header);
+			uint second_block_size = remaining_size - first_block_size;
 
 			// First block - May not exist if block is page aligned, but write anyway
 			// If the block exists, info is useful, otherwise this memory location will simply be deallocated
@@ -469,11 +469,11 @@ void free_release_pages()
 		}
 
 		// Free pages
-		for (unsigned int i = 0; i < n_pages; ++i)
+		for (uint i = 0; i < n_pages; ++i)
 		{
-			unsigned int aligned_addr = aligned_addr_base + (i << 12);
-			unsigned int pde = aligned_addr >> 22;
-			unsigned int pte = (aligned_addr >> 12) & 0x3FF;
+			uint aligned_addr = aligned_addr_base + (i << 12);
+			uint pde = aligned_addr >> 22;
+			uint pte = (aligned_addr >> 12) & 0x3FF;
 			free_page(pde, pte);
 		}
 
@@ -488,16 +488,16 @@ void free_release_pages()
 	}
 }
 
-void allocate_page(unsigned int frame_id, unsigned int page_id)
+void allocate_page(uint frame_id, uint page_id)
 {
 	// Write PTE
 	PTE(page_id) = FRAME_ID_ADDR(frame_id) | PAGE_WRITE | PAGE_PRESENT;
 	MARK_FRAME_USED(frame_id); // Internal allocation registration
 }
 
-void free_page(unsigned int pde, unsigned int pte)
+void free_page(uint pde, uint pte)
 {
-	unsigned int frame_id = page_tables[pde].entries[pte] >> 12;
+	uint frame_id = page_tables[pde].entries[pte] >> 12;
 
 	// Write PTE
 	page_tables[pde].entries[pte] = 0;
@@ -515,14 +515,14 @@ void allocate_page_user(uint frame_id, uint page_id)
 	MARK_FRAME_USED(frame_id); // Internal allocation registration
 }
 
-void* page_aligned_malloc(unsigned int size)
+void* page_aligned_malloc(uint size)
 {
-	unsigned int total_size = size + sizeof(void*) + PAGE_SIZE;
+	uint total_size = size + sizeof(void*) + PAGE_SIZE;
 	void* base_addr = malloc(total_size);
 	if (base_addr == nullptr)
 		return nullptr;
 
-	unsigned int aligned_addr = ((unsigned int) base_addr + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+	uint aligned_addr = ((uint) base_addr + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
 	((void**) aligned_addr)[-1] = base_addr;
 
 	return (void*) aligned_addr;
@@ -549,7 +549,7 @@ GRUB_module* get_grub_modules()
 	return grub_modules;
 }
 
-unsigned int* get_stack_top_ptr()
+uint* get_stack_top_ptr()
 {
 	return stack_top_ptr;
 }

@@ -171,7 +171,7 @@ bool FAT_drive::mkdir(const char* path)
 	uint dir_content_sector = active_sector;
 
 	// Indicate that dir content cluster is the end of the cluster chain it belongs to
-	*(unsigned int*) &FAT[FAT_entry_offset] = CLUSTER_EOC;
+	*(uint*) &FAT[FAT_entry_offset] = CLUSTER_EOC;
 	if (ATA::write_sectors(id, 1, FAT_sector, 0x10, (uint) FAT)) // Write new FAT
 	{
 		printf_error("drive write error");
@@ -281,7 +281,7 @@ bool FAT_drive::change_active_cluster(uint new_active_cluster, uint& active_clus
 		return false;
 	}
 
-	table_value = *(unsigned int*) &FAT[FAT_entry_offset];
+	table_value = *(uint*) &FAT[FAT_entry_offset];
 	/*if (fat32) */table_value &= 0x0FFFFFFF;
 	dir_entry_id = 0;
 
@@ -457,7 +457,7 @@ bool FAT_drive::touch(const char* path)
 		return false;
 
 	// Indicate that dir content cluster is the end of the cluster chain it belongs to
-	*(unsigned int*) &FAT[FAT_entry_offset] = CLUSTER_EOC;
+	*(uint*) &FAT[FAT_entry_offset] = CLUSTER_EOC;
 	if (ATA::write_sectors(id, 1, FAT_sector, 0x10, (uint) FAT)) // Write new FAT
 	{
 		printf_error("drive write error");

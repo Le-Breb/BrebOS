@@ -13,12 +13,12 @@ class PIT
 	 * @param ms desired PIT delay
 	 * @return PIT divider
 	 */
-	static unsigned int ms_to_pit_divider(unsigned int ms);
+	static uint ms_to_pit_divider(uint ms);
 
 public:
 	static uint ticks; // PIT tick since it's been initialized
 
-	static unsigned int get_tick();
+	static uint get_tick();
 
 	/**
 	 * Set up the PIT

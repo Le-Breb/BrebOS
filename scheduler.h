@@ -4,13 +4,13 @@
 #include "process.h"
 
 // Maximum concurrent processes. Limit defined by size of pid_pool
-#define MAX_PROCESSES (sizeof(unsigned int) * 8)
+#define MAX_PROCESSES (sizeof(uint) * 8)
 
 #define RESET_QUANTUM(p) (p->quantum = p->priority * CLOCK_TICK_MS)
 typedef struct
 {
 	pid_t arr[MAX_PROCESSES];
-	unsigned int start, count;
+	uint start, count;
 } ready_queue_t;
 
 class Scheduler
@@ -18,8 +18,8 @@ class Scheduler
 private:
 
 	// Bitmap of available PID. Ith LSB indicates PID state ; 1 = used, 0 = free.
-	// Thus, 32 = sizeof(unsigned int) PIDs are available, allowing up to 32 processes to run concurrently
-	static unsigned int pid_pool;
+	// Thus, 32 = sizeof(uint) PIDs are available, allowing up to 32 processes to run concurrently
+	static uint pid_pool;
 
 	static pid_t running_process;
 	static ready_queue_t ready_queue;
@@ -43,7 +43,7 @@ public:
 	 */
 	[[noreturn]] static void schedule();
 
-	static void start_module(unsigned int module, pid_t ppid, int argc, const char** argv);
+	static void start_module(uint module, pid_t ppid, int argc, const char** argv);
 
 	static void init();
 

@@ -1,14 +1,14 @@
 #include "PIT.h"
 #include "IO.h"
 
-unsigned int PIT::get_tick()
+uint PIT::get_tick()
 {
 	return ticks;
 }
 
 void PIT::init()
 {
-	unsigned int divider = ms_to_pit_divider(CLOCK_TICK_MS);
+	uint divider = ms_to_pit_divider(CLOCK_TICK_MS);
 
 	outb(0x43, 0b00110110);
 
@@ -16,7 +16,7 @@ void PIT::init()
 	outb(0x40, (divider >> 8) & 0xFF); // Send high byte of divider
 }
 
-unsigned int PIT::ms_to_pit_divider(unsigned int ms)
+uint PIT::ms_to_pit_divider(uint ms)
 {
 	// 1000 / f = ms
 	// 1193182 / div = f

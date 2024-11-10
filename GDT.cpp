@@ -10,7 +10,7 @@ extern "C" void load_gdt_asm_(struct gdt_descriptor* gdt);
 
 extern "C" void load_tss_asm_();
 
-void GDT::set_entry(unsigned int num, unsigned int base, unsigned int limit, char access, char granularity)
+void GDT::set_entry(uint num, uint base, uint limit, char access, char granularity)
 {
 	gdt[num].base_low = (base & 0xFFFF); // NOLINT(*-narrowing-conversions)
 	gdt[num].base_middle = (base >> 16) & 0xFF; // NOLINT(*-narrowing-conversions)
@@ -23,14 +23,14 @@ void GDT::set_entry(unsigned int num, unsigned int base, unsigned int limit, cha
 	gdt[num].access = access;
 }
 
-void GDT::setup_tss(unsigned int gdt_entry, unsigned int ss0, unsigned int esp0)
+void GDT::setup_tss(uint gdt_entry, uint ss0, uint esp0)
 {
-	unsigned int base = (unsigned int) &tss;
-	unsigned int limit = base + sizeof(tss_entry_t);
+	uint base = (uint) &tss;
+	uint limit = base + sizeof(tss_entry_t);
 
 	set_entry(gdt_entry, base, limit, (char) TSS_SEGMENT_ACCESS, 0x00);
 
-	for (unsigned int i = 0; i < sizeof(tss_entry_t); ++i)
+	for (uint i = 0; i < sizeof(tss_entry_t); ++i)
 		*(((unsigned char*) &tss) + i) = 0;
 
 	tss.ss0 = ss0;
@@ -40,7 +40,7 @@ void GDT::setup_tss(unsigned int gdt_entry, unsigned int ss0, unsigned int esp0)
 	tss.ss = tss.ds = tss.es = tss.fs = tss.gs = 0x13;
 }
 
-void GDT::set_tss_kernel_stack(unsigned int esp0)
+void GDT::set_tss_kernel_stack(uint esp0)
 {
 	tss.esp0 = esp0;
 }

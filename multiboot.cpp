@@ -3,7 +3,7 @@
 #include "clib/string.h"
 #include "clib/stdio.h"
 
-void Multiboot::print_mmap(unsigned int ebx)
+void Multiboot::print_mmap(uint ebx)
 {
 	multiboot_info* mboot_header = (multiboot_info*) (ebx + 0xC0000000);
 	uint memory_slots = mboot_header->mmap_length / sizeof(multiboot_memory_map_t);

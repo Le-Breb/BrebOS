@@ -1,6 +1,8 @@
 #ifndef INCLUDE_OS_GDT_H
 #define INCLUDE_OS_GDT_H
 
+#include "clib/stddef.h"
+
 #define PL0 0x00
 #define PL1 0x20
 #define PL2 0x40
@@ -48,31 +50,31 @@ typedef struct gdt_entry gdt_entry_t;
 // Task State Segment
 struct tss_entry
 {
-	unsigned int prev_tss;   // The previous TSS - if we used hardware task switching this would form a linked list.
-	unsigned int esp0;       // The stack pointer to load when we change to kernel mode.
-	unsigned int ss0;        // The stack segment to load when we change to kernel mode.
-	unsigned int esp1;       // Unused...
-	unsigned int ss1;
-	unsigned int esp2;
-	unsigned int ss2;
-	unsigned int cr3;
-	unsigned int eip;
-	unsigned int eflags;
-	unsigned int eax;
-	unsigned int ecx;
-	unsigned int edx;
-	unsigned int ebx;
-	unsigned int esp;
-	unsigned int ebp;
-	unsigned int esi;
-	unsigned int edi;
-	unsigned int es;         // The value to load into ES when we change to kernel mode.
-	unsigned int cs;         // The value to load into CS when we change to kernel mode.
-	unsigned int ss;         // The value to load into SS when we change to kernel mode.
-	unsigned int ds;         // The value to load into DS when we change to kernel mode.
-	unsigned int fs;         // The value to load into FS when we change to kernel mode.
-	unsigned int gs;         // The value to load into GS when we change to kernel mode.
-	unsigned int ldt;        // Unused...
+	uint prev_tss;   // The previous TSS - if we used hardware task switching this would form a linked list.
+	uint esp0;       // The stack pointer to load when we change to kernel mode.
+	uint ss0;        // The stack segment to load when we change to kernel mode.
+	uint esp1;       // Unused...
+	uint ss1;
+	uint esp2;
+	uint ss2;
+	uint cr3;
+	uint eip;
+	uint eflags;
+	uint eax;
+	uint ecx;
+	uint edx;
+	uint ebx;
+	uint esp;
+	uint ebp;
+	uint esi;
+	uint edi;
+	uint es;         // The value to load into ES when we change to kernel mode.
+	uint cs;         // The value to load into CS when we change to kernel mode.
+	uint ss;         // The value to load into SS when we change to kernel mode.
+	uint ds;         // The value to load into DS when we change to kernel mode.
+	uint fs;         // The value to load into FS when we change to kernel mode.
+	uint gs;         // The value to load into GS when we change to kernel mode.
+	uint ldt;        // Unused...
 	unsigned short trap;
 	unsigned short iomap_base;
 } __attribute__((packed));
@@ -86,7 +88,7 @@ private:
 
 	static gdt_descriptor_t gdt_descriptor;
 
-	static void setup_tss(unsigned int gdt_entry, unsigned int ss0, unsigned int esp0);
+	static void setup_tss(uint gdt_entry, uint ss0, uint esp0);
 
 	/**
 	 * Write a GDT entry
@@ -99,7 +101,7 @@ private:
 	 * @param granularity Granularity flags
 	 */
 	static void
-	set_entry(unsigned int num, unsigned int base, unsigned int limit, char access, char granularity);
+	set_entry(uint num, uint base, uint limit, char access, char granularity);
 
 	/**
 	 * Load the GDT
@@ -130,7 +132,7 @@ public:
 	 *
 	 * @param esp0 Stack pointer
 	 */
-	static void set_tss_kernel_stack(unsigned int esp0);
+	static void set_tss_kernel_stack(uint esp0);
 };
 
 #endif /* INCLUDE_OS_GDT_H */

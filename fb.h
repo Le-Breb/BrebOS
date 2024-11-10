@@ -2,6 +2,8 @@
 #define INCLUDE_FB_H
 
 /* The I/O ports */
+#include "clib/stddef.h"
+
 #define FB_COMMAND_PORT 0x3D4
 #define FB_DATA_PORT 0x3D5
 
@@ -37,7 +39,7 @@
 
 class FB
 {
-	static unsigned int caret_pos; /* Framebuffer index */
+	static uint caret_pos; /* Framebuffer index */
 	static short* const fb;
 	static unsigned char BG;
 	static unsigned char FG;
