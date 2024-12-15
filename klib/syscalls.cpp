@@ -54,23 +54,23 @@ void free(void* ptr)
 	__asm__ volatile("int $0x80" : : "a"(9), "b"(ptr));
 }
 
-bool mkdir(unsigned int drive_id, const char* path)
+bool mkdir(const char* path)
 {
 	bool success;
-	__asm__ volatile("int $0x80" : "=a"(success): "a"(10), "b"(drive_id), "c"(path));
+	__asm__ volatile("int $0x80" : "=a"(success): "a"(10), "b"(path));
 	return success;
 }
 
-bool touch(unsigned int drive_id, const char* path)
+bool touch(const char* path)
 {
 	bool success;
-	__asm__ volatile("int $0x80" : "=a"(success): "a"(11), "b"(drive_id), "c"(path));
+	__asm__ volatile("int $0x80" : "=a"(success): "a"(11), "b"(path));
 	return success;
 }
 
-bool ls(unsigned int drive_id, const char* path)
+bool ls(const char* path)
 {
 	bool success;
-	__asm__ volatile("int $0x80" : "=a"(success): "a"(12), "b"(drive_id), "c"(path));
+	__asm__ volatile("int $0x80" : "=a"(success): "a"(12), "b"(path));
 	return success;
 }

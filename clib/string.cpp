@@ -45,3 +45,44 @@ int strcmp(const char* str1, const char* str2)
 
 	return *str1 - *str2;
 }
+
+int in_set(const char* set, const char c)
+{
+	unsigned int i = 0;
+	while (*(set + i))
+	{
+		if (*(set + i) == c)
+		{
+			return 1;
+		}
+
+		i++;
+	}
+
+	return 0;
+}
+
+char* strtok_r(char* str, const char* delim, char** saveptr)
+{
+	if (str != nullptr)
+		*saveptr = str;
+
+	while (**saveptr && in_set(delim, **saveptr))
+		(*saveptr)++;
+
+	if (!**saveptr)
+		return nullptr;
+
+	char* start = *saveptr;
+
+	while (**saveptr && !in_set(delim, **saveptr))
+		(*saveptr)++;
+
+	if (**saveptr)
+	{
+		**saveptr = '\0';
+		(*saveptr)++;
+	}
+
+	return start;
+}

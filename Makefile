@@ -1,5 +1,6 @@
 OBJS = loader.o io.o kmain.o fb.o GDT.o gdt_.o interrupts_.o interrupts.o keyboard.o memory.o memory_.o shutdown.o \
-system.o process.o syscalls.o list.o PIT.o PIC.o IDT.o ELF.o scheduler.o ATA.o multiboot.o IO.o FAT.o
+system.o process.o syscalls.o list.o PIT.o PIC.o IDT.o ELF.o scheduler.o ATA.o multiboot.o IO.o FAT.o file.o inode.o \
+dentry.o FS.o superblock.o VFS.o
 OBJECTS= $(OBJS:%.o=$(BUILD_DIR)/%.o)
 CC = i686-elf-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
@@ -67,10 +68,12 @@ $(OS_ISO): kernel.elf program program2 libdynlk
 	mkdir -p isodir/modules
 	#Create disk
 	#qemu-img create -f raw disk_image.img 1M
-	dd if=/dev/zero of=disk_image.img bs=1M count=1
+	dd if=/dev/zero of=disk_image.img bs=1M count=35 # Can't go a lot lower than that, otherwise drive would be interpreted as FAT16
 	#Install FAT32 on it
 	mkfs.vfat -F 32 -v disk_image.img
 	#cp disk_image.img2 disk_image.img
+	mmd -i disk_image.img ::/bin
+	mcopy -i disk_image.img program/build/program ::/bin
 
 	echo "set timeout=$(GRUB_TIMEOUT)" > grub.cfg
 	echo "set default=0" >> grub.cfg

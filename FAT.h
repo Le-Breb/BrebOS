@@ -4,6 +4,8 @@
 #include "clib/stddef.h"
 #include "clib/stdint.h"
 #include "ATA.h"
+#include "FS.h"
+#include "dentry.h"
 
 // https://download.microsoft.com/download/1/6/1/161ba512-40e2-4cc9-843a-923143f3456c/fatgen103.doc
 // https://wiki.osdev.org/FAT
@@ -24,6 +26,7 @@
 #define LAST_LONG_ENTRY 0x40
 
 #define NAME_PADDING_BYTE 0x20
+#define DIR_ENTRY_NAME_LEN 11
 
 enum FAT_type
 {
@@ -53,7 +56,6 @@ typedef struct fat_BS
 
 	// this will be cast to it's specific type once the driver actually knows what type of FAT this is.
 	unsigned char extended_section[54];
-
 }__attribute__((packed)) fat_BS_t;
 
 typedef struct fat_extBS_32
@@ -71,7 +73,6 @@ typedef struct fat_extBS_32
 	uint volume_id;
 	unsigned char volume_label[11];
 	unsigned char fat_type_label[8];
-
 }__attribute__((packed)) fat_extBS_32_t;
 
 class __attribute__((packed)) LongDirEntry
@@ -96,7 +97,7 @@ public:
 class __attribute__((packed)) DirEntry
 {
 public:
-	char name[11];
+	char name[DIR_ENTRY_NAME_LEN];
 	uint8_t attrs;
 	const uint8_t NTRes = 0;
 	uint8_t creation_time_tenth;
@@ -110,9 +111,9 @@ public:
 	uint32_t file_size;
 
 	DirEntry(const char* name, uint8_t attrs, uint32_t first_cluster_addr, uint32_t fileSize,
-			 uint8_t creationTimeTenth = -1,
-			 int16_t creationTime = -1, int16_t creationDate = -1, int16_t lastAccessDate = -1,
-			 uint16_t writeTime = -1, uint16_t writeDate = -1);
+	         uint8_t creationTimeTenth = -1,
+	         int16_t creationTime = -1, int16_t creationDate = -1, int16_t lastAccessDate = -1,
+	         uint16_t writeTime = -1, uint16_t writeDate = -1);
 
 	[[nodiscard]] bool is_directory() const;
 
@@ -135,7 +136,7 @@ struct directory
 };
 
 /* FAT32 ATA drive handler */
-class FAT_drive
+class FAT_drive : public FS
 {
 	static FAT_drive* drives[4];
 
@@ -164,7 +165,7 @@ class FAT_drive
 	 * @param num_tokens returned value indicating number of tokens
 	 * @return token list
 	 */
-	const char** split_at_slashes(const char* str, uint* num_tokens);
+	static const char** split_at_slashes(const char* str, uint* num_tokens);
 
 	uint get_free_cluster(uint num_FAT_entries);
 
@@ -175,8 +176,8 @@ class FAT_drive
 	 */
 	bool
 	change_active_cluster(uint new_active_cluster, uint& active_cluster, uint& active_sector,
-						  uint& FAT_entry_offset, uint& FAT_offset, uint& FAT_sector, uint& table_value,
-						  uint& dir_entry_id);
+	                      uint& FAT_entry_offset, uint& FAT_offset, uint& FAT_sector, uint& table_value,
+	                      uint& dir_entry_id);
 
 	/** Browses file tree up to the directory containing the folder designed by path.
 	 * Updates provided environment variables.
@@ -186,29 +187,33 @@ class FAT_drive
 	 * @return boolean indicating whether the dir was found
 	 */
 	bool browse_to_folder_parent(const char** path, uint num_tokens, uint& active_cluster, uint& active_sector,
-								 uint& FAT_entry_offset, uint& FAT_offset, uint& FAT_sector, uint& table_value,
-								 uint& dir_entry_id);
-
-	bool mkdir(const char* path);
-
-	bool touch(const char* path);
-
-	bool ls(const char* path);
+	                             uint& FAT_entry_offset, uint& FAT_offset, uint& FAT_sector, uint& table_value,
+	                             uint& dir_entry_id);
 
 	static FAT_drive* from_drive(unsigned char drive);
 
+	bool load_file_to_buf(const char* path, uint offset, uint length, void* buffer);
+
+	Dentry* get_child_entry(const Dentry& parent_dentry, const char* name) override;
+
 public:
+	bool touch(const Dentry& parent_dentry, const char* entry_name) override;
+
+	bool mkdir(const Dentry& parent_dentry, const char* entry_name) override;
+
+	bool ls(const Dentry& dentry) override;
+
+	[[nodiscard]] static bool drive_present(uint drive_id);
+
 	static void init();
 
 	static void shutdown();
 
-	static bool mkdir(uint drive_id, const char* path);
+	static bool load_file_to_buf(uint drive_id, const char* path, uint offset, uint length, void* buffer);
 
-	static bool touch(uint drive_id, const char* path);
+	~FAT_drive() override;
 
-	static bool ls(uint drive_id, const char* path);
-
-	~FAT_drive();
+	Inode* get_root_node() override;
 };
 
 

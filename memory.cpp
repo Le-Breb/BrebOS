@@ -1,7 +1,7 @@
 #include "memory.h"
-#include "process.h"
 #include "clib/stdio.h"
 #include "clib/string.h"
+#include "FAT.h"
 
 extern "C" void boot_page_directory();
 
@@ -552,4 +552,29 @@ GRUB_module* get_grub_modules()
 uint* get_stack_top_ptr()
 {
 	return stack_top_ptr;
+}
+
+bool mmap_to_buf(char* path, uint offset, size_t length, void* buf)
+{
+	return !FAT_drive::load_file_to_buf(0, path, offset, length, buf);
+}
+
+void* mmap(int prot, char* path, uint offset, size_t length)
+{
+	if (prot)
+	{
+		printf_error("Prot not supported yet");
+		return nullptr;
+	}
+	char* mem = new char[length];
+	if (!mem)
+		return nullptr;
+
+	if (!mmap_to_buf(path, offset, length, mem))
+	{
+		delete[] mem;
+		return nullptr;
+	}
+
+	return mem;
 }

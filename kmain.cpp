@@ -9,13 +9,10 @@
 #include "PIT.h"
 #include "PIC.h"
 #include "IDT.h"
-#include "ATA.h"
-#include "FAT.h"
+#include "VFS.h"
 
 extern "C" void _init(void); // NOLINT(*-reserved-identifier)
 
-//Todo: Try to figure out address 0 page faulting (like isn't proc entry point there ?)
-//Todo: Kill process when major issue occurs (such as PAGEFAULT)
 //Todo: Make printf run mostly in user mode
 //Todo: Implement shared memory
 //Todo: Investigate about whether page 184 (VGA buffer start address is mapped twice)
@@ -52,8 +49,8 @@ extern "C" int kmain(uint ebx)
 	init_mem((multiboot_info_t*) (ebx + 0xC0000000));
 	FB::ok();
 
-	printf("Initializing FAT drives and ATA driver\n");
-	FAT_drive::init();
+	printf("Initializing Virtual File System\n");
+	VFS::init();
 	FB::ok();
 
 	printf("Setting up process handling\n");
@@ -61,10 +58,11 @@ extern "C" int kmain(uint ebx)
 	FB::ok();
 
 	// Set INIT process ready
-	Scheduler::start_module(0, 0, 0, (const char**) nullptr);
+	Scheduler::start_module(0, 0, 0, nullptr);
 
 	// Run processes! :D
 	PIC::enable_preemptive_scheduling();
+
 
 	// Not supposed to be executed, but we never know...
 	System::shutdown();

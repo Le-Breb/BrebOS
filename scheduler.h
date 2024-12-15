@@ -45,6 +45,8 @@ public:
 
 	static void start_module(uint module, pid_t ppid, int argc, const char** argv);
 
+	static bool exec(const char* path, pid_t ppid, int argc, const char** argv);
+
 	static void init();
 
 	static pid_t get_running_process_pid();

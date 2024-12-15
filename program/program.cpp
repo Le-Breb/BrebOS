@@ -74,12 +74,12 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 			// Q command: shutdown
 		else if (c_id == 1 && cmd[0] == 'q')
 			shutdown();
-		else if (cmd[0] == 'm' && cmd[1] == ' ' && DIGIT(cmd[2]) && cmd[3] == ' ')
-			printf("Creation of folder %s: %s\n", cmd + 4, mkdir(cmd[2] - '0', cmd + 4) ? "success" : "failed");
-		else if (cmd[0] == 't' && cmd[1] == ' ' && DIGIT(cmd[2]) && cmd[3] == ' ')
-			printf("Creation of file %s: %s\n", cmd + 4, touch(cmd[2] - '0', cmd + 4) ? "success" : "failed");
-		else if (cmd[0] == 'l' && cmd[1] == ' ' && DIGIT(cmd[2]) && cmd[3] == ' ')
-			printf("Ls at %s: %s\n", cmd + 4, ls(cmd[2] - '0', cmd + 4) ? "success" : "failed");
+		else if (cmd[0] == 'm' && cmd[1] == 'k' && cmd[2] == 'd' && cmd[3] == 'i' && cmd[4] == 'r' && cmd[5] == ' ')
+			mkdir(cmd + 6);
+		else if (cmd[0] == 't' && cmd[1] == 'o' && cmd[2] == 'u' && cmd[3] == 'c' && cmd[4] == 'h' && cmd[5] == ' ')
+			touch(cmd + 6);
+		else if (cmd[0] == 'l' && cmd[1] == 's' && cmd[2] == ' ')
+			ls(cmd + 3);
 		else
 			printf("Unknown command\n");
 

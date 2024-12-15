@@ -4,13 +4,13 @@
 #include "clib/stdio.h"
 #include "system.h"
 #include "PIC.h"
-#include "FAT.h"
+#include "VFS.h"
 
 void Syscall::start_process(cpu_state_t* cpu_state)
 {
 	// Load child process and set it ready
 	Scheduler::start_module(cpu_state->ebx, Scheduler::get_running_process_pid(), cpu_state->ecx,
-							(const char**) cpu_state->edx);
+	                        (const char**) cpu_state->edx);
 }
 
 void Syscall::printf(cpu_state_t* cpu_state)
@@ -82,18 +82,18 @@ void Syscall::dynlk(cpu_state_t* cpu_state)
 	}
 
 	Elf32_Shdr* strtab_h = ((Elf32_Shdr*) ((uint) p->elf->elf32Shdr +
-										   p->elf->elf32Ehdr->e_shentsize * dynsym_hdr->sh_link));
+	                                       p->elf->elf32Ehdr->e_shentsize * dynsym_hdr->sh_link));
 	char* strtab = (char*) (p->elf->mod->start_addr + strtab_h->sh_offset);
 
 	// Check symbol index makes sense
 	uint dynsym_num_entries = dynsym_hdr->sh_size / dynsym_hdr->sh_entsize;
 	if (symbol + 1 > dynsym_num_entries)
 		printf_error("Required symbol has index %d while symtab only contains %d entries", symbol,
-					 dynsym_num_entries);
+		             dynsym_num_entries);
 
 	// Get symbol name
 	Elf32_Sym* s = (Elf32_Sym*) (p->elf->mod->start_addr + dynsym_hdr->sh_offset +
-								 symbol * dynsym_hdr->sh_entsize);
+	                             symbol * dynsym_hdr->sh_entsize);
 	char* symbol_name = &strtab[s->st_name];
 
 	// Get lib
@@ -181,24 +181,40 @@ void Syscall::get_key()
 
 void Syscall::mkdir(cpu_state_t* cpu_state)
 {
-	uint drive_id = cpu_state->ebx;
-	const char* path = (const char*) cpu_state->ecx;
+	const char* path = (const char*) cpu_state->ebx;
 
-	cpu_state->eax = (uint) FAT_drive::mkdir(drive_id, path);
+	cpu_state->eax = (uint) VFS::mkdir(path);
 }
 
 void Syscall::touch(cpu_state_t* cpu_state)
 {
-	uint drive_id = cpu_state->ebx;
-	const char* path = (const char*) cpu_state->ecx;
+	const char* path = (const char*) cpu_state->ebx;
 
-	cpu_state->eax = (uint) FAT_drive::touch(drive_id, path);
+	cpu_state->eax = (uint) VFS::touch(path);
 }
 
 void Syscall::ls(cpu_state_t* cpu_state)
 {
-	uint drive_id = cpu_state->ebx;
-	const char* path = (const char*) cpu_state->ecx;
+	const char* path = (const char*) cpu_state->ebx;
 
-	cpu_state->eax = (uint) FAT_drive::ls(drive_id, path);
+	cpu_state->eax = (uint) VFS::ls(path);
+}
+
+void Syscall::mmap(cpu_state_t* cpu_state, int prot, char* path, uint offset, size_t length)
+{
+	if (length || offset || prot)
+	{
+		printf_error("Only path argument implemented for now");
+		cpu_state->eax = 0;
+		return;
+	}
+	malloc(Scheduler::get_running_process(), cpu_state);
+	if (!cpu_state->eax) // User space allocation failed
+		return;
+	if (!mmap_to_buf(path, offset, length, (void*) cpu_state->eax))
+	{
+		free(Scheduler::get_running_process(), cpu_state);
+		cpu_state->eax = 0;
+		return;
+	}
 }

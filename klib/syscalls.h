@@ -48,10 +48,10 @@ void* malloc(unsigned int n);
  */
 void free(void* ptr);
 
-bool mkdir(unsigned int drive_id, const char* path);
+bool mkdir(const char* path);
 
-bool touch(unsigned int drive_id, const char* path);
+bool touch(const char* path);
 
-bool ls(unsigned int drive_id, const char* path);
+bool ls(const char* path);
 
 #endif //INCLUDE_SYSCALLS_H
