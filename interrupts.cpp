@@ -34,14 +34,14 @@ extern "C" [[noreturn]] void resume_user_process_asm_(cpu_state_t cpu_state, str
 
 extern "C" [[noreturn]] void resume_syscall_handler_asm_(cpu_state_t cpu_state, uint iret_esp);
 
-void Interrupts::page_fault_handler(struct stack_state* stack_state)
+void Interrupts::page_fault_handler(stack_state_t* stack_state)
 {
 	uint addr; // Address of the fault
 	__asm__ volatile("mov %%cr2, %0" : "=r"(addr)); // Get addr from CR2
 
 	uint err = stack_state->error_code;
 
-	printf_error("Page fault at address 0x%x", addr);
+	printf_error("Page fault at address 0x%x caused by instruction at 0x%x", addr, stack_state->eip);
 	printf("Present: %s\n", (err & 1 ? "True" : "False"));
 	printf("Write: %s\n", err & 2 ? "True" : "False");
 	printf("User mode: %s\n", err & 4 ? "True" : "False");
@@ -54,7 +54,7 @@ void Interrupts::page_fault_handler(struct stack_state* stack_state)
 	Scheduler::get_running_process()->terminate();
 }
 
-void Interrupts::gpf_handler(struct stack_state* stack_state)
+void Interrupts::gpf_handler(stack_state* stack_state)
 {
 	printf_error("General protection fault");
 	printf("Segment selector: %x\n", stack_state->error_code);

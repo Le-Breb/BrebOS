@@ -7,6 +7,7 @@
 #define MAX_PROCESSES (sizeof(uint) * 8)
 
 #define RESET_QUANTUM(p) (p->quantum = p->priority * CLOCK_TICK_MS)
+
 typedef struct
 {
 	pid_t arr[MAX_PROCESSES];
@@ -16,7 +17,6 @@ typedef struct
 class Scheduler
 {
 private:
-
 	// Bitmap of available PID. Ith LSB indicates PID state ; 1 = used, 0 = free.
 	// Thus, 32 = sizeof(uint) PIDs are available, allowing up to 32 processes to run concurrently
 	static uint pid_pool;
@@ -37,7 +37,6 @@ private:
 	static void release_pid(pid_t pid);
 
 public:
-
 	/**
 	 * Executes next process in the ready queue
 	 */
@@ -57,7 +56,7 @@ public:
 
 	static void set_process_ready(Process* p);
 
-	static void free_terminateed_process(Process& p);
+	static void free_terminated_process(Process& p);
 };
 
 

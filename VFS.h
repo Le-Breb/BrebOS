@@ -23,7 +23,7 @@ public:
 /**
  * Virtual File System. \n
  * This is an abstraction layer of physical file systems. All kernel file operations
- * are performed through this unified interface. That way, hardware specific implementation detailed
+ * are performed through this unified interface. That way, hardware specific implementation details
  * are hidden. Those details are implemented by device drivers. They have to inherit from the abstract FS
  * class, which unifies file systems representation and is at the core of the VFS routines.
  */
@@ -41,14 +41,7 @@ class VFS
 	 * @param name name of looked after dentry
 	 * @return matching cached dentry, or nullptr if not found
 	 */
-	static Dentry* get_cached_dentry(Dentry* parent, const char* name, uint type);
-
-	/**
-	 * Browses file system to the folder located at path
-	 * @param path path to browse to
-	 * @return Dentry of folder at path, nullptr if something went wront
-	 */
-	static Dentry* browse_to(const char* path);
+	static Dentry* get_cached_dentry(Dentry* parent, const char* name, Inode::Type type);
 
 public:
 	static void init();
@@ -72,6 +65,13 @@ public:
 	 * @return boolean indicating success state
 	 */
 	static bool mount_rootfs(FS* fs);
+
+	/**
+	 * Browses file system to the folder located at path
+	 * @param path path to browse to
+	 * @return Dentry of folder at path, nullptr if something went wront
+	 */
+	static Dentry* browse_to(const char* path);
 };
 
 

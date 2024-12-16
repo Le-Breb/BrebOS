@@ -1,4 +1,4 @@
-#include "../klib/syscalls.h"
+#include "../kapi/syscalls.h"
 
 #define MAX_CMD_LEN 100
 
@@ -16,30 +16,22 @@ void clear_cmd()
 
 void start_program()
 {
-	if (!DIGIT(cmd[2]))
-		printf("Invalid program index: %c\n", cmd[2]);
-	else
+	int argc = 0;
+	char* argv[MAX_CMD_LEN];
+	char* beg = &cmd[2]; // Beginning of current arg
+	for (unsigned int i = 2; i < c_id; ++i)
 	{
-		int argc = 0;
-		char* argv[MAX_CMD_LEN];
-		char* beg = &cmd[4]; // Beginning of current arg
-		for (unsigned int i = 4; i < c_id; ++i)
+		if (cmd[i] == ' ') // Enf of current arg
 		{
-			if (cmd[i] == ' ') // Enf of current arg
-			{
-				cmd[i] = '\0'; // Terminate string
-				argv[argc++] = beg; // Add ptr to argv and update argc
-				beg = &cmd[i + 1]; // Update beg to point to next arg
-			}
-		}
-		if (c_id != 3)
-		{
-			cmd[c_id] = '\0'; // Terminate final arg
+			cmd[i] = '\0'; // Terminate string
 			argv[argc++] = beg; // Add ptr to argv and update argc
+			beg = &cmd[i + 1]; // Update beg to point to next arg
 		}
-
-		start_process(cmd[2] - '0', argc, (const char**) argv);
 	}
+	cmd[c_id] = '\0'; // Terminate final arg
+	argv[argc++] = beg; // Add ptr to argv and update argc
+
+	exec(argv[0], argc, (const char**) argv);
 }
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
@@ -69,7 +61,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 		}
 
 		// P command: start a program
-		if (cmd[0] == 'p' && cmd[1] == ' ' && (c_id == 3 || cmd[3] == ' '))
+		if (cmd[0] == 'p' && cmd[1] == ' ')
 			start_program();
 			// Q command: shutdown
 		else if (c_id == 1 && cmd[0] == 'q')

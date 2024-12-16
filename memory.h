@@ -136,8 +136,8 @@ GRUB_module* get_grub_modules();
 /** Get pointer to top of kernel stack */
 uint* get_stack_top_ptr();
 
-bool mmap_to_buf(char* path, uint offset, size_t length, void* buf);
+bool mmap_to_buf(const char* path, uint offset, size_t length, void* buf);
 
-void* mmap(int prot, char* path, uint offset, size_t length);
+void* mmap(int prot, const char* path, uint offset, size_t length);
 
 #endif //INCLUDE_MEMORY_H

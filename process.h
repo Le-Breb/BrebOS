@@ -46,8 +46,9 @@ public:
 	stack_state_t k_stack_state; // Syscall handler execution context
 
 	ELF* elf;
-private:
+	ELF* kapi_elf;
 
+private:
 	/** Page aligned allocator **/
 	void* operator new(size_t size);
 
@@ -65,19 +66,18 @@ private:
 
 	/**
 	 * Sets up a dynamically linked process
-	 * @param proc process
-	 * @param grub_modules grub modules
+	 * @param start_address ELF start address
 	 * @return process set up, NULL if an error occurred
 	 */
-	bool dynamic_loading();
+	bool dynamic_loading(uint start_address);
 
 	/**
 	* Load a lib in a process' address soace
 	* @param p process to add libynlk to
-	* @param lib_mod GRUB modules
+	* @param path GRUB modules
 	* @return libdynlk runtime entry point address
 	*/
-	bool load_lib(GRUB_module* lib_mod);
+	ELF* load_lib(const char* path);
 
 	/**
 	 * Allocate space for libydnlk and add it to a process' address space
@@ -92,15 +92,14 @@ private:
 	 * Allocate a process containing an ELF
 	 * @return process struct, NULL if an error occurred
 	 */
-	static Process* allocate_proc_for_elf_module(GRUB_module* module);
+	static Process* allocate_proc_for_elf_module(uint start_address);
 
 	/**
 	 * Create a process to run an ELF executable
 	 *
-	 * @param module ELF Grub module id
 	 * @return program's process
 	 */
-	static Process* from_ELF(GRUB_module* module);
+	static Process* from_ELF(uint start_address);
 
 	/**
 	 * Loads a flat binary in memory
@@ -124,10 +123,9 @@ private:
 	 */
 	void
 	copy_elf_subsegment_to_address_space(void* bytes_ptr, uint n, bool no_write, Elf32_Phdr* h, uint& pte_offset,
-										 uint& copied_bytes, page_table_t* sys_page_tables);
+	                                     uint& copied_bytes, page_table_t* sys_page_tables);
 
 public:
-
 	/** Gets the process' PID */
 	[[nodiscard]] pid_t get_pid() const;
 
@@ -151,14 +149,14 @@ public:
 
 	/**
 	 * Create a process from a GRUB module
-	 * @param module module
+	 * @param start_addresss program's start address
 	 * @param pid process ID
 	 * @param ppid parent process ID
 	 * @param argc num args
 	 * @param argv args
 	 * @return process, nullptr if an error occurred
 	 */
-	static Process* from_module(GRUB_module* module, pid_t pid, pid_t ppid, int argc, const char** argv);
+	static Process* from_memory(uint start_addresss, pid_t pid, pid_t ppid, int argc, const char** argv);
 
 	/**
 	 * Sets a flag
@@ -182,8 +180,9 @@ public:
 	/**
 	 * Load ELF file code and data into a process' address space and maps it
 	 * @param load_elf ELF to load
+	 * @param elf_start_address start address of ELF
 	 */
-	void load_elf(ELF* load_elf);
+	void load_elf(ELF* load_elf, uint elf_start_address);
 };
 
 #endif //INCLUDE_PROCESS_H

@@ -65,7 +65,7 @@ public:
 	 * */
 	[[noreturn]]
 
-	static void dispatcher(cpu_state_t* cpu_state, struct stack_state* stack_state);
+	static void dispatcher(cpu_state_t* cpu_state, stack_state_t* stack_state);
 };
 
 #endif //INCLUDE_SYSCALLS_H

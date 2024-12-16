@@ -17,6 +17,7 @@ extern "C" void _init(void); // NOLINT(*-reserved-identifier)
 //Todo: Implement shared memory
 //Todo: Investigate about whether page 184 (VGA buffer start address is mapped twice)
 //Todo: same for page pde 771 pte11 at the end of run_module
+//Todo: Add support for multiple dynamically linked libs
 extern "C" int kmain(uint ebx)
 {
 	_init(); // Execute constructors
@@ -58,7 +59,7 @@ extern "C" int kmain(uint ebx)
 	FB::ok();
 
 	// Set INIT process ready
-	Scheduler::start_module(0, 0, 0, nullptr);
+	Scheduler::exec("/bin/program", 0, 0, nullptr);
 
 	// Run processes! :D
 	PIC::enable_preemptive_scheduling();

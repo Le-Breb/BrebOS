@@ -217,7 +217,7 @@ void allocate_page_tables()
 	lowest_free_pe = 770 * PDT_ENTRIES; // Kernel is (for now at least) only allowed to allocate in higher half
 }
 
-void load_grub_modules(struct multiboot_info* multibootInfo)
+void load_grub_modules(multiboot_info* multibootInfo)
 {
 	grub_modules = (GRUB_module*) malloc(multibootInfo->mods_count * sizeof(GRUB_module));
 
@@ -226,7 +226,7 @@ void load_grub_modules(struct multiboot_info* multibootInfo)
 		multiboot_module_t* module = &((multiboot_module_t*) (multibootInfo->mods_addr + 0xC0000000))[i];
 
 		// Set module page as present
-		uint module_start_frame_id = (uint) module->mod_start / PAGE_SIZE;
+		uint module_start_frame_id = module->mod_start / PAGE_SIZE;
 		uint mod_size = module->mod_end - module->mod_start;
 		uint required_pages = mod_size / PAGE_SIZE + (mod_size % PAGE_SIZE == 0 ? 0 : 1);
 
@@ -316,8 +316,8 @@ memory_header* more_kernel(uint n)
 
 	memory_header* h = (memory_header*) sbrk(sizeof(memory_header) * n);
 
-	if ((int*) h == 0x00)
-		return 0x00;
+	if ((int*) h == nullptr)
+		return nullptr;
 
 	h->s.size = n;
 
@@ -420,9 +420,10 @@ void free_release_pages()
 	for (memory_header* c = freep->s.ptr;; p = c, c = c->s.ptr)
 	{
 		uint block_byte_size = c->s.size * sizeof(memory_header);
-		unsigned mod = ((uint) c & (PAGE_SIZE - 1)); // c % PAGE_SIZE
-		uint aligned_free_bytes =
-				mod > block_byte_size ? 0 : (block_byte_size - mod); // min(0, byte_size - mod)
+		uint aligned_addr_base =
+				((uint) c + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1); // Start addr of first page
+		uint d = aligned_addr_base - (uint) c;
+		uint aligned_free_bytes = d >= block_byte_size ? 0 : block_byte_size - d;
 		aligned_free_bytes -= aligned_free_bytes & (PAGE_SIZE - 1); // -= aligned_free_bytes % PAGE_SIZE
 
 		// Skip small block
@@ -434,9 +435,7 @@ void free_release_pages()
 			continue;
 		}
 
-		unsigned n_pages = aligned_free_bytes >> 12; // Num pages to free
-		uint aligned_addr_base =
-				((uint) c + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1); // Start addr of first page
+		unsigned n_pages = aligned_free_bytes >> 12; // Num pages to free, aligned_free_bytes / PAGE_SIZE
 		unsigned free_size = aligned_free_bytes / sizeof(memory_header); // Freed memory size in sizeof(memory_header)
 		uint remaining_size = c->s.size - free_size;
 
@@ -451,17 +450,18 @@ void free_release_pages()
 
 			// First block - May not exist if block is page aligned, but write anyway
 			// If the block exists, info is useful, otherwise this memory location will simply be deallocated
-			c->s.size -= first_block_size;
+			c->s.size = first_block_size;
 			// For now c->s.ptr points to the next block in the list
 
 			// Second block - May not exist and writing anyway would actually overwrite next block, so we ensure it exists
 			if (second_block_size != 0)
 			{
+				memory_header* next = c->s.ptr; // Save next
+
 				// Link previous block to second block - previous block is p if first block does bot exist
-				(first_block_size == 0 ? p : c)->s.ptr = c + free_size;
+				(first_block_size == 0 ? p : c)->s.ptr = c + first_block_size + free_size;
 
 				// Setup second block
-				memory_header* next = c->s.ptr; // Save next
 				c += first_block_size + free_size; // Move to second block location
 				c->s.size = second_block_size; // Write size
 				c->s.ptr = next; // Link with next
@@ -554,12 +554,13 @@ uint* get_stack_top_ptr()
 	return stack_top_ptr;
 }
 
-bool mmap_to_buf(char* path, uint offset, size_t length, void* buf)
+bool mmap_to_buf(const char* path, uint offset, size_t length, void* buf)
 {
-	return !FAT_drive::load_file_to_buf(0, path, offset, length, buf);
+	// Todo: use VFS for path resolution and fs redirection
+	return FAT_drive::load_file_to_buf(0, path, offset, length, buf);
 }
 
-void* mmap(int prot, char* path, uint offset, size_t length)
+void* mmap(int prot, const char* path, uint offset, size_t length)
 {
 	if (prot)
 	{

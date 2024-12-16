@@ -15,12 +15,12 @@ INTERNAL_OBJS=$(CRTI_OBJ) $(OBJECTS) $(CRTN_OBJ)
 LDFLAGS = -T link.ld -melf_i386 -g
 AS = nasm
 ASFLAGS = -f elf -F dwarf -g
-KLIB_OBJECTS = $(shell find clib/build -name *.o)
+CLIB_OBJECTS = $(shell find clib/build -name *.o)
 
 BUILD_DIR=build
 PROGRAM_BUILD_DIR=program/build
 PROGRAM2_BUILD_DIR=program2/build
-KLIB_BUILD_DIR=klib/build
+KAPI_BUILD_DIR=kapi/build
 CLIB_BUILD_DIR=clib/build
 LIBDYNLK_BUILD_DIR=libdynlk/build
 
@@ -40,7 +40,7 @@ directories:
 	mkdir -p $(BUILD_DIR)
 	mkdir -p $(PROGRAM_BUILD_DIR)
 	mkdir -p $(PROGRAM2_BUILD_DIR)
-	mkdir -p $(KLIB_BUILD_DIR)
+	mkdir -p $(KAPI_BUILD_DIR)
 	mkdir -p $(CLIB_BUILD_DIR)
 	mkdir -p $(LIBDYNLK_BUILD_DIR)
 
@@ -58,7 +58,7 @@ clib:
 
 
 kernel.elf: directories $(INTERNAL_OBJS) clib
-	ld $(LDFLAGS) $(OBJ_LIST) -Iclib/ $(KLIB_OBJECTS) -o $(BUILD_DIR)/kernel.elf $(libgcc)
+	ld $(LDFLAGS) $(OBJ_LIST) -Iclib/ $(CLIB_OBJECTS) -o $(BUILD_DIR)/kernel.elf $(libgcc)
 
 $(OS_ISO): kernel.elf program program2 libdynlk
 #	Create directories
@@ -73,7 +73,10 @@ $(OS_ISO): kernel.elf program program2 libdynlk
 	mkfs.vfat -F 32 -v disk_image.img
 	#cp disk_image.img2 disk_image.img
 	mmd -i disk_image.img ::/bin
-	mcopy -i disk_image.img program/build/program ::/bin
+	mcopy -i disk_image.img $(PROGRAM_BUILD_DIR)/program ::/bin
+	mcopy -i disk_image.img $(PROGRAM2_BUILD_DIR)/program2 ::/bin
+	mcopy -i disk_image.img $(KAPI_BUILD_DIR)/libkapi.so ::/bin
+	mcopy -i disk_image.img $(LIBDYNLK_BUILD_DIR)/libdynlk.so ::/bin
 
 	echo "set timeout=$(GRUB_TIMEOUT)" > grub.cfg
 	echo "set default=0" >> grub.cfg
@@ -83,17 +86,17 @@ $(OS_ISO): kernel.elf program program2 libdynlk
 	#echo "terminal_output serial" >> grub.cfg
 	echo menuentry \"$(OUT_NAME)\" { >> grub.cfg
 	echo "	multiboot /boot/$(OUT_BIN)" >> grub.cfg
-	echo "	module /modules/program" >> grub.cfg
-	echo "	module /modules/program2" >> grub.cfg
-	echo "	module /modules/libdynlk.so" >> grub.cfg
-	echo "	module /modules/libsyscalls.so" >> grub.cfg
+	#echo "	module /modules/program" >> grub.cfg
+	#echo "	module /modules/program2" >> grub.cfg
+	#echo "	module /modules/libdynlk.so" >> grub.cfg
+	#echo "	module /modules/libkapi.so" >> grub.cfg
 	echo } >> grub.cfg
 
 	cp $(BUILD_DIR)/$(OUT_BIN) isodir/boot/$(OUT_BIN)
 	cp $(PROGRAM_BUILD_DIR)/program isodir/modules/program
 	cp $(PROGRAM2_BUILD_DIR)/program2 isodir/modules/program2
 	cp $(LIBDYNLK_BUILD_DIR)/libdynlk.so isodir/modules/libdynlk.so
-	cp $(KLIB_BUILD_DIR)/libsyscalls.so isodir/modules/libsyscalls.so
+	cp $(KAPI_BUILD_DIR)/libkapi.so isodir/modules/libkapi.so
 	cp grub.cfg isodir/boot/grub/grub.cfg
 
 	echo "Building ISO..."
@@ -118,6 +121,6 @@ clean:
 	rm -rf $(OS_ISO)
 	make -C program clean
 	make -C program2 clean
-	make -C klib clean
+	make -C kapi clean
 	make -C clib clean
 	make -C libdynlk clean

@@ -5,7 +5,7 @@
 #include "clib/stddef.h"
 
 #define OS_INTERPR ("/dynlk") // OS default interpreter, used to run dynamically linked programs
-#define OS_LIB ("libsyscalls.so") // OS lib, allowing programs to use syscalls
+#define OS_LIB ("libkapi.so") // OS lib, allowing programs to use syscalls
 
 enum ELF_type
 {
@@ -17,40 +17,29 @@ enum ELF_type
 class ELF
 {
 private:
-	ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr, GRUB_module* mod);
+	ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr, uint start_address);
 
 public:
+	Elf32_Ehdr global_hdr;
+	Elf32_Phdr* prog_hdrs;
+	Elf32_Shdr* section_hdrs;
+	Elf32_Dyn* dyn_table;
+	Elf32_Sym* symbols;
+	Elf32_Rel* relocs;
+	Elf32_Shdr* dynsym_hdr;
+	const char* interpreter_name;
+	const char* dynsym_strtab;
 
-	Elf32_Ehdr* elf32Ehdr;
-	Elf32_Phdr* elf32Phdr;
-	Elf32_Shdr* elf32Shdr;
-	GRUB_module* mod;
 
-	explicit ELF(GRUB_module* mod);
+	explicit ELF(uint start_address);
 
-	/**
-	 * Get dynamic section onf an ELF
-	 * @return dynamic section header table, NULL if an error occurred
-	 */
-	Elf32_Dyn* get_dyn_table();
+	~ELF();
 
 	/**
 	 * Get the highest address in the runtime address space of an ELF file
 	 * @return highest runtime address
 	 */
-	uint get_highest_runtime_addr();
-
-	/**
-	 * Get PLT relocation table of an ELF file
-	 * @return PLT relocation table, NULL if error occurred
-	 */
-	Elf32_Rel* get_rel_plt();
-
-	/**
-	 * Get DYNSYM header an ELF file
-	 * @return DYNSYM header, NULL if error occurred
-	 */
-	Elf32_Shdr* get_dynsym_hdr();
+	uint get_highest_runtime_addr() const;
 
 	/**
 	 * Get a symbol of an ELF file
@@ -60,17 +49,11 @@ public:
 
 	/**
 	 * Checks whether an ELF file is valid and supported
-	 * @param mod GRUB module containing the ELF
+	 * @param start_address GRUB module containing the ELF
 	 * @param expected_type expected type of the ELF
 	 * @return boolean indicating whether the file is valid or not
 	 */
-	static bool is_valid(GRUB_module* mod, enum ELF_type expected_type);
-
-	/**
-	 * Get the interpreter name of an ELF file
-	 * @return name of the interpreter, NULL if the ELF doesn't use one
-	 */
-	char* get_interpreter_name();
+	static bool is_valid(uint start_address, ELF_type expected_type);
 
 	/**
 	 * Get entry point of libdynlk in a process' runtime address space
@@ -83,13 +66,14 @@ public:
 	/**
 	 * Get segment in which the GOT lays
 	 * @param file_got_addr GOT address (in the ELF)
+	 * @param start_address
 	 * @return GOT segment header, NULL if an error occurred
 	 */
-	Elf32_Phdr* get_GOT_segment(const uint* file_got_addr);
+	Elf32_Phdr* get_GOT_segment(const uint* file_got_addr, uint start_address) const;
 
-	[[nodiscard]] size_t base_address();
+	[[nodiscard]] size_t base_address() const;
 
-	[[nodiscard]] size_t num_pages();
+	[[nodiscard]] size_t num_pages() const;
 };
 
 #endif //INCLUDE_OS_ELF_H

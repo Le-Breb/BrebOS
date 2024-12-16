@@ -2,20 +2,20 @@
 #include "clib/stdio.h"
 #include "clib/string.h"
 
-bool ELF::is_valid(GRUB_module* mod, enum ELF_type expected_type)
+bool ELF::is_valid(uint start_address, ELF_type expected_type)
 {
-	ELF elf(mod);
+	const ELF elf(start_address);
 
 	// Ensure this is an ELF
-	if (elf.elf32Ehdr->e_ident[0] != 0x7F || elf.elf32Ehdr->e_ident[1] != 'E' || elf.elf32Ehdr->e_ident[2] != 'L' ||
-		elf.elf32Ehdr->e_ident[3] != 'F')
+	if (elf.global_hdr.e_ident[0] != 0x7F || elf.global_hdr.e_ident[1] != 'E' || elf.global_hdr.e_ident[2] != 'L' ||
+	    elf.global_hdr.e_ident[3] != 'F')
 	{
 		printf_error("Not an ELF\n");
 		return false;
 	}
 
 	// Ensure program is 32 bits
-	if (elf.elf32Ehdr->e_ident[4] != 1)
+	if (elf.global_hdr.e_ident[4] != 1)
 	{
 		printf_error("Not a 32 bit program");
 		return false;
@@ -24,21 +24,21 @@ bool ELF::is_valid(GRUB_module* mod, enum ELF_type expected_type)
 	switch (expected_type)
 	{
 		case Executable:
-			if (elf.elf32Ehdr->e_type != ET_EXEC)
+			if (elf.global_hdr.e_type != ET_EXEC)
 			{
 				printf_error("Not an executable ELF");
 				return false;
 			}
 			break;
 		case SharedObject:
-			if (elf.elf32Ehdr->e_type != ET_DYN)
+			if (elf.global_hdr.e_type != ET_DYN)
 			{
 				printf_error("Not an executable ELF");
 				return false;
 			}
 			break;
 		case Relocatable:
-			if (elf.elf32Ehdr->e_type != ET_REL)
+			if (elf.global_hdr.e_type != ET_REL)
 			{
 				printf_error("Not an executable ELF");
 				return false;
@@ -48,16 +48,16 @@ bool ELF::is_valid(GRUB_module* mod, enum ELF_type expected_type)
 	//printf("Endianness: %s\n", elf32Ehdr->e_ident[5] == 1 ? "Little" : "Big");
 
 	// ELF imposes that first section header is null
-	if (elf.elf32Shdr->sh_type != SHT_NULL)
+	if (elf.section_hdrs[0].sh_type != SHT_NULL)
 	{
 		printf_error("Not a valid ELF file");
 		return false;
 	}
 
 	// Ensure program is supported
-	for (int k = 0; k < elf.elf32Ehdr->e_shnum; ++k)
+	for (int k = 0; k < elf.global_hdr.e_shnum; ++k)
 	{
-		Elf32_Shdr* h = (Elf32_Shdr*) ((uint) elf.elf32Shdr + elf.elf32Ehdr->e_shentsize * k);
+		Elf32_Shdr* h = &elf.section_hdrs[k];
 		switch (h->sh_type)
 		{
 			case SHT_NULL:
@@ -77,7 +77,7 @@ bool ELF::is_valid(GRUB_module* mod, enum ELF_type expected_type)
 		}
 	}
 
-	if (elf.elf32Ehdr->e_phnum == 0)
+	if (elf.global_hdr.e_phnum == 0)
 	{
 		printf_error("No program header");
 		return false;
@@ -86,9 +86,9 @@ bool ELF::is_valid(GRUB_module* mod, enum ELF_type expected_type)
 	// Check that no read-only page overlaps with a write-allowed page
 	uint elf_num_pages = elf.num_pages();
 	bool* ro_pages = (bool*) calloc(elf_num_pages, sizeof(bool));
-	for (int k = 0; k < elf.elf32Ehdr->e_phnum; ++k)
+	for (int k = 0; k < elf.global_hdr.e_phnum; ++k)
 	{
-		Elf32_Phdr* h = (Elf32_Phdr*) ((uint) elf.elf32Phdr + elf.elf32Ehdr->e_phentsize * k);
+		Elf32_Phdr* h = &elf.prog_hdrs[k];
 		if (h->p_type != PT_LOAD)
 			continue;
 
@@ -115,12 +115,12 @@ bool ELF::is_valid(GRUB_module* mod, enum ELF_type expected_type)
 }
 
 //Todo: Represent the whole PT_LOAD layout to accurately compute the size of the loaded parts
-uint ELF::get_highest_runtime_addr()
+uint ELF::get_highest_runtime_addr() const
 {
 	uint highest_addr = 0;
-	for (int k = 0; k < elf32Ehdr->e_phnum; ++k)
+	for (int k = 0; k < global_hdr.e_phnum; ++k)
 	{
-		Elf32_Phdr* h = (Elf32_Phdr*) ((uint) elf32Phdr + elf32Ehdr->e_phentsize * k);
+		Elf32_Phdr* h = &prog_hdrs[k];
 		if (h->p_type != PT_LOAD)
 			continue;
 
@@ -132,27 +132,6 @@ uint ELF::get_highest_runtime_addr()
 	return highest_addr;
 }
 
-char* ELF::get_interpreter_name()
-{
-	for (int k = 0; k < elf32Ehdr->e_phnum; ++k)
-	{
-		Elf32_Phdr* h = (Elf32_Phdr*) ((uint) elf32Phdr + elf32Ehdr->e_phentsize * k);
-
-		if (h->p_type != PT_INTERP)
-			continue;
-
-		char* interpreter_path = (char*) mod->start_addr + h->p_offset;
-		if (strcmp(interpreter_path, OS_INTERPR) != 0)
-		{
-			printf_error("Unsupported interpreter: %s", interpreter_path);
-			return nullptr;
-		}
-		return interpreter_path;
-	}
-
-	return nullptr;
-}
-
 void* ELF::get_libdynlk_main_runtime_addr(uint proc_num_pages)
 {
 	// Find and return main's address
@@ -161,16 +140,16 @@ void* ELF::get_libdynlk_main_runtime_addr(uint proc_num_pages)
 	return s == nullptr ? (void*) s : (void*) (proc_num_pages * PAGE_SIZE + s->st_value);
 }
 
-Elf32_Phdr* ELF::get_GOT_segment(const uint* file_got_addr)
+Elf32_Phdr* ELF::get_GOT_segment(const uint* file_got_addr, uint start_address) const
 {
 	Elf32_Phdr* got_segment_hdr = nullptr;
-	for (int k = 0; k < elf32Ehdr->e_phnum; ++k)
+	for (int k = 0; k < global_hdr.e_phnum; ++k)
 	{
-		Elf32_Phdr* h = (Elf32_Phdr*) ((uint) elf32Phdr + elf32Ehdr->e_phentsize * k);
+		Elf32_Phdr* h = &prog_hdrs[k];
 		if (h->p_type != PT_LOAD)
 			continue;
-		if (h->p_offset <= (uint) file_got_addr - mod->start_addr &&
-			h->p_offset + h->p_memsz >= (uint) file_got_addr - mod->start_addr)
+		if (h->p_offset <= (uint) file_got_addr - start_address &&
+		    h->p_offset + h->p_memsz >= (uint) file_got_addr - start_address)
 		{
 			got_segment_hdr = h;
 			break;
@@ -185,89 +164,143 @@ Elf32_Phdr* ELF::get_GOT_segment(const uint* file_got_addr)
 	return got_segment_hdr;
 }
 
-Elf32_Dyn* ELF::get_dyn_table()
+Elf32_Sym* ELF::get_symbol(const char* symbol_name)
 {
-	for (int k = 0; k < elf32Ehdr->e_shnum; ++k)
+	uint lib_dynsym_num_entries = dynsym_hdr->sh_size / dynsym_hdr->sh_entsize;
+
+	for (uint i = 1; i < lib_dynsym_num_entries; i++)
 	{
-		Elf32_Shdr* h = (Elf32_Shdr*) ((uint) elf32Shdr + elf32Ehdr->e_shentsize * k);
+		if (strcmp(&dynsym_strtab[symbols[i].st_name], symbol_name) == 0)
+			return &symbols[i];
+	}
+
+	return nullptr;
+}
+
+ELF::ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr,
+         uint start_address) : global_hdr(*elf32Ehdr)
+{
+	// Copy phdrs
+	prog_hdrs = new Elf32_Phdr[elf32Ehdr->e_phnum];
+	for (int k = 0; k < this->global_hdr.e_phnum; ++k)
+		prog_hdrs[k] = *(Elf32_Phdr*) ((uint) elf32Phdr + this->global_hdr.e_phentsize * k);
+
+	// Copy shdrs
+	section_hdrs = new Elf32_Shdr[elf32Ehdr->e_shnum];
+	for (int k = 0; k < this->global_hdr.e_shnum; ++k)
+		section_hdrs[k] = *(Elf32_Shdr*) ((uint) elf32Shdr + this->global_hdr.e_shentsize * k);
+
+	// Copy dynamic table
+	dyn_table = nullptr;
+	for (int k = 0; k < this->global_hdr.e_shnum; ++k)
+	{
+		Elf32_Shdr* h = (Elf32_Shdr*) ((uint) elf32Shdr + this->global_hdr.e_shentsize * k);
 
 		if (h->sh_type != SHT_DYNAMIC)
 			continue;
-		return (Elf32_Dyn*) (mod->start_addr + h->sh_offset);
+		uint num_entries = h->sh_size / h->sh_entsize;
+		dyn_table = new Elf32_Dyn[num_entries];
+		Elf32_Dyn* dyn_table = (Elf32_Dyn*) (start_address + h->sh_offset);
+		int i = 0;
+		for (; dyn_table->d_tag != DT_NULL; dyn_table++, i++)
+			this->dyn_table[i] = *dyn_table;
+		this->dyn_table[i] = *dyn_table;
+
+		break;
 	}
 
-	return nullptr;
-}
+	// Copy interpreter path
+	interpreter_name = nullptr;
+	for (int k = 0; k < this->global_hdr.e_phnum; ++k)
+	{
+		Elf32_Phdr* h = &prog_hdrs[k];
 
-Elf32_Rel* ELF::get_rel_plt()
-{
+		if (h->p_type != PT_INTERP)
+			continue;
+
+		char* interpr_path = (char*) start_address + h->p_offset;
+		interpreter_name = new char[strlen(interpr_path) + 1];
+		strcpy((char*) interpreter_name, interpr_path);
+		break;
+	}
+
+	// Copy strtab
 	Elf32_Shdr* sh_strtab_h = (Elf32_Shdr*) ((uint) elf32Shdr +
-											 elf32Ehdr->e_shentsize * elf32Ehdr->e_shstrndx);
-	char* strtab = (char*) (mod->start_addr + sh_strtab_h->sh_offset);
+	                                         elf32Ehdr->e_shentsize * elf32Ehdr->e_shstrndx);
+	char* shstrtab = (char*) (start_address + sh_strtab_h->sh_offset);
+
+	// Copy relocation entries
+	relocs = nullptr;
 	for (int k = 0; k < elf32Ehdr->e_shnum; ++k)
 	{
 		Elf32_Shdr* h = (Elf32_Shdr*) ((uint) elf32Shdr + elf32Ehdr->e_shentsize * k);
-		if (h->sh_type != SHT_REL || strcmp(".rel.plt", &strtab[h->sh_name]) != 0)
+		if (h->sh_type != SHT_REL || strcmp(".rel.plt", &shstrtab[h->sh_name]) != 0)
 			continue;
-		return (Elf32_Rel*) (mod->start_addr + h->sh_offset);
+		Elf32_Rel* r = (Elf32_Rel*) (start_address + h->sh_offset);
+		uint num_entries = h->sh_size / h->sh_entsize;
+		relocs = new Elf32_Rel[num_entries];
+		for (uint i = 0; i < num_entries; i++)
+			relocs[i] = *r++;
+		break;
 	}
 
-	return nullptr;
-}
-
-Elf32_Shdr* ELF::get_dynsym_hdr()
-{
+	// Copy dynsym header and dynsym strtab
+	dynsym_hdr = nullptr;
+	dynsym_strtab = nullptr;
 	for (int k = 0; k < elf32Ehdr->e_shnum; ++k)
 	{
 		Elf32_Shdr* h = (Elf32_Shdr*) ((uint) elf32Shdr + elf32Ehdr->e_shentsize * k);
 
 		if (h->sh_type != SHT_DYNSYM)
 			continue;
-		return h;
+		dynsym_hdr = new Elf32_Shdr;
+		memcpy(dynsym_hdr, h, sizeof(Elf32_Shdr));
+		Elf32_Shdr* dyn_strtab_h = &section_hdrs[h->sh_link];
+		dynsym_strtab = new char[dyn_strtab_h->sh_size];
+		memcpy((char*) dynsym_strtab, (char*) start_address + dyn_strtab_h->sh_offset, dyn_strtab_h->sh_size);
+		break;
 	}
 
-	return nullptr;
-}
-
-Elf32_Sym* ELF::get_symbol(const char* symbol_name)
-{
-	Elf32_Shdr* lib_dynsym_hdr = get_dynsym_hdr();
-	char* strtab = (char*) (mod->start_addr +
-							((Elf32_Shdr*) ((uint) elf32Shdr +
-											elf32Ehdr->e_shentsize * lib_dynsym_hdr->sh_link))->sh_offset);
-	uint lib_dynsym_num_entries = lib_dynsym_hdr->sh_size / lib_dynsym_hdr->sh_entsize;
-
-	for (uint i = 1; i < lib_dynsym_num_entries; i++)
+	// Copy symbols
+	symbols = nullptr;
+	if (dynsym_hdr)
 	{
-		Elf32_Sym* lib_symbol_entry = (Elf32_Sym*) (mod->start_addr + lib_dynsym_hdr->sh_offset +
-													i * lib_dynsym_hdr->sh_entsize);
-		if (strcmp(&strtab[lib_symbol_entry->st_name], symbol_name) == 0)
-			return lib_symbol_entry;
+		uint lib_dynsym_num_entries = dynsym_hdr->sh_size / dynsym_hdr->sh_entsize;
+		symbols = new Elf32_Sym[lib_dynsym_num_entries];
+		for (uint i = 0; i < lib_dynsym_num_entries; i++)
+		{
+			Elf32_Sym* lib_symbol_entry = (Elf32_Sym*) (start_address + dynsym_hdr->sh_offset +
+			                                            i * dynsym_hdr->sh_entsize);
+			symbols[i] = *lib_symbol_entry;
+		}
 	}
-
-	return nullptr;
-
-
 }
 
-ELF::ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr, GRUB_module* mod) : elf32Ehdr(elf32Ehdr),
-																								  elf32Phdr(elf32Phdr),
-																								  elf32Shdr(elf32Shdr),
-																								  mod(mod)
-{}
-
-ELF::ELF(GRUB_module* mod) : ELF((Elf32_Ehdr*) mod->start_addr,
-								 (Elf32_Phdr*) (mod->start_addr + ((Elf32_Ehdr*) mod->start_addr)->e_phoff),
-								 (Elf32_Shdr*) (mod->start_addr + ((Elf32_Ehdr*) mod->start_addr)->e_shoff), mod)
+ELF::ELF(uint start_address)
+	: ELF((Elf32_Ehdr*) start_address,
+	      (Elf32_Phdr*) (start_address + ((Elf32_Ehdr*) start_address)->e_phoff),
+	      (Elf32_Shdr*) (start_address + ((Elf32_Ehdr*) start_address)->e_shoff),
+	      start_address)
 {
 }
 
-size_t ELF::base_address()
+ELF::~ELF()
+{
+	delete[] prog_hdrs;
+	delete[] section_hdrs;
+	delete[] dyn_table;
+	delete[] interpreter_name;
+	delete[] relocs;
+	delete dynsym_hdr;
+	delete[] symbols;
+}
+
+size_t ELF::base_address() const
 {
 	size_t lowest_address = -1;
-	for (int k = 0; k < elf32Ehdr->e_phnum; ++k)
+	for (int k = 0; k < global_hdr.e_phnum; ++k)
 	{
-		Elf32_Phdr* h = (Elf32_Phdr*) ((uint) elf32Phdr + elf32Ehdr->e_phentsize * k);
+		Elf32_Phdr* h = &prog_hdrs[k];
 		if (h->p_type != PT_LOAD)
 			continue;
 
@@ -279,7 +312,7 @@ size_t ELF::base_address()
 	return lowest_address & ~(PAGE_SIZE - 1); // Truncate to nearest page size multiple
 }
 
-size_t ELF::num_pages()
+size_t ELF::num_pages() const
 {
 	return (get_highest_runtime_addr() + PAGE_SIZE - 1) / PAGE_SIZE;
 }

@@ -1,9 +1,11 @@
 #include "scheduler.h"
+
+#include "dentry.h"
 #include "PIT.h"
 #include "system.h"
 #include "GDT.h"
+#include "VFS.h"
 #include "clib/stdio.h"
-#include "clib/string.h"
 
 uint Scheduler::pid_pool = 0;
 pid_t Scheduler::running_process = MAX_PROCESSES;
@@ -29,7 +31,7 @@ Process* Scheduler::get_next_process()
 
 		if (proc->is_terminated())
 		{
-			free_terminateed_process(*proc);
+			free_terminated_process(*proc);
 			ready_queue.start = (ready_queue.start + 1) % MAX_PROCESSES;
 			ready_queue.count--;
 		}
@@ -105,19 +107,56 @@ void Scheduler::start_module(uint module, pid_t ppid, int argc, const char** arg
 		printf_error("Max process are already running");
 		return;
 	}
-	pid_t pid = Scheduler::get_free_pid();
+	pid_t pid = get_free_pid();
 	if (pid == MAX_PROCESSES)
 	{
 		printf_error("No more PID available");
 		return;
 	}
 
-	Process* proc = Process::from_module(&get_grub_modules()[module], pid, ppid, argc, argv);
+	Process* proc = Process::from_memory(get_grub_modules()[module].start_addr, pid, ppid, argc, argv);
 	if (!proc)
 		return;
 
 	processes[pid] = proc;
 	set_process_ready(proc);
+}
+
+bool Scheduler::exec(const char* path, pid_t ppid, int argc, const char** argv)
+{
+	if (ready_queue.count == MAX_PROCESSES)
+	{
+		printf_error("Max process are already running");
+		return false;
+	}
+	pid_t pid = get_free_pid();
+	if (pid == MAX_PROCESSES)
+	{
+		printf_error("No more PID available");
+		return false;
+	}
+
+	Dentry* dentry = VFS::browse_to(path);
+	if (!dentry)
+		return false;
+
+	char* buf = new char[dentry->inode->size];
+	if (!mmap_to_buf(path, 0, dentry->inode->size, buf))
+	{
+		printf_error("mmap_to_buf() failed");
+		delete[] buf;
+		return false;
+	}
+
+	Process* proc = Process::from_memory((uint) buf, pid, ppid, argc, argv);
+	delete[] buf;
+	if (!proc)
+		return false;
+
+	processes[pid] = proc;
+	set_process_ready(proc);
+
+	return true;
 }
 
 
@@ -182,7 +221,7 @@ void Scheduler::release_pid(pid_t pid)
 	pid_pool &= ~(1 << pid);
 }
 
-void Scheduler::free_terminateed_process(Process& p)
+void Scheduler::free_terminated_process(Process& p)
 {
 	release_pid(p.pid);
 	delete &p;

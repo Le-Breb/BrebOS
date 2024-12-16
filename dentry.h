@@ -6,12 +6,12 @@
 class Dentry
 {
 public:
-	Dentry(const Inode* inode, const Dentry* parent, const char* name);
+	Dentry(Inode* inode, const Dentry* parent, const char* name);
 
 	~Dentry();
 
 public:
-	const Inode* inode;
+	Inode* inode;
 	const Dentry* parent;
 	const char* name;
 };

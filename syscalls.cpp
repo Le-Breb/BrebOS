@@ -9,8 +9,8 @@
 void Syscall::start_process(cpu_state_t* cpu_state)
 {
 	// Load child process and set it ready
-	Scheduler::start_module(cpu_state->ebx, Scheduler::get_running_process_pid(), cpu_state->ecx,
-	                        (const char**) cpu_state->edx);
+	Scheduler::exec((char*) cpu_state->ebx, Scheduler::get_running_process_pid(), cpu_state->ecx,
+	                (const char**) cpu_state->edx);
 }
 
 void Syscall::printf(cpu_state_t* cpu_state)
@@ -56,7 +56,7 @@ void Syscall::dynlk(cpu_state_t* cpu_state)
 		printf_error("running process address does not match calling process address");
 
 	// Get relocation table
-	Elf32_Rel* reloc_table = p->elf->get_rel_plt();
+	Elf32_Rel* reloc_table = p->elf->relocs;
 	if (reloc_table == nullptr)
 	{
 		printf_error("no reloc table");
@@ -74,16 +74,12 @@ void Syscall::dynlk(cpu_state_t* cpu_state)
 	}
 
 	// Get dynsym and its string table
-	Elf32_Shdr* dynsym_hdr = p->elf->get_dynsym_hdr();
+	Elf32_Shdr* dynsym_hdr = p->elf->dynsym_hdr;
 	if (dynsym_hdr == 0x00)
 	{
 		printf_error("Where tf is dynsym ?");
 		terminate_process(p);
 	}
-
-	Elf32_Shdr* strtab_h = ((Elf32_Shdr*) ((uint) p->elf->elf32Shdr +
-	                                       p->elf->elf32Ehdr->e_shentsize * dynsym_hdr->sh_link));
-	char* strtab = (char*) (p->elf->mod->start_addr + strtab_h->sh_offset);
 
 	// Check symbol index makes sense
 	uint dynsym_num_entries = dynsym_hdr->sh_size / dynsym_hdr->sh_entsize;
@@ -92,19 +88,14 @@ void Syscall::dynlk(cpu_state_t* cpu_state)
 		             dynsym_num_entries);
 
 	// Get symbol name
-	Elf32_Sym* s = (Elf32_Sym*) (p->elf->mod->start_addr + dynsym_hdr->sh_offset +
-	                             symbol * dynsym_hdr->sh_entsize);
-	char* symbol_name = &strtab[s->st_name];
+	Elf32_Sym* s = &p->elf->symbols[symbol];
+	const char* symbol_name = &p->elf->dynsym_strtab[s->st_name];
 
-	// Get lib
-	GRUB_module* lib_mod = &get_grub_modules()[3];
-	ELF lib_elf(lib_mod);
-
-	// Get symbol in lib
-	Elf32_Sym* lib_s = lib_elf.get_symbol(symbol_name);
+	// Get symbol in kapi
+	Elf32_Sym* lib_s = p->kapi_elf->get_symbol(symbol_name);
 	if (lib_s == nullptr)
 	{
-		printf_error("Symbol %s not found in klib", symbol_name);
+		printf_error("Symbol %s not found in kapi", symbol_name);
 		terminate_process(p);
 	}
 
@@ -125,7 +116,7 @@ void Syscall::get_key()
 	__asm__ volatile("int $0x20");
 }
 
-[[noreturn]] void Syscall::dispatcher(cpu_state_t* cpu_state, struct stack_state* stack_state)
+[[noreturn]] void Syscall::dispatcher(cpu_state_t* cpu_state, stack_state_t* stack_state)
 {
 	Process* p = Scheduler::get_running_process();
 

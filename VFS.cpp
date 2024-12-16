@@ -30,7 +30,7 @@ void VFS::init()
 		return;
 	}
 
-	// Mount File Systems
+	// Mount other File Systems
 	for (uint i = 1; i < FS::fs_list->get_size(); ++i)
 	{
 		FS* fs = (FS*) FS::fs_list->get_at(i);
@@ -57,11 +57,20 @@ bool VFS::touch(const char* pathname)
 	memset(p + i, 0, path_length - i);
 	// Extract file name
 	const char* file_name = pathname + i + 1;
+	if (!strlen(file_name))
+	{
+		printf_error("Empty file name");
+		delete[] p;
+		return false;
+	}
 
 	Dentry* dentry = browse_to(p);
-	delete[] p;
-	if (dentry == nullptr)
+	if (!dentry || dentry->inode->type != Inode::Dir)
+	{
+		printf_error("%s no such/not a directory", pathname);
 		return false;
+	}
+	delete[] p;
 
 	return dentry->inode->superblock->get_fs()->touch(*dentry, file_name);
 }
@@ -69,26 +78,20 @@ bool VFS::touch(const char* pathname)
 bool VFS::ls(const char* pathname)
 {
 	// Basic path checks
-	if (!pathname || pathname[0] != '/')
+	if (!pathname)
 	{
 		printf_error("Invalid path");
 		return false;
 	}
 
-	// Create path copy ensuring it ends with '/'
-	size_t path_length = strlen(pathname);
-	char* p = new char[path_length + 2]; // Psth of parent directory
-	strcpy(p, pathname);
-	if (pathname[path_length - 1] != '/')
-	{
-		p[path_length++] = '/';
-		p[path_length] = '\0';
-	}
+	Dentry* dentry = browse_to(pathname);
 
-	Dentry* dentry = browse_to(p);
-	delete[] p;
-	if (!dentry)
+	// Couldn't browse up to parent directory, abort
+	if (!dentry || dentry->inode->type != Inode::Dir)
+	{
+		printf_error("%s no such/not a directory", pathname);
 		return false;
+	}
 
 	return dentry->inode->superblock->get_fs()->ls(*dentry);
 }
@@ -122,6 +125,12 @@ bool VFS::mkdir(const char* pathname)
 
 	// ~cd parent
 	Dentry* dentry = browse_to(parent_dir_path);
+	// Couldn't browse up to parent directory, abort
+	if (dentry->inode->type != Inode::Dir)
+	{
+		printf_error("%s no such/not a directory", pathname);
+		return false;
+	}
 	delete[] parent_dir_path;
 	if (!dentry)
 		return false;
@@ -130,7 +139,7 @@ bool VFS::mkdir(const char* pathname)
 }
 
 
-Dentry* VFS::get_cached_dentry(Dentry* parent, const char* name, uint type)
+Dentry* VFS::get_cached_dentry(Dentry* parent, const char* name, Inode::Type type) // Todo: use a hash map
 {
 	for (uint i = 0; i < num_dentries; ++i)
 	{
@@ -161,7 +170,7 @@ Dentry* VFS::browse_to(const char* path)
 		token = strtok_r(nullptr, "/", &svptr);
 	}
 
-	// Pure virtual node, cannot create anything there
+	// Pure virtual node, cannot do anything there
 	if (!dentry->inode->superblock)
 	{
 		printf_error("Path targets full virtual Inode");
@@ -170,29 +179,37 @@ Dentry* VFS::browse_to(const char* path)
 	}
 
 	// Full path cannot be fully browsed only using cached entries, now manually browse
+	FS* fs = dentry->inode->superblock->get_fs();
 	while (token)
 	{
-		FS* fs = dentry->inode->superblock->get_fs();
-		dentry = fs->get_child_entry(*dentry, token);
-		if (!dentry || dentry->inode->type != Inode::Dir)
+		if (dentry->inode->type != Inode::Dir)
 		{
-			printf_error("%s no such/not a directory", path);
+			printf_error("%s not a directory", path);
+			delete[] p;
+			return nullptr;
+		}
+		dentry = fs->get_child_entry(*dentry, token);
+		if (!dentry)
+		{
+			printf_error("%s no such directory", path);
 			delete[] p;
 			return nullptr;
 		}
 
+		if (num_inodes == MAX_INODES || num_dentries == MAX_DENTRIES)
+		{
+			printf_error("Too many inodes or dentries");
+			delete[] p;
+		}
+
+		// Register node/dentry in cache
+		inodes[num_inodes++] = dentry->inode;
+		dentries[num_dentries++] = dentry;
+
 		token = strtok_r(nullptr, "/", &svptr);
 	}
-
-	// Couldn't browse up to parent directory, abort
-	if (token || dentry->inode->type != Inode::Dir)
-	{
-		printf_error("%s no such/not a directory", path);
-		delete[] p;
-		return nullptr;
-	}
-
 	delete[] p;
+
 	return dentry;
 }
 
@@ -217,6 +234,9 @@ bool VFS::mount(FS* fs)
 
 bool VFS::mount_rootfs(FS* fs)
 {
+	if (inodes[0])
+		return false;
+
 	// Compute mount point
 	char mount_point[] = {'/', '\0'};
 

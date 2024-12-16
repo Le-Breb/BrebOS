@@ -324,25 +324,6 @@ bool FAT_drive::load_file_to_buf(const char* path, uint offset, uint length, voi
 		return false;
 	// Get file name
 	const char* file_name = tokens[num_tokens - 1];
-	uint l = strlen(file_name);
-	if (l > 11)
-	{
-		printf_error("Dir name requires LFN support");
-		return false;
-	}
-	// Find dot
-	uint last_dot_pos = l;
-	for (uint i = l; i > 0; --i)
-		if (file_name[i] == '.')
-		{
-			last_dot_pos = i;
-			break;
-		}
-	if (last_dot_pos >= 8)
-	{
-		printf_error("extension is too long");
-		return false;
-	}
 
 	uint active_cluster, active_sector, FAT_offset, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
 	if (!browse_to_folder_parent(tokens + 1, num_tokens - 2, active_cluster, active_sector,
@@ -399,23 +380,6 @@ Dentry* FAT_drive::get_child_entry(const Dentry& parent_dentry, const char* name
 	// Make sure path makes sense
 	if (!name || name[0] == '/')
 		return nullptr;
-	// Tokenise path
-	uint l = strlen(name);
-	if (l > 11)
-	{
-		printf_error("Dir name requires LFN support");
-		return nullptr;
-	}
-	// Find dot
-	uint last_dot_pos = l;
-	for (uint i = l; i > 0; --i)
-		if (name[i] == '.')
-		{
-			last_dot_pos = i;
-			break;
-		}
-	if (last_dot_pos >= 8)
-		return nullptr;
 
 	uint parent_sector = parent_dentry.inode->lba;
 	uint parent_cluster = parent_sector/* * bs.sectors_per_cluster*/;
@@ -426,9 +390,27 @@ Dentry* FAT_drive::get_child_entry(const Dentry& parent_dentry, const char* name
 		return nullptr;
 
 	// Skip used dir entries, aka files/folders inside wd
-	while (dir_entry_id * sizeof(DirEntry) < FAT_Buf_size && !entries[dir_entry_id].is_free() &&
-	       strcmp(entries[dir_entry_id].get_name(), name) != 0)
+	bool found_in_lfn = false;
+	while (dir_entry_id * sizeof(DirEntry) < FAT_Buf_size && !entries[dir_entry_id].is_free())
+	{
+		if (found_in_lfn) // File name matched in previous entry which is a fln entry referring to the current entry
+			break;
+		bool lfn = entries[dir_entry_id].is_LFN();
+		char* entry_name = lfn
+			                   ? ((LongDirEntry*) &entries[dir_entry_id])->get_uglily_converted_utf8_name()
+			                   : entries[dir_entry_id].get_name();
+
+		bool match = !strcmp(entry_name, name);
+		delete[] entry_name;
+		if (match)
+		{
+			found_in_lfn = lfn;
+			if (!lfn)
+				break;
+		}
+
 		dir_entry_id++;
+	}
 
 	if (dir_entry_id * sizeof(DirEntry) >= FAT_Buf_size || entries[dir_entry_id].is_free())
 		return nullptr;
@@ -446,26 +428,6 @@ bool FAT_drive::touch(const Dentry& parent_dentry, const char* entry_name)
 	// Make sure path makes sense
 	if (!entry_name || entry_name[0] == '/')
 		return false;
-	// Tokenise path
-	uint l = strlen(entry_name);
-	if (l > 11)
-	{
-		printf_error("Dir name requires LFN support");
-		return false;
-	}
-	// Find dot
-	uint last_dot_pos = l;
-	for (uint i = l; i > 0; --i)
-		if (entry_name[i] == '.')
-		{
-			last_dot_pos = i;
-			break;
-		}
-	if (last_dot_pos >= 8)
-	{
-		printf_error("extension is too long");
-		return false;
-	}
 
 	uint parent_sector = parent_dentry.inode->lba;
 	uint parent_cluster = parent_sector/* * bs.sectors_per_cluster*/;
@@ -706,7 +668,7 @@ char* DirEntry::get_name() const
 		n[i++] = name[j];
 	}
 	// If entry is a file, and it has an extension, add .
-	if (!is_directory() && name[10] != NAME_PADDING_BYTE)
+	if (!is_directory() && name[8] != NAME_PADDING_BYTE)
 		n[i++] = '.';
 	for (int j = 8; j < 11; ++j)
 	{

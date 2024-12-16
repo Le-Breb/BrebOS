@@ -17,9 +17,9 @@ extern "C" [[noreturn]] void exit();
 
 /** Executes a GRUB module
  *
- * @param module_id Module ID
+ * @param path program path
  */
-void start_process(unsigned int module_id, int argc, const char** argv);
+void exec(const char* path, int argc, const char** argv);
 
 /**
  * Gets PID

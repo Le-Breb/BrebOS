@@ -4,7 +4,7 @@ CC = i686-elf-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
 -c -g -fno-exceptions -fno-rtti
 libgcc=$(shell i686-elf-gcc $(CFLAGS) -print-libgcc-file-name)
-LDFLAGS = -T link_program.ld -melf_i386 -g -L../klib/build/ -lsyscalls -dynamic-linker /dynlk
+LDFLAGS = -T link_program.ld -melf_i386 -g -L../kapi/build/ -lkapi -dynamic-linker /dynlk
 AS = nasm
 ASFLAGS = -f elf -F dwarf -g
 BUILD_DIR=build
@@ -13,10 +13,10 @@ all: program
 
 .PHONY: program
 
-klib:
-	make -C ../klib
+kapi:
+	make -C ../kapi
 
-program: $(OBJECTS) klib
+program: $(OBJECTS) kapi
 	ld $(LDFLAGS) -o $(BUILD_DIR)/program $(OBJECTS) $(libgcc)
 
 $(BUILD_DIR)/%.o: %.cpp
