@@ -6,7 +6,7 @@
 class Dentry
 {
 public:
-	Dentry(Inode* inode, const Dentry* parent, const char* name);
+	Dentry(Inode* inode, Dentry* parent, const char* name);
 
 	~Dentry();
 

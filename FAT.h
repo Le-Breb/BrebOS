@@ -3,7 +3,6 @@
 
 #include "clib/stddef.h"
 #include "clib/stdint.h"
-#include "ATA.h"
 #include "FS.h"
 #include "dentry.h"
 
@@ -192,7 +191,7 @@ class FAT_drive : public FS
 
 	static FAT_drive* from_drive(unsigned char drive);
 
-	Dentry* get_child_entry(const Dentry& parent_dentry, const char* name) override;
+	Dentry* get_child_entry(Dentry& parent_dentry, const char* name) override;
 
 public:
 	bool touch(const Dentry& parent_dentry, const char* entry_name) override;

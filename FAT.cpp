@@ -361,7 +361,7 @@ void* FAT_drive::load_file_to_buf(const char* file_name, Dentry* parent_dentry, 
 }
 
 
-Dentry* FAT_drive::get_child_entry(const Dentry& parent_dentry, const char* name)
+Dentry* FAT_drive::get_child_entry(Dentry& parent_dentry, const char* name)
 {
 	// Make sure path makes sense
 	if (!name || name[0] == '/')
