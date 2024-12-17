@@ -9,6 +9,9 @@ uint VFS::num_dentries = 0;
 Inode* VFS::inodes[MAX_INODES] = {nullptr};
 Dentry* VFS::dentries[MAX_DENTRIES] = {nullptr};
 File* VFS::fds[MAX_OPEN_FILES] = {nullptr};
+uint VFS::num_path = 0;
+Dentry* VFS::path[PATH_CAPACITY] = {};
+
 
 void VFS::init()
 {
@@ -36,6 +39,9 @@ void VFS::init()
 		FS* fs = (FS*) FS::fs_list->get_at(i);
 		mount(fs);
 	}
+
+	if (!add_to_path("/bin"))
+		printf_error("Failed to add /bin to path");
 }
 
 bool VFS::touch(const char* pathname)
@@ -150,14 +156,30 @@ Dentry* VFS::get_cached_dentry(Dentry* parent, const char* name, Inode::Type typ
 	return nullptr;
 }
 
-Dentry* VFS::browse_to(const char* path)
+bool VFS::add_to_path(const char* path)
+{
+	if (num_inodes >= PATH_CAPACITY)
+		return false;
+
+	Dentry* dentry = browse_to(path);
+	if (!dentry || dentry->inode->type != Inode::Dir)
+	{
+		delete dentry;
+		return false;
+	}
+	VFS::path[num_path++] = dentry;
+
+	return true;
+}
+
+Dentry* VFS::browse_to(const char* path, Dentry* starting_point)
 {
 	char* svptr; // Internal pointer for strok_r calls
 
 	char* p = new char[strlen(path) + 1];
 	strcpy(p, path);
 	char* token = strtok_r(p, "/", &svptr);
-	Dentry* dentry = dentries[0];
+	Dentry* dentry = starting_point;
 
 	// Browse cached dentries as much as possible
 	while (token)
@@ -213,8 +235,25 @@ Dentry* VFS::browse_to(const char* path)
 	return dentry;
 }
 
+Dentry* VFS::browse_to(const char* path)
+{
+	if (path[0] == '/')
+		return browse_to(path, dentries[0]);
+
+	for (uint i = 0; i < num_path; ++i)
+	{
+		Dentry* d = browse_to(path, VFS::path[i]);
+		if (d)
+			return d;
+	}
+
+	return nullptr;
+}
+
 void* VFS::load_file(const char* path, uint offset, uint length)
 {
+	if (!path)
+		return nullptr;
 	Dentry* dentry = browse_to(path);
 	if (!dentry || dentry->inode->type != Inode::File)
 	{

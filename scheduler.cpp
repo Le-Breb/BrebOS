@@ -136,10 +136,6 @@ bool Scheduler::exec(const char* path, pid_t ppid, int argc, const char** argv)
 		return false;
 	}
 
-	Dentry* dentry = VFS::browse_to(path);
-	if (!dentry)
-		return false;
-
 	void* buf = VFS::load_file(path);
 	if (!buf)
 		return false;

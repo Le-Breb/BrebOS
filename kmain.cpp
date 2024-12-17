@@ -59,7 +59,7 @@ extern "C" int kmain(uint ebx)
 	FB::ok();
 
 	// Set INIT process ready
-	Scheduler::exec("/bin/program", 0, 0, nullptr);
+	Scheduler::exec("program", 0, 0, nullptr);
 
 	// Run processes! :D
 	PIC::enable_preemptive_scheduling();

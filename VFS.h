@@ -7,18 +7,11 @@
 #define MAX_OPEN_FILES 100
 #define MAX_INODES 100
 #define MAX_DENTRIES 200
+#define PATH_CAPACITY 1024
 
 #include "list.h"
 #include "file.h"
 #include "FS.h"
-
-class Path
-{
-	uint num_inodes;
-	list* inodes;
-
-public:
-};
 
 /**
  * Virtual File System. \n
@@ -34,6 +27,8 @@ class VFS
 	static Inode* inodes[MAX_INODES]; // Caches Inodes entries. [0] = /, [1] = /mnt
 	static Dentry* dentries[MAX_DENTRIES]; // Caches directory entries. [0] = /, [1] = /mnt
 	static File* fds[MAX_OPEN_FILES]; // Open file descriptors
+	static Dentry* path[PATH_CAPACITY];
+	static uint num_path;
 
 	/**
 	 * Searches a dentry into cached ones
@@ -42,6 +37,10 @@ class VFS
 	 * @return matching cached dentry, or nullptr if not found
 	 */
 	static Dentry* get_cached_dentry(Dentry* parent, const char* name, Inode::Type type);
+
+	static bool add_to_path(const char* path);
+
+	static Dentry* browse_to(const char* path, Dentry* starting_point);
 
 public:
 	static void init();
@@ -69,6 +68,7 @@ public:
 	/**
 	 * Browses file system to the folder located at path
 	 * @param path path to browse to
+	 * @param starting_point
 	 * @return Dentry of folder at path, nullptr if something went wront
 	 */
 	static Dentry* browse_to(const char* path);
