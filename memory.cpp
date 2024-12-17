@@ -1,7 +1,7 @@
 #include "memory.h"
 #include "clib/stdio.h"
 #include "clib/string.h"
-#include "FAT.h"
+#include "VFS.h"
 
 extern "C" void boot_page_directory();
 
@@ -554,12 +554,6 @@ uint* get_stack_top_ptr()
 	return stack_top_ptr;
 }
 
-bool mmap_to_buf(const char* path, uint offset, size_t length, void* buf)
-{
-	// Todo: use VFS for path resolution and fs redirection
-	return FAT_drive::load_file_to_buf(0, path, offset, length, buf);
-}
-
 void* mmap(int prot, const char* path, uint offset, size_t length)
 {
 	if (prot)
@@ -567,15 +561,6 @@ void* mmap(int prot, const char* path, uint offset, size_t length)
 		printf_error("Prot not supported yet");
 		return nullptr;
 	}
-	char* mem = new char[length];
-	if (!mem)
-		return nullptr;
 
-	if (!mmap_to_buf(path, offset, length, mem))
-	{
-		delete[] mem;
-		return nullptr;
-	}
-
-	return mem;
+	return VFS::load_file(path, offset, length);
 }

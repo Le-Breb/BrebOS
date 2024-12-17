@@ -192,8 +192,6 @@ class FAT_drive : public FS
 
 	static FAT_drive* from_drive(unsigned char drive);
 
-	bool load_file_to_buf(const char* path, uint offset, uint length, void* buffer);
-
 	Dentry* get_child_entry(const Dentry& parent_dentry, const char* name) override;
 
 public:
@@ -209,7 +207,7 @@ public:
 
 	static void shutdown();
 
-	static bool load_file_to_buf(uint drive_id, const char* path, uint offset, uint length, void* buffer);
+	void* load_file_to_buf(const char* file_name, Dentry* parent_dentry, uint offset, uint length) override;
 
 	~FAT_drive() override;
 

@@ -213,6 +213,19 @@ Dentry* VFS::browse_to(const char* path)
 	return dentry;
 }
 
+void* VFS::load_file(const char* path, uint offset, uint length)
+{
+	Dentry* dentry = browse_to(path);
+	if (!dentry || dentry->inode->type != Inode::File)
+	{
+		printf_error("%s: no such file", path);
+		return nullptr;
+	}
+
+	return dentry->inode->superblock->get_fs()->load_file_to_buf(dentry->name, dentry->parent, offset,
+	                                                             length ? length : dentry->inode->size);
+}
+
 bool VFS::mount(FS* fs)
 {
 	// Compute mount point

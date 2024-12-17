@@ -312,29 +312,15 @@ void FAT_drive::shutdown()
 		delete drives[i];
 }
 
-bool FAT_drive::load_file_to_buf(const char* path, uint offset, uint length, void* buffer)
+void* FAT_drive::load_file_to_buf(const char* file_name, Dentry* parent_dentry, uint offset, uint length)
 {
-	// Make sure path makes sense
-	if (!path || path[0] != '/')
-		return false;
-	// Tokenise path
-	uint num_tokens;
-	const char** tokens = split_at_slashes(path, &num_tokens);
-	if (!num_tokens || !tokens)
-		return false;
-	// Get file name
-	const char* file_name = tokens[num_tokens - 1];
-
+	uint parent_sector = parent_dentry->inode->lba;
+	uint parent_cluster = parent_sector/* * bs.sectors_per_cluster*/;
 	uint active_cluster, active_sector, FAT_offset, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
-	if (!browse_to_folder_parent(tokens + 1, num_tokens - 2, active_cluster, active_sector,
-	                             FAT_entry_offset, FAT_offset, FAT_sector, table_value, dir_entry_id))
-		return false;
-
 	// ~= cd wd
-	uint wd_cluster = num_tokens == 2 ? extBS_32.root_cluster : entries[dir_entry_id].first_cluster_addr();
-	if (!change_active_cluster(wd_cluster, active_cluster, active_sector, FAT_entry_offset, FAT_offset,
+	if (!change_active_cluster(parent_cluster, active_cluster, active_sector, FAT_entry_offset, FAT_offset,
 	                           FAT_sector, table_value, dir_entry_id))
-		return false;
+		return nullptr;
 
 	// Skip used dir entries, aka files/folders inside wd
 	while (dir_entry_id * sizeof(DirEntry) < FAT_Buf_size && !entries[dir_entry_id].is_free() &&
@@ -342,21 +328,24 @@ bool FAT_drive::load_file_to_buf(const char* path, uint offset, uint length, voi
 		dir_entry_id++;
 
 	if (dir_entry_id * sizeof(DirEntry) >= FAT_Buf_size || entries[dir_entry_id].is_free())
-		return false;
+		return nullptr;
 
 	// Be careful, this pointer losses its meaning when changing active_cluster
 	DirEntry* file_entry = &entries[dir_entry_id];
 	uint next_cluster = file_entry->first_cluster_addr();
 	if (offset + length > file_entry->file_size)
-		return false;
+		return nullptr;
 
 	uint wrote_bytes = 0;
-	char* b = (char*) buffer;
+	char* b = new char[length];
 	while (wrote_bytes < length && next_cluster != CLUSTER_EOC)
 	{
 		if (!change_active_cluster(next_cluster, active_cluster, active_sector, FAT_entry_offset, FAT_offset,
 		                           FAT_sector, table_value, dir_entry_id))
-			return false;
+		{
+			delete[] b;
+			return nullptr;
+		}
 		uint rem = length - wrote_bytes;
 		uint num = rem < ATA_SECTOR_SIZE ? rem : ATA_SECTOR_SIZE;
 		memcpy(b + wrote_bytes, buf, num);
@@ -364,16 +353,13 @@ bool FAT_drive::load_file_to_buf(const char* path, uint offset, uint length, voi
 		next_cluster = table_value;
 	}
 
-	return wrote_bytes == length;
+	if (wrote_bytes == length)
+		return b;
+
+	delete[] b;
+	return nullptr;
 }
 
-
-bool FAT_drive::load_file_to_buf(uint drive_id, const char* path, uint offset, uint length, void* buffer)
-{
-	if (!drives[drive_id])
-		return false;
-	return drives[drive_id]->load_file_to_buf(path, offset, length, buffer);
-}
 
 Dentry* FAT_drive::get_child_entry(const Dentry& parent_dentry, const char* name)
 {

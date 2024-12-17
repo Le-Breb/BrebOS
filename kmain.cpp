@@ -64,7 +64,6 @@ extern "C" int kmain(uint ebx)
 	// Run processes! :D
 	PIC::enable_preemptive_scheduling();
 
-
 	// Not supposed to be executed, but we never know...
 	System::shutdown();
 }

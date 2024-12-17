@@ -140,16 +140,12 @@ bool Scheduler::exec(const char* path, pid_t ppid, int argc, const char** argv)
 	if (!dentry)
 		return false;
 
-	char* buf = new char[dentry->inode->size];
-	if (!mmap_to_buf(path, 0, dentry->inode->size, buf))
-	{
-		printf_error("mmap_to_buf() failed");
-		delete[] buf;
+	void* buf = VFS::load_file(path);
+	if (!buf)
 		return false;
-	}
 
 	Process* proc = Process::from_memory((uint) buf, pid, ppid, argc, argv);
-	delete[] buf;
+	delete[] (char*) buf;
 	if (!proc)
 		return false;
 

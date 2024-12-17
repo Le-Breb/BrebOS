@@ -276,21 +276,16 @@ bool Process::dynamic_loading(uint start_address)
 
 ELF* Process::load_lib(const char* path)
 {
-	Dentry* dentry;
-	if (!((dentry = VFS::browse_to(path))))
+	void* buf = VFS::load_file(path);
+	if (!buf)
 		return nullptr;
-	char* buf = new char[dentry->inode->size];
-	if (!mmap_to_buf(path, 0, dentry->inode->size, buf))
-	{
-		delete[] buf;
-		return nullptr;
-	}
 	uint start_address = (uint) buf;
 
 	if (!ELF::is_valid(start_address, SharedObject))
 		return nullptr;
 
 	ELF* lib_elf = new ELF(start_address);
+	delete[] (char*) buf;
 
 	// Allocate space for lib int process' address space
 	if (!alloc_and_add_lib_pages_to_process(*lib_elf))

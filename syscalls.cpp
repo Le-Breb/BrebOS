@@ -190,22 +190,3 @@ void Syscall::ls(cpu_state_t* cpu_state)
 
 	cpu_state->eax = (uint) VFS::ls(path);
 }
-
-void Syscall::mmap(cpu_state_t* cpu_state, int prot, char* path, uint offset, size_t length)
-{
-	if (length || offset || prot)
-	{
-		printf_error("Only path argument implemented for now");
-		cpu_state->eax = 0;
-		return;
-	}
-	malloc(Scheduler::get_running_process(), cpu_state);
-	if (!cpu_state->eax) // User space allocation failed
-		return;
-	if (!mmap_to_buf(path, offset, length, (void*) cpu_state->eax))
-	{
-		free(Scheduler::get_running_process(), cpu_state);
-		cpu_state->eax = 0;
-		return;
-	}
-}

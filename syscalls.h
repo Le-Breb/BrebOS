@@ -54,8 +54,6 @@ class Syscall
 
 	static void ls(cpu_state_t* cpu_state);
 
-	static void mmap(cpu_state_t* cpu_state, int prot, char* path, uint offset, size_t length);
-
 public:
 	/**
 	 * Handles a syscall

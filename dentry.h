@@ -12,7 +12,7 @@ public:
 
 public:
 	Inode* inode;
-	const Dentry* parent;
+	Dentry* parent;
 	const char* name;
 };
 

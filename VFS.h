@@ -72,6 +72,8 @@ public:
 	 * @return Dentry of folder at path, nullptr if something went wront
 	 */
 	static Dentry* browse_to(const char* path);
+
+	static void* load_file(const char* path, uint offset = 0, uint length = 0);
 };
 
 

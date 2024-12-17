@@ -50,6 +50,7 @@ typedef union memory_header /* memory block header */
 		union memory_header* ptr; /* next block */
 		uint size; /* size of this block */
 	} s;
+
 	Align x; /* force alignment of blocks */
 } memory_header;
 
@@ -136,8 +137,6 @@ GRUB_module* get_grub_modules();
 /** Get pointer to top of kernel stack */
 uint* get_stack_top_ptr();
 
-bool mmap_to_buf(const char* path, uint offset, size_t length, void* buf);
-
-void* mmap(int prot, const char* path, uint offset, size_t length);
+void* mmap(int prot, const char* path, uint offset = 0, size_t length = 0);
 
 #endif //INCLUDE_MEMORY_H
