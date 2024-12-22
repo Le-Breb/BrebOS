@@ -5,7 +5,7 @@ OBJECTS= $(OBJS:%.o=$(BUILD_DIR)/%.o)
 CC = i686-elf-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
 -c -g -fno-exceptions -fno-rtti
-libgcc=$(shell i686-elf-gcc $(CFLAGS) -print-libgcc-file-name)
+libgcc=$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
 CRTI_OBJ=$(BUILD_DIR)/crti.o
 CRTBEGIN_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtbegin.o)
 CRTEND_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtend.o)

@@ -2,7 +2,7 @@ OBJECTS = $(BUILD_DIR)/libkapi.so
 CC = i686-elf-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
 -g -fno-exceptions -fno-rtti
-libgcc=$(shell i686-elf-gcc $(CFLAGS) -print-libgcc-file-name)
+libgcc=$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
 LIBFLAGS = -fPIC -Wl,-shared
 BUILD_DIR=build
 

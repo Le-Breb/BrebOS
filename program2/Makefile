@@ -3,7 +3,7 @@ OBJECTS= $(OBJS:%.o=$(BUILD_DIR)/%.o)
 CC = i686-elf-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
 -c -g -fno-exceptions -fno-rtti
-libgcc=$(shell i686-elf-gcc $(CFLAGS) -print-libgcc-file-name)
+libgcc=$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
 LDFLAGS = -T link_program2.ld -melf_i386 -g -L../kapi/build/ -lkapi -dynamic-linker /dynlk
 AS = nasm
 ASFLAGS = -f elf -F dwarf -g
