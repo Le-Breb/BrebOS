@@ -17,8 +17,23 @@ void FB::scroll()
 		fb[FB_WIDTH * (FB_HEIGHT - 1) + i] = ((((BG & 0x0F) << 4) | (FG & 0x0F)) << 8 | ' ');
 }
 
+void FB::delchar()
+{
+	if (!caret_pos)
+		return;
+	caret_pos--;
+	putchar(' ');
+	caret_pos--;
+	move_cursor(caret_pos);
+}
+
 void FB::putchar(char c)
 {
+	if (c == '\b')
+	{
+		delchar();
+		return;
+	}
 	if (c == '\n')
 	{
 		caret_pos = (caret_pos / FB_WIDTH + 1) * FB_WIDTH;
@@ -43,10 +58,10 @@ void FB::move_cursor(unsigned short pos)
 {
 	if (pos >= 2000)
 		return;
-	outb(FB_COMMAND_PORT, FB_HIGH_BYTE_COMMAND);   /* Send pos high bits command */
-	outb(FB_DATA_PORT, ((pos >> 8) & 0x00FF));     /* Send pos high bits */
-	outb(FB_COMMAND_PORT, FB_LOW_BYTE_COMMAND);    /* Send pos low bits command */
-	outb(FB_DATA_PORT, pos & 0x00FF);              /* Send pos low bits */
+	outb(FB_COMMAND_PORT, FB_HIGH_BYTE_COMMAND); /* Send pos high bits command */
+	outb(FB_DATA_PORT, ((pos >> 8) & 0x00FF)); /* Send pos high bits */
+	outb(FB_COMMAND_PORT, FB_LOW_BYTE_COMMAND); /* Send pos low bits command */
+	outb(FB_DATA_PORT, pos & 0x00FF); /* Send pos low bits */
 }
 
 void FB::clear_screen()

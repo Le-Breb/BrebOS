@@ -34,6 +34,19 @@ void start_program()
 	exec(argv[0], argc, (const char**) argv);
 }
 
+void handlechar(char c)
+{
+	if (c == '\b')
+	{
+          if (!c_id)
+			return;
+          c_id--;
+    }
+	else cmd[c_id++] = c;
+
+	printf("%c", c);
+}
+
 int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 {
 	while (1)
@@ -50,14 +63,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 
 			char c = get_keystroke();
 
+
 			if (c == '\n')
 			{
 				printf("\n");
 				break;
 			}
-
-			cmd[c_id++] = c;
-			printf("%c", c);
+			handlechar(c);
 		}
 
 		// P command: start a program

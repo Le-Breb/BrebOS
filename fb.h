@@ -43,6 +43,7 @@ class FB
 	static short* const fb;
 	static unsigned char BG;
 	static unsigned char FG;
+
 public:
 	static void init();
 
@@ -101,6 +102,9 @@ public:
 
 	/** Scroll one line up  */
 	static void scroll();
+
+	/** Delete a character */
+	static void delchar();
 };
 
 #endif /* INCLUDE_FB_H */

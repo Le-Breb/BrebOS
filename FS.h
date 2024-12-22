@@ -29,7 +29,7 @@ public:
 
 	virtual bool ls(const Dentry& dentry) = 0;
 
-	virtual void* load_file_to_buf(const char* file_name, Dentry* parent_dentry, uint offset, uint length) = 0;
+	virtual void* load_file_to_buf(const char* file_name, Dentry* parent_dentry, uint offset, uint length) = 0	;
 
 	[[nodiscard]] virtual Inode* get_root_node() = 0;
 };
