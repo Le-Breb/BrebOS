@@ -4,8 +4,8 @@
 #include "clib/string.h"
 #include "clib/stdio.h"
 
-uint VFS::num_inodes = 0;
-uint VFS::num_dentries = 0;
+uint VFS::lowest_free_inode = 0;
+uint VFS::lowest_free_dentry = 0;
 Inode* VFS::inodes[MAX_INODES] = {nullptr};
 Dentry* VFS::dentries[MAX_DENTRIES] = {nullptr};
 File* VFS::fds[MAX_OPEN_FILES] = {nullptr};
@@ -22,9 +22,12 @@ void VFS::init()
 
 	// Create /mnt
 	Inode* mnt_node = new Inode(nullptr, 0, 0, Inode::Dir);
-	inodes[num_inodes++] = mnt_node;
 	Dentry* mnt_dentry = new Dentry(mnt_node, dentries[0], "mnt");
-	dentries[num_dentries++] = mnt_dentry;
+	if (!cache_dentry(mnt_dentry))
+	{
+		printf_error("Couldn't mount mnt");
+		return;
+	}
 
 	// FS limit check
 	if (FS::fs_list->get_size()/* + num_inodes*/ >= MAX_FS)
@@ -147,8 +150,10 @@ bool VFS::mkdir(const char* pathname)
 
 Dentry* VFS::get_cached_dentry(Dentry* parent, const char* name, Inode::Type type) // Todo: use a hash map
 {
-	for (uint i = 0; i < num_dentries; ++i)
+	for (uint i = 0; i < MAX_DENTRIES; ++i)
 	{
+		if (!dentries[i])
+			continue;
 		if (!strcmp(dentries[i]->name, name) && dentries[i]->parent == parent && dentries[i]->inode->type == type)
 			return dentries[i];
 	}
@@ -158,7 +163,7 @@ Dentry* VFS::get_cached_dentry(Dentry* parent, const char* name, Inode::Type typ
 
 bool VFS::add_to_path(const char* path)
 {
-	if (num_inodes >= PATH_CAPACITY)
+	if (lowest_free_inode >= PATH_CAPACITY)
 		return false;
 
 	Dentry* dentry = browse_to(path);
@@ -218,21 +223,87 @@ Dentry* VFS::browse_to(const char* path, Dentry* starting_point)
 			return nullptr;
 		}
 
-		if (num_inodes == MAX_INODES || num_dentries == MAX_DENTRIES)
+		if (!cache_dentry(dentry))
 		{
 			printf_error("Too many inodes or dentries");
 			delete[] p;
+			return nullptr;
 		}
-
-		// Register node/dentry in cache
-		inodes[num_inodes++] = dentry->inode;
-		dentries[num_dentries++] = dentry;
 
 		token = strtok_r(nullptr, "/", &svptr);
 	}
 	delete[] p;
 
 	return dentry;
+}
+
+bool VFS::cache_dentry(Dentry* dentry)
+{
+	if (lowest_free_dentry == MAX_DENTRIES)
+		free_unused_cache_entries();
+	// No need to check for lowest_free_inode cause there is one or more dentry per inode,
+	// ie there cannot have more inodes than dentires
+
+	if (lowest_free_dentry == MAX_DENTRIES || lowest_free_inode == MAX_INODES)
+		return false;
+
+	inodes[lowest_free_inode++] = dentry->inode;
+	dentries[lowest_free_dentry++] = dentry;
+
+	while (lowest_free_inode < MAX_INODES && inodes[lowest_free_inode])
+		lowest_free_inode++;
+	while (lowest_free_dentry < MAX_DENTRIES && dentries[lowest_free_dentry])
+		lowest_free_dentry++;
+
+	return true;
+}
+
+void VFS::free_unused_dentry_cache_entries()
+{
+	for (uint i = 2; i < MAX_DENTRIES; ++i) // skip root and mnt entries
+	{
+		if (!dentries[i])
+		{
+			if (i < lowest_free_dentry)
+				lowest_free_dentry = i;
+			continue;
+		}
+		if (!dentries[i]->rc)
+		{
+			delete dentries[i];
+			dentries[i] = nullptr;
+
+			if (i < lowest_free_inode)
+				lowest_free_dentry = i;
+		}
+	}
+}
+
+void VFS::free_unused_inode_cache_entries()
+{
+	for (uint i = 2; i < MAX_INODES; ++i) // skip root and mnt entries
+	{
+		if (!inodes[i])
+		{
+			if (i < lowest_free_inode)
+				lowest_free_inode = i;
+			continue;
+		}
+		if (!inodes[i]->rc)
+		{
+			delete inodes[i];
+			inodes[i] = nullptr;
+
+			if (i < lowest_free_inode)
+				lowest_free_inode = i;
+		}
+	}
+}
+
+void VFS::free_unused_cache_entries()
+{
+	free_unused_dentry_cache_entries();
+	free_unused_inode_cache_entries();
 }
 
 Dentry* VFS::browse_to(const char* path)
@@ -278,8 +349,14 @@ bool VFS::mount(FS* fs)
 	// Get and register FS root
 	Inode* n = fs->get_root_node();
 	Dentry* d = new Dentry(n, dentries[1], mount_point + 4);
-	inodes[num_inodes++] = n;
-	dentries[num_dentries++] = d;
+
+	if (!cache_dentry(d))
+	{
+		delete d;
+		delete n;
+
+		return false;
+	}
 
 	return true;
 }
@@ -299,8 +376,14 @@ bool VFS::mount_rootfs(FS* fs)
 	// Get and register FS root
 	Inode* n = fs->get_root_node();
 	Dentry* d = new Dentry(n, nullptr, mount_point);
-	inodes[num_inodes++] = n;
-	dentries[num_dentries++] = d;
+
+	if (!cache_dentry(d))
+	{
+		delete d;
+		delete n;
+
+		return false;
+	}
 
 	return true;
 }

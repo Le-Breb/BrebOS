@@ -22,8 +22,8 @@
  */
 class VFS
 {
-	static uint num_inodes;
-	static uint num_dentries;
+	static uint lowest_free_inode;
+	static uint lowest_free_dentry;
 	static Inode* inodes[MAX_INODES]; // Caches Inodes entries. [0] = /, [1] = /mnt
 	static Dentry* dentries[MAX_DENTRIES]; // Caches directory entries. [0] = /, [1] = /mnt
 	static File* fds[MAX_OPEN_FILES]; // Open file descriptors
@@ -41,6 +41,14 @@ class VFS
 	static bool add_to_path(const char* path);
 
 	static Dentry* browse_to(const char* path, Dentry* starting_point);
+
+	static bool cache_dentry(Dentry* dentry);
+
+	static void free_unused_dentry_cache_entries();
+
+	static void free_unused_inode_cache_entries();
+
+	static void free_unused_cache_entries();
 
 public:
 	static void init();

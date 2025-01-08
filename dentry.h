@@ -14,6 +14,7 @@ public:
 	Inode* inode;
 	Dentry* parent;
 	const char* name;
+	int rc = 0;
 };
 
 

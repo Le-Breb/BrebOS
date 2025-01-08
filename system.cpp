@@ -20,6 +20,7 @@ extern "C" uint is_running_in_qemu_asm();
 	{
 		printf_info("System halted (Hardware shutdown not implemented)");
 		while (1)
-		{};
+		{
+		};
 	}
 }

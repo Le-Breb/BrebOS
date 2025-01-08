@@ -105,7 +105,7 @@ void Interrupts::gpf_handler(stack_state* stack_state)
 }
 
 extern "C" void
-interrupt_handler(uint kesp, cpu_state_t cpu_state, uint interrupt, struct stack_state stack_state)
+interrupt_handler(uint kesp, cpu_state_t cpu_state, uint interrupt, stack_state_t stack_state)
 {
 	switch (interrupt)
 	{

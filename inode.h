@@ -24,6 +24,8 @@ public:
 	const uint lba; // Logical block address, will be interpreted as needed by FS driver
 
 	const Type type;
+
+	int rc = 0;
 };
 
 

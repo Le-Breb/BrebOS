@@ -419,6 +419,7 @@ void free_release_pages()
 	memory_header* p = freep;
 	for (memory_header* c = freep->s.ptr;; p = c, c = c->s.ptr)
 	{
+		// printf(" - %p", c);
 		uint block_byte_size = c->s.size * sizeof(memory_header);
 		uint aligned_addr_base =
 				((uint) c + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1); // Start addr of first page
@@ -435,6 +436,8 @@ void free_release_pages()
 			continue;
 		}
 
+		// printf("\nFreeing from 0x%x to 0x%x\n", aligned_addr_base, aligned_addr_base + aligned_free_bytes);
+
 		unsigned n_pages = aligned_free_bytes >> 12; // Num pages to free, aligned_free_bytes / PAGE_SIZE
 		unsigned free_size = aligned_free_bytes / sizeof(memory_header); // Freed memory size in sizeof(memory_header)
 		uint remaining_size = c->s.size - free_size;
@@ -442,7 +445,14 @@ void free_release_pages()
 		// Adjust memory headers
 		// Page aligned block entirely removed (remaining_size can't be 0 if block isn't page aligned)
 		if (remaining_size == 0)
-			p->s.ptr = c->s.ptr; // Simply link previous to next
+		{
+			p->s.ptr = c->s.ptr; // Link previous to next
+
+			// Rollback c to previous mem header cause the mem region c is in will be deallocated,
+			// thus the for loop would segfault without this instruction. With it, the for loop
+			// will gently iterate to the next mem header as we just updated previous' next
+			c = p;
+		}
 		else // The block is split into two blocks: one before freed pages and one after them
 		{
 			uint first_block_size = (aligned_addr_base - (uint) c) / sizeof(memory_header);
@@ -486,6 +496,8 @@ void free_release_pages()
 			break;
 		}
 	}
+
+	// printf("\n====\n");
 }
 
 void allocate_page(uint frame_id, uint page_id)

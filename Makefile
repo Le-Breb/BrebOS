@@ -72,6 +72,8 @@ $(OS_ISO): kernel.elf shell program2 libdynlk
 	#Install FAT32 on it
 	mkfs.vfat -F 32 -v disk_image.img
 	#cp disk_image.img2 disk_image.img
+	mmd -i disk_image.img ::/fold
+	mmd -i disk_image.img ::/fold2
 	mmd -i disk_image.img ::/bin
 	mcopy -i disk_image.img $(SHELL_BUILD_DIR)/shell ::/bin
 	mcopy -i disk_image.img $(PROGRAM2_BUILD_DIR)/program2 ::/bin
