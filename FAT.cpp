@@ -315,7 +315,7 @@ void FAT_drive::shutdown()
 void* FAT_drive::load_file_to_buf(const char* file_name, Dentry* parent_dentry, uint offset, uint length)
 {
 	uint parent_sector = parent_dentry->inode->lba;
-	uint parent_cluster = parent_sector/* * bs.sectors_per_cluster*/;
+	uint parent_cluster = parent_sector * bs.sectors_per_cluster;
 	uint active_cluster, active_sector, FAT_offset, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
 	// ~= cd wd
 	if (!change_active_cluster(parent_cluster, active_cluster, active_sector, FAT_entry_offset, FAT_offset,
@@ -368,7 +368,7 @@ Dentry* FAT_drive::get_child_entry(Dentry& parent_dentry, const char* name)
 		return nullptr;
 
 	uint parent_sector = parent_dentry.inode->lba;
-	uint parent_cluster = parent_sector/* * bs.sectors_per_cluster*/;
+	uint parent_cluster = parent_sector * bs.sectors_per_cluster;
 	uint active_cluster, active_sector, FAT_offset, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
 	// ~= cd wd
 	if (!change_active_cluster(parent_cluster, active_cluster, active_sector, FAT_entry_offset, FAT_offset,
@@ -416,7 +416,7 @@ bool FAT_drive::touch(const Dentry& parent_dentry, const char* entry_name)
 		return false;
 
 	uint parent_sector = parent_dentry.inode->lba;
-	uint parent_cluster = parent_sector/* * bs.sectors_per_cluster*/;
+	uint parent_cluster = parent_sector * bs.sectors_per_cluster;
 	uint active_cluster, active_sector, FAT_offset, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
 	// ~= cd wd
 	if (!change_active_cluster(parent_cluster, active_cluster, active_sector, FAT_entry_offset, FAT_offset,
@@ -429,7 +429,7 @@ bool FAT_drive::touch(const Dentry& parent_dentry, const char* entry_name)
 		dir_entry_id++;
 
 	// No free entry in wd cluster
-	if (dir_entry_id * sizeof(DirEntry) == bs.bytes_per_sector * 1/*bs.sectors_per_cluster*/)
+	if (dir_entry_id * sizeof(DirEntry) == bs.bytes_per_sector * bs.sectors_per_cluster)
 	{
 		printf_error("Working directory cluster is full, chaining implementation is needed");
 		return false;
@@ -479,7 +479,7 @@ bool FAT_drive::mkdir(const Dentry& parent_dentry, const char* entry_name)
 	}
 
 	uint parent_sector = parent_dentry.inode->lba;
-	uint parent_cluster = parent_sector/* * bs.sectors_per_cluster*/;
+	uint parent_cluster = parent_sector * bs.sectors_per_cluster;
 	uint active_cluster, active_sector, FAT_offset, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
 	// ~= cd wd
 	if (!change_active_cluster(parent_cluster, active_cluster, active_sector, FAT_entry_offset, FAT_offset,
@@ -491,15 +491,14 @@ bool FAT_drive::mkdir(const Dentry& parent_dentry, const char* entry_name)
 		dir_entry_id++;
 
 	// No free entry in wd cluster
-	if (dir_entry_id * sizeof(DirEntry) == bs.bytes_per_sector * 1/*bs.sectors_per_cluster*/)
+	if (dir_entry_id * sizeof(DirEntry) == bs.bytes_per_sector * bs.sectors_per_cluster)
 	{
 		printf_error("Working directory cluster is full, chaining implementation is needed");
 		return false;
 	}
 
-	uint dir_content_cluster = get_free_cluster(ATA_SECTOR_SIZE * extBS_32.table_size_32/* /
-																			bs.sectors_per_cluster*/ /
-	                                            sizeof(DirEntry));
+	uint dir_content_cluster = get_free_cluster(ATA_SECTOR_SIZE * extBS_32.table_size_32 *
+	                                            bs.sectors_per_cluster * sizeof(DirEntry));
 	if (!dir_content_cluster)
 	{
 		printf_error("no free cluster found");
@@ -556,7 +555,7 @@ bool FAT_drive::mkdir(const Dentry& parent_dentry, const char* entry_name)
 bool FAT_drive::ls(const Dentry& dentry)
 {
 	uint parent_sector = dentry.inode->lba;
-	uint parent_cluster = parent_sector/* * bs.sectors_per_cluster*/;
+	uint parent_cluster = parent_sector * bs.sectors_per_cluster;
 	uint active_cluster, active_sector, FAT_offset, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
 	// ~= cd wd
 	if (!change_active_cluster(parent_cluster, active_cluster, active_sector, FAT_entry_offset, FAT_offset,
