@@ -164,8 +164,7 @@ bool Process::dynamic_loading(uint start_address)
 	// Address of GOT within the ELF file (not where it is loaded nor its runtime address)
 	// In order to know whether base address should be retrieved from values, refer to Figure 2-10: Dynamic Array Tags
 	// in http://www.skyfree.org/linux/references/ELF_Format.pdf
-	int c = 0;
-	for (Elf32_Dyn* d = dyn_table; d->d_tag != DT_NULL; d++, c++)
+	for (Elf32_Dyn* d = dyn_table; d->d_tag != DT_NULL; d++)
 	{
 		switch (d->d_tag)
 		{
@@ -285,16 +284,17 @@ ELF* Process::load_lib(const char* path)
 		return nullptr;
 
 	ELF* lib_elf = new ELF(start_address);
-	delete[] (char*) buf;
 
 	// Allocate space for lib int process' address space
 	if (!alloc_and_add_lib_pages_to_process(*lib_elf))
 	{
 		delete lib_elf;
+		delete[] (char*) buf;
 		return nullptr;
 	}
 	// Load lib into newly allocated space
 	load_elf(lib_elf, start_address);
+	delete[] (char*) buf;
 
 	return lib_elf;
 }
@@ -545,6 +545,7 @@ Process::copy_elf_subsegment_to_address_space(void* bytes_ptr, uint n, bool no_w
 
 	// Copy code
 	uint dest_page_start_addr = VIRT_ADDR(sys_pe_id / PDT_ENTRIES, sys_pe_id % PDT_ENTRIES, 0);
+	printf("%p\n", (void*) bytes_ptr);
 	memcpy((void*) dest_page_start_addr, bytes_ptr, n);
 
 	// Update counter
