@@ -18,7 +18,7 @@ void VFS::init()
 	FS::init();
 	FAT_drive::init();
 
-	mount_rootfs((FS*) FS::fs_list->get_at(0));
+	mount_rootfs((FS*)FS::fs_list->get_at(0));
 
 	// Create /mnt
 	Inode* mnt_node = new Inode(nullptr, 0, 0, Inode::Dir);
@@ -39,7 +39,7 @@ void VFS::init()
 	// Mount other File Systems
 	for (uint i = 1; i < FS::fs_list->get_size(); ++i)
 	{
-		FS* fs = (FS*) FS::fs_list->get_at(i);
+		FS* fs = (FS*)FS::fs_list->get_at(i);
 		mount(fs);
 	}
 
@@ -148,13 +148,13 @@ bool VFS::mkdir(const char* pathname)
 }
 
 
-Dentry* VFS::get_cached_dentry(Dentry* parent, const char* name, Inode::Type type) // Todo: use a hash map
+Dentry* VFS::get_cached_dentry(Dentry* parent, const char* name) // Todo: use a hash map
 {
 	for (uint i = 0; i < MAX_DENTRIES; ++i)
 	{
 		if (!dentries[i])
 			continue;
-		if (!strcmp(dentries[i]->name, name) && dentries[i]->parent == parent && dentries[i]->inode->type == type)
+		if (!strcmp(dentries[i]->name, name) && dentries[i]->parent == parent)
 			return dentries[i];
 	}
 
@@ -189,18 +189,28 @@ Dentry* VFS::browse_to(const char* path, Dentry* starting_point)
 	// Browse cached dentries as much as possible
 	while (token)
 	{
-		Dentry* next_entry = get_cached_dentry(dentry, token, Inode::Dir);
-		if (!next_entry)
+		Dentry* next_entry = get_cached_dentry(dentry, token);
+		if (!next_entry) //  Nothing ffound in cache
 			break;
 
 		dentry = next_entry;
 		token = strtok_r(nullptr, "/", &svptr);
+		if (next_entry->inode->type != Inode::Dir) // Stop browsing if we hit a file's cached dentry
+			break;
 	}
 
 	// Pure virtual node, cannot do anything there
 	if (!dentry->inode->superblock)
 	{
 		printf_error("Path targets full virtual Inode");
+		delete[] p;
+		return nullptr;
+	}
+
+	// We browsed up to a file's cached dentry but we haven't finished browsing (i.e., part of the path targets a file)
+	if (token && dentry->inode->type != Inode::Dir)
+	{
+		printf_error("%s no such directory", path);
 		delete[] p;
 		return nullptr;
 	}

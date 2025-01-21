@@ -24,6 +24,8 @@ public:
 	 * Set up the PIT
 	 */
 	static void init();
+
+	static void sleep(uint ms);
 };
 
 

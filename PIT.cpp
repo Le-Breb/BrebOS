@@ -16,6 +16,19 @@ void PIT::init()
 	outb(0x40, (divider >> 8) & 0xFF); // Send high byte of divider
 }
 
+void PIT::sleep(uint ms)
+{
+	uint tick = ticks;
+	uint num_ticks_to_wait = TICKS_PER_SEC * ms / 1000;
+	// If wait duration is less than 1 tick, wait 1 tick anyway // Todo: use high precision timers to handle it
+	if (!num_ticks_to_wait)
+		num_ticks_to_wait = 1;
+	// ReSharper disable CppDFALoopConditionNotUpdated
+	while (ticks - tick < num_ticks_to_wait)
+		// ReSharper restore CppDFALoopConditionNotUpdated
+		__asm__ __volatile__("hlt"); // Todo: Use something smarter, like schedule_timeout when it will be implemented
+}
+
 uint PIT::ms_to_pit_divider(uint ms)
 {
 	// 1000 / f = ms

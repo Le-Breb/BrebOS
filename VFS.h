@@ -36,7 +36,7 @@ class VFS
 	 * @param name name of looked after dentry
 	 * @return matching cached dentry, or nullptr if not found
 	 */
-	static Dentry* get_cached_dentry(Dentry* parent, const char* name, Inode::Type type);
+	static Dentry* get_cached_dentry(Dentry* parent, const char* name);
 
 	static bool add_to_path(const char* path);
 

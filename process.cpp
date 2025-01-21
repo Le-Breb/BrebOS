@@ -18,7 +18,7 @@ Process* Process::from_binary(GRUB_module* module)
 	Process* proc = new Process();
 	proc->stack_state.eip = 0;
 	proc->num_pages = mod_code_pages;
-	proc->pte = (uint*) malloc(mod_code_pages * sizeof(uint));
+	proc->pte = (uint*)malloc(mod_code_pages * sizeof(uint));
 
 	// Allocate process code pages
 	for (uint k = 0; k < mod_code_pages; ++k)
@@ -33,7 +33,7 @@ Process* Process::from_binary(GRUB_module* module)
 	uint sys_pe_id = proc->pte[proc_pe_id];
 	uint code_page_start_addr = module->start_addr + proc_pe_id * PAGE_SIZE;
 	uint dest_page_start_addr =
-			(sys_pe_id / PDT_ENTRIES) << 22 | (sys_pe_id % PDT_ENTRIES) << 12;
+		(sys_pe_id / PDT_ENTRIES) << 22 | (sys_pe_id % PDT_ENTRIES) << 12;
 
 	// Copy whole pages
 	for (; proc_pe_id < mod_size / PAGE_SIZE; ++proc_pe_id)
@@ -41,12 +41,12 @@ Process* Process::from_binary(GRUB_module* module)
 		code_page_start_addr = module->start_addr + proc_pe_id * PAGE_SIZE;
 		sys_pe_id = proc->pte[proc_pe_id];
 		dest_page_start_addr = (sys_pe_id / PDT_ENTRIES) << 22 | (sys_pe_id % PDT_ENTRIES) << 12;
-		memcpy((void*) dest_page_start_addr, (void*) (module->start_addr + code_page_start_addr),
+		memcpy((void*)dest_page_start_addr, (void*)(module->start_addr + code_page_start_addr),
 		       PAGE_SIZE);
 	}
 	// Handle data that does not fit a whole page. First copy the remaining bytes then fill the rest with 0
-	memcpy((void*) dest_page_start_addr, (void*) code_page_start_addr, mod_size % PAGE_SIZE);
-	memset((void*) (dest_page_start_addr + mod_size % PAGE_SIZE), 0, PAGE_SIZE - mod_size % PAGE_SIZE);
+	memcpy((void*)dest_page_start_addr, (void*)code_page_start_addr, mod_size % PAGE_SIZE);
+	memset((void*)(dest_page_start_addr + mod_size % PAGE_SIZE), 0, PAGE_SIZE - mod_size % PAGE_SIZE);
 
 	return proc;
 }
@@ -117,7 +117,7 @@ void* Process::operator new(size_t size)
 void* Process::operator new[]([[maybe_unused]] size_t size)
 {
 	printf_error("Please do not use this operator");
-	return (void*) 1;
+	return (void*)1;
 }
 
 void Process::operator delete(void* p)
@@ -148,7 +148,7 @@ bool Process::dynamic_loading(uint start_address)
 		printf_error("Process base address (%zu) < PAGE_SIZE (%u). Aborting", base_addr, PAGE_SIZE);
 		return false;
 	}
-	if (base_addr == (size_t) -1)
+	if (base_addr == (size_t)-1)
 	{
 		printf_error("Cannot compute base address. Aborting");
 		return false;
@@ -168,35 +168,35 @@ bool Process::dynamic_loading(uint start_address)
 	{
 		switch (d->d_tag)
 		{
-			case DT_STRTAB:
-				dyn_str_table = (char*) (start_address + d->d_un.d_ptr - base_addr);
-				break;
-			case DT_SYMTAB:
-				dynsymtab = (void*) (start_address + d->d_un.d_ptr - base_addr);
-				break;
-			case DT_NEEDED:
-				lib_name_idx = d->d_un.d_val;
-				break;
-			case DT_PLTGOT:
-				file_got_addr = (uint*) (start_address + d->d_un.d_val - base_addr);
-				break;
-			case DT_HASH:
-				dynsyntab_num_entries = *(((uint*) (start_address + d->d_un.d_val - base_addr)) +
-				                          1); // nchain
-				break;
-			case DT_SYMENT:
-				dynsymtab_ent_size = d->d_un.d_val;
-				break;
-			case DT_GNU_HASH:
-			case DT_STRSZ:
-			case DT_DEBUG:
-			case DT_PLTRELSZ:
-			case DT_PLTREL:
-			case DT_JMPREL:
-				break;
-			default:
-				printf_error("Unknown dynamic table entry: %u|%x", d->d_tag, d->d_tag);
-				break;
+		case DT_STRTAB:
+			dyn_str_table = (char*)(start_address + d->d_un.d_ptr - base_addr);
+			break;
+		case DT_SYMTAB:
+			dynsymtab = (void*)(start_address + d->d_un.d_ptr - base_addr);
+			break;
+		case DT_NEEDED:
+			lib_name_idx = d->d_un.d_val;
+			break;
+		case DT_PLTGOT:
+			file_got_addr = (uint*)(start_address + d->d_un.d_val - base_addr);
+			break;
+		case DT_HASH:
+			dynsyntab_num_entries = *(((uint*)(start_address + d->d_un.d_val - base_addr)) +
+				1); // nchain
+			break;
+		case DT_SYMENT:
+			dynsymtab_ent_size = d->d_un.d_val;
+			break;
+		case DT_GNU_HASH:
+		case DT_STRSZ:
+		case DT_DEBUG:
+		case DT_PLTRELSZ:
+		case DT_PLTREL:
+		case DT_JMPREL:
+			break;
+		default:
+			printf_error("Unknown dynamic table entry: %u|%x", d->d_tag, d->d_tag);
+			break;
 		}
 	}
 	if (dyn_str_table == nullptr)
@@ -223,7 +223,7 @@ bool Process::dynamic_loading(uint start_address)
 	// Ensure dynamic symbols are supported
 	for (uint i = 1; i < dynsyntab_num_entries; ++i) // First entry has to be null, we skip it
 	{
-		Elf32_Sym* dd = (Elf32_Sym*) ((uint) dynsymtab + i * dynsymtab_ent_size);
+		Elf32_Sym* dd = (Elf32_Sym*)((uint)dynsymtab + i * dynsymtab_ent_size);
 		//printf("%s\n", &dyn_str_table[dd->st_name]);
 		uint type = ELF32_ST_TYPE(dd->st_info);
 		if (type != STT_FUNC)
@@ -239,11 +239,11 @@ bool Process::dynamic_loading(uint start_address)
 
 	// Compute GOT runtime address and loaded GOT address
 	uint got_runtime_addr =
-			(uint) file_got_addr - (start_address + got_segment_hdr->p_offset) +
-			got_segment_hdr->p_vaddr;
+		(uint)file_got_addr - (start_address + got_segment_hdr->p_offset) +
+		got_segment_hdr->p_vaddr;
 	uint got_sys_pe_id = pte[got_runtime_addr / PAGE_SIZE];
-	uint* got_addr = (uint*) VIRT_ADDR(got_sys_pe_id / PDT_ENTRIES, got_sys_pe_id % PT_ENTRIES,
-	                                   got_runtime_addr % PAGE_SIZE);
+	uint* got_addr = (uint*)VIRT_ADDR(got_sys_pe_id / PDT_ENTRIES, got_sys_pe_id % PT_ENTRIES,
+	                                  got_runtime_addr % PAGE_SIZE);
 
 	// Load kapi
 	if (!((kapi_elf = load_lib("/bin/libkapi.so"))))
@@ -264,8 +264,8 @@ bool Process::dynamic_loading(uint start_address)
 	}
 
 	// GOT setup: GOT[0] unused, GOT[1] = addr of GRUB module (to identify the program), GOT[2] = dynamic linker address
-	*(void**) (got_addr + 1) = (void*) this;
-	*(void**) (got_addr + 2) = libdynlk_entry_point;
+	*(void**)(got_addr + 1) = (void*)this;
+	*(void**)(got_addr + 2) = libdynlk_entry_point;
 
 	// Indicate entry point
 	stack_state.eip = elf->global_hdr.e_entry;
@@ -278,7 +278,7 @@ ELF* Process::load_lib(const char* path)
 	void* buf = VFS::load_file(path);
 	if (!buf)
 		return nullptr;
-	uint start_address = (uint) buf;
+	uint start_address = (uint)buf;
 
 	if (!ELF::is_valid(start_address, SharedObject))
 		return nullptr;
@@ -289,12 +289,12 @@ ELF* Process::load_lib(const char* path)
 	if (!alloc_and_add_lib_pages_to_process(*lib_elf))
 	{
 		delete lib_elf;
-		delete[] (char*) buf;
+		delete[] (char*)buf;
 		return nullptr;
 	}
 	// Load lib into newly allocated space
 	load_elf(lib_elf, start_address);
-	delete[] (char*) buf;
+	delete[] (char*)buf;
 
 	return lib_elf;
 }
@@ -306,7 +306,7 @@ bool Process::alloc_and_add_lib_pages_to_process(ELF& lib_elf)
 	uint lib_num_code_pages = highest_addr / PAGE_SIZE + ((highest_addr % PAGE_SIZE) ? 1 : 0);
 
 	// Adjust proc pte array - add space for lib code
-	uint* new_pte = (uint*) calloc((num_pages + lib_num_code_pages), sizeof(uint));
+	uint* new_pte = (uint*)calloc((num_pages + lib_num_code_pages), sizeof(uint));
 	if (new_pte == nullptr)
 	{
 		printf_error("Unable to allocate memory for process");
@@ -355,7 +355,7 @@ Process* Process::allocate_proc_for_elf_module(uint start_address)
 	// Num pages code spans over
 	uint proc_code_pages = highest_addr / PAGE_SIZE + ((highest_addr % PAGE_SIZE) ? 1 : 0);
 	proc->num_pages = proc_code_pages;
-	proc->pte = (uint*) calloc(proc->num_pages, sizeof(uint));
+	proc->pte = (uint*)calloc(proc->num_pages, sizeof(uint));
 	proc->allocs = new list();
 	if (proc->pte == nullptr)
 	{
@@ -431,40 +431,40 @@ bool Process::is_waiting_key() const
 
 size_t Process::write_args_to_stack(size_t stack_top_v_addr, int argc, const char** argv)
 {
-	char* stack_top = (char*) stack_top_v_addr;
+	char* stack_top = (char*)stack_top_v_addr;
 
 	size_t args_len = 0; // Actual size of all args combined
 	for (int i = 0; i < argc; ++i)
 		args_len += strlen(argv[i]) + 1;
 	// Word aligned total args size
 	size_t args_occupied_space =
-			args_len & (sizeof(int) - 1) ? (args_len & ~(sizeof(int) - 1)) + sizeof(int) : args_len;
+		args_len & (sizeof(int) - 1) ? (args_len & ~(sizeof(int) - 1)) + sizeof(int) : args_len;
 
-	char** argv_ptr = (char**) ((uint) (stack_top - args_occupied_space));
+	char** argv_ptr = (char**)((uint)(stack_top - args_occupied_space));
 	for (int i = argc - 1; i >= 0; --i)
 	{
 		size_t l = strlen(argv[i]) + 1; // Current arg len
 		stack_top -= l; // Point to beginning of string
 		argv_ptr -= 1; // Point to argv[i] location
-		*argv_ptr = (char*) (0xC0000000 - ((char*) stack_top_v_addr - stack_top)); // Write argv[i]
+		*argv_ptr = (char*)(0xC0000000 - ((char*)stack_top_v_addr - stack_top)); // Write argv[i]
 		memcpy(stack_top, argv[i], l); // Write ith string
 	}
 
 	// Write argc and argv
-	char* argv0_addr = (char*) 0xC0000000 - ((char*) stack_top_v_addr - (char*) argv_ptr);
-	argv_ptr = (char**) (((uint) argv_ptr - 0x10) & ~0xF); // ABI 16 bytes alignment
+	char* argv0_addr = (char*)0xC0000000 - ((char*)stack_top_v_addr - (char*)argv_ptr);
+	argv_ptr = (char**)(((uint)argv_ptr - 0x10) & ~0xF); // ABI 16 bytes alignment
 	*(argv_ptr + 1) = argv0_addr; // Argv
-	*(uint*) (argv_ptr) = argc; // Argc
+	*(uint*)(argv_ptr) = argc; // Argc
 
-	return 0xC0000000 - ((char*) stack_top_v_addr - (char*) argv_ptr);
+	return 0xC0000000 - ((char*)stack_top_v_addr - (char*)argv_ptr);
 }
 
 Process* Process::from_memory(uint start_addr, pid_t pid, pid_t ppid, int argc, const char** argv)
 {
 	// Check whether file is an elf
-	Elf32_Ehdr* elf32Ehdr = (Elf32_Ehdr*) start_addr;
+	Elf32_Ehdr* elf32Ehdr = (Elf32_Ehdr*)start_addr;
 	bool elf = elf32Ehdr->e_ident[0] == 0x7F && elf32Ehdr->e_ident[1] == 'E' && elf32Ehdr->e_ident[2] == 'L' &&
-	           elf32Ehdr->e_ident[3] == 'F';
+		elf32Ehdr->e_ident[3] == 'F';
 	if (!elf)
 	{
 		printf_error("Unable to find ELF header");
@@ -545,8 +545,7 @@ Process::copy_elf_subsegment_to_address_space(void* bytes_ptr, uint n, bool no_w
 
 	// Copy code
 	uint dest_page_start_addr = VIRT_ADDR(sys_pe_id / PDT_ENTRIES, sys_pe_id % PDT_ENTRIES, 0);
-	printf("%p\n", (void*) bytes_ptr);
-	memcpy((void*) dest_page_start_addr, bytes_ptr, n);
+	memcpy((void*)dest_page_start_addr, bytes_ptr, n);
 
 	// Update counter
 	copied_bytes += n;
@@ -568,7 +567,7 @@ void Process::load_elf(ELF* load_elf, uint elf_start_address)
 		bool no_write = !(h->p_flags & PF_W); // Segment has no write permissions
 
 		uint copied_bytes = 0;
-		void* bytes_ptr = (void*) (elf_start_address + h->p_offset);
+		void* bytes_ptr = (void*)(elf_start_address + h->p_offset);
 
 		// Copy first bytes if they are not page aligned
 		if (h->p_vaddr % PAGE_SIZE)
@@ -582,7 +581,7 @@ void Process::load_elf(ELF* load_elf, uint elf_start_address)
 		// Copy whole pages
 		while (copied_bytes + PAGE_SIZE < h->p_filesz)
 		{
-			bytes_ptr = (void*) (elf_start_address + h->p_offset + copied_bytes);
+			bytes_ptr = (void*)(elf_start_address + h->p_offset + copied_bytes);
 			copy_elf_subsegment_to_address_space(bytes_ptr, PAGE_SIZE, no_write, h, pte_offset, copied_bytes,
 			                                     sys_page_tables);
 		}
@@ -591,7 +590,7 @@ void Process::load_elf(ELF* load_elf, uint elf_start_address)
 		uint num_final_bytes = h->p_filesz - copied_bytes;
 		if (!num_final_bytes)
 			continue;
-		bytes_ptr = (void*) (elf_start_address + h->p_offset + copied_bytes);
+		bytes_ptr = (void*)(elf_start_address + h->p_offset + copied_bytes);
 		copy_elf_subsegment_to_address_space(bytes_ptr, num_final_bytes, no_write, h, pte_offset, copied_bytes,
 		                                     sys_page_tables);
 	}

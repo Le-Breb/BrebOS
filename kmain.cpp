@@ -14,16 +14,16 @@
 extern "C" void _init(void); // NOLINT(*-reserved-identifier)
 
 //Todo: Make printf run mostly in user mode
-//Todo: Implement shared memory
 //Todo: Investigate about whether page 184 (VGA buffer start address is mapped twice)
 //Todo: same for page pde 771 pte11 at the end of run_module
 //Todo: Add support for multiple dynamically linked libs
-extern "C" int kmain(uint ebx)
+//Todo: Advanced memory freeing (do something when free_pages do not manage to have free_bytes < FREE_THRESHOLD)
+//Todo: Implement process schedule_timeout to have sleeping processes out of the scheduler ready queue (usage: sleep)
+extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointer
 {
 	_init(); // Execute constructors
 	Interrupts::disable_asm();
 
-	// Initialize framebuffer
 	FB::init();
 
 	printf("Setting up GDT\n");
@@ -38,31 +38,31 @@ extern "C" int kmain(uint ebx)
 	IDT::init();
 	FB::ok();
 
-	printf("Initializing PIT\n");
-	PIT::init();
-	FB::ok();
-
 	printf("Enabling interrupts\n");
 	Interrupts::enable_asm();
 	FB::ok();
 
 	printf("Initialize memory ");
-	init_mem((multiboot_info_t*) (ebx + 0xC0000000));
+	init_mem((multiboot_info_t*)(ebx + 0xC0000000));
+	FB::ok();
+
+	// Activates preemptive scheduling.
+	// At this point, a kernel initialization process is created and will be preempted like any other process.
+	// It will execute the remaining instructions until Scheduler::stop_kernel_init_process() is called.
+	// Multiple processes can now run concurrently
+	printf("Activating preemptive scheduling\n");
+	Scheduler::init();
 	FB::ok();
 
 	printf("Initializing Virtual File System\n");
 	VFS::init();
 	FB::ok();
 
-	printf("Setting up process handling\n");
-	Scheduler::init();
-	FB::ok();
-
 	// Set INIT process ready
 	Scheduler::exec("shell", 0, 0, nullptr);
 
-	// Run processes! :D
-	PIC::enable_preemptive_scheduling();
+	// This makes the kernel initialization process end itself, thus ending kernel initialization
+	Scheduler::stop_kernel_init_process();
 
 	// Not supposed to be executed, but we never know...
 	System::shutdown();

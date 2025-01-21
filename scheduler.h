@@ -36,6 +36,13 @@ private:
 
 	static void release_pid(pid_t pid);
 
+	/**
+	 * Create and st ready a process that will perform kernel initialization
+	 * This process is used to execute parts of the initialization that rely on
+	 * PIT::tick
+	 */
+	static void create_kernel_init_process();
+
 public:
 	/**
 	 * Executes next process in the ready queue
@@ -44,7 +51,7 @@ public:
 
 	static void start_module(uint module, pid_t ppid, int argc, const char** argv);
 
-	static bool exec(const char* path, pid_t ppid, int argc, const char** argv);
+	static int exec(const char* path, pid_t ppid, int argc, const char** argv);
 
 	static void init();
 
@@ -57,6 +64,12 @@ public:
 	static void set_process_ready(Process* p);
 
 	static void free_terminated_process(Process& p);
+
+	/**
+	 * Stop kernel initialization process, leaving only potential user programs
+	 * in the waiting queue
+	 */
+	static void stop_kernel_init_process();
 };
 
 

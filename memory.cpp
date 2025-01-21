@@ -7,8 +7,8 @@ extern "C" void boot_page_directory();
 
 extern "C" void boot_page_table1();
 
-pdt_t* pdt = (pdt_t*) boot_page_directory;
-page_table_t* asm_pt1 = (page_table_t*) boot_page_table1;
+pdt_t* pdt = (pdt_t*)boot_page_directory;
+page_table_t* asm_pt1 = (page_table_t*)boot_page_table1;
 page_table_t* page_tables;
 
 // Map of used frames. 1 = used, 0 = free. Ith page is referenced at (i % 32)th lsb of map[i / 32]
@@ -26,7 +26,7 @@ uint free_bytes = 0;
 
 extern "C" void stack_top();
 
-uint* stack_top_ptr = (uint*) stack_top;
+uint* stack_top_ptr = (uint*)stack_top;
 
 /** Tries to allocate a contiguous block of memory
  * @param n Size of the block in bytes
@@ -152,7 +152,7 @@ void init_page_bitmap()
 void allocate_page_tables()
 {
 	// Save for later use
-	uint asm_pt1_page_table_entry = ((uint) asm_pt1 >> 12) & 0x3FF;
+	uint asm_pt1_page_table_entry = ((uint)asm_pt1 >> 12) & 0x3FF;
 
 	/** Allocate page 1024 + 769
 	 * Kernel is given pages 0 to 1023, we'll allocate page tables at pages 1024 to 2047
@@ -176,7 +176,7 @@ void allocate_page_tables()
 
 	// Newly allocated page will be the first of the page tables. It will map itself and the 1023 other page tables.
 	// Get pointer to newly allocated page, casting to page_table*.
-	page_tables = (page_table_t*) VIRT_ADDR(768, 1022, 0);
+	page_tables = (page_table_t*)VIRT_ADDR(768, 1022, 0);
 
 	// Allocate pages 1024 to 2047, ie allocate space of all the page tables
 	for (uint i = 0; i < PT_ENTRIES; ++i)
@@ -191,7 +191,7 @@ void allocate_page_tables()
 	__asm__ volatile("invlpg (%0)" : : "r" (VIRT_ADDR(769, 1022, 0)));
 
 	// Update pointer using pdt[769]
-	page_tables = (page_table_t*) VIRT_ADDR(769, 0, 0);
+	page_tables = (page_table_t*)VIRT_ADDR(769, 0, 0);
 
 	// Let user access all page tables. Access will be defined in page table entries
 	for (int i = 0; i < PDT_ENTRIES; ++i)
@@ -219,11 +219,11 @@ void allocate_page_tables()
 
 void load_grub_modules(multiboot_info* multibootInfo)
 {
-	grub_modules = (GRUB_module*) malloc(multibootInfo->mods_count * sizeof(GRUB_module));
+	grub_modules = (GRUB_module*)malloc(multibootInfo->mods_count * sizeof(GRUB_module));
 
 	for (uint i = 0; i < multibootInfo->mods_count; ++i)
 	{
-		multiboot_module_t* module = &((multiboot_module_t*) (multibootInfo->mods_addr + 0xC0000000))[i];
+		multiboot_module_t* module = &((multiboot_module_t*)(multibootInfo->mods_addr + 0xC0000000))[i];
 
 		// Set module page as present
 		uint module_start_frame_id = module->mod_start / PAGE_SIZE;
@@ -262,7 +262,7 @@ void* sbrk(uint n)
 {
 	// Memory full
 	if (lowest_free_frame == PT_ENTRIES * PDT_ENTRIES)
-		return 0x00;
+		return nullptr;
 
 	uint b = lowest_free_pe; /* block beginning page index */
 	uint e; /* block end page index + 1*/
@@ -273,7 +273,7 @@ void* sbrk(uint n)
 	{
 		// Maximum possibly free memory is too small to fulfill request
 		if (b + num_pages_requested > PDT_ENTRIES * PT_ENTRIES)
-			return 0x00;
+			return nullptr;
 
 		uint rem = num_pages_requested;
 		uint j = b;
@@ -306,7 +306,7 @@ void* sbrk(uint n)
 		lowest_free_pe++;
 
 	// Allocated memory block virtually starts at page b. Return it.
-	return (void*) (((b / PDT_ENTRIES) << 22) | ((b % PDT_ENTRIES) << 12));
+	return (void*)(((b / PDT_ENTRIES) << 22) | ((b % PDT_ENTRIES) << 12));
 }
 
 memory_header* more_kernel(uint n)
@@ -314,17 +314,18 @@ memory_header* more_kernel(uint n)
 	if (n < N_ALLOC)
 		n = N_ALLOC;
 
-	memory_header* h = (memory_header*) sbrk(sizeof(memory_header) * n);
+	memory_header* h = (memory_header*)sbrk(sizeof(memory_header) * n);
 
-	if ((int*) h == nullptr)
+	if ((int*)h == nullptr)
 		return nullptr;
 
 	h->s.size = n;
 
 	uint byte_size = sizeof(memory_header) * n;
-	free_bytes -= byte_size; // Prevent free from freeing pages we just allocated
-	free((void*) (h + 1));
-	free_bytes += byte_size;
+	uint free_bytes_save = free_bytes;
+	free_bytes = -byte_size; // Prevent free from freeing pages we just allocated
+	free((void*)(h + 1));
+	free_bytes = free_bytes_save + byte_size;
 
 	return freep;
 }
@@ -349,7 +350,7 @@ extern "C" void* malloc(uint n)
 			}
 			free_bytes -= nunits * sizeof(memory_header);
 			freep = p;
-			return (void*) (c + 1);
+			return (void*)(c + 1);
 		}
 		if (c == freep) /* wrapped around free list */
 		{
@@ -370,14 +371,14 @@ extern "C" void* calloc(size_t nmemb, size_t size)
 	void* mem = malloc(total_size);
 	if (!mem)
 		return NULL;
-	memset((char*) mem, 0, total_size);
+	memset((char*)mem, 0, total_size);
 
 	return mem;
 }
 
 extern "C" void free(void* ptr)
 {
-	memory_header* c = (memory_header*) ptr - 1;
+	memory_header* c = (memory_header*)ptr - 1;
 	memory_header* p;
 	free_bytes += c->s.size * sizeof(memory_header);
 
@@ -422,8 +423,8 @@ void free_release_pages()
 		// printf(" - %p", c);
 		uint block_byte_size = c->s.size * sizeof(memory_header);
 		uint aligned_addr_base =
-				((uint) c + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1); // Start addr of first page
-		uint d = aligned_addr_base - (uint) c;
+			((uint)c + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1); // Start addr of first page
+		uint d = aligned_addr_base - (uint)c;
 		uint aligned_free_bytes = d >= block_byte_size ? 0 : block_byte_size - d;
 		aligned_free_bytes -= aligned_free_bytes & (PAGE_SIZE - 1); // -= aligned_free_bytes % PAGE_SIZE
 
@@ -455,7 +456,7 @@ void free_release_pages()
 		}
 		else // The block is split into two blocks: one before freed pages and one after them
 		{
-			uint first_block_size = (aligned_addr_base - (uint) c) / sizeof(memory_header);
+			uint first_block_size = (aligned_addr_base - (uint)c) / sizeof(memory_header);
 			uint second_block_size = remaining_size - first_block_size;
 
 			// First block - May not exist if block is page aligned, but write anyway
@@ -534,15 +535,15 @@ void* page_aligned_malloc(uint size)
 	if (base_addr == nullptr)
 		return nullptr;
 
-	uint aligned_addr = ((uint) base_addr + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
-	((void**) aligned_addr)[-1] = base_addr;
+	uint aligned_addr = ((uint)base_addr + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+	((void**)aligned_addr)[-1] = base_addr;
 
-	return (void*) aligned_addr;
+	return (void*)aligned_addr;
 }
 
 void page_aligned_free(void* ptr)
 {
-	void* base_addr = ((void**) ptr)[-1];
+	void* base_addr = ((void**)ptr)[-1];
 	free(base_addr);
 }
 

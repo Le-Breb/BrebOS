@@ -1,9 +1,9 @@
 #include "scheduler.h"
 
-#include "dentry.h"
 #include "PIT.h"
 #include "system.h"
 #include "GDT.h"
+#include "PIC.h"
 #include "VFS.h"
 #include "clib/stdio.h"
 
@@ -37,6 +37,7 @@ Process* Scheduler::get_next_process()
 		}
 		else if (proc->is_waiting_key())
 		{
+			ready_queue.arr[ready_queue.start] = MAX_PROCESSES;
 			ready_queue.start = (ready_queue.start + 1) % MAX_PROCESSES;
 			ready_queue.count--;
 			waiting_queue.arr[(waiting_queue.start + waiting_queue.count) % MAX_PROCESSES] = proc->get_pid();
@@ -51,6 +52,7 @@ Process* Scheduler::get_next_process()
 				p->quantum -= CLOCK_TICK_MS;
 			else
 			{
+				ready_queue.arr[ready_queue.start] = MAX_PROCESSES;
 				ready_queue.arr[(ready_queue.start + ready_queue.count) % MAX_PROCESSES] = p->get_pid();
 				RESET_QUANTUM(p);
 				ready_queue.start = (ready_queue.start + 1) % MAX_PROCESSES;
@@ -122,33 +124,33 @@ void Scheduler::start_module(uint module, pid_t ppid, int argc, const char** arg
 	set_process_ready(proc);
 }
 
-bool Scheduler::exec(const char* path, pid_t ppid, int argc, const char** argv)
+int Scheduler::exec(const char* path, pid_t ppid, int argc, const char** argv)
 {
 	if (ready_queue.count == MAX_PROCESSES)
 	{
 		printf_error("Max process are already running");
-		return false;
+		return -1;
 	}
 	pid_t pid = get_free_pid();
 	if (pid == MAX_PROCESSES)
 	{
 		printf_error("No more PID available");
-		return false;
+		return -1;
 	}
 
 	void* buf = VFS::load_file(path);
 	if (!buf)
-		return false;
+		return -1;
 
-	Process* proc = Process::from_memory((uint) buf, pid, ppid, argc, argv);
-	delete[] (char*) buf;
+	Process* proc = Process::from_memory((uint)buf, pid, ppid, argc, argv);
+	delete[] (char*)buf;
 	if (!proc)
-		return false;
+		return -1;
 
 	processes[pid] = proc;
 	set_process_ready(proc);
 
-	return true;
+	return pid;
 }
 
 
@@ -168,12 +170,19 @@ pid_t Scheduler::get_free_pid()
 
 void Scheduler::init()
 {
+	PIT::init();
 	for (uint i = 0; i < MAX_PROCESSES; ++i)
 	{
-		ready_queue.arr[i] = -1;
-		processes[i] = 0x00;
+		ready_queue.arr[i] = MAX_PROCESSES;
+		waiting_queue.arr[i] = MAX_PROCESSES;
+		processes[i] = nullptr;
 	}
 	ready_queue.start = ready_queue.count = 0;
+
+	// Create a process that represents the kernel itself
+	// then continue kernel initialization with preemptive scheduling running
+	create_kernel_init_process();
+	PIC::enable_preemptive_scheduling();
 }
 
 pid_t Scheduler::get_running_process_pid()
@@ -190,11 +199,12 @@ void Scheduler::wake_up_key_waiting_processes(char key)
 {
 	for (uint i = 0; i < waiting_queue.count; ++i)
 	{
-		// Add process to ready queue
-		pid_t pid = waiting_queue.arr[(waiting_queue.start + waiting_queue.count) % MAX_PROCESSES];
+		// Add process to ready queue and remove it from waiting queue
+		pid_t pid = waiting_queue.arr[(waiting_queue.start + waiting_queue.count - 1) % MAX_PROCESSES];
+		waiting_queue.arr[(waiting_queue.start + waiting_queue.count - 1) % MAX_PROCESSES] = MAX_PROCESSES;
 		ready_queue.arr[(ready_queue.start + ready_queue.count++) % MAX_PROCESSES] = pid;
 
-		processes[pid]->cpu_state.eax = (uint) key; // Return key
+		processes[pid]->cpu_state.eax = (uint)key; // Return key
 		processes[pid]->flags &= ~P_WAITING_KEY; // Clear flag
 	}
 
@@ -213,8 +223,37 @@ void Scheduler::release_pid(pid_t pid)
 	pid_pool &= ~(1 << pid);
 }
 
+void Scheduler::create_kernel_init_process()
+{
+	Process* kernel = new Process();
+	kernel->pdt = *get_pdt();
+	uint pid = get_free_pid();
+	if (pid == MAX_PROCESSES)
+	{
+		printf_error("No more PID available. Cannot finish kernel initialization.");
+		System::shutdown();
+	}
+	processes[pid] = kernel;
+	set_process_ready(kernel);
+	running_process = pid;
+}
+
 void Scheduler::free_terminated_process(Process& p)
 {
 	release_pid(p.pid);
+	ready_queue.arr[ready_queue.start] = MAX_PROCESSES;
+	processes[p.pid] = nullptr;
 	delete &p;
+}
+
+void Scheduler::stop_kernel_init_process()
+{
+	processes[0]->terminate();
+
+	// We asked for termination of kernel init process.
+	// It is this precise process running those instructions.
+	// If we asked for its termination, then it shouldn't do anything more once marked terminated.
+	// Thus, we manually trigger the timer interrupt in order to call the scheduler,
+	// which will free the process and select another one to be executed
+	__asm__ volatile("int $0x20");
 }
