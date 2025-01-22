@@ -4,39 +4,42 @@
 #include "libc/stddef.h"
 #include "memory.h"
 
+template <class T>
 struct list_item_
 {
-	void* data;
+	T* data;
 	struct list_item_* next;
 	struct list_item_* prev;
 };
 
-typedef struct list_item_ list_item;
+template <class T>
+using list_item = struct list_item_<T>;
 
+template <class T>
 class list
 {
 	size_t size;
-	list_item* head;
-	list_item* tail;
+	list_item<T>* head;
+	list_item<T>* tail;
 
 public:
 	~list();
 
 	list();
 
-	void* push_front(void* element);
+	T* push_front(T* element);
 
-	void* push_back(void* element);
+	T* push_back(T* element);
 
 	size_t get_size() const;
 
-	void* get_at(size_t index) const;
+	T* get_at(size_t index) const;
 
-	void* insert_at(void* element, size_t index);
+	T* insert_at(T* element, size_t index);
 
-	int find(void* element) const;
+	int find(T* element) const;
 
-	void* remove_at(size_t index);
+	T* remove_at(size_t index);
 
 	void clear();
 

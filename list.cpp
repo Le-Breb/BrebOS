@@ -1,15 +1,18 @@
 #include "memory.h"
 #include "list.h"
+#include "VFS.h"
 
-list::list() : size(0), head(NULL), tail(NULL)
+template <class T>
+list<T>::list() : size(0), head(NULL), tail(NULL)
 {
 }
 
-void* list::push_front(void* element)
+template <class T>
+T* list<T>::push_front(T* element)
 {
-	list_item* i = (list_item*) malloc(sizeof(list_item));
+	list_item<T>* i = (list_item<T>*)malloc(sizeof(list_item<T>));
 	if (!i)
-		return 0;
+		return nullptr;
 
 	i->data = element;
 	i->next = head;
@@ -25,10 +28,10 @@ void* list::push_front(void* element)
 	return element;
 }
 
-
-void* list::push_back(void* element)
+template <class T>
+T* list<T>::push_back(T* element)
 {
-	list_item* i = (list_item*) malloc(sizeof(list_item));
+	list_item<T>* i = (list_item<T>*)malloc(sizeof(list_item<T>));
 	if (!i)
 		return 0;
 
@@ -46,24 +49,27 @@ void* list::push_back(void* element)
 	return element;
 }
 
-size_t list::get_size() const
+template <class T>
+size_t list<T>::get_size() const
 {
 	return size;
 }
 
-void* list::get_at(size_t index) const
+template <class T>
+T* list<T>::get_at(size_t index) const
 {
 	if (size == 0 || index >= size)
 		return NULL;
 
-	list_item* i = head;
+	list_item<T>* i = head;
 	for (size_t c = 0; c < index; c++)
 		i = i->next;
 
 	return i->data;
 }
 
-void* list::insert_at(void* element, size_t index)
+template <class T>
+T* list<T>::insert_at(T* element, size_t index)
 {
 	if (index > size)
 		return 0;
@@ -71,11 +77,11 @@ void* list::insert_at(void* element, size_t index)
 	if (index == NULL)
 		return push_front(element);
 
-	list_item* i = head;
+	list_item<T>* i = head;
 	for (size_t c = 0; c < index - 1; c++)
 		i = i->next;
 
-	list_item* n = (list_item*) malloc(sizeof(list_item));
+	list_item<T>* n = (list_item<T>*)malloc(sizeof(list_item<T>));
 	if (!n)
 		return NULL;
 	n->data = element;
@@ -92,9 +98,10 @@ void* list::insert_at(void* element, size_t index)
 	return element;
 }
 
-int list::find(void* element) const
+template <class T>
+int list<T>::find(T* element) const
 {
-	list_item* i = head;
+	list_item<T>* i = head;
 	for (int c = 0; i; c++, i = i->next)
 		if (i->data == element)
 			return c;
@@ -102,15 +109,16 @@ int list::find(void* element) const
 	return -1;
 }
 
-void* list::remove_at(size_t index)
+template <class T>
+T* list<T>::remove_at(size_t index)
 {
 	if (index >= size)
 		return NULL;
 
 	if (index == 0)
 	{
-		void* e = head->data;
-		list_item* h = head;
+		T* e = head->data;
+		list_item<T>* h = head;
 		head = h->next;
 		if (head)
 			head->prev = NULL;
@@ -122,12 +130,12 @@ void* list::remove_at(size_t index)
 		return e;
 	}
 
-	list_item* i = head;
+	list_item<T>* i = head;
 	for (size_t c = 0; c < index - 1; c++, i = i->next)
 		continue;
 
-	list_item* c = i->next;
-	void* e = c->data;
+	list_item<T>* c = i->next;
+	T* e = c->data;
 	i->next = c->next;
 	if (i->next)
 		i->next->prev = i;
@@ -141,13 +149,14 @@ void* list::remove_at(size_t index)
 	return e;
 }
 
-void list::clear()
+template <class T>
+void list<T>::clear()
 {
-	list_item* i = head;
+	list_item<T>* i = head;
 
 	while (i)
 	{
-		list_item* n = i->next;
+		list_item<T>* n = i->next;
 		delete i;
 		i = n;
 	}
@@ -156,33 +165,35 @@ void list::clear()
 	head = tail = NULL;
 }
 
-void list::reverse()
+template <class T>
+void list<T>::reverse()
 {
-	list_item* i = head;
+	list_item<T>* i = head;
 
 	if (!i)
 		return;
 
 	while (i)
 	{
-		list_item* n = i->next;
+		list_item<T>* n = i->next;
 		i->next = i->prev;
 		i->prev = n;
 
 		i = n;
 	}
 
-	list_item* tmp = head;
+	list_item<T>* tmp = head;
 	head = tail;
 	tail = tmp;
 }
 
-list* list::split_at(size_t index)
+template <class T>
+list<T>* list<T>::split_at(size_t index)
 {
 	if (index > size)
 		return NULL;
 
-	list* n = (list*) malloc(sizeof(list));
+	list* n = (list*)malloc(sizeof(list));
 	if (!n)
 		return NULL;
 
@@ -195,14 +206,20 @@ list* list::split_at(size_t index)
 	return n;
 }
 
-void list::concat(list* list2)
+template <class T>
+void list<T>::concat(list* list2)
 {
 	for (size_t i = 0; i < list2->size; i++)
 		push_back(list2->get_at(i));
 	list2->clear();
 }
 
-list::~list()
+template <class T>
+list<T>::~list()
 {
 	clear();
 }
+
+// Explicit template instantiation (avoids having to put everything in the header file)
+template class list<FS>;
+template class list<void>;

@@ -356,7 +356,7 @@ Process* Process::allocate_proc_for_elf_module(uint start_address)
 	uint proc_code_pages = highest_addr / PAGE_SIZE + ((highest_addr % PAGE_SIZE) ? 1 : 0);
 	proc->num_pages = proc_code_pages;
 	proc->pte = (uint*)calloc(proc->num_pages, sizeof(uint));
-	proc->allocs = new list();
+	proc->allocs = new list<void>();
 	if (proc->pte == nullptr)
 	{
 		printf_error("Unable to allocate memory for process");

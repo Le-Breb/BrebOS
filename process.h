@@ -38,7 +38,7 @@ private:
 	uint k_stack_top; // Top of syscall handlers' stack
 	uint flags; // Process state
 
-	list* allocs; // list of memory blocks allocated by the process
+	list<void>* allocs; // list of memory blocks allocated by the process
 public:
 	cpu_state_t cpu_state; // Registers
 	cpu_state_t k_cpu_state; // Syscall handler registers

@@ -18,7 +18,7 @@ void VFS::init()
 	FS::init();
 	FAT_drive::init();
 
-	mount_rootfs((FS*)FS::fs_list->get_at(0));
+	mount_rootfs(FS::fs_list->get_at(0));
 
 	// Create /mnt
 	Inode* mnt_node = new Inode(nullptr, 0, 0, Inode::Dir);
@@ -39,7 +39,7 @@ void VFS::init()
 	// Mount other File Systems
 	for (uint i = 1; i < FS::fs_list->get_size(); ++i)
 	{
-		FS* fs = (FS*)FS::fs_list->get_at(i);
+		FS* fs = FS::fs_list->get_at(i);
 		mount(fs);
 	}
 
