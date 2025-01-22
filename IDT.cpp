@@ -1,6 +1,6 @@
 
 #include "IDT.h"
-#include "clib/stddef.h"
+#include "libc/stddef.h"
 
 #pragma region ints
 

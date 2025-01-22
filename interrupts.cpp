@@ -1,6 +1,6 @@
 #include "interrupts.h"
 #include "keyboard.h"
-#include "clib/stdio.h"
+#include "libc/stdio.h"
 #include "scheduler.h"
 #include "syscalls.h"
 #include "PIT.h"

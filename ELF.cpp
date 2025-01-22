@@ -1,6 +1,6 @@
 #include "ELF.h"
-#include "clib/stdio.h"
-#include "clib/string.h"
+#include "libc/stdio.h"
+#include "libc/string.h"
 
 bool ELF::is_valid(uint start_address, ELF_type expected_type)
 {

@@ -1,7 +1,7 @@
 #ifndef CUSTOM_OS_PIT_H
 #define CUSTOM_OS_PIT_H
 
-#include "clib/stddef.h"
+#include "libc/stddef.h"
 
 #define CLOCK_TICK_MS 10
 #define TICKS_PER_SEC (1000 / CLOCK_TICK_MS)

@@ -1,8 +1,8 @@
 #ifndef BREBOS_FAT_H
 #define BREBOS_FAT_H
 
-#include "clib/stddef.h"
-#include "clib/stdint.h"
+#include "libc/stddef.h"
+#include "libc/stdint.h"
 #include "FS.h"
 #include "dentry.h"
 

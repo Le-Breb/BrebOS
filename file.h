@@ -2,7 +2,7 @@
 #define BREBOS_FILE_H
 
 
-#include "clib/stddef.h"
+#include "libc/stddef.h"
 
 #define F_ERR ((uint)-1)
 

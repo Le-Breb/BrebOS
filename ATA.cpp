@@ -1,7 +1,7 @@
 #include "ATA.h"
 #include "IO.h"
-#include "clib/stddef.h"
-#include "clib/stdio.h"
+#include "libc/stddef.h"
+#include "libc/stdio.h"
 #include "fb.h"
 #include "PIT.h"
 

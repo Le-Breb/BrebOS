@@ -5,7 +5,7 @@
 #include "interrupts.h"
 #include "ELF.h"
 #include "list.h"
-#include "clib/stddef.h"
+#include "libc/stddef.h"
 
 typedef uint pid_t;
 

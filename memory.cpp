@@ -1,6 +1,6 @@
 #include "memory.h"
-#include "clib/stdio.h"
-#include "clib/string.h"
+#include "libc/stdio.h"
+#include "libc/string.h"
 #include "VFS.h"
 
 extern "C" void boot_page_directory();

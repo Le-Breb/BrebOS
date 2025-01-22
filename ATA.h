@@ -5,7 +5,7 @@
 
 #pragma region defines
 
-#include "clib/stddef.h"
+#include "libc/stddef.h"
 
 #define BAR0 (0x1F0) // start of the I/O ports used by the primary channel.
 #define BAR1 (0x3F6) // start of the I/O ports which control the primary channel.

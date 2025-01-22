@@ -1,5 +1,5 @@
 #include "superblock.h"
-#include "clib/string.h"
+#include "libc/string.h"
 
 uint Superblock::num_devices = 0;
 Superblock* Superblock::block_list[MAX_DEVICES] = {nullptr};

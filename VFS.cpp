@@ -1,8 +1,8 @@
 #include "VFS.h"
 #include "FAT.h"
 #include "superblock.h"
-#include "clib/string.h"
-#include "clib/stdio.h"
+#include "libc/string.h"
+#include "libc/stdio.h"
 
 uint VFS::lowest_free_inode = 0;
 uint VFS::lowest_free_dentry = 0;

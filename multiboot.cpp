@@ -1,7 +1,7 @@
 #include "multiboot.h"
-#include "clib/stddef.h"
-#include "clib/string.h"
-#include "clib/stdio.h"
+#include "libc/stddef.h"
+#include "libc/string.h"
+#include "libc/stdio.h"
 
 void Multiboot::print_mmap(uint ebx)
 {

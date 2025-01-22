@@ -2,7 +2,7 @@
 #define INCLUDE_ELF_H
 
 #include "ELF_defines.h"
-#include "clib/stddef.h"
+#include "libc/stddef.h"
 
 #define OS_INTERPR ("/dynlk") // OS default interpreter, used to run dynamically linked programs
 #define OS_LIB ("libkapi.so") // OS lib, allowing programs to use syscalls

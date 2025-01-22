@@ -1,8 +1,8 @@
 #include "process.h"
 
 #include "dentry.h"
-#include "clib/string.h"
-#include "clib/stdio.h"
+#include "libc/string.h"
+#include "libc/stdio.h"
 #include "memory.h"
 #include "VFS.h"
 

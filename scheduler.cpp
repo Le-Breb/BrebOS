@@ -5,7 +5,7 @@
 #include "GDT.h"
 #include "PIC.h"
 #include "VFS.h"
-#include "clib/stdio.h"
+#include "libc/stdio.h"
 
 uint Scheduler::pid_pool = 0;
 pid_t Scheduler::running_process = MAX_PROCESSES;

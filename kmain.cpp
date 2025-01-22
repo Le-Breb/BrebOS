@@ -5,7 +5,7 @@
 #include "memory.h"
 #include "system.h"
 #include "scheduler.h"
-#include "clib/stdio.h"
+#include "libc/stdio.h"
 #include "PIT.h"
 #include "PIC.h"
 #include "IDT.h"
@@ -19,6 +19,8 @@ extern "C" void _init(void); // NOLINT(*-reserved-identifier)
 //Todo: Add support for multiple dynamically linked libs
 //Todo: Advanced memory freeing (do something when free_pages do not manage to have free_bytes < FREE_THRESHOLD)
 //Todo: Implement process schedule_timeout to have sleeping processes out of the scheduler ready queue (usage: sleep)
+//Todo: Update Makefile with dependencies (even for disk image) so that it does not rebuilt the ISO image is no source changed
+//Todo: Pass executable full path in argv[0]
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointer
 {
 	_init(); // Execute constructors

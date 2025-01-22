@@ -1,8 +1,8 @@
 #include "FAT.h"
-#include "clib/stddef.h"
+#include "libc/stddef.h"
 #include "ATA.h"
-#include "clib/string.h"
-#include "clib/stdio.h"
+#include "libc/string.h"
+#include "libc/stdio.h"
 #include "superblock.h"
 #include "dentry.h"
 

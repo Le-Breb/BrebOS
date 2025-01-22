@@ -1,6 +1,6 @@
 #include "system.h"
 #include "IO.h"
-#include "clib/stdio.h"
+#include "libc/stdio.h"
 #include "FAT.h"
 
 extern "C" uint is_running_in_qemu_asm();

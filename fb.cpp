@@ -1,6 +1,6 @@
 #include "fb.h"
 #include "IO.h"
-#include "clib/string.h"
+#include "libc/string.h"
 
 uint FB::caret_pos = 0;
 short* const FB::fb = (short*) FB_ADDR;

@@ -8,16 +8,20 @@ LDFLAGS = -T link_shell.ld -melf_i386 -g -L../kapi/build/ -lkapi -dynamic-linker
 AS = nasm
 ASFLAGS = -f elf -F dwarf -g
 BUILD_DIR=build
+LIBC=../libc/build/libc.a
 
 all: shell
 
 .PHONY: shell
 
+libc:
+	make -C ../libc
+
 kapi:
 	make -C ../kapi
 
-shell: $(OBJECTS) kapi
-	ld $(LDFLAGS) -o $(BUILD_DIR)/shell $(OBJECTS) $(libgcc)
+shell: $(OBJECTS) kapi libc
+	ld $(LDFLAGS) -o $(BUILD_DIR)/shell $(OBJECTS) $(LIBC) $(libgcc)
 
 $(BUILD_DIR)/%.o: %.cpp
 	$(CC) $(CFLAGS) $< -o $@

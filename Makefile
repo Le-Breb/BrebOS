@@ -15,13 +15,13 @@ INTERNAL_OBJS=$(CRTI_OBJ) $(OBJECTS) $(CRTN_OBJ)
 LDFLAGS = -T link.ld -melf_i386 -g
 AS = nasm
 ASFLAGS = -f elf -F dwarf -g
-CLIB_OBJECTS = $(shell find clib/build -name *.o)
+LIBC_OBJECTS = $(shell find libc/build -name *.o)
 
 BUILD_DIR=build
 SHELL_BUILD_DIR=shell/build
 PROGRAM2_BUILD_DIR=program2/build
 KAPI_BUILD_DIR=kapi/build
-CLIB_BUILD_DIR=clib/build
+LIBC_BUILD_DIR=libc/build
 LIBDYNLK_BUILD_DIR=libdynlk/build
 
 OUT_NAME=kernel
@@ -34,14 +34,14 @@ GRUB_TIMEOUT=0
 
 all: $(OS_ISO)
 
-.PHONY: shell program2 clib libdynlk
+.PHONY: shell program2 libc libdynlk
 
 directories:
 	mkdir -p $(BUILD_DIR)
 	mkdir -p $(SHELL_BUILD_DIR)
 	mkdir -p $(PROGRAM2_BUILD_DIR)
 	mkdir -p $(KAPI_BUILD_DIR)
-	mkdir -p $(CLIB_BUILD_DIR)
+	mkdir -p $(LIBC_BUILD_DIR)
 	mkdir -p $(LIBDYNLK_BUILD_DIR)
 
 shell:
@@ -53,12 +53,12 @@ program2:
 libdynlk:
 	make -C libdynlk
 
-clib:
-	make -C clib
+libc:
+	make -C libc
 
 
-kernel.elf: directories $(INTERNAL_OBJS) clib
-	ld $(LDFLAGS) $(OBJ_LIST) -Iclib/ $(CLIB_OBJECTS) -o $(BUILD_DIR)/kernel.elf $(libgcc)
+kernel.elf: directories $(INTERNAL_OBJS) libc
+	ld $(LDFLAGS) $(OBJ_LIST) -Ilibc/ $(LIBC_OBJECTS) -o $(BUILD_DIR)/kernel.elf $(libgcc)
 
 $(OS_ISO): kernel.elf shell program2 libdynlk
 #	Create directories
@@ -124,5 +124,5 @@ clean:
 	make -C shell clean
 	make -C program2 clean
 	make -C kapi clean
-	make -C clib clean
+	make -C libc clean
 	make -C libdynlk clean

@@ -1,7 +1,7 @@
 #ifndef BREBOS_INODE_H
 #define BREBOS_INODE_H
 
-#include "clib/stddef.h"
+#include "libc/stddef.h"
 
 class Superblock;
 

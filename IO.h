@@ -8,7 +8,7 @@
 * @param data The data to send to the I/O port
 25
 */
-#include "clib/stddef.h"
+#include "libc/stddef.h"
 
 extern "C" void outb(unsigned short port, unsigned char data);
 

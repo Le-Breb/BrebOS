@@ -1,7 +1,7 @@
 #ifndef INCLUDE_LIST_H
 #define INCLUDE_LIST_H
 
-#include "clib/stddef.h"
+#include "libc/stddef.h"
 #include "memory.h"
 
 struct list_item_

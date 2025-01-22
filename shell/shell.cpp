@@ -1,4 +1,5 @@
 #include "../kapi/syscalls.h"
+#include "../libc/string.h"
 
 #define MAX_CMD_LEN 100
 
@@ -18,20 +19,13 @@ void start_program()
 {
 	int argc = 0;
 	char* argv[MAX_CMD_LEN];
-	char* beg = &cmd[2]; // Beginning of current arg
-	for (unsigned int i = 2; i < c_id; ++i)
-	{
-		if (cmd[i] == ' ') // Enf of current arg
-		{
-			cmd[i] = '\0'; // Terminate string
-			argv[argc++] = beg; // Add ptr to argv and update argc
-			beg = &cmd[i + 1]; // Update beg to point to next arg
-		}
-	}
-	cmd[c_id] = '\0'; // Terminate final arg
-	argv[argc++] = beg; // Add ptr to argv and update argc
+	char* arg;
+	char* tmp = nullptr;
+    char* program_name = strtok_r(cmd + 2, " ", &tmp);
+	while ((arg = strtok_r(nullptr, " ", &tmp)))
+        argv[argc++] = arg;
 
-	exec(argv[0], argc, (const char**) argv);
+	exec(program_name, argc, (const char**) argv);
 }
 
 void handlechar(char c)

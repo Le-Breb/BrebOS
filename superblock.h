@@ -1,7 +1,7 @@
 #ifndef BREBOS_SUPERBLOCK_H
 #define BREBOS_SUPERBLOCK_H
 
-#include "clib/stddef.h"
+#include "libc/stddef.h"
 #include "FS.h"
 
 #define MAX_DEVICES 4

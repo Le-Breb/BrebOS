@@ -1,6 +1,6 @@
 #include "file.h"
 #include "FAT.h"
-#include "clib/string.h"
+#include "libc/string.h"
 
 uint File::num_open_files = 0;
 
