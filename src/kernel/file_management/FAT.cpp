@@ -166,7 +166,7 @@ FAT_drive::~FAT_drive()
 	delete FAT;
 	delete buf;
 
-	fs_list->remove_at(FS::fs_list->find(this));
+	fs_list->remove(this);
 }
 
 bool FAT_drive::change_active_cluster(uint new_active_cluster, uint& active_cluster, uint& active_sector,
@@ -303,7 +303,7 @@ void FAT_drive::init()
 	{
 		if (!drives[i])
 			continue;
-		fs_list->push_back(drives[i]);
+		fs_list->add(drives[i]);
 	}
 }
 

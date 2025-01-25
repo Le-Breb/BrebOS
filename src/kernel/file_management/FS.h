@@ -12,14 +12,15 @@ class FS
 	friend Superblock;
 
 protected:
-	virtual ~FS();
 
 	Superblock* superblock;
 
 public:
+	virtual ~FS();
+
 	static void init();
 
-	static list<FS>* fs_list;
+	static list<FS*>* fs_list;
 
 	virtual Dentry* get_child_entry(Dentry& parent_dentry, const char* entry_name) = 0;
 

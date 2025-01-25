@@ -48,12 +48,19 @@ void Syscall::dynlk(cpu_state_t* cpu_state)
 {
     // Get calling process and verify its identity is as expected
     Process* p = Scheduler::get_running_process();
-    ELF* elf;
-    if ((uint)p == cpu_state->esi)
-        elf = p->elf;
-    else if ((uint)p->libc_elf == cpu_state->esi)
-        elf = p->libc_elf;
-    else
+
+    // Find the ELF from which the call is from
+    ELF* elf = nullptr;
+    for (int i = 0; i < p->elfs.size(); i++)
+    {
+        ELF* ith_elf = *p->elfs.get(i);
+        if ((uint)ith_elf == cpu_state->esi)
+        {
+            elf = ith_elf;
+            break;
+        }
+    }
+    if (elf == nullptr)
     {
         printf_error("dynlk met unknown ELF");
         return;
@@ -95,24 +102,19 @@ void Syscall::dynlk(cpu_state_t* cpu_state)
     Elf32_Sym* s = &elf->symbols[symbol];
     const char* symbol_name = &elf->dynsym_strtab[s->st_name];
 
-    // Get symbol in libc
-    Elf32_Sym* lib_s = p->libc_elf->get_symbol(symbol_name);
-    if (lib_s == nullptr)
+    // Find symbol
+    void* symbol_addr = (void*)p->get_symbol_runtime_address(elf, symbol_name);
+    if (symbol_addr == nullptr)
     {
-        printf_error("Symbol %s not found in libc", symbol_name);
-        terminate_process(p);
+        printf_error("Symbol %s not found", symbol_name);
+        return;
     }
 
-    // Compute symbol address // Todo: Make it modular, do not rely on lib to be loaded after libydnlk
-    // and add support for multiple libs
-    uint lib_runtime_start_addr =
-        ((p->elf->get_highest_runtime_addr()+ (PAGE_SIZE - 1))& ~(PAGE_SIZE - 1)) +
-            ((p->libdynlk_elf->get_highest_runtime_addr() + (PAGE_SIZE - 1)) & ~(PAGE_SIZE - 1));
-    void* symbol_addr = (void*)(lib_runtime_start_addr + lib_s->st_value);
+    // Compute symbol's GOT entry address
+    uint got_entry_addr = rel->r_offset + elf->runtime_load_address;
 
-    uint got_entry_addr = rel->r_offset + (((uint)p == cpu_state->esi) ? 0 : lib_runtime_start_addr);
     *((void**)got_entry_addr) = symbol_addr; // Write symbol address to GOT
-    Scheduler::get_running_process()->cpu_state.eax = (uint)symbol_addr; // Return symbol address
+    Scheduler::get_running_process()->cpu_state.eax = (uint)symbol_addr; // Return symbol address to userland dynlk
 }
 
 void Syscall::get_key()

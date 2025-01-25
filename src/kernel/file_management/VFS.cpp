@@ -18,7 +18,7 @@ void VFS::init()
 	FS::init();
 	FAT_drive::init();
 
-	mount_rootfs(FS::fs_list->get_at(0));
+	mount_rootfs(*FS::fs_list->get(0));
 
 	// Create /mnt
 	Inode* mnt_node = new Inode(nullptr, 0, 0, Inode::Dir);
@@ -30,18 +30,15 @@ void VFS::init()
 	}
 
 	// FS limit check
-	if (FS::fs_list->get_size()/* + num_inodes*/ >= MAX_FS)
+	if (FS::fs_list->size()/* + num_inodes*/ >= MAX_FS)
 	{
 		printf_error("Too many file systems (wtf that\'s a lot)");
 		return;
 	}
 
 	// Mount other File Systems
-	for (uint i = 1; i < FS::fs_list->get_size(); ++i)
-	{
-		FS* fs = FS::fs_list->get_at(i);
-		mount(fs);
-	}
+	for (int i = 1; i < FS::fs_list->size(); i++)
+		mount(*FS::fs_list->get(i));
 
 	if (!add_to_path("/bin"))
 		printf_error("Failed to add /bin to path");

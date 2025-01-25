@@ -14,7 +14,7 @@ extern "C" void _init(void); // NOLINT(*-reserved-identifier)
 //Todo: printf buffering and flushing
 //Todo: Investigate about whether page 184 (VGA buffer start address is mapped twice)
 //Todo: same for page pde 771 pte11 at the end of run_module
-//Todo: Add support for multiple dynamically linked libs
+//Todo: Add support for multiple dynamically linked libs (register dyn lib dependencies)
 //Todo: Advanced memory freeing (do something when free_pages do not manage to have free_bytes < FREE_THRESHOLD)
 //Todo: Implement process schedule_timeout to have sleeping processes out of the scheduler ready queue (usage: sleep)
 //Todo: Make dynamic loader call DT_INIT and DT_INIT_ARRAY

@@ -3,6 +3,7 @@
 
 #include "ELF_defines.h"
 #include "kstddef.h"
+#include "../utils/list.h"
 
 #define OS_INTERPR ("/dynlk") // OS default interpreter, used to run dynamically linked programs
 #define OS_LIB ("libc.so") // OS lib, allowing programs to use syscalls
@@ -30,7 +31,8 @@ public:
 	const char* interpreter_name;
 	const char* dynsym_strtab;
 	size_t num_relocs;
-
+	list<ELF*> dependencies;
+	uint runtime_load_address = 0;
 
 	explicit ELF(uint start_address);
 
@@ -40,13 +42,13 @@ public:
 	 * Get the highest address in the runtime address space of an ELF file
 	 * @return highest runtime address
 	 */
-	uint get_highest_runtime_addr() const;
+	[[nodiscard]] uint get_highest_runtime_addr() const;
 
 	/**
 	 * Get a symbol of an ELF file
 	 * @return symbol, NULL if error occurred
 	 */
-	Elf32_Sym* get_symbol(const char* symbol_name);
+	Elf32_Sym* get_symbol(const char* symbol_name) const;
 
 	/**
 	 * Checks whether an ELF file is valid and supported
@@ -75,6 +77,8 @@ public:
 	[[nodiscard]] size_t base_address() const;
 
 	[[nodiscard]] size_t num_pages() const;
+
+	void register_dependency(ELF* elf);
 };
 
-#endif //INCLUDE_OS_ELF_H
+#endif //INCLUDE_ELF_H

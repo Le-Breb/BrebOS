@@ -1,53 +1,124 @@
 #ifndef INCLUDE_LIST_H
 #define INCLUDE_LIST_H
 
-#include "kstddef.h"
-#include "../core/memory.h"
+template<class T>
+class Node {
+public:
+	T value;
+	Node<T> *next;
 
-template <class T>
-struct list_item_
-{
-	T* data;
-	struct list_item_* next;
-	struct list_item_* prev;
+	Node();
+
+	explicit Node(T val);
 };
 
-template <class T>
-using list_item = struct list_item_<T>;
+template<class T>
+Node<T>::Node() {
+	next = nullptr;
+}
 
-template <class T>
-class list
-{
-	size_t size;
-	list_item<T>* head;
-	list_item<T>* tail;
+template<class T>
+Node<T>::Node(T val) {
+	value = val;
+	next = nullptr;
+}
+
+template<class E>
+class list {
+
+private:
+    Node<E> *head;
+    int s;
 
 public:
-	~list();
 
-	list();
+    const static int SORT_ASC = 0;
+    const static int SORT_DESC = 1;
 
-	T* push_front(T* element);
+    list();
 
-	T* push_back(T* element);
+    /**
+     * Appends the specified element to the end of this list.
+     *
+     * @param e - the element to add
+     */
+    void add(E e);
 
-	size_t get_size() const;
+    /**
+     * Inserts the specified element at the specified position in this list.
+     * Shifts the element currently at that position (if any) and any subsequent
+     * elements to the right (adds one to their indices).
+     *
+     * @param index index at which the specified element is to be inserted
+     * @param e  element to be inserted
+     */
+    bool add(int index, E e);
 
-	T* get_at(size_t index) const;
+    /**
+     * Inserts the specified element at the beginning of this list.
+     *
+     * @param e  the element to add
+     */
+    void addFirst(E e);
 
-	T* insert_at(T* element, size_t index);
+    /**
+     * Appends the specified element to the end of this list.
+     *
+     * @param e the element to add
+     */
+    void addLast(E e);
 
-	int find(T* element) const;
+    /**
+     * Removes the first occurrence of the specified element from this list, if it is present.
+     * If this list does not contain the element, it is unchanged.
+     *
+     * @param e
+     */
+    bool remove(E e);
 
-	T* remove_at(size_t index);
+    /**
+     * Removes and returns the first element from this list.
+     */
+    bool removeFirst();
 
-	void clear();
+    /**
+     * Removes and returns the last element from this list.
+     */
+    bool removeLast();
 
-	void reverse();
+    /**
+     * Returns the number of elements in this list.
+     *
+     * @return the number of elements in this list
+     */
+    [[nodiscard]] int size() const;
 
-	list* split_at(size_t index);
+    /**
+     * Returns true if this list contains the specified element.
+     *
+     * @param e element whose presence in this list is to be tested
+     * @return <b>true</b> if this list contains the specified element
+     */
+    bool contains(E e);
 
-	void concat(list* list2);
+    /**
+     * Reverse the whole list
+     */
+    void reverse();
+
+    /**
+     * Sort the list by the given order
+     *
+     * @param order the order to sort the list
+     */
+    void sort(int order);
+
+    /**
+     * Removes all of the elements from this list and free the allocated memory.
+     */
+    void clear();
+
+	[[nodiscard]] E* get(int index) const;
 };
 
 #endif /* !INCLUDE_LIST_H */

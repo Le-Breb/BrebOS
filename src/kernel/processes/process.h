@@ -38,16 +38,13 @@ private:
 	uint k_stack_top; // Top of syscall handlers' stack
 	uint flags; // Process state
 
-	list<void>* allocs; // list of memory blocks allocated by the process
+	list<uint> allocs; // list of memory blocks allocated by the process
 public:
+	list<ELF*> elfs;
 	cpu_state_t cpu_state; // Registers
 	cpu_state_t k_cpu_state; // Syscall handler registers
 	stack_state_t stack_state; // Execution context
 	stack_state_t k_stack_state; // Syscall handler execution context
-
-	ELF* elf;
-	ELF* libc_elf;
-	ELF* libdynlk_elf;
 
 private:
 	/** Page aligned allocator **/
@@ -68,9 +65,10 @@ private:
 	/**
 	 * Sets up a dynamically linked process
 	 * @param start_address ELF start address
+	 * @param elf process' main ELF
 	 * @return process set up, NULL if an error occurred
 	 */
-	bool dynamic_loading(uint start_address);
+	bool dynamic_loading(uint start_address, ELF* elf);
 
 	/**
 	* Load a lib in a process' address soace
@@ -138,13 +136,13 @@ public:
 	 * @param n required memory quantity
 	 * @return pointer to the beginning of allocated heap memory, NULL if an error occurred
 	 */
-	[[nodiscard]] void* allocate_dyn_memory(uint n) const;
+	[[nodiscard]] void* allocate_dyn_memory(uint n);
 
 	/**
 	 * Contiguous heap memory free
 	 * @param ptr pointer to the beginning of allocated heap memory
 	 */
-	void free_dyn_memory(void* ptr) const;
+	void free_dyn_memory(void* ptr);
 
 	/**
 	 * Create a process from a GRUB module
@@ -193,6 +191,15 @@ public:
 	 * @param elf_runtime_load_address where the elf is loaded at runtime
 	 */
 	void relocate_got_entries(ELF* elf, uint elf_runtime_load_address) const;
+
+	/**
+	 * Computes the runtime address of a symbol referenced by an ELF.
+	 * Works in conjunction with dynlk to resolve symbol addresses at runtime for lazy binding.
+	 * @param elf ELF asking for the symbol address
+	 * @param symbol_name name of the symbol
+	 * @return runtime address of the symbol, 0x00 if not found
+	 */
+	static uint get_symbol_runtime_address(const ELF* elf, const char* symbol_name) ;
 };
 
 #endif //INCLUDE_PROCESS_H

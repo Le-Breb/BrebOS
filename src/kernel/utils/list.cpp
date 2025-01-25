@@ -1,225 +1,320 @@
-#include "../core/memory.h"
 #include "list.h"
-#include "../file_management/VFS.h"
 
-template <class T>
-list<T>::list() : size(0), head(NULL), tail(NULL)
+template <class E>
+list<E>::list()
 {
+    head = nullptr;
+    s = 0;
 }
 
-template <class T>
-T* list<T>::push_front(T* element)
+template <class E>
+void list<E>::addFirst(E e)
 {
-	list_item<T>* i = (list_item<T>*)malloc(sizeof(list_item<T>));
-	if (!i)
-		return nullptr;
+    auto* newNode = new Node<E>(e);
+    if (head == nullptr)
+    {
+        head = newNode;
+    }
+    else
+    {
+        newNode->next = head;
+        head = newNode;
+    }
 
-	i->data = element;
-	i->next = head;
-	if (i->next)
-		i->next->prev = i;
-	else
-		tail = i;
-	i->prev = NULL;
-
-	head = i;
-	size++;
-
-	return element;
+    s++;
 }
 
-template <class T>
-T* list<T>::push_back(T* element)
+template <class E>
+void list<E>::add(E e)
 {
-	list_item<T>* i = (list_item<T>*)malloc(sizeof(list_item<T>));
-	if (!i)
-		return 0;
+    auto* newNode = new Node<E>(e);
+    if (head == nullptr)
+    {
+        head = newNode;
+        s++;
+        return;
+    }
 
-	i->data = element;
-	i->prev = tail;
-	if (tail)
-		tail->next = i;
-	else
-		head = i;
-	i->next = NULL;
+    Node<E>* current = head;
+    Node<E>* tmp;
 
-	tail = i;
-	size++;
+    do
+    {
+        tmp = current;
+        current = current->next;
+    }
+    while (current != nullptr);
 
-	return element;
+
+    tmp->next = newNode;
+
+    s++;
 }
 
-template <class T>
-size_t list<T>::get_size() const
+template <class E>
+bool list<E>::remove(E e)
 {
-	return size;
+    Node<E>* current = head;
+    Node<E>* prev = nullptr;
+    bool found = false;
+
+    if (current == nullptr)
+    {
+        return false;
+    }
+
+    do
+    {
+        if (current->value == e)
+        {
+            found = true;
+            break;
+        }
+
+        prev = current;
+        current = current->next;
+    }
+    while (current != nullptr);
+
+    if (!found)
+    {
+        return false;
+    }
+
+    // if the first element
+    if (current == head)
+    {
+        prev = head;
+        head = current->next;
+        delete prev;
+        return true;
+    }
+
+    // if the last element
+    if (current->next == nullptr)
+    {
+        prev->next = nullptr;
+        delete current;
+        return true;
+    }
+
+    prev->next = current->next;
+    delete current;
+
+    s--;
+
+    return true;
 }
 
-template <class T>
-T* list<T>::get_at(size_t index) const
+template <class E>
+bool list<E>::removeFirst()
 {
-	if (size == 0 || index >= size)
-		return NULL;
+    Node<E>* tmp = head;
 
-	list_item<T>* i = head;
-	for (size_t c = 0; c < index; c++)
-		i = i->next;
+    if (tmp == nullptr)
+    {
+        return false;
+    }
 
-	return i->data;
+    head = tmp->next;
+    delete tmp;
+
+    s--;
+
+    return true;
 }
 
-template <class T>
-T* list<T>::insert_at(T* element, size_t index)
+template <class E>
+bool list<E>::removeLast()
 {
-	if (index > size)
-		return 0;
+    Node<E>* current = head;
+    Node<E>* prev = nullptr;
 
-	if (index == NULL)
-		return push_front(element);
+    if (current == nullptr)
+    {
+        return false;
+    }
 
-	list_item<T>* i = head;
-	for (size_t c = 0; c < index - 1; c++)
-		i = i->next;
+    do
+    {
+        prev = current;
+        current = current->next;
+    }
+    while (current->next != nullptr);
 
-	list_item<T>* n = (list_item<T>*)malloc(sizeof(list_item<T>));
-	if (!n)
-		return NULL;
-	n->data = element;
-	n->next = i->next;
-	n->prev = i;
-	if (n->next)
-		n->next->prev = n;
-	else
-		tail = n;
-	i->next = n;
 
-	size++;
-
-	return element;
+    prev->next = nullptr;
+    delete current;
+    s--;
+    return true;
 }
 
-template <class T>
-int list<T>::find(T* element) const
+template <class E>
+void list<E>::reverse()
 {
-	list_item<T>* i = head;
-	for (int c = 0; i; c++, i = i->next)
-		if (i->data == element)
-			return c;
+    Node<E>* current = head;
+    Node<E>* newNext = nullptr;
+    Node<E>* tmp;
 
-	return -1;
+    if (current == nullptr)
+        return;
+
+    do
+    {
+        tmp = current->next;
+        current->next = newNext;
+        newNext = current;
+        current = tmp;
+    }
+    while (current != nullptr);
+
+    head = newNext;
 }
 
-template <class T>
-T* list<T>::remove_at(size_t index)
+/*template<class E>
+void list<E>::sort(int order) {
+
+    Node<E> *tmpPtr = head;
+    Node<E> *tmpNxt = nullptr;
+
+    if (tmpPtr == nullptr)
+        return;
+
+    tmpNxt = head->next;
+
+    E tmp;
+
+    while (tmpNxt != nullptr) {
+        while (tmpNxt != tmpPtr) {
+            if (order == SORT_ASC) {
+                if (tmpNxt->value < tmpPtr->value) {
+                    tmp = tmpPtr->value;
+                    tmpPtr->value = tmpNxt->value;
+                    tmpNxt->value = tmp;
+                }
+            } else if (order == SORT_DESC) {
+                if (tmpNxt->value > tmpPtr->value) {
+                    tmp = tmpPtr->value;
+                    tmpPtr->value = tmpNxt->value;
+                    tmpNxt->value = tmp;
+                }
+            } else {
+                cerr << "Err: invalid sort order '" << order << "'" << endl;
+                return;
+            }
+            tmpPtr = tmpPtr->next;
+        }
+        tmpPtr = head;
+        tmpNxt = tmpNxt->next;
+    }
+}*/
+
+template <class E>
+void list<E>::clear()
 {
-	if (index >= size)
-		return NULL;
+    Node<E>* current = head;
 
-	if (index == 0)
-	{
-		T* e = head->data;
-		list_item<T>* h = head;
-		head = h->next;
-		if (head)
-			head->prev = NULL;
-		else
-			tail = NULL;
-		delete h;
-		size--;
+    do
+    {
+        Node<E>* tmp = current;
+        current = current->next;
+        delete tmp;
+    }
+    while (current != nullptr);
 
-		return e;
-	}
+    head = nullptr;
 
-	list_item<T>* i = head;
-	for (size_t c = 0; c < index - 1; c++, i = i->next)
-		continue;
-
-	list_item<T>* c = i->next;
-	T* e = c->data;
-	i->next = c->next;
-	if (i->next)
-		i->next->prev = i;
-	else
-		tail = i;
-
-	size--;
-
-	delete c;
-
-	return e;
+    s = 0;
 }
 
-template <class T>
-void list<T>::clear()
+template <class E>
+E* list<E>::get(int index) const
 {
-	list_item<T>* i = head;
+    if (index < 0 || index >= s)
+        return nullptr;
 
-	while (i)
-	{
-		list_item<T>* n = i->next;
-		delete i;
-		i = n;
-	}
+    Node<E>* current = head;
 
-	size = 0;
-	head = tail = NULL;
+    while (index--)
+    {
+        current = current->next;
+    }
+    return &current->value;
 }
 
-template <class T>
-void list<T>::reverse()
+template <class E>
+int list<E>::size() const
 {
-	list_item<T>* i = head;
-
-	if (!i)
-		return;
-
-	while (i)
-	{
-		list_item<T>* n = i->next;
-		i->next = i->prev;
-		i->prev = n;
-
-		i = n;
-	}
-
-	list_item<T>* tmp = head;
-	head = tail;
-	tail = tmp;
+    return s;
 }
 
-template <class T>
-list<T>* list<T>::split_at(size_t index)
+template <class E>
+void list<E>::addLast(E e)
 {
-	if (index > size)
-		return NULL;
-
-	list* n = (list*)malloc(sizeof(list));
-	if (!n)
-		return NULL;
-
-	for (size_t i = index; i < size; i++)
-		n->push_back(get_at(i));
-	size_t s = size;
-	for (size_t i = index; i < s; i++)
-		remove_at(index);
-
-	return n;
+    add(e);
 }
 
-template <class T>
-void list<T>::concat(list* list2)
+template <class E>
+bool list<E>::add(int index, E e)
 {
-	for (size_t i = 0; i < list2->size; i++)
-		push_back(list2->get_at(i));
-	list2->clear();
+    if (index < 0 || index > s)
+    {
+        return false;
+    }
+
+    if (index == 0)
+    {
+        addFirst(e);
+        return true;
+    }
+
+    if (index == s)
+    {
+        addLast(e);
+        return true;
+    }
+
+    Node<E>* current = head;
+    auto* newNode = new Node<E>(e);
+
+    int i = 0;
+    do
+    {
+        if (i++ == index)
+        {
+            break;
+        }
+        current = current->next;
+    }
+    while (current != nullptr);
+
+    newNode->next = current->next;
+    current->next = newNode;
+
+    s++;
+
+    return true;
 }
 
-template <class T>
-list<T>::~list()
+template <class E>
+bool list<E>::contains(E e)
 {
-	clear();
+    Node<E>* current = head;
+
+    while (current != nullptr)
+    {
+        if (current->value == e)
+        {
+            return true;
+        }
+        current = current->next;
+    }
+    return false;
 }
 
-// Explicit template instantiation (avoids having to put everything in the header file)
-template class list<FS>;
-template class list<void>;
+// Compile the types of lists we will need here to other files can use them
+#include "../file_management/FS.h"
+#include "../processes/ELF.h"
+template class list<FS*>;
+template class list<ELF*>;
+template class list<uint>;

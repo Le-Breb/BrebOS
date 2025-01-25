@@ -67,12 +67,11 @@ Process::~Process()
 		free_page(pte[i] / PDT_ENTRIES, pte[i] % PDT_ENTRIES);
 	}
 
+
 	// Free process fields
+	for (int i = 0; i < elfs.size(); i++)
+		delete *elfs.get(i);
 	delete pte;
-	delete elf;
-	delete libc_elf;
-	delete libdynlk_elf;
-	delete allocs;
 
 	flags |= P_TERMINATED;
 
@@ -85,28 +84,20 @@ void Process::terminate()
 	flags |= P_TERMINATED;
 }
 
-void* Process::allocate_dyn_memory(uint n) const
+void* Process::allocate_dyn_memory(uint n)
 {
 	void* mem = malloc(n);
 
 	if (mem)
-	{
-		if (!allocs->push_front(mem))
-		{
-			free(mem);
-			return NULL;
-		}
-	}
+		allocs.addFirst((uint)mem);
 
 	return mem;
 }
 
-void Process::free_dyn_memory(void* ptr) const
+void Process::free_dyn_memory(void* ptr)
 {
-	int pos = allocs->find(ptr);
-	if (pos == -1)
+	if (!allocs.remove((uint)ptr))
 		printf_error("Process dyn memory ptr not found in process allocs");
-	allocs->remove_at(pos);
 	free(ptr);
 }
 
@@ -131,7 +122,7 @@ void Process::operator delete[]([[maybe_unused]] void* p)
 	printf_error("do not call this");
 }
 
-bool Process::dynamic_loading(uint start_address)
+bool Process::dynamic_loading(uint start_address, ELF* elf)
 {
 	const char* interpereter_name = elf->interpreter_name;
 	if (strcmp(interpereter_name, OS_INTERPR) != 0)
@@ -248,8 +239,11 @@ bool Process::dynamic_loading(uint start_address)
 
 	// Load libdynlk
 	uint proc_num_pages = num_pages;
+	ELF* libdynlk_elf;
 	if (!((libdynlk_elf = load_lib("/bin/libdynlk.so", nullptr))))
 		return false;
+	elfs.addLast(libdynlk_elf);
+	elf->register_dependency(libdynlk_elf);
 
 	// Get libdynlk entry point
 	void* libdynlk_entry_point = libdynlk_elf->get_libdynlk_main_runtime_addr(proc_num_pages); // Todo: change this
@@ -260,11 +254,14 @@ bool Process::dynamic_loading(uint start_address)
 	}
 
 	// Load libc
+	ELF* libc_elf;
 	if (!((libc_elf = load_lib("/bin/libc.so", libdynlk_entry_point))))
 		return false;
+	elfs.addLast(libc_elf);
+	elf->register_dependency(libc_elf);
 
 	// GOT setup: GOT[0] unused, GOT[1] = addr of GRUB module (to identify the program), GOT[2] = dynamic linker address
-	*(void**)(got_addr + 1) = (void*)this;
+	*(void**)(got_addr + 1) = (void*)elf;
 	*(void**)(got_addr + 2) = libdynlk_entry_point;
 
 	// Indicate entry point
@@ -297,6 +294,24 @@ void Process::relocate_got_entries(ELF* elf, uint elf_runtime_load_address) cons
 	}
 }
 
+uint Process::get_symbol_runtime_address(const ELF* elf, const char* symbol_name)
+{
+	const Elf32_Sym* s = elf->get_symbol(symbol_name);
+	// Test whether the symbol exists, is defined in the ELF and has global visibility
+	if (s && s->st_shndx && ELF32_ST_BIND(s->st_info) == STB_GLOBAL)
+		return elf->runtime_load_address + s->st_value;
+
+	for (int i = 0; i < elf->dependencies.size(); i++)
+	{
+		const ELF* dep = *elf->dependencies.get(i);
+		s = dep->get_symbol(symbol_name);
+		if (s && s->st_shndx && ELF32_ST_BIND(s->st_info) == STB_GLOBAL)
+			return dep->runtime_load_address + s->st_value;
+	}
+
+	return 0x00;
+}
+
 ELF* Process::load_lib(const char* path, void* lib_dynlk_runtime_entry_point)
 {
 	void* buf = VFS::load_file(path);
@@ -318,6 +333,7 @@ ELF* Process::load_lib(const char* path, void* lib_dynlk_runtime_entry_point)
 	// Load lib into newly allocated space
 	uint lib_load_addr = load_elf(lib_elf, start_address);
 	relocate_got_entries(lib_elf, lib_load_addr);
+	lib_elf->runtime_load_address = lib_load_addr;
 	delete[] (char*)buf;
 
 	size_t base_addr= lib_elf->base_address();
@@ -396,14 +412,13 @@ Process* Process::allocate_proc_for_elf_module(ELF* elf)
 		return nullptr;
 	}
 	memset(proc, 0, sizeof(Process));
-	proc->elf = elf;
 
-	uint highest_addr = proc->elf->get_highest_runtime_addr();
+	uint highest_addr = elf->get_highest_runtime_addr();
 	// Num pages code spans over
 	uint proc_code_pages = highest_addr / PAGE_SIZE + ((highest_addr % PAGE_SIZE) ? 1 : 0);
 	proc->num_pages = proc_code_pages;
 	proc->pte = (uint*)calloc(proc->num_pages, sizeof(uint));
-	proc->allocs = new list<void>();
+	proc->elfs.addFirst(elf);
 	if (proc->pte == nullptr)
 	{
 		printf_error("Unable to allocate memory for process");
@@ -411,9 +426,9 @@ Process* Process::allocate_proc_for_elf_module(ELF* elf)
 	}
 
 	// Allocate process code pages
-	for (int i = 0; i < proc->elf->global_hdr.e_phnum; ++i)
+	for (int i = 0; i < elf->global_hdr.e_phnum; ++i)
 	{
-		Elf32_Phdr* h = &proc->elf->prog_hdrs[i];
+		Elf32_Phdr* h = &elf->prog_hdrs[i];
 		if (h->p_type != PT_LOAD)
 			continue;
 
@@ -442,14 +457,14 @@ Process* Process::from_ELF(uint start_address)
 	if (proc == nullptr)
 		return nullptr;
 
-	proc->load_elf(proc->elf, start_address);
+	proc->load_elf(elf, start_address);
 
-	const char* interpereter_name = proc->elf->interpreter_name;
+	const char* interpereter_name = elf->interpreter_name;
 	bool dynamic = interpereter_name != nullptr;
 
 	if (dynamic)
 	{
-		if (proc->dynamic_loading(start_address))
+		if (proc->dynamic_loading(start_address, elf))
 			return proc;
 		delete proc;
 		return nullptr;

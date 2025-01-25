@@ -165,7 +165,7 @@ Elf32_Phdr* ELF::get_GOT_segment(const uint* file_got_addr, uint start_address) 
 	return got_segment_hdr;
 }
 
-Elf32_Sym* ELF::get_symbol(const char* symbol_name)
+Elf32_Sym* ELF::get_symbol(const char* symbol_name) const
 {
 	uint lib_dynsym_num_entries = dynsym_hdr->sh_size / dynsym_hdr->sh_entsize;
 
@@ -318,4 +318,9 @@ size_t ELF::base_address() const
 size_t ELF::num_pages() const
 {
 	return (get_highest_runtime_addr() + PAGE_SIZE - 1) / PAGE_SIZE;
+}
+
+void ELF::register_dependency(ELF* elf)
+{
+	dependencies.addLast(elf);
 }
