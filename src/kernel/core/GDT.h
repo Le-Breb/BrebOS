@@ -1,7 +1,7 @@
 #ifndef INCLUDE_OS_GDT_H
 #define INCLUDE_OS_GDT_H
 
-#include "kstddef.h"
+#include <kstddef.h>
 
 #define PL0 0x00
 #define PL1 0x20

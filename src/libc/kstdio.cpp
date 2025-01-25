@@ -3,7 +3,7 @@
 #include "kstddef.h"
 #include "kstring.h"
 #include "kwchar.h"
-#include "ctype.h"
+#include "kctype.h"
 #include "kstdint.h"
 #include "ksyscalls.h"
 

@@ -1,7 +1,7 @@
 #include "VFS.h"
 #include "FAT.h"
 #include "superblock.h"
-#include "kstring.h"
+#include <kstring.h>
 #include "../core/fb.h"
 
 uint VFS::lowest_free_inode = 0;

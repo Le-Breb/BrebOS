@@ -1,4 +1,4 @@
-#include "kstring.h"
+#include <kstring.h>
 
 extern "C" unsigned long strlen(char const* str)
 {

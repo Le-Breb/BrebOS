@@ -1,5 +1,5 @@
 #include "superblock.h"
-#include "kstring.h"
+#include <kstring.h>
 
 uint Superblock::num_devices = 0;
 Superblock* Superblock::block_list[MAX_DEVICES] = {nullptr};

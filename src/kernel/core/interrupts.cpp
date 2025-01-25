@@ -2,7 +2,7 @@
 
 #include "fb.h"
 #include "keyboard.h"
-#include "kstdio.h"
+#include <kstdio.h>
 #include "../processes/scheduler.h"
 #include "syscalls.h"
 #include "PIT.h"

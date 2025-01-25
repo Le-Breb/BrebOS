@@ -1,7 +1,7 @@
 #ifndef CUSTOM_OS_IDT_H
 #define CUSTOM_OS_IDT_H
 
-#include "kstddef.h"
+#include <kstddef.h>
 
 #define INTGATE  0x8E00
 #define SYSCALL  0xEF00

@@ -1,6 +1,6 @@
-#include "kstring.h"
-#include "kstdio.h"
-#include "ksyscalls.h"
+#include <kstring.h>
+#include <kstdio.h>
+#include <ksyscalls.h>
 
 #define MAX_CMD_LEN 100
 

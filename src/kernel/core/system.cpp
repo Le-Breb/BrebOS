@@ -2,7 +2,7 @@
 
 #include "fb.h"
 #include "IO.h"
-#include "kstdio.h"
+#include <kstdio.h>
 #include "../file_management/FAT.h"
 
 extern "C" uint is_running_in_qemu_asm();

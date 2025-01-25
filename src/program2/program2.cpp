@@ -1,5 +1,5 @@
-#include "kstdio.h"
-#include "ksyscalls.h"
+#include <kstdio.h>
+#include <ksyscalls.h>
 
 extern "C" int main(int argc, char** argv)
 {

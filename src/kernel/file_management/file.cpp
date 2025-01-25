@@ -1,6 +1,6 @@
 #include "file.h"
 #include "FAT.h"
-#include "kstring.h"
+#include <kstring.h>
 
 uint File::num_open_files = 0;
 

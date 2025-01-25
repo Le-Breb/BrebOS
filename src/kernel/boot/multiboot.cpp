@@ -1,6 +1,6 @@
 #include "multiboot.h"
-#include "kstddef.h"
-#include "kstring.h"
+#include <kstddef.h>
+#include <kstring.h>
 #include "../core/fb.h"
 
 void Multiboot::print_mmap(uint ebx)

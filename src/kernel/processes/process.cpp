@@ -1,7 +1,7 @@
 #include "process.h"
 
-#include "kstring.h"
-#include "kstdio.h"
+#include <kstring.h>
+#include <kstdio.h>
 #include "../core/memory.h"
 #include "../core/fb.h"
 #include "../file_management/VFS.h"

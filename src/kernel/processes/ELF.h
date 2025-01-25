@@ -2,7 +2,7 @@
 #define INCLUDE_ELF_H
 
 #include "ELF_defines.h"
-#include "kstddef.h"
+#include <kstddef.h>
 #include "../utils/list.h"
 
 #define OS_INTERPR ("/dynlk") // OS default interpreter, used to run dynamically linked programs

@@ -1,11 +1,11 @@
 #include "fb.h"
 
 #include <kstdio.h>
-#include <ctype.h>
+#include <kctype.h>
 #include <kwchar.h>
+#include <kstring.h>
 
 #include "IO.h"
-#include "kstring.h"
 
 uint FB::caret_pos = 0;
 short* const FB::fb = (short*)FB_ADDR;

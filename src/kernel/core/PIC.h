@@ -1,7 +1,7 @@
 #ifndef CUSTOM_OS_PIC_H
 #define CUSTOM_OS_PIC_H
 
-#include "kstddef.h"
+#include <kstddef.h>
 
 #define ICW1_INIT    0x10
 #define ICW1_ICW4    0x01

@@ -1,5 +1,5 @@
 #include "dentry.h"
-#include "kstring.h"
+#include <kstring.h>
 
 Dentry::Dentry(Inode* inode, Dentry* parent, const char* name) : inode(inode), parent(parent),
                                                                  name(new char[strlen(name) + 1])

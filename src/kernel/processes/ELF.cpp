@@ -1,6 +1,6 @@
 #include "ELF.h"
-#include "kstdio.h"
-#include "kstring.h"
+#include <kstdio.h>
+#include <kstring.h>
 #include "../core/fb.h"
 
 ELF* ELF::is_valid(uint start_address, ELF_type expected_type)

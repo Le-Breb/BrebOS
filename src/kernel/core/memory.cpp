@@ -1,7 +1,7 @@
 #include "memory.h"
 
 #include "fb.h"
-#include "kstring.h"
+#include <kstring.h>
 #include "../file_management/VFS.h"
 
 #define INVALIDATE_PAGE(pde, pte) __asm__ volatile("invlpg (%0)" : : "r" (VIRT_ADDR(pde, pte, 0)));
