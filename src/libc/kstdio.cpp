@@ -93,10 +93,9 @@ char* __int_str(intmax_t i, char b[], int base, uint plusSignIfNeeded, uint spac
 	return b;
 }
 
-void displayCharacter([[maybe_unused]] char c, int* a)
+void displayCharacter(char c, int* a)
 {
-	//FB::putchar(c);
-    char b[] = {c,0};
+    volatile char b[] = {c,0}; // Volatile prevents b to be optimized out, messing up the syscall
 
 	__asm__ volatile("int $0x80" : : "a"(2), "S"(b));
 	*a += 1;

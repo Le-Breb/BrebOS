@@ -1,9 +1,10 @@
 #include "memory.h"
 
 #include "fb.h"
-#include "kstdio.h"
 #include "kstring.h"
 #include "../file_management/VFS.h"
+
+#define INVALIDATE_PAGE(pde, pte) __asm__ volatile("invlpg (%0)" : : "r" (VIRT_ADDR(pde, pte, 0)));
 
 extern "C" void boot_page_directory();
 
@@ -184,7 +185,7 @@ void allocate_page_tables()
 	//MARK_FRAME_USED(new_page_frame_id); No need, will be done in allocate_page
 
 	// Apply changes
-	__asm__ volatile("invlpg (%0)" : : "r" (VIRT_ADDR(768, 1022, 0)));
+	INVALIDATE_PAGE(768, 1022);
 
 	// Newly allocated page will be the first of the page tables. It will map itself and the 1023 other page tables.
 	// Get pointer to newly allocated page, casting to page_table*.
@@ -199,8 +200,8 @@ void allocate_page_tables()
 	asm_pt1->entries[1022] = 0; // Not needed anymore as the page it maps now maps itself as it became a page table
 
 	// Apply changes
-	__asm__ volatile("invlpg (%0)" : : "r" (VIRT_ADDR(768, 1022, 0)));
-	__asm__ volatile("invlpg (%0)" : : "r" (VIRT_ADDR(769, 1022, 0)));
+	INVALIDATE_PAGE(768, 1022);
+	INVALIDATE_PAGE(769, 1022);
 
 	// Update pointer using pdt[769]
 	page_tables = (page_table_t*)VIRT_ADDR(769, 0, 0);
@@ -526,7 +527,7 @@ void free_page(uint pde, uint pte)
 
 	// Write PTE
 	page_tables[pde].entries[pte] = 0;
-	__asm__ volatile("invlpg (%0)" : : "r" (VIRT_ADDR(pde, pte, 0))); // Invalidate TLB entry
+	INVALIDATE_PAGE(pde, pte);
 	MARK_FRAME_FREE(frame_id); // Internal deallocation registration
 
 	if (frame_id < lowest_free_frame)

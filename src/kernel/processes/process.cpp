@@ -70,7 +70,7 @@ Process::~Process()
 	// Free process fields
 	delete pte;
 	delete elf;
-	delete kapi_elf;
+	delete libc_elf;
 	delete libdynlk_elf;
 	delete allocs;
 
@@ -260,7 +260,7 @@ bool Process::dynamic_loading(uint start_address)
 	}
 
 	// Load libc
-	if (!((kapi_elf = load_lib("/bin/libc.so", libdynlk_entry_point))))
+	if (!((libc_elf = load_lib("/bin/libc.so", libdynlk_entry_point))))
 		return false;
 
 	// GOT setup: GOT[0] unused, GOT[1] = addr of GRUB module (to identify the program), GOT[2] = dynamic linker address
@@ -273,16 +273,26 @@ bool Process::dynamic_loading(uint start_address)
 	return true;
 }
 
-void Process::relocate_got_stub_entries(ELF* elf, uint elf_runtime_load_address) const
+void Process::relocate_got_entries(ELF* elf, uint elf_runtime_load_address) const
 {
+	if (elf->global_hdr.e_type != ET_DYN)
+	{
+		printf_error("Attempting to relocate GOT entries of an ELF which is not a dynamic object");
+		return;
+	}
 	for (size_t i = 0; i < elf->num_relocs; i++)
 	{
+		// Get GOT entry runtime address
 		Elf32_Rel* reloc = elf->relocs + i;
 		uint got_entry_runtime_addr = elf_runtime_load_address + reloc->r_offset;
+
+		// Find where it has been loaded in memory
 		uint sys_pe_id = pte[got_entry_runtime_addr / PAGE_SIZE];
 		uint sys_pde_id = sys_pe_id / PDT_ENTRIES;
 		uint sys_pte_id = sys_pe_id % PT_ENTRIES;
 		uint got_entry_curr_addr = VIRT_ADDR(sys_pde_id, sys_pte_id, reloc->r_offset % PAGE_SIZE);
+
+		// Update its value
 		*(Elf32_Addr*)got_entry_curr_addr += elf_runtime_load_address;
 	}
 }
@@ -307,7 +317,7 @@ ELF* Process::load_lib(const char* path, void* lib_dynlk_runtime_entry_point)
 	}
 	// Load lib into newly allocated space
 	uint lib_load_addr = load_elf(lib_elf, start_address);
-	relocate_got_stub_entries(lib_elf, lib_load_addr);
+	relocate_got_entries(lib_elf, lib_load_addr);
 	delete[] (char*)buf;
 
 	size_t base_addr= lib_elf->base_address();

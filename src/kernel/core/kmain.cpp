@@ -17,7 +17,8 @@ extern "C" void _init(void); // NOLINT(*-reserved-identifier)
 //Todo: Add support for multiple dynamically linked libs
 //Todo: Advanced memory freeing (do something when free_pages do not manage to have free_bytes < FREE_THRESHOLD)
 //Todo: Implement process schedule_timeout to have sleeping processes out of the scheduler ready queue (usage: sleep)
-//Make dynamic loader call DT_INIT and DT_INIT_ARRAY
+//Todo: Make dynamic loader call DT_INIT and DT_INIT_ARRAY
+//Todo: Add a 'release' Makefile behaviour to compile with -O3
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointer
 {
 	_init(); // Execute constructors

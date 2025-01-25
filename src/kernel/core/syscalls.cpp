@@ -51,8 +51,8 @@ void Syscall::dynlk(cpu_state_t* cpu_state)
     ELF* elf;
     if ((uint)p == cpu_state->esi)
         elf = p->elf;
-    else if ((uint)p->kapi_elf == cpu_state->esi)
-        elf = p->kapi_elf;
+    else if ((uint)p->libc_elf == cpu_state->esi)
+        elf = p->libc_elf;
     else
     {
         printf_error("dynlk met unknown ELF");
@@ -95,8 +95,8 @@ void Syscall::dynlk(cpu_state_t* cpu_state)
     Elf32_Sym* s = &elf->symbols[symbol];
     const char* symbol_name = &elf->dynsym_strtab[s->st_name];
 
-    // Get symbol in kapi
-    Elf32_Sym* lib_s = p->kapi_elf->get_symbol(symbol_name);
+    // Get symbol in libc
+    Elf32_Sym* lib_s = p->libc_elf->get_symbol(symbol_name);
     if (lib_s == nullptr)
     {
         printf_error("Symbol %s not found in libc", symbol_name);

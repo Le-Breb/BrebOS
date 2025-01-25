@@ -46,7 +46,7 @@ public:
 	stack_state_t k_stack_state; // Syscall handler execution context
 
 	ELF* elf;
-	ELF* kapi_elf;
+	ELF* libc_elf;
 	ELF* libdynlk_elf;
 
 private:
@@ -74,7 +74,6 @@ private:
 
 	/**
 	* Load a lib in a process' address soace
-	* @param p process to add libynlk to
 	* @param path GRUB modules
 	* @param lib_dynlk_runtime_entry_point
 	* @return libdynlk runtime entry point address
@@ -83,9 +82,7 @@ private:
 
 	/**
 	 * Allocate space for libydnlk and add it to a process' address space
-	 * @param elf32Ehdr ELF heder
-	 * @param elf32Phdr program table header
-	 * @param p process to add libdynlk to
+	 * @param lib_elf library elf
 	 * @return boolean indicating success state
 	 */
 	bool alloc_and_add_lib_pages_to_process(ELF& lib_elf);
@@ -139,13 +136,13 @@ public:
 	/**
 	 * Contiguous heap memory allocator
 	 * @param n required memory quantity
-	 * @return pointer to beginning of allocated heap memory, NULL if an error occurred
+	 * @return pointer to the beginning of allocated heap memory, NULL if an error occurred
 	 */
 	[[nodiscard]] void* allocate_dyn_memory(uint n) const;
 
 	/**
 	 * Contiguous heap memory free
-	 * @param ptr pointer to beginning of allocated heap memory
+	 * @param ptr pointer to the beginning of allocated heap memory
 	 */
 	void free_dyn_memory(void* ptr) const;
 
@@ -186,7 +183,16 @@ public:
 	 */
 	uint load_elf(ELF* load_elf, uint elf_start_address);
 
-	void relocate_got_stub_entries(ELF* elf, uint elf_runtime_load_address) const;
+	/**
+	 * Update GOT entries of a dynamic object ELF.
+	 * When a dynamic library is loaded in memory, its GOT contains absolute addresses of the PLT stubs first 'jmp'.
+	 * Those addresses are computed by the linker assuming the ELF is loaded at 0x00.
+	 * However, dynamic objects can be loaded anywhere by the dynamic loader, which is why we need to add the runtime
+	 * load address to the GOT entries so that the 'jmp' addresses remain correct.
+	 * @param elf elf with relocations to process
+	 * @param elf_runtime_load_address where the elf is loaded at runtime
+	 */
+	void relocate_got_entries(ELF* elf, uint elf_runtime_load_address) const;
 };
 
 #endif //INCLUDE_PROCESS_H

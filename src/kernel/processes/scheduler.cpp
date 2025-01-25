@@ -252,8 +252,8 @@ void Scheduler::free_terminated_process(Process& p)
 {
 	release_pid(p.pid);
 	ready_queue.arr[ready_queue.start] = MAX_PROCESSES;
-	delete &p;
 	processes[p.pid] = nullptr;
+	delete &p;
 }
 
 void Scheduler::stop_kernel_init_process()
@@ -265,5 +265,5 @@ void Scheduler::stop_kernel_init_process()
 	// If we asked for its termination, then it shouldn't do anything more once marked terminated.
 	// Thus, we manually trigger the timer interrupt in order to call the scheduler,
 	// which will free the process and select another one to be executed
-	__asm__ volatile("int $0x20");
+	TRIGGER_TIMER_INTERRUPT
 }

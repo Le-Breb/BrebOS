@@ -134,6 +134,8 @@ bool VFS::mkdir(const char* pathname)
 
 	// ~cd parent
 	Dentry* dentry = browse_to(parent_dir_path);
+	if (!dentry)
+		return false;
 	// Couldn't browse up to parent directory, abort
 	if (dentry->inode->type != Inode::Dir)
 	{
@@ -141,8 +143,6 @@ bool VFS::mkdir(const char* pathname)
 		return false;
 	}
 	delete[] parent_dir_path;
-	if (!dentry)
-		return false;
 
 	return dentry->inode->superblock->get_fs()->mkdir(*dentry, dir_name);
 }

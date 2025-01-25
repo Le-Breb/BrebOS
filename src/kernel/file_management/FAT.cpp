@@ -11,7 +11,7 @@ FAT_drive* FAT_drive::drives[] = {};
 
 char* LongDirEntry::utf16_to_utf8_cautionless_cast(const char* str, uint len)
 {
-	char* res = new char[len / 2];
+	char* res = new char[len / 2 + 1];
 	for (uint i = 0; i < len / 2; ++i)
 		res[i] = str[i * 2];
 	res[len / 2] = '\0';
@@ -36,9 +36,9 @@ char* LongDirEntry::get_uglily_converted_utf8_name() const
 	while (p < 4 && n3[p])
 		full_name[gp++] = n3[p++];
 
-	delete n1;
-	delete n2;
-	delete n3;
+	delete[] n1;
+	delete[] n2;
+	delete[] n3;
 
 	return full_name;
 }
