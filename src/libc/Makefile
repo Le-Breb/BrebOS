@@ -10,6 +10,8 @@ CRTBEGIN_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtbegin.o)
 CRTEND_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtend.o)
 CRTN_OBJ=$(GCC_BUILD_DIR)/crtn.o
 OBJ_LIST=$(CRTI_OBJ) $(CRTBEGIN_OBJ) $(OBJECTS) $(CRTEND_OBJ) $(CRTN_OBJ)
+AS = nasm
+ASFLAGS = -f elf -F dwarf -g
 ifdef RELEASE
 CFLAGS += -O3
 ASFLAGS += -O3
@@ -17,8 +19,6 @@ else
 CFLAGS += -O0
 ASFLAGS += -O0
 endif
-AS = nasm
-ASFLAGS = -f elf -F dwarf -g
 BUILD_DIR=build
 LIB=$(BUILD_DIR)/libc.so
 LIBFLAGS = -fPIC -Wl,-shared -pie

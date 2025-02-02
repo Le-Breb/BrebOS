@@ -10,6 +10,8 @@ OBJECTS = $(patsubst %.cpp, $(KERNEL_BUILD_DIR)/%.o, $(filter %.cpp, $(SRC))) \
 CC = i686-elf-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
 -c -g -fno-exceptions -fno-rtti
+AS = nasm
+ASFLAGS = -f elf -F dwarf -g
 ifdef RELEASE
 CFLAGS += -O3
 ASFLAGS += -O3
@@ -26,8 +28,6 @@ CRTN_OBJ=$(GCC_BUILD_DIR)/crtn.o
 OBJ_LIST=$(CRTI_OBJ) $(CRTBEGIN_OBJ) $(OBJECTS) $(CRTEND_OBJ) $(CRTN_OBJ)
 INTERNAL_OBJS=$(CRTI_OBJ) $(OBJECTS) $(CRTN_OBJ)
 LDFLAGS = -T link.ld -melf_i386 -g
-AS = nasm
-ASFLAGS = -f elf -F dwarf -g
 LIBC=$(LIBC_BUILD_DIR)/libc.a
 LD=ld
 
@@ -146,8 +146,8 @@ debug: $(OS_ISO)
 clean:
 	rm -rf *.o $(OUT_BIN) $(OS_ISO)
 	rm -rf isodir
-	rm -rf $(BUILD_DIR)/*
-	rm -rf $(KERNEL_BUILD_DIR)/*
+	rm -rf $(BUILD_DIR)
+	rm -rf $(KERNEL_BUILD_DIR)
 	rm -rf $(OS_ISO)
 	make -C $(SRC_DIR)/shell clean
 	make -C $(SRC_DIR)/program2 clean
