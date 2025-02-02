@@ -1,14 +1,15 @@
 #include "multiboot.h"
+#include "../core/memory.h"
 #include <kstddef.h>
 #include <kstring.h>
 #include "../core/fb.h"
 
 void Multiboot::print_mmap(uint ebx)
 {
-	multiboot_info* mboot_header = (multiboot_info*) (ebx + 0xC0000000);
+	multiboot_info* mboot_header = (multiboot_info*) (ebx + KERNEL_VIRTUAL_BASE);
 	uint memory_slots = mboot_header->mmap_length / sizeof(multiboot_memory_map_t);
 
-	uint mem_map_start = (uint) mboot_header->mmap_addr + 0xC0000000;
+	uint mem_map_start = (uint) mboot_header->mmap_addr + KERNEL_VIRTUAL_BASE;
 	uint mem_map_size = (uint) mboot_header->mmap_length;
 	//uint mem_map_end = (uint) mboot_header->mmap_addr + (uint) mboot_header->mmap_length;
 

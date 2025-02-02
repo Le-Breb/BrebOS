@@ -51,6 +51,14 @@ public:
 
 	static void start_module(uint module, pid_t ppid, int argc, const char** argv);
 
+	/**
+	 * 
+	 * @param path path to ELF
+	 * @param ppid parent PID
+	 * @param argc number of program arguments
+	 * @param argv program arguments
+	 * @return new process' PID, -1 on error
+	 */
 	static int exec(const char* path, pid_t ppid, int argc, const char** argv);
 
 	static void init();

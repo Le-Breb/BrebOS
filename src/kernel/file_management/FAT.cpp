@@ -270,7 +270,7 @@ bool FAT_drive::browse_to_folder_parent(const char** path, uint num_tokens, uint
 		}
 		dir_entry_id++; // Current entry did not match token, proceed to next one
 
-		// Reached end of sector, follow cluster chain //Todo: Investigate the case when sector_size != cluster_size
+		// Reached end of sector, follow cluster chain
 		if (dir_entry_id * sizeof(uint32_t) == ATA_SECTOR_SIZE)
 		{
 			if (table_value == BAD_SECTOR)

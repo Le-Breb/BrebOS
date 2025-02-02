@@ -8,8 +8,15 @@ SRC=$(shell cd $(SRC_DIR)/kernel; find . -name '*.cpp' -o -name '*.s' | sed 's|^
 OBJECTS = $(patsubst %.cpp, $(KERNEL_BUILD_DIR)/%.o, $(filter %.cpp, $(SRC))) \
           $(patsubst %.s, $(KERNEL_BUILD_DIR)/%.o, $(filter %.s, $(SRC)))
 CC = i686-elf-gcc
-CFLAGS = -O0 -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
+CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
 -c -g -fno-exceptions -fno-rtti
+ifdef RELEASE
+CFLAGS += -O3
+ASFLAGS += -O3
+else
+CFLAGS += -O0
+ASFLAGS += -O0
+endif
 CPPFLAGS=-I$(SRC_DIR)/libc
 libgcc=$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
 CRTI_OBJ=$(GCC_BUILD_DIR)/crti.o
@@ -20,7 +27,7 @@ OBJ_LIST=$(CRTI_OBJ) $(CRTBEGIN_OBJ) $(OBJECTS) $(CRTEND_OBJ) $(CRTN_OBJ)
 INTERNAL_OBJS=$(CRTI_OBJ) $(OBJECTS) $(CRTN_OBJ)
 LDFLAGS = -T link.ld -melf_i386 -g
 AS = nasm
-ASFLAGS = -O0 -f elf -F dwarf -g
+ASFLAGS = -f elf -F dwarf -g
 LIBC=$(LIBC_BUILD_DIR)/libc.a
 LD=ld
 

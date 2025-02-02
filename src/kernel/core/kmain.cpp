@@ -17,8 +17,8 @@ extern "C" void _init(void); // NOLINT(*-reserved-identifier)
 //Todo: Add support for multiple dynamically linked libs (register dyn lib dependencies)
 //Todo: Advanced memory freeing (do something when free_pages do not manage to have free_bytes < FREE_THRESHOLD)
 //Todo: Implement process schedule_timeout to have sleeping processes out of the scheduler ready queue (usage: sleep)
-//Todo: Make dynamic loader call DT_INIT and DT_INIT_ARRAY
-//Todo: Add a 'release' Makefile behaviour to compile with -O3
+//Todo: Make allocate page user allocate below memory higher half, and above for kernel pages
+//Todo: Process R_386_PC32 and R_386_32 relocations
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointer
 {
 	_init(); // Execute constructors
@@ -43,7 +43,7 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointe
 	FB::ok();
 
 	printf("Initialize memory\n");
-	init_mem((multiboot_info_t*)(ebx + 0xC0000000));
+	init_mem((multiboot_info_t*)(ebx + KERNEL_VIRTUAL_BASE));
 	FB::ok();
 
 	// Activates preemptive scheduling.

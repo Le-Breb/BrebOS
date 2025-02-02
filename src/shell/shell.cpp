@@ -40,6 +40,7 @@ void handlechar(char c)
 	else cmd[c_id++] = c;
 
 	printf("%c", c);
+	flush();
 }
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
@@ -47,6 +48,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 	while (1)
 	{
 		printf(">>> ");
+        flush();
 
 		while (1)
 		{

@@ -67,7 +67,7 @@ void Syscall::dynlk(cpu_state_t* cpu_state)
     }
 
     // Get relocation table
-    Elf32_Rel* reloc_table = elf->relocs;
+    Elf32_Rel* reloc_table = elf->plt_relocs;
     if (reloc_table == nullptr)
     {
         printf_error("no reloc table");
@@ -76,7 +76,7 @@ void Syscall::dynlk(cpu_state_t* cpu_state)
 
     // Check required symbol's relocation
     Elf32_Rel* rel = (Elf32_Rel*)((uint)reloc_table + cpu_state->edi);
-    uint symbol = ELF32_R_SYM(rel->r_info);
+    uint symbol_id = ELF32_R_SYM(rel->r_info);
     uint type = ELF32_R_TYPE(rel->r_info);
     if (type != R_386_JMP_SLOT)
     {
@@ -94,12 +94,12 @@ void Syscall::dynlk(cpu_state_t* cpu_state)
 
     // Check symbol index makes sense
     uint dynsym_num_entries = dynsym_hdr->sh_size / dynsym_hdr->sh_entsize;
-    if (symbol + 1 > dynsym_num_entries)
-        printf_error("Required symbol has index %d while symtab only contains %d entries", symbol,
+    if (symbol_id + 1 > dynsym_num_entries)
+        printf_error("Required symbol has index %d while symtab only contains %d entries", symbol_id,
                      dynsym_num_entries);
 
     // Get symbol name
-    Elf32_Sym* s = &elf->symbols[symbol];
+    Elf32_Sym* s = &elf->symbols[symbol_id];
     const char* symbol_name = &elf->dynsym_strtab[s->st_name];
 
     // Find symbol
@@ -113,7 +113,7 @@ void Syscall::dynlk(cpu_state_t* cpu_state)
     // Compute symbol's GOT entry address
     uint got_entry_addr = rel->r_offset + elf->runtime_load_address;
 
-    *((void**)got_entry_addr) = symbol_addr; // Write symbol address to GOT
+    *(void**)got_entry_addr = symbol_addr; // Write symbol address to GOT
     Scheduler::get_running_process()->cpu_state.eax = (uint)symbol_addr; // Return symbol address to userland dynlk
 }
 
@@ -137,7 +137,7 @@ void Syscall::get_key()
     case 1:
         terminate_process(p);
     case 2:
-        FB::putchar(*(char*)cpu_state->esi);
+        FB::write((char*)cpu_state->esi);
         break;
     case 3:
         PIC::disable_preemptive_scheduling(); // Is it necessary ? Isn't timer interrupt disabled when this runs ?

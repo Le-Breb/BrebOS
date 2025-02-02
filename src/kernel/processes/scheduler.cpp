@@ -93,13 +93,11 @@ void Scheduler::set_first_ready_process_asleep_waiting_key_press()
 		__builtin_unreachable();
 	}
 
-	page_table_t* page_tables = get_page_tables();
-
 	// Set TSS esp0 to point to the syscall handler stack (i.e. tell the CPU where is syscall handler stack)
 	GDT::set_tss_kernel_stack(p->k_stack_top);
 
 	// Use process' address space
-	Interrupts::change_pdt_asm(PHYS_ADDR((uint) &p->pdt));
+	Interrupts::change_pdt_asm(PHYS_ADDR(get_page_tables(), (uint) &p->pdt));
 
 	// Jump
 	if (p->flags & P_SYSCALL_INTERRUPTED)

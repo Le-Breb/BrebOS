@@ -6,6 +6,9 @@
 #include "kctype.h"
 #include "kstdint.h"
 #include "ksyscalls.h"
+#include "stream.h"
+
+static stream s = stream(stream::Policy::STREAM_NEWLINE_FLUSHED);
 
 char* __int_str(intmax_t i, char b[], int base, uint plusSignIfNeeded, uint spaceSignIfNeeded,
 				int paddingNo, uint justify, uint zeroPad)
@@ -95,9 +98,7 @@ char* __int_str(intmax_t i, char b[], int base, uint plusSignIfNeeded, uint spac
 
 void displayCharacter(char c, int* a)
 {
-    volatile char b[] = {c,0}; // Volatile prevents b to be optimized out, messing up the syscall
-
-	__asm__ volatile("int $0x80" : : "a"(2), "S"(b));
+    s.write(c);
 	*a += 1;
 }
 
@@ -560,4 +561,10 @@ __attribute__ ((format (printf, 1, 2))) int printf([[maybe_unused]] const char* 
 	int i = vprintf(format, list);
 	va_end (list);
 	return i;
+}
+
+
+void flush()
+{
+	s.flush();
 }

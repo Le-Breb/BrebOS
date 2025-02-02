@@ -17,6 +17,7 @@
 #define FREE_THRESHOLD (10 * PAGE_SIZE) // Maximum bytes freed before attempting to free pages
 
 #define STACK_SIZE 4096
+#define KERNEL_VIRTUAL_BASE 0xC0000000
 
 #define FRAME_ID_ADDR(i) (i * PAGE_SIZE)
 #define VIRT_ADDR(pde, pte, offset) (pde << 22 | pte << 12 | offset)
@@ -27,7 +28,7 @@
 #define FRAME_FREE(i) !(FRAME_USED(i))
 #define MARK_FRAME_USED(i) frame_bitmap[i / 32] |= 1 << (i % 32)
 #define MARK_FRAME_FREE(i) frame_bitmap[i / 32] &= ~(1 << (i % 32))
-#define PHYS_ADDR(virt_addr) (page_tables[virt_addr >> 22].entries[(virt_addr >> 12) & 0x3FF] & ~0x3FF)
+#define PHYS_ADDR(page_tables, virt_addr) (page_tables[virt_addr >> 22].entries[(virt_addr >> 12) & 0x3FF] & ~0x3FF)
 
 //https://wiki.osdev.org/Paging
 
@@ -67,10 +68,17 @@ void init_mem(multiboot_info_t* minfo);
 
 /** Tries to allocate a contiguous block of memory
  *
- * @param n Size of the block in size
- * @return Address of beginning of allocated block if allocation was successful, NULL otherwise
+ * @param n Size of the block in bytes
+ * @return Address of the beginning of allocated block if allocation was successful, NULL otherwise
  */
 extern "C" void* malloc(uint n);
+
+/** Tries to allocate a contiguous block of memory on pages marked with PAGE_USER
+ *
+ * @param n Size of the block in bytes
+ * @return Address of the beginning of allocated block if allocation was successful, NULL otherwise
+ */
+void* user_malloc(uint n);
 
 extern "C" void* calloc(size_t nmemb, size_t size);
 
@@ -90,6 +98,12 @@ void* page_aligned_malloc(uint size);
  * @param ptr Pointer to the memory block to free
  */
 extern "C" void free(void* ptr);
+
+/** Frees some memory allocated on pages with PAGE_USER
+ *
+ * @param ptr Pointer to the memory block to free
+ */
+void user_free(void* ptr);
 
 /**
  * Free page-aligned memory

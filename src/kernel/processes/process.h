@@ -18,6 +18,18 @@ typedef uint pid_t;
 
 class Scheduler;
 
+struct init_fini_info
+{
+	list<Elf32_Addr> init_array;
+	list<Elf32_Addr> fini_array;
+
+	init_fini_info()
+	{
+		init_array = list<Elf32_Addr>();
+		fini_array = list<Elf32_Addr>();
+	}
+};
+
 class Process
 {
 	friend class Scheduler;
@@ -39,6 +51,7 @@ private:
 	uint flags; // Process state
 
 	list<uint> allocs; // list of memory blocks allocated by the process
+	init_fini_info init_fini;
 public:
 	list<ELF*> elfs;
 	cpu_state_t cpu_state; // Registers
@@ -112,15 +125,22 @@ private:
 	 *
 	 * @param bytes_ptr pointer to bytes to copy
 	 * @param n num bytes to copy
-	 * @param no_write whether the segment has write permissions
 	 * @param h PT_LOAD segment header
 	 * @param pte_offset offset to consider when referring to process pte, ie index of ELF first PTE entry
 	 * @param copied_bytes counter of bytes processed in current segment
-	 * @param sys_page_tables kernel page tables
 	 */
 	void
-	copy_elf_subsegment_to_address_space(void* bytes_ptr, uint n, bool no_write, Elf32_Phdr* h, uint& pte_offset,
-	                                     uint& copied_bytes, page_table_t* sys_page_tables);
+	copy_elf_subsegment_to_address_space(void* bytes_ptr, uint n, Elf32_Phdr* h, uint& pte_offset,
+	                                     uint& copied_bytes) const;
+
+	/**
+	 * Collects _init, _fini addresses, as well as init_array and fini_array entries
+	 *
+	 * @param elf ELF to process
+	 * @param runtime_load_address load address of the ELF at runtime
+	 * @param load_address current load address of the ELF
+	 */
+	void register_elf_init_and_fini(ELF* elf, uint runtime_load_address, uint load_address);
 
 public:
 	/** Gets the process' PID */
@@ -170,16 +190,21 @@ public:
 	/**
 	 * Writes argc, argv array pointer, argv pointer array and argv contents to stack
 	 * @param stack_top_v_addr Virtual address of process stack top in kernel address space
+	 * @param argc number of arguments
+	 * @param argv argument list
+	 * @param init_array init array. Shall contain _init at index 0 if it exists
+	 * @param fini_array fini array. Shall contain _fini at index 0 if it exists
 	 * @return ESP in process address space ready to be used
 	 */
-	size_t write_args_to_stack(size_t stack_top_v_addr, int argc, const char** argv);
+	static size_t write_args_to_stack(size_t stack_top_v_addr, int argc, const char** argv, list<Elf32_Addr>
+	                                  init_array, list<Elf32_Addr> fini_array);
 
 	/**
 	 * Load ELF file code and data into a process' address space and maps it
 	 * @param load_elf ELF to load
 	 * @param elf_start_address start address of ELF
 	 */
-	uint load_elf(ELF* load_elf, uint elf_start_address);
+	void load_elf(ELF* load_elf, uint elf_start_address);
 
 	/**
 	 * Update GOT entries of a dynamic object ELF.
@@ -190,7 +215,7 @@ public:
 	 * @param elf elf with relocations to process
 	 * @param elf_runtime_load_address where the elf is loaded at runtime
 	 */
-	void relocate_got_entries(ELF* elf, uint elf_runtime_load_address) const;
+	void apply_relocations(ELF* elf, uint elf_runtime_load_address) const;
 
 	/**
 	 * Computes the runtime address of a symbol referenced by an ELF.
@@ -199,7 +224,15 @@ public:
 	 * @param symbol_name name of the symbol
 	 * @return runtime address of the symbol, 0x00 if not found
 	 */
-	static uint get_symbol_runtime_address(const ELF* elf, const char* symbol_name) ;
+	static uint get_symbol_runtime_address(const ELF* elf, const char* symbol_name);
+
+	/**
+	 * Maps the segments of an ELF into the process' virtual address space
+	 *
+	 * @param load_elf ELF to map
+	 * @param pte_offset number of pages already occupied in process' virtual address space
+	 */
+	void map_elf(ELF* load_elf, uint pte_offset);
 };
 
 #endif //INCLUDE_PROCESS_H

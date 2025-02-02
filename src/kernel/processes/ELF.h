@@ -26,11 +26,13 @@ public:
 	Elf32_Shdr* section_hdrs;
 	Elf32_Dyn* dyn_table;
 	Elf32_Sym* symbols;
-	Elf32_Rel* relocs;
+	Elf32_Rel* plt_relocs;
+	Elf32_Rel* dyn_relocs;
 	Elf32_Shdr* dynsym_hdr;
 	const char* interpreter_name;
 	const char* dynsym_strtab;
-	size_t num_relocs;
+	size_t num_plt_relocs;
+	size_t num_dyn_relocs;
 	list<ELF*> dependencies;
 	uint runtime_load_address = 0;
 

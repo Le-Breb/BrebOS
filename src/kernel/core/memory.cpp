@@ -20,7 +20,9 @@ uint lowest_free_pe;
 uint lowest_free_frame = 0;
 
 memory_header base = {.s = {&base, 0}};
+memory_header user_base = {.s = {&user_base, 0}};
 memory_header* freep; /* Lowest free block */
+memory_header* user_freep; /* Lowest free user block */
 
 [[maybe_unused]] uint loaded_grub_modules = 0;
 GRUB_module* grub_modules;
@@ -33,18 +35,20 @@ uint* stack_top_ptr = (uint*)stack_top;
 
 /** Tries to allocate a contiguous block of memory
  * @param n Size of the block in bytes
+ * @param user
  *  @return A pointer to a contiguous block of n bytes or NULL if memory is full
  */
-void* sbrk(uint n);
+void* sbrk(uint n, bool user);
 
 void init_page_bitmap();
 
 /** Tries to allocate a contiguous block of (virtual) memory
  *
  * @param n Size to allocate. Unit: sizeof(mem_header)
+ * @param user
  * @return Pointer to allocated memory if allocation was successful, NULL otherwise
  */
-memory_header* more_kernel(uint n);
+memory_header* more_kernel(uint n, bool user);
 
 /** Reload cr3 which will acknowledge every pte change and invalidate TLB */
 extern "C" void reload_cr3_asm();
@@ -236,7 +240,7 @@ void load_grub_modules(multiboot_info* multibootInfo)
 
 	for (uint i = 0; i < multibootInfo->mods_count; ++i)
 	{
-		multiboot_module_t* module = &((multiboot_module_t*)(multibootInfo->mods_addr + 0xC0000000))[i];
+		multiboot_module_t* module = &((multiboot_module_t*)(multibootInfo->mods_addr + KERNEL_VIRTUAL_BASE))[i];
 
 		// Set module page as present
 		uint module_start_frame_id = module->mod_start / PAGE_SIZE;
@@ -268,10 +272,11 @@ void init_mem(struct multiboot_info* multibootInfo)
 	init_page_bitmap();
 	allocate_page_tables();
 	freep = &base;
+	user_freep = &user_base;
 	load_grub_modules(multibootInfo);
 }
 
-void* sbrk(uint n)
+void* sbrk(uint n, bool user)
 {
 	// Memory full
 	if (lowest_free_frame == PT_ENTRIES * PDT_ENTRIES)
@@ -312,22 +317,22 @@ void* sbrk(uint n)
 
 	// Allocate pages
 	for (uint i = b; i < e; ++i)
-		allocate_page(get_free_page(), i);
+		user ? allocate_page_user(get_free_page(), i) : allocate_page(get_free_page(), i);
 
 	lowest_free_pe = e;
 	while (PTE_USED(lowest_free_pe))
 		lowest_free_pe++;
 
 	// Allocated memory block virtually starts at page b. Return it.
-	return (void*)(((b / PDT_ENTRIES) << 22) | ((b % PDT_ENTRIES) << 12));
+	return (void*)VIRT_ADDR(b / PDT_ENTRIES, b % PDT_ENTRIES, 0);
 }
 
-memory_header* more_kernel(uint n)
+memory_header* more_kernel(uint n, bool user)
 {
 	if (n < N_ALLOC)
 		n = N_ALLOC;
 
-	memory_header* h = (memory_header*)sbrk(sizeof(memory_header) * n);
+	memory_header* h = (memory_header*)sbrk(sizeof(memory_header) * n, user);
 
 	if ((int*)h == nullptr)
 		return nullptr;
@@ -337,16 +342,17 @@ memory_header* more_kernel(uint n)
 	uint byte_size = sizeof(memory_header) * n;
 	uint free_bytes_save = free_bytes;
 	free_bytes = -byte_size; // Prevent free from freeing pages we just allocated
-	free((void*)(h + 1));
+	user ? user_free((void*)(h + 1)) : free((void*)(h + 1));
 	free_bytes = free_bytes_save + byte_size;
 
-	return freep;
+	return user ? user_freep : freep;
 }
 
-extern "C" void* malloc(uint n)
+void* malloc(uint n, bool user)
 {
 	memory_header* c;
-	memory_header* p = freep;
+	memory_header** free_list_beg = user ? &user_freep : &freep;
+	memory_header* p = *free_list_beg;
 	unsigned nunits = (n + sizeof(memory_header) - 1) / sizeof(memory_header) + 1;
 
 	for (c = p->s.ptr;; p = c, c = c->s.ptr)
@@ -362,15 +368,25 @@ extern "C" void* malloc(uint n)
 				c->s.size = nunits;
 			}
 			free_bytes -= nunits * sizeof(memory_header);
-			freep = p;
+			*free_list_beg = p;
 			return (void*)(c + 1);
 		}
-		if (c == freep) /* wrapped around free list */
+		if (c == *free_list_beg) /* wrapped around free list */
 		{
-			if ((c = more_kernel(nunits)) == nullptr)
+			if ((c = more_kernel(nunits, user)) == nullptr)
 				return nullptr; /* none left */
 		}
 	}
+}
+
+extern "C" void* malloc(uint n)
+{
+	return malloc(n, false);
+}
+
+void* user_malloc(uint n)
+{
+	return malloc(n, true);
 }
 
 extern "C" void* calloc(size_t nmemb, size_t size)
@@ -389,18 +405,19 @@ extern "C" void* calloc(size_t nmemb, size_t size)
 	return mem;
 }
 
-extern "C" void free(void* ptr)
+void free(void* ptr, bool user)
 {
 	memory_header* c = (memory_header*)ptr - 1;
 	memory_header* p;
 	free_bytes += c->s.size * sizeof(memory_header);
+	memory_header** free_list_beg = user ? &user_freep : &freep;
 
 	// Loop until p < c < p->s.ptr
-	for (p = freep; !(c > p && c < p->s.ptr); p = p->s.ptr)
+	for (p = *free_list_beg; !(c > p && c < p->s.ptr); p = p->s.ptr)
 		//Break when arrived at the end of the list and c goes before beginning or after end
 
-		if (p >= p->s.ptr && (c < p->s.ptr || c > p))
-			break;
+			if (p >= p->s.ptr && (c < p->s.ptr || c > p))
+				break;
 
 	// Join with upper neighbor if contiguous
 	if (c + c->s.size == p->s.ptr)
@@ -421,11 +438,21 @@ extern "C" void free(void* ptr)
 		p->s.ptr = c;
 
 	// Set new freep
-	freep = p;
+	*free_list_beg = p;
 
 	// Free pages
 	if (free_bytes >= FREE_THRESHOLD)
 		free_release_pages();
+}
+
+void user_free(void* ptr)
+{
+	free(ptr, true);
+}
+
+extern "C" void free(void* ptr)
+{
+	free(ptr, false);
 }
 
 void free_release_pages()

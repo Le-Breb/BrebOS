@@ -46,4 +46,8 @@ bool touch(const char* path);
 
 bool ls(const char* path);
 
+void puts(const char* str);
+
+void putchar(char c);
+
 #endif //INCLUDE_SYSCALLS_H

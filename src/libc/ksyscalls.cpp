@@ -11,6 +11,17 @@ void exec(const char* path, int argc, const char** argv)
 	__asm__ volatile("int $0x80" : : "a"(3), "D"(path), "S"(argc), "d"(argv));
 }
 
+void putchar(char c)
+{
+	const char b[] = { c, 0 };
+   	puts(b);
+}
+
+void puts(const char* str)
+{
+	__asm__ volatile("int $0x80" : : "a"(2), "S"(str));
+}
+
 unsigned int get_pid()
 {
 	unsigned int pid;
