@@ -22,7 +22,10 @@ CFLAGS += -O0
 ASFLAGS += -O0
 endif
 
-all: $(OBJECTS)
+all: directories $(OBJECTS)
+
+directories:
+	mkdir -p $(BUILD_DIR)
 
 .PHONY: gcc
 
@@ -32,4 +35,4 @@ $(BUILD_DIR)/%.o: %.s
 	$(AS) $(ASFLAGS) $< -o $@
 
 clean:
-	rm -rf $(BUILD_DIR)/*
+	rm -rf $(BUILD_DIR)

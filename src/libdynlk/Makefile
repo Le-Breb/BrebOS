@@ -16,11 +16,14 @@ BUILD_DIR=build
 
 all: $(LIB)
 
-$(LIB): $(OBJECTS)
+directories:
+	mkdir -p $(BUILD_DIR)
+
+$(LIB): directories $(OBJECTS)
 	ld -m elf_i386 -shared -o $(LIB) $(OBJECTS)
 
 $(BUILD_DIR)/%.o: %.s
 	$(AS) $(ASFLAGS) -f elf32 -o $@ $<
 
 clean:
-	rm -rf build/*
+	rm -rf $(BUILD_DIR)

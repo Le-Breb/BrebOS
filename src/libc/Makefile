@@ -24,11 +24,21 @@ LIB=$(BUILD_DIR)/libc.so
 LIBFLAGS = -fPIC -Wl,-shared -pie
 CPPFLAGS=-I../libc
 
-all: LIB
+all: gcc $(BUILD_DIR)/libc.so $(BUILD_DIR)/libc.a
 
-LIB: $(OBJECTS)
-		$(CC) $(CFLAGS) $(LIBFLAGS) -o $(BUILD_DIR)/libc.so $(OBJ_LIST) $(libgcc)
-	    ar rcs $(BUILD_DIR)/libc.a $(OBJECTS) $(libgcc)
+gcc:
+	make -C ../gcc
+
+.PHONY: $(BUILD_DIR)/libc.so $(BUILD_DIR)/libc.a
+
+directories:
+	@mkdir -p $(BUILD_DIR)
+
+$(BUILD_DIR)/libc.so: directories $(OBJECTS)
+	$(CC) $(CFLAGS) $(LIBFLAGS) -o $@ $(OBJ_LIST) $(libgcc)
+
+$(BUILD_DIR)/libc.a: directories $(OBJECTS)
+	ar rcs $@ $(OBJECTS) $(libgcc)
 
 .PHONY: libc
 
@@ -38,4 +48,4 @@ $(BUILD_DIR)/%.o: %.s
 	$(AS) $(ASFLAGS) $< -o $@
 
 clean:
-	rm -rf build/*
+	rm -rf $(BUILD_DIR)

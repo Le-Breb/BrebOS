@@ -1,0 +1,45 @@
+# Generic Makefile that builds any program in a subdirectory of $(SRC_DIR)/programs.
+# This file is copied by $(SRC_DIR)/programs/Makefile in every subdirectory of
+# $(SRC_DIR)/programs before being called.
+
+EXEC_NAME=$(shell basename $(CURDIR))
+SRC = $(shell find -name '*.cpp')
+OBJECTS= $(SRC:%.cpp=$(BUILD_DIR)/%.o)
+CC = i686-elf-gcc
+CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
+-c -g -fno-exceptions -fno-rtti
+AS = nasm
+ASFLAGS = -f elf -F dwarf -g
+ifdef RELEASE
+CFLAGS += -O3
+ASFLAGS += -O3
+else
+CFLAGS += -O0
+ASFLAGS += -O0
+endif
+libgcc=$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
+LDFLAGS = -T ../link_program.ld -melf_i386 -g -L../../libc/build/ -lc -dynamic-linker /dynlk
+BUILD_DIR=build
+CPPFLAGS=-I../../libc
+
+all: program
+
+.PHONY: program
+
+build_dir:
+	@mkdir -p $(BUILD_DIR)
+
+libc:
+	make -C ../../libc
+
+program: build_dir $(OBJECTS) libc
+	ld $(LDFLAGS) -o ../build/$(EXEC_NAME) ../start_program.o $(OBJECTS) $(libgcc)
+
+$(BUILD_DIR)/%.o: %.cpp
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
+$(BUILD_DIR)/%.o: %.s
+	$(AS) $(ASFLAGS) $< -o $@
+
+clean:
+	rm -rf $(BUILD_DIR)
+	rm -rf ./Makefile

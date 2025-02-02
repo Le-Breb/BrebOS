@@ -1,5 +1,3 @@
-SEARCH_DIR("build")
-
 PHDRS
 {
     headers PT_PHDR PHDRS;
@@ -19,7 +17,7 @@ SECTIONS
 
     .text ALIGN(0x1000) :
     {
-        start_shell.o(.text) /* include the .text section of start.o */
+        ../start_program.o(.text) /* include the .text section of start.o */
         *(.text) /* include all other .text sections */
     } :text
 
