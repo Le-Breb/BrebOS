@@ -18,7 +18,7 @@ extern "C" void _init(void); // NOLINT(*-reserved-identifier)
 //Todo: Advanced memory freeing (do something when free_pages do not manage to have free_bytes < FREE_THRESHOLD)
 //Todo: Implement process schedule_timeout to have sleeping processes out of the scheduler ready queue (usage: sleep)
 //Todo: Make allocate page user allocate below memory higher half, and above for kernel pages
-//Todo: Process R_386_PC32 and R_386_32 relocations
+//Todo: Process R_386_PC32 relocations
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointer
 {
 	_init(); // Execute constructors

@@ -1,5 +1,6 @@
 extern main
 extern exit
+extern __cxa_finalize
 section .text
 
 ; Expected stack layout. ESP shall be 0x10 bytes aligned (ABI requirement)
@@ -46,4 +47,8 @@ section .text
     jmp .Lfini_array_loop
 
 .Lexit:
+    sub esp, 0xc0 ; for ABI 16 bytes alignement
+    push 0x00 ; instruct cxa finalize to call all destructors
+    call __cxa_finalize ; call global destructors registered by __cxa_atexit. Why isn't this called by gcc routines ??
+    add esp, 0x10
     call exit
