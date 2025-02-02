@@ -74,6 +74,7 @@ ELF* ELF::is_valid(uint start_address, ELF_type expected_type)
         case SHT_REL:
         case SHT_DYNAMIC:
         case SHT_INIT_ARRAY:
+        case SHT_FINI_ARRAY:
             break;
         default:
             printf("Section type not supported: %i. Aborting\n", h->sh_type);

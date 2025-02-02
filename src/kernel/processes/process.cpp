@@ -272,20 +272,21 @@ bool Process::dynamic_loading(uint start_address, ELF* elf)
     return true;
 }
 
-void Process::apply_relocations(ELF* elf, uint elf_runtime_load_address) const
+bool Process::apply_relocations(ELF* elf, uint elf_runtime_load_address) const
 {
-    if (elf->global_hdr.e_type != ET_DYN)
-    {
-        printf_error("Attempting to relocate GOT entries of an ELF which is not a dynamic object");
-        return;
-    }
-    // PLT relocations
-    for (size_t i = 0; i < elf->num_plt_relocs; i++)
+    // Cf. Relocation Types in http://www.skyfree.org/linux/references/ELF_Format.pdf
+    uint& B = elf_runtime_load_address;
+
+    // PLT relocations - The OS performs lazy binding, so the relocs are not fully resolved: the OS simply
+    // adds the elf runtime load address to GOT entries, so that PLT stubs' first JMP remain valid, calling
+    // stub 0 afterwards, which will then call dynlk thanks to the address in GOT[2]. Dynlk will then perform
+    // the complete relocation at runtime.
+    for (size_t i = 0; i < elf->num_plt_relocs; i++) // Todo: check if this isn't bypassing lazy binding
     {
         // Get GOT entry runtime address
         Elf32_Rel* reloc = elf->plt_relocs + i;
         Elf32_Addr got_entry_runtime_addr = elf_runtime_load_address + reloc->r_offset;
-        if (ELF32_R_TYPE(reloc->r_info) != R_386_JMP_SLOT) // Calculation: Symbol address
+        if (ELF32_R_TYPE(reloc->r_info) != R_386_JMP_SLOT)
             continue;
 
         // Find where it has been loaded in memory
@@ -313,27 +314,65 @@ void Process::apply_relocations(ELF* elf, uint elf_runtime_load_address) const
         Elf32_Addr load_address = VIRT_ADDR(sys_pde_id, sys_pte_id, reloc->r_offset % PAGE_SIZE);
         switch (reloc_type)
         {
-        case R_386_GLOB_DAT: // Calculation: Symbol address
+        case R_386_GLOB_DAT:
             {
                 uint symbol_id = ELF32_R_SYM(reloc->r_info);
                 Elf32_Sym* symbol = &elf->symbols[symbol_id];
                 Elf32_Addr symbol_address = symbol->st_value;
-                Elf32_Addr symbol_relocated_address = elf_runtime_load_address + symbol_address;
+                Elf32_Addr S = B + symbol_address;
 
                 // Update its value
-                *(Elf32_Addr*)load_address = symbol_relocated_address;
+                *(Elf32_Addr*)load_address = S;
                 break;
             }
-        case R_386_RELATIVE: // Calculation: Address written in ELF + runtime load address
-            *(Elf32_Addr*)load_address += elf_runtime_load_address;
-            break;
-        case R_386_PC32: // Todo: implement this
+        case R_386_RELATIVE:
+            {
+                Elf32_Addr A = *(Elf32_Addr*)load_address;
+                *(Elf32_Addr*)load_address = B + A;
+                break;
+            }
+        case R_386_PC32:
+            {
+                uint symbol_id = ELF32_R_SYM(reloc->r_info);
+                Elf32_Sym* symbol = &elf->symbols[symbol_id];
+                // Weak symbols that are not yet defined are not an issue
+                if (ELF32_ST_BIND(symbol->st_info) != STB_WEAK || symbol->st_shndx != 0)
+                {
+                    printf_error("unsupported R_396_PC32 relocation");
+                    return false;
+                }
+                /*Elf32_Addr symbol_address = symbol->st_value;
+                Elf32_Addr S = B + symbol_address;
+                [[maybe_unused]] const char* symbol_name = &elf->dynsym_strtab[symbol->st_name];
+                Elf32_Addr A = *(Elf32_Addr*)load_address;
+                Elf32_Addr P = reloc->r_offset;
+
+                // Update its value
+                *(Elf32_Addr*)load_address = S + A - P;*/
+                break;
+            }
         case R_386_32:
-            break;
-        default:
+            {
+                uint symbol_id = ELF32_R_SYM(reloc->r_info);
+                Elf32_Sym* symbol = &elf->symbols[symbol_id];
+                // Weak symbols that are not yet defined are not an issue
+                if (ELF32_ST_BIND(symbol->st_info) == STB_WEAK && symbol->st_shndx == 0)
+                    break;
+                Elf32_Addr symbol_address = symbol->st_value;
+                [[maybe_unused]] const char* symbol_name = &elf->dynsym_strtab[symbol->st_name];
+                Elf32_Addr S = B + symbol_address;
+                Elf32_Addr A = *(Elf32_Addr*)load_address;
+
+                // Update its value
+                *(Elf32_Addr*)load_address = S + A;
+                break;
+            }
+        default: // Shouldn't happen, supported relocation types are checked in ELF::is_valid
             break;
         }
     }
+
+    return true;
 }
 
 uint Process::get_symbol_runtime_address(const ELF* elf, const char* symbol_name)
@@ -373,11 +412,14 @@ ELF* Process::load_lib(const char* path, void* lib_dynlk_runtime_entry_point)
         return nullptr;
     }
     // Load lib into newly allocated space
-    uint lib_runtime_load_addr = (num_pages - lib_elf->num_pages()) * PAGE_SIZE;
-    load_elf(lib_elf, load_address);
-    apply_relocations(lib_elf, lib_runtime_load_addr);
-    lib_elf->runtime_load_address = lib_runtime_load_addr;
+    Elf32_Addr lib_runtime_load_addr = load_elf(lib_elf, load_address);
     delete[] (char*)buf;
+    if (lib_runtime_load_addr == (Elf32_Addr)-1)
+    {
+        delete lib_elf;
+        return nullptr;
+    }
+    lib_elf->runtime_load_address = lib_runtime_load_addr;
 
     size_t base_addr = lib_elf->base_address();
     uint got_runtime_addr = 0;
@@ -499,9 +541,10 @@ Process* Process::from_ELF(uint start_address)
 
     Process* proc = allocate_proc_for_elf_module(elf);
     if (proc == nullptr)
-        return nullptr;
+        {delete elf; return nullptr;}
 
-    proc->load_elf(elf, start_address);
+    if ((Elf32_Addr)-1 == proc->load_elf(elf, start_address))
+        {delete elf; return nullptr;}
 
     const char* interpereter_name = elf->interpreter_name;
     bool dynamic = interpereter_name != nullptr;
@@ -666,12 +709,12 @@ Process::copy_elf_subsegment_to_address_space(void* bytes_ptr, uint n, Elf32_Phd
     copied_bytes += n;
 }
 
-void Process::register_elf_init_and_fini(ELF* elf, uint runtime_load_address, uint load_address)
+void Process::register_elf_init_and_fini(ELF* elf, uint runtime_load_address)
 {
     uint init_arr_byte_size = 0;
     uint fini_arr_byte_size = 0;
-    Elf32_Addr* file_init_array = nullptr;
-    Elf32_Addr* file_fini_array = nullptr;
+    Elf32_Addr* init_array = nullptr;
+    Elf32_Addr* fini_array = nullptr;
     Elf32_Addr init_address = 0;
     Elf32_Addr fini_address = 0;
 
@@ -687,11 +730,23 @@ void Process::register_elf_init_and_fini(ELF* elf, uint runtime_load_address, ui
             fini_address = runtime_load_address + d->d_un.d_val;
             break;
         case DT_INIT_ARRAY:
-            file_init_array = (Elf32_Addr*)(load_address + d->d_un.d_val);
-            break;
+            {
+                Elf32_Addr runtime_address = runtime_load_address + d->d_un.d_val;
+                uint sys_pe_id = pte[runtime_address / PAGE_SIZE];
+                uint sys_pde_id = sys_pe_id / PDT_ENTRIES;
+                uint sys_pte_id = sys_pe_id % PT_ENTRIES;
+                init_array = (Elf32_Addr*)VIRT_ADDR(sys_pde_id, sys_pte_id, d->d_un.d_val % PAGE_SIZE);
+                break;
+            }
         case DT_FINI_ARRAY:
-            file_fini_array = (Elf32_Addr*)(load_address + d->d_un.d_val);
-            break;
+            {
+                Elf32_Addr runtime_address = runtime_load_address + d->d_un.d_val;
+                uint sys_pe_id = pte[runtime_address / PAGE_SIZE];
+                uint sys_pde_id = sys_pe_id / PDT_ENTRIES;
+                uint sys_pte_id = sys_pe_id % PT_ENTRIES;
+                fini_array = (Elf32_Addr*)VIRT_ADDR(sys_pde_id, sys_pte_id, d->d_un.d_val % PAGE_SIZE);
+                break;
+            }
         case DT_INIT_ARRAYSZ:
             init_arr_byte_size = d->d_un.d_val;
             break;
@@ -706,12 +761,12 @@ void Process::register_elf_init_and_fini(ELF* elf, uint runtime_load_address, ui
     // Store init and fini arrays
     uint init_n = init_arr_byte_size / sizeof(Elf32_Addr);
     for (uint i = init_n - 1; i < init_n; i--)
-        init_fini.init_array.addFirst(runtime_load_address + file_init_array[i]);
+        init_fini.init_array.addFirst(init_array[i]);
     if (init_address)
         init_fini.init_array.addFirst(init_address);
     uint fini_n = fini_arr_byte_size / sizeof(Elf32_Addr);
     for (uint i = fini_n - 1; i < init_n; i--)
-        init_fini.fini_array.addFirst(runtime_load_address + file_fini_array[i]);
+        init_fini.fini_array.addFirst(fini_array[i]);
     if (fini_address)
         init_fini.fini_array.addFirst(fini_address);
 }
@@ -746,13 +801,13 @@ void Process::map_elf(ELF* load_elf, uint pte_offset)
     }
 }
 
-void Process::load_elf(ELF* load_elf, uint elf_start_address)
+Elf32_Addr Process::load_elf(ELF* load_elf, uint elf_start_address)
 {
+    uint lib_runtime_load_addr = (num_pages - load_elf->num_pages()) * PAGE_SIZE;
     uint elf_num_pages = load_elf->num_pages();
     uint pte_offset = num_pages - elf_num_pages;
 
     map_elf(load_elf, pte_offset);
-    register_elf_init_and_fini(load_elf, pte_offset * PAGE_SIZE, elf_start_address);
 
     // Copy lib code in allocated space
     for (int k = 0; k < load_elf->global_hdr.e_phnum; ++k)
@@ -786,4 +841,10 @@ void Process::load_elf(ELF* load_elf, uint elf_start_address)
         bytes_ptr = (void*)(elf_start_address + h->p_offset + copied_bytes);
         copy_elf_subsegment_to_address_space(bytes_ptr, num_final_bytes, h, pte_offset, copied_bytes);
     }
+
+    if (!apply_relocations(load_elf, lib_runtime_load_addr))
+        return -1;
+    register_elf_init_and_fini(load_elf, pte_offset * PAGE_SIZE);
+
+    return lib_runtime_load_addr;
 }

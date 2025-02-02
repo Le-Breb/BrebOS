@@ -138,9 +138,8 @@ private:
 	 *
 	 * @param elf ELF to process
 	 * @param runtime_load_address load address of the ELF at runtime
-	 * @param load_address current load address of the ELF
 	 */
-	void register_elf_init_and_fini(ELF* elf, uint runtime_load_address, uint load_address);
+	void register_elf_init_and_fini(ELF* elf, uint runtime_load_address);
 
 public:
 	/** Gets the process' PID */
@@ -204,18 +203,14 @@ public:
 	 * @param load_elf ELF to load
 	 * @param elf_start_address start address of ELF
 	 */
-	void load_elf(ELF* load_elf, uint elf_start_address);
+	Elf32_Addr load_elf(ELF* load_elf, uint elf_start_address);
 
 	/**
-	 * Update GOT entries of a dynamic object ELF.
-	 * When a dynamic library is loaded in memory, its GOT contains absolute addresses of the PLT stubs first 'jmp'.
-	 * Those addresses are computed by the linker assuming the ELF is loaded at 0x00.
-	 * However, dynamic objects can be loaded anywhere by the dynamic loader, which is why we need to add the runtime
-	 * load address to the GOT entries so that the 'jmp' addresses remain correct.
+	 * Process relocations of an ELF.
 	 * @param elf elf with relocations to process
 	 * @param elf_runtime_load_address where the elf is loaded at runtime
 	 */
-	void apply_relocations(ELF* elf, uint elf_runtime_load_address) const;
+	bool apply_relocations(ELF* elf, uint elf_runtime_load_address) const;
 
 	/**
 	 * Computes the runtime address of a symbol referenced by an ELF.
