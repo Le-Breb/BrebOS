@@ -119,19 +119,20 @@ You can now run your program using `p your_awesome_program_name` in BrebOS.
 - **Interrupts** (IDT)
 - **Dynamic memory allocation** (malloc, free)
 ### Processes
+- **Userland** (processes run in ring 3, kernel in ring 0)
 - **Preemptive scheduling**
 - **Syscalls**
 - **ELF support**
-  - ELF loading and execution (ELf processing, address space setup, global/local static variables)
+  - ELF loading and execution (ELf processing, address space setup, global/local static variables handling)
   - Dynamic libraries support (relocations)
   - Lazy binding support (addresses of functions within dynamic libraries are resolved at runtime by `dynlk`, the OS' dynamic linker)
   - Custom libc (basic functions such as `strlen` and syscalls wrappers)
-- **Virtual File System (VFS)**
-  - ATA driver (taken from osdev.com, not implemented by myself)
+- **File System**
+  - ATA driver (taken from osdev.com, not implemented by me)
   - FAT32 support
-  - VFS to abstract hardware/file_system specific details
+  - VFS which abstracts hardware/file_system specific details and provide a unified interface within the kernel.
 ### Misc
-- Keyboard driver
+- PS2 Keyboard driver
 
 ### Roadmap 🛣️
 
