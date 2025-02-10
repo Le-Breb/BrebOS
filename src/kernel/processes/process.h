@@ -9,6 +9,7 @@
 
 typedef uint pid_t;
 
+#define P_READY 0
 // Process is terminated but not freed
 #define P_TERMINATED 1
 // Process has been interrupted during a syscall
@@ -18,26 +19,15 @@ typedef uint pid_t;
 
 class Scheduler;
 
-struct init_fini_info
-{
-	list<Elf32_Addr> init_array;
-	list<Elf32_Addr> fini_array;
-
-	init_fini_info()
-	{
-		init_array = list<Elf32_Addr>();
-		fini_array = list<Elf32_Addr>();
-	}
-};
-
 class Process
 {
-	friend class Scheduler;
+	friend class Scheduler; // Scheduler managers processes, it needs complete access to do its stuff
+	friend class ELFLoader; // ELFLoader creates processes, it acts like the constructor, it initializes most fields
 
 private:
 	// Process page tables. Process can use all virtual addresses below the kernel virtual location at pde 768
-	page_table_t page_tables[768];
-	pdt_t pdt; // process page directory table
+	page_table_t page_tables[768]{};
+	pdt_t pdt{}; // process page directory table
 
 	uint quantum, priority;
 
@@ -50,14 +40,13 @@ private:
 	uint k_stack_top; // Top of syscall handlers' stack
 	uint flags; // Process state
 
-	list<uint> allocs; // list of memory blocks allocated by the process
-	init_fini_info init_fini;
+	list<uint> allocs{}; // list of memory blocks allocated by the process
 public:
-	list<ELF*> elfs;
-	cpu_state_t cpu_state; // Registers
-	cpu_state_t k_cpu_state; // Syscall handler registers
-	stack_state_t stack_state; // Execution context
-	stack_state_t k_stack_state; // Syscall handler execution context
+	list<ELF*> elfs{};
+	cpu_state_t cpu_state{}; // Registers
+	cpu_state_t k_cpu_state{}; // Syscall handler registers
+	stack_state_t stack_state{}; // Execution context
+	stack_state_t k_stack_state{}; // Syscall handler execution context
 
 private:
 	/** Page aligned allocator **/
@@ -75,41 +64,7 @@ private:
 	/** Frees a terminated process */
 	~Process();
 
-	/**
-	 * Sets up a dynamically linked process
-	 * @param start_address ELF start address
-	 * @param elf process' main ELF
-	 * @return process set up, NULL if an error occurred
-	 */
-	bool dynamic_loading(uint start_address, ELF* elf);
-
-	/**
-	* Load a lib in a process' address soace
-	* @param path GRUB modules
-	* @param lib_dynlk_runtime_entry_point
-	* @return libdynlk runtime entry point address
-	*/
-	ELF* load_lib(const char* path, void* lib_dynlk_runtime_entry_point);
-
-	/**
-	 * Allocate space for libydnlk and add it to a process' address space
-	 * @param lib_elf library elf
-	 * @return boolean indicating success state
-	 */
-	bool alloc_and_add_lib_pages_to_process(ELF& lib_elf);
-
-	/**
-	 * Allocate a process containing an ELF
-	 * @return process struct, NULL if an error occurred
-	 */
-	static Process* allocate_proc_for_elf_module(ELF* elf);
-
-	/**
-	 * Create a process to run an ELF executable
-	 *
-	 * @return program's process
-	 */
-	static Process* from_ELF(uint start_address);
+	explicit Process(uint num_pages);
 
 	/**
 	 * Loads a flat binary in memory
@@ -118,28 +73,7 @@ private:
 	 * @param module grub modules
 	 * @return program's process, NULL if an error occurred
 	 */
-	static Process* from_binary(GRUB_module* module);
-
-	/**
-	 * Load part of an ELF segment into the process address space and maps it.
-	 *
-	 * @param bytes_ptr pointer to bytes to copy
-	 * @param n num bytes to copy
-	 * @param h PT_LOAD segment header
-	 * @param pte_offset offset to consider when referring to process pte, ie index of ELF first PTE entry
-	 * @param copied_bytes counter of bytes processed in current segment
-	 */
-	void
-	copy_elf_subsegment_to_address_space(void* bytes_ptr, uint n, Elf32_Phdr* h, uint& pte_offset,
-	                                     uint& copied_bytes) const;
-
-	/**
-	 * Collects _init, _fini addresses, as well as init_array and fini_array entries
-	 *
-	 * @param elf ELF to process
-	 * @param runtime_load_address load address of the ELF at runtime
-	 */
-	void register_elf_init_and_fini(ELF* elf, uint runtime_load_address);
+	//static Process* from_binary(GRUB_module* module);
 
 public:
 	/** Gets the process' PID */
@@ -164,17 +98,6 @@ public:
 	void free_dyn_memory(void* ptr);
 
 	/**
-	 * Create a process from a GRUB module
-	 * @param start_addresss program's start address
-	 * @param pid process ID
-	 * @param ppid parent process ID
-	 * @param argc num args
-	 * @param argv args
-	 * @return process, nullptr if an error occurred
-	 */
-	static Process* from_memory(uint start_addresss, pid_t pid, pid_t ppid, int argc, const char** argv);
-
-	/**
 	 * Sets a flag
 	 * @param flag flag to set
 	 */
@@ -187,47 +110,13 @@ public:
 	[[nodiscard]] bool is_waiting_key() const;
 
 	/**
-	 * Writes argc, argv array pointer, argv pointer array and argv contents to stack
-	 * @param stack_top_v_addr Virtual address of process stack top in kernel address space
-	 * @param argc number of arguments
-	 * @param argv argument list
-	 * @param init_array init array. Shall contain _init at index 0 if it exists
-	 * @param fini_array fini array. Shall contain _fini at index 0 if it exists
-	 * @return ESP in process address space ready to be used
-	 */
-	static size_t write_args_to_stack(size_t stack_top_v_addr, int argc, const char** argv, list<Elf32_Addr>
-	                                  init_array, list<Elf32_Addr> fini_array);
-
-	/**
-	 * Load ELF file code and data into a process' address space and maps it
-	 * @param load_elf ELF to load
-	 * @param elf_start_address start address of ELF
-	 */
-	Elf32_Addr load_elf(ELF* load_elf, uint elf_start_address);
-
-	/**
-	 * Process relocations of an ELF.
-	 * @param elf elf with relocations to process
-	 * @param elf_runtime_load_address where the elf is loaded at runtime
-	 */
-	bool apply_relocations(ELF* elf, uint elf_runtime_load_address) const;
-
-	/**
-	 * Computes the runtime address of a symbol referenced by an ELF.
-	 * Works in conjunction with dynlk to resolve symbol addresses at runtime for lazy binding.
-	 * @param elf ELF asking for the symbol address
-	 * @param symbol_name name of the symbol
-	 * @return runtime address of the symbol, 0x00 if not found
-	 */
+	* Computes the runtime address of a symbol referenced by an ELF.
+	* Works in conjunction with dynlk to resolve symbol addresses at runtime for lazy binding.
+	* @param elf ELF asking for the symbol address
+	* @param symbol_name name of the symbol
+	* @return runtime address of the symbol, 0x00 if not found
+	*/
 	static uint get_symbol_runtime_address(const ELF* elf, const char* symbol_name);
-
-	/**
-	 * Maps the segments of an ELF into the process' virtual address space
-	 *
-	 * @param load_elf ELF to map
-	 * @param pte_offset number of pages already occupied in process' virtual address space
-	 */
-	void map_elf(ELF* load_elf, uint pte_offset);
 };
 
 #endif //INCLUDE_PROCESS_H

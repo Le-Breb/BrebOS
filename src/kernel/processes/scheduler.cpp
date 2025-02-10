@@ -1,5 +1,6 @@
 #include "scheduler.h"
 
+#include "ELFLoader.h"
 #include "../core/PIT.h"
 #include "../core/system.h"
 #include "../core/GDT.h"
@@ -123,7 +124,7 @@ void Scheduler::start_module(uint module, pid_t ppid, int argc, const char** arg
 		return;
 	}
 
-	Process* proc = Process::from_memory(get_grub_modules()[module].start_addr, pid, ppid, argc, argv);
+	Process* proc = ELFLoader::setup_elf_process(get_grub_modules()[module].start_addr, pid, ppid, argc, argv);
 	if (!proc)
 		return;
 
@@ -149,7 +150,7 @@ int Scheduler::exec(const char* path, pid_t ppid, int argc, const char** argv)
 	if (!buf)
 		return -1;
 
-	Process* proc = Process::from_memory((uint)buf, pid, ppid, argc, argv);
+	Process* proc = ELFLoader::setup_elf_process((uint)buf, pid, ppid, argc, argv);
 	delete[] (char*)buf;
 	if (!proc)
 		return -1;
@@ -232,10 +233,11 @@ void Scheduler::release_pid(pid_t pid)
 
 void Scheduler::create_kernel_init_process()
 {
-	Process* kernel = new Process();
+	Process* kernel = new Process(0);
 	kernel->priority = 2;
 	kernel->pdt = *get_pdt();
 	uint pid = get_free_pid();
+	kernel->pid = pid;
 	if (pid == MAX_PROCESSES)
 	{
 		printf_error("No more PID available. Cannot finish kernel initialization.");
