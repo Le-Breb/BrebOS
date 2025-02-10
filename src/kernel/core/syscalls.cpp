@@ -50,21 +50,20 @@ void Syscall::dynlk(cpu_state_t* cpu_state)
     Process* p = Scheduler::get_running_process();
 
     // Find the ELF from which the call is from
-    ELF* elf = nullptr;
-    for (int i = 0; i < p->elfs.size(); i++)
+    struct elf_dependence_list* dep = p->elf_dependence_list;
+    while (dep)
     {
-        ELF* ith_elf = *p->elfs.get(i);
-        if ((uint)ith_elf == cpu_state->esi)
-        {
-            elf = ith_elf;
+        if ((uint)dep->elf == cpu_state->esi)
             break;
-        }
+
+        dep = dep->next;
     }
-    if (elf == nullptr)
+    if (dep == nullptr)
     {
         printf_error("dynlk met unknown ELF");
         return;
     }
+    ELF* elf = dep->elf;
 
     // Get relocation table
     Elf32_Rel* reloc_table = elf->plt_relocs;
@@ -103,7 +102,7 @@ void Syscall::dynlk(cpu_state_t* cpu_state)
     const char* symbol_name = &elf->dynsym_strtab[s->st_name];
 
     // Find symbol
-    void* symbol_addr = (void*)p->get_symbol_runtime_address(elf, symbol_name);
+    void* symbol_addr = (void*)p->get_symbol_runtime_address(dep, symbol_name);
     if (symbol_addr == nullptr)
     {
         printf_error("Symbol %s not found", symbol_name);
@@ -111,7 +110,7 @@ void Syscall::dynlk(cpu_state_t* cpu_state)
     }
 
     // Compute symbol's GOT entry address
-    uint got_entry_addr = rel->r_offset + elf->runtime_load_address;
+    uint got_entry_addr = rel->r_offset + dep->runtime_load_address;
 
     *(void**)got_entry_addr = symbol_addr; // Write symbol address to GOT
     Scheduler::get_running_process()->cpu_state.eax = (uint)symbol_addr; // Return symbol address to userland dynlk

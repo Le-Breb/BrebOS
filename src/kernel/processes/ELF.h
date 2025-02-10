@@ -3,7 +3,7 @@
 
 #include "ELF_defines.h"
 #include <kstddef.h>
-#include "../utils/list.h"
+#include <kstring.h>
 
 #define OS_INTERPR ("/dynlk") // OS default interpreter, used to run dynamically linked programs
 #define OS_LIB ("libc.so") // OS lib, allowing programs to use syscalls
@@ -33,8 +33,6 @@ public:
 	const char* dynsym_strtab;
 	size_t num_plt_relocs;
 	size_t num_dyn_relocs;
-	list<ELF*> dependencies;
-	uint runtime_load_address = 0;
 
 	explicit ELF(uint start_address);
 
@@ -79,8 +77,38 @@ public:
 	[[nodiscard]] size_t base_address() const;
 
 	[[nodiscard]] size_t num_pages() const;
+};
 
-	void register_dependency(ELF* elf);
+struct elf_dependence_list
+{
+	const char* path; // Path of the ELF, owned by this structure
+	ELF* elf;
+	elf_dependence_list* next;
+	Elf32_Addr runtime_load_address;
+
+	elf_dependence_list(const char* path, ELF* elf, Elf32_Addr runtime_load_address)
+		: path((char*)malloc(strlen(path) + 1)),
+		  elf(elf),
+		  next(nullptr),
+		  runtime_load_address(runtime_load_address)
+	{
+		strcpy((char*)this->path, path);
+	}
+
+	void add_dependence(const char* path, ELF* elf, Elf32_Addr runtime_load_address)
+	{
+		elf_dependence_list* curr = this;
+		while (curr->next)
+			curr = curr->next;
+		curr->next = new elf_dependence_list(path, elf, runtime_load_address);
+	}
+
+	~elf_dependence_list()
+	{
+		delete path;
+		delete next;
+		delete elf;
+	}
 };
 
 #endif //INCLUDE_ELF_H

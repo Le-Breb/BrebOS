@@ -353,8 +353,3 @@ size_t ELF::num_pages() const
 {
     return (get_highest_runtime_addr() + PAGE_SIZE - 1) / PAGE_SIZE;
 }
-
-void ELF::register_dependency(ELF* elf)
-{
-    dependencies.addLast(elf);
-}

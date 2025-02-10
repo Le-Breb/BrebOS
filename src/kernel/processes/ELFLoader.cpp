@@ -123,11 +123,11 @@ bool ELFLoader::dynamic_loading(uint start_address, ELF* elf)
 
     // Load libdynlk
     uint proc_num_pages = proc->num_pages;
+    uint libdynlk_runtime_load_address;
     ELF* libdynlk_elf;
-    if (!((libdynlk_elf = load_lib("/bin/libdynlk.so", nullptr))))
+    if (!((libdynlk_elf = load_lib(LIBDYNLK_PATH, nullptr, libdynlk_runtime_load_address))))
         return false;
-    proc->elfs.addLast(libdynlk_elf);
-    elf->register_dependency(libdynlk_elf);
+    proc->elf_dependence_list->add_dependence(LIBDYNLK_PATH, libdynlk_elf, libdynlk_runtime_load_address);
 
     // Get libdynlk entry point
     void* libdynlk_entry_point = libdynlk_elf->get_libdynlk_main_runtime_addr(proc_num_pages);
@@ -139,10 +139,10 @@ bool ELFLoader::dynamic_loading(uint start_address, ELF* elf)
 
     // Load libc
     ELF* libc_elf;
-    if (!((libc_elf = load_lib("/bin/libc.so", libdynlk_entry_point))))
+    Elf32_Addr libc_runtime_load_address;
+    if (!((libc_elf = load_lib(LIBC_PATH, libdynlk_entry_point, libc_runtime_load_address))))
         return false;
-    proc->elfs.addLast(libc_elf);
-    elf->register_dependency(libc_elf);
+    proc->elf_dependence_list->add_dependence(LIBC_PATH, libc_elf, libc_runtime_load_address);
 
     // GOT setup: GOT[0] unused, GOT[1] = addr of GRUB module (to identify the program), GOT[2] = dynamic linker address
     *(void**)(got_addr + 1) = (void*)elf;
@@ -154,7 +154,7 @@ bool ELFLoader::dynamic_loading(uint start_address, ELF* elf)
     return true;
 }
 
-bool ELFLoader::apply_relocations(ELF* elf, uint elf_runtime_load_address)
+bool ELFLoader::apply_relocations(ELF* elf, uint elf_runtime_load_address) const
 {
     // Cf. Relocation Types in http://www.skyfree.org/linux/references/ELF_Format.pdf
     uint& B = elf_runtime_load_address;
@@ -257,7 +257,7 @@ bool ELFLoader::apply_relocations(ELF* elf, uint elf_runtime_load_address)
     return true;
 }
 
-ELF* ELFLoader::load_lib(const char* path, void* lib_dynlk_runtime_entry_point)
+ELF* ELFLoader::load_lib(const char* path, void* lib_dynlk_runtime_entry_point, Elf32_Addr& runtime_load_address)
 {
     void* buf = VFS::load_file(path);
     if (!buf)
@@ -283,7 +283,7 @@ ELF* ELFLoader::load_lib(const char* path, void* lib_dynlk_runtime_entry_point)
         delete lib_elf;
         return nullptr;
     }
-    lib_elf->runtime_load_address = lib_runtime_load_addr;
+    runtime_load_address = lib_runtime_load_addr;
 
     size_t base_addr = lib_elf->base_address();
     uint got_runtime_addr = 0;
@@ -312,7 +312,7 @@ ELF* ELFLoader::load_lib(const char* path, void* lib_dynlk_runtime_entry_point)
     return lib_elf;
 }
 
-bool ELFLoader::alloc_and_add_lib_pages_to_process(ELF& lib_elf)
+bool ELFLoader::alloc_and_add_lib_pages_to_process(ELF& lib_elf) const
 {
     uint highest_addr = lib_elf.get_highest_runtime_addr();
     // Num pages lib  code spans over
@@ -352,13 +352,12 @@ bool ELFLoader::alloc_and_add_lib_pages_to_process(ELF& lib_elf)
     return true;
 }
 
-Process* ELFLoader::init_process(ELF* elf)
+Process* ELFLoader::init_process(ELF* elf, const char* path)
 {
     uint highest_addr = elf->get_highest_runtime_addr();
     // Num pages code spans over
     uint proc_code_pages = highest_addr / PAGE_SIZE + ((highest_addr % PAGE_SIZE) ? 1 : 0);
-    auto* proc = new Process(proc_code_pages);
-    proc->elfs.addFirst(elf);
+    auto* proc = new Process(proc_code_pages, elf, 0, path);
     if (proc->pte == nullptr)
     {
         printf_error("Unable to allocate memory for process");
@@ -389,7 +388,7 @@ Process* ELFLoader::init_process(ELF* elf)
 
 void
 ELFLoader::copy_elf_subsegment_to_address_space(void* bytes_ptr, uint n, Elf32_Phdr* h, uint& pte_offset,
-                                              uint& copied_bytes)
+                                              uint& copied_bytes) const
 {
     // Compute indexes
     uint* elf_pte = proc->pte + pte_offset;
@@ -466,7 +465,7 @@ void ELFLoader::register_elf_init_and_fini(ELF* elf, uint runtime_load_address)
         init_fini.fini_array.addFirst(fini_address);
 }
 
-void ELFLoader::map_elf(ELF* load_elf, uint pte_offset)
+void ELFLoader::map_elf(ELF* load_elf, uint pte_offset) const
 {
     uint* elf_pte = proc->pte + pte_offset;
     page_table_t* sys_page_tables = get_page_tables();
@@ -544,13 +543,13 @@ Elf32_Addr ELFLoader::load_elf(ELF* load_elf, uint elf_start_address)
     return lib_runtime_load_addr;
 }
 
-Process* ELFLoader::process_from_elf(uint start_address, int argc, const char** argv, pid_t pid, pid_t ppid)
+Process* ELFLoader::process_from_elf(uint start_address, int argc, const char** argv, pid_t pid, pid_t ppid, const char* path)
 {
     ELF* elf;
     if (!((elf = ELF::is_valid(start_address, Executable))))
         return nullptr;
 
-    proc = init_process(elf);
+    proc = init_process(elf, path);
     if (proc == nullptr)
         return proc;
 
@@ -574,7 +573,7 @@ Process* ELFLoader::process_from_elf(uint start_address, int argc, const char** 
     return proc;
 }
 
-void ELFLoader::finalize_process_setup(int argc, const char** argv, pid_t pid, pid_t ppid)
+void ELFLoader::finalize_process_setup(int argc, const char** argv, pid_t pid, pid_t ppid) const
 {
     // Allocate process stack page
     uint p_stack_pe_id = get_free_pe();
@@ -621,10 +620,10 @@ void ELFLoader::finalize_process_setup(int argc, const char** argv, pid_t pid, p
     memset(&proc->cpu_state, 0, sizeof(proc->cpu_state));
 }
 
-Process* ELFLoader::setup_elf_process(uint start_addr, pid_t pid, pid_t ppid, int argc, const char** argv)
+Process* ELFLoader::setup_elf_process(uint start_addr, pid_t pid, pid_t ppid, int argc, const char** argv, const char* path)
 {
     ELFLoader loader = ELFLoader();
-    Process* proc = loader.process_from_elf(start_addr, argc, argv, pid, ppid);
+    Process* proc = loader.process_from_elf(start_addr, argc, argv, pid, ppid, path);
 
     return proc;
 }

@@ -7,6 +7,9 @@
 #include "ELF_defines.h"
 #include "process.h"
 
+#define LIBDYNLK_PATH "/bin/libdynlk.so"
+#define LIBC_PATH "/bin/libc.so"
+
 struct init_fini_info
 {
     list<Elf32_Addr> init_array;
@@ -41,22 +44,23 @@ private:
     * Load a lib in a process' address soace
     * @param path GRUB modules
     * @param lib_dynlk_runtime_entry_point
+    * @param runtime_load_address address where lib is loaded in runtime address space
     * @return libdynlk runtime entry point address
     */
-    ELF* load_lib(const char* path, void* lib_dynlk_runtime_entry_point);
+    ELF* load_lib(const char* path, void* lib_dynlk_runtime_entry_point, Elf32_Addr& runtime_load_address);
 
     /**
      * Allocate space for libydnlk and add it to a process' address space
      * @param lib_elf library elf
      * @return boolean indicating success state
      */
-    bool alloc_and_add_lib_pages_to_process(ELF& lib_elf);
+    bool alloc_and_add_lib_pages_to_process(ELF& lib_elf) const;
 
     /**
      * Allocate a process containing an ELF
      * @return process struct, NULL if an error occurred
      */
-    Process* init_process(ELF* elf);
+    static Process* init_process(ELF* elf, const char* path);
 
     /**
      * Load part of an ELF segment into the process address space and maps it.
@@ -69,7 +73,7 @@ private:
      */
     void
     copy_elf_subsegment_to_address_space(void* bytes_ptr, uint n, Elf32_Phdr* h, uint& pte_offset,
-                                         uint& copied_bytes);
+                                         uint& copied_bytes) const;
 
     /**
      * Collects _init, _fini addresses, as well as init_array and fini_array entries
@@ -91,7 +95,7 @@ private:
      * @param elf elf with relocations to process
      * @param elf_runtime_load_address where the elf is loaded at runtime
      */
-    bool apply_relocations(ELF* elf, uint elf_runtime_load_address);
+    bool apply_relocations(ELF* elf, uint elf_runtime_load_address) const;
 
     /**
      * Maps the segments of an ELF into the process' virtual address space
@@ -99,14 +103,14 @@ private:
      * @param load_elf ELF to map
      * @param pte_offset number of pages already occupied in process' virtual address space
      */
-    void map_elf(ELF* load_elf, uint pte_offset);
+    void map_elf(ELF* load_elf, uint pte_offset) const;
 
     /**
      * Create a process to run an ELF executable
      *
      * @return program's process
      */
-    Process* process_from_elf(uint start_address, int argc, const char** argv, pid_t pid, pid_t ppid);
+    Process* process_from_elf(uint start_address, int argc, const char** argv, pid_t pid, pid_t ppid, const char* path);
 
     /**
      * Writes argc, argv array pointer, argv pointer array and argv contents to stack
@@ -128,7 +132,7 @@ private:
      * @param pid process ID
      * @param ppid parent process ID
      */
-    void finalize_process_setup(int argc, const char** argv, pid_t pid, pid_t ppid);
+    void finalize_process_setup(int argc, const char** argv, pid_t pid, pid_t ppid) const;
 
 public:
     /**
@@ -140,7 +144,7 @@ public:
      * @param argv args
      * @return process, nullptr if an error occurred
      */
-    static Process* setup_elf_process(uint start_addresss, pid_t pid, pid_t ppid, int argc, const char** argv);
+    static Process* setup_elf_process(uint start_addresss, pid_t pid, pid_t ppid, int argc, const char** argv, const char* path);
 };
 
 

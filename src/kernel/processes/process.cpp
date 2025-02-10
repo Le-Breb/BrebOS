@@ -68,19 +68,16 @@ Process::~Process()
         free_page(pte[i] / PDT_ENTRIES, pte[i] % PDT_ENTRIES);
     }
 
-
-    // Free process fields
-    for (int i = 0; i < elfs.size(); i++)
-        delete *elfs.get(i);
     delete pte;
+    delete elf_dependence_list;
 
     flags |= P_TERMINATED;
 
     printf_info("Process %u exited", pid);
 }
 
-Process::Process(uint num_pages) : quantum(0), priority(0), num_pages(num_pages), pte((uint*)calloc(num_pages, sizeof(uint))),
-pid(MAX_PROCESSES), ppid(MAX_PROCESSES), k_stack_top(-1), flags(P_READY)
+Process::Process(uint num_pages, ELF* elf, Elf32_Addr runtime_load_address, const char* path) : quantum(0), priority(0), num_pages(num_pages), pte((uint*)calloc(num_pages, sizeof(uint))),
+pid(MAX_PROCESSES), ppid(MAX_PROCESSES), k_stack_top(-1), flags(P_READY), elf_dependence_list(new struct elf_dependence_list(path, elf, runtime_load_address))
 {
 
 }
@@ -149,19 +146,19 @@ bool Process::is_waiting_key() const
     return flags & P_WAITING_KEY;
 }
 
-uint Process::get_symbol_runtime_address(const ELF* elf, const char* symbol_name)
+uint Process::get_symbol_runtime_address(const struct elf_dependence_list* dep, const char* symbol_name)
 {
-    const Elf32_Sym* s = elf->get_symbol(symbol_name);
+    const Elf32_Sym* s = dep->elf->get_symbol(symbol_name);
     // Test whether the symbol exists, is defined in the ELF and has global visibility
     if (s && s->st_shndx && ELF32_ST_BIND(s->st_info) == STB_GLOBAL)
-        return elf->runtime_load_address + s->st_value;
+        return dep->runtime_load_address + s->st_value;
 
-    for (int i = 0; i < elf->dependencies.size(); i++)
+    while (dep)
     {
-        const ELF* dep = *elf->dependencies.get(i);
-        s = dep->get_symbol(symbol_name);
+        s = dep->elf->get_symbol(symbol_name);
         if (s && s->st_shndx && ELF32_ST_BIND(s->st_info) == STB_GLOBAL)
             return dep->runtime_load_address + s->st_value;
+        dep = dep->next; // Symbol not found in current ELF, proceed to next dependency
     }
 
     return 0x00;

@@ -42,7 +42,7 @@ private:
 
 	list<uint> allocs{}; // list of memory blocks allocated by the process
 public:
-	list<ELF*> elfs{};
+	struct elf_dependence_list* elf_dependence_list;
 	cpu_state_t cpu_state{}; // Registers
 	cpu_state_t k_cpu_state{}; // Syscall handler registers
 	stack_state_t stack_state{}; // Execution context
@@ -64,7 +64,7 @@ private:
 	/** Frees a terminated process */
 	~Process();
 
-	explicit Process(uint num_pages);
+	explicit Process(uint num_pages, ELF* elf, Elf32_Addr runtime_load_address, const char* path);
 
 	/**
 	 * Loads a flat binary in memory
@@ -112,11 +112,12 @@ public:
 	/**
 	* Computes the runtime address of a symbol referenced by an ELF.
 	* Works in conjunction with dynlk to resolve symbol addresses at runtime for lazy binding.
-	* @param elf ELF asking for the symbol address
+	* Search the symbol in the list containing the ELF and its dependencies.
+	* @param dep ELF asking for the symbol address
 	* @param symbol_name name of the symbol
 	* @return runtime address of the symbol, 0x00 if not found
 	*/
-	static uint get_symbol_runtime_address(const ELF* elf, const char* symbol_name);
+	static uint get_symbol_runtime_address(const struct elf_dependence_list* dep, const char* symbol_name);
 };
 
 #endif //INCLUDE_PROCESS_H
