@@ -111,22 +111,22 @@ interrupt_handler(uint kesp, cpu_state_t cpu_state, uint interrupt, stack_state_
 {
 	switch (interrupt)
 	{
-		case 0x20:
-			Interrupts::interrupt_timer(kesp, &cpu_state, &stack_state);
-		case 0x21:
-			Keyboard::interrupt_handler();
-			break;
-		case 0x0e:
-			Interrupts::page_fault_handler(&stack_state);
-			break;
-		case 0xD:
-			Interrupts::gpf_handler(&stack_state);
-			break;
-		case 0x80:
-			Syscall::dispatcher(&cpu_state, &stack_state);
-		default:
-			printf_error("Received unknown interrupt: %u", interrupt);
-			break;
+	case 0x20:
+		Interrupts::interrupt_timer(kesp, &cpu_state, &stack_state);
+	case 0x21:
+		Keyboard::interrupt_handler();
+		break;
+	case 0x0e:
+		Interrupts::page_fault_handler(&stack_state);
+		break;
+	case 0xD:
+		Interrupts::gpf_handler(&stack_state);
+		break;
+	case 0x80:
+		Syscall::dispatcher(&cpu_state, &stack_state);
+	default:
+		printf_error("Received unknown interrupt: %u", interrupt);
+		break;
 	}
 
 	PIC::acknowledge(interrupt);

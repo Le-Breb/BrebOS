@@ -22,7 +22,8 @@ struct init_fini_info
     }
 };
 
-class ELFLoader {
+class ELFLoader
+{
 private:
     Process* proc;
     init_fini_info init_fini;
@@ -144,9 +145,9 @@ public:
      * @param argv args
      * @return process, nullptr if an error occurred
      */
-    static Process* setup_elf_process(uint start_addresss, pid_t pid, pid_t ppid, int argc, const char** argv, const char* path);
+    static Process* setup_elf_process(uint start_addresss, pid_t pid, pid_t ppid, int argc, const char** argv,
+                                      const char* path);
 };
-
 
 
 #endif //ELFLOADER_H

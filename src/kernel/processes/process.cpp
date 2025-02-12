@@ -76,10 +76,11 @@ Process::~Process()
     printf_info("Process %u exited", pid);
 }
 
-Process::Process(uint num_pages, ELF* elf, Elf32_Addr runtime_load_address, const char* path) : quantum(0), priority(0), num_pages(num_pages), pte((uint*)calloc(num_pages, sizeof(uint))),
-pid(MAX_PROCESSES), ppid(MAX_PROCESSES), k_stack_top(-1), flags(P_READY), elf_dependence_list(new struct elf_dependence_list(path, elf, runtime_load_address))
+Process::Process(uint num_pages, ELF* elf, Elf32_Addr runtime_load_address, const char* path) : quantum(0), priority(0),
+    num_pages(num_pages), pte((uint*)calloc(num_pages, sizeof(uint))),
+    pid(MAX_PROCESSES), ppid(MAX_PROCESSES), k_stack_top(-1), flags(P_READY),
+    elf_dependence_list(new struct elf_dependence_list(path, elf, runtime_load_address))
 {
-
 }
 
 

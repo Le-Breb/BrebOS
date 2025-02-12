@@ -109,7 +109,7 @@ void operator delete[]([[maybe_unused]] void* p, [[maybe_unused]] long unsigned 
 
 void operator delete([[maybe_unused]] void* p, [[maybe_unused]] unsigned int n)
 {
-  	free(p);
+	free(p);
 }
 
 void operator delete []([[maybe_unused]] void* p, [[maybe_unused]] unsigned int n)
@@ -416,8 +416,8 @@ void free(void* ptr, bool user)
 	for (p = *free_list_beg; !(c > p && c < p->s.ptr); p = p->s.ptr)
 		//Break when arrived at the end of the list and c goes before beginning or after end
 
-			if (p >= p->s.ptr && (c < p->s.ptr || c > p))
-				break;
+		if (p >= p->s.ptr && (c < p->s.ptr || c > p))
+			break;
 
 	// Join with upper neighbor if contiguous
 	if (c + c->s.size == p->s.ptr)

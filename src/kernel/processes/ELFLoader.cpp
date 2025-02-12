@@ -388,7 +388,7 @@ Process* ELFLoader::init_process(ELF* elf, const char* path)
 
 void
 ELFLoader::copy_elf_subsegment_to_address_space(void* bytes_ptr, uint n, Elf32_Phdr* h, uint& pte_offset,
-                                              uint& copied_bytes) const
+                                                uint& copied_bytes) const
 {
     // Compute indexes
     uint* elf_pte = proc->pte + pte_offset;
@@ -543,7 +543,8 @@ Elf32_Addr ELFLoader::load_elf(ELF* load_elf, uint elf_start_address)
     return lib_runtime_load_addr;
 }
 
-Process* ELFLoader::process_from_elf(uint start_address, int argc, const char** argv, pid_t pid, pid_t ppid, const char* path)
+Process* ELFLoader::process_from_elf(uint start_address, int argc, const char** argv, pid_t pid, pid_t ppid,
+                                     const char* path)
 {
     ELF* elf;
     if (!((elf = ELF::is_valid(start_address, Executable))))
@@ -554,7 +555,10 @@ Process* ELFLoader::process_from_elf(uint start_address, int argc, const char** 
         return proc;
 
     if ((Elf32_Addr)-1 == load_elf(elf, start_address))
-    {delete proc; return nullptr;}
+    {
+        delete proc;
+        return nullptr;
+    }
 
     const char* interpereter_name = elf->interpreter_name;
     bool dynamic = interpereter_name != nullptr;
@@ -563,13 +567,13 @@ Process* ELFLoader::process_from_elf(uint start_address, int argc, const char** 
     {
         if (dynamic_loading(start_address, elf))
         {
-            finalize_process_setup(argc, argv ,pid, ppid);
+            finalize_process_setup(argc, argv, pid, ppid);
             return proc;
         }
         delete proc;
         return nullptr;
     }
-    finalize_process_setup(argc, argv ,pid, ppid);
+    finalize_process_setup(argc, argv, pid, ppid);
     return proc;
 }
 
@@ -620,7 +624,8 @@ void ELFLoader::finalize_process_setup(int argc, const char** argv, pid_t pid, p
     memset(&proc->cpu_state, 0, sizeof(proc->cpu_state));
 }
 
-Process* ELFLoader::setup_elf_process(uint start_addr, pid_t pid, pid_t ppid, int argc, const char** argv, const char* path)
+Process* ELFLoader::setup_elf_process(uint start_addr, pid_t pid, pid_t ppid, int argc, const char** argv,
+                                      const char* path)
 {
     ELFLoader loader = ELFLoader();
     Process* proc = loader.process_from_elf(start_addr, argc, argv, pid, ppid, path);
@@ -629,7 +634,7 @@ Process* ELFLoader::setup_elf_process(uint start_addr, pid_t pid, pid_t ppid, in
 }
 
 size_t ELFLoader::write_args_to_stack(size_t stack_top_v_addr, int argc, const char** argv, list<Elf32_Addr>
-                                    init_array, list<Elf32_Addr> fini_array)
+                                      init_array, list<Elf32_Addr> fini_array)
 {
     size_t args_len = 0; // Actual size of all args combined
     for (int i = 0; i < argc; ++i)

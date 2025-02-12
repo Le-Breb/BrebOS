@@ -89,7 +89,8 @@ ELF* ELF::is_valid(uint start_address, ELF_type expected_type)
             is_valid_exit_err
         }
     for (size_t i = 0; i < elf->num_dyn_relocs; i++)
-        if (auto reloc_type = ELF32_R_TYPE(elf->dyn_relocs[i].r_info); reloc_type != R_386_RELATIVE && reloc_type != R_386_GLOB_DAT && reloc_type != R_386_32 && reloc_type != R_386_PC32)
+        if (auto reloc_type = ELF32_R_TYPE(elf->dyn_relocs[i].r_info); reloc_type != R_386_RELATIVE && reloc_type !=
+            R_386_GLOB_DAT && reloc_type != R_386_32 && reloc_type != R_386_PC32)
         {
             printf_error("Unsupported dyn relocation type: %u. Aborting\n", reloc_type);
             is_valid_exit_err
