@@ -7,11 +7,11 @@
 #include "../processes/scheduler.h"
 #include "PIC.h"
 #include "IDT.h"
+#include "PCI.h"
 #include "../file_management/VFS.h"
 
 extern "C" void _init(void); // NOLINT(*-reserved-identifier)
 
-//Todo: printf buffering and flushing
 //Todo: Investigate about whether page 184 (VGA buffer start address is mapped twice)
 //Todo: same for page pde 771 pte11 at the end of run_module
 //Todo: Add support for multiple dynamically linked libs (register dyn lib dependencies)
@@ -45,6 +45,8 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointe
 	printf("Initialize memory\n");
 	init_mem((multiboot_info_t*)(ebx + KERNEL_VIRTUAL_BASE));
 	FB::ok();
+
+	PCI::checkAllBuses();
 
 	// Activates preemptive scheduling.
 	// At this point, a kernel initialization process is created and will be preempted like any other process.

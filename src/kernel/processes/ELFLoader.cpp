@@ -344,7 +344,7 @@ bool ELFLoader::alloc_and_add_lib_pages_to_process(ELF& lib_elf) const
                 continue;
             uint pe = get_free_pe(); // Get PTE id
             proc->pte[pte_id] = pe; // Reference PTE
-            allocate_page_user(get_free_page(), pe); // Allocate page
+            allocate_page_user(get_free_frame(), pe); // Allocate page
         }
     }
     proc->num_pages += lib_num_code_pages;
@@ -379,7 +379,7 @@ Process* ELFLoader::init_process(ELF* elf, const char* path)
                 continue;
             uint pe = get_free_pe(); // Get PTE id
             proc->pte[pte_id] = pe; // Reference PTE
-            allocate_page_user(get_free_page(), pe); // Allocate page
+            allocate_page_user(get_free_frame(), pe); // Allocate page
         }
     }
 
@@ -581,14 +581,14 @@ void ELFLoader::finalize_process_setup(int argc, const char** argv, pid_t pid, p
 {
     // Allocate process stack page
     uint p_stack_pe_id = get_free_pe();
-    allocate_page_user(get_free_page(), p_stack_pe_id);
+    allocate_page_user(get_free_frame(), p_stack_pe_id);
     uint p_stack_top_v_addr = p_stack_pe_id * PAGE_SIZE + PAGE_SIZE;
 
     // Allocate syscall handler stack page
     uint k_stack_pe = get_free_pe();
     uint k_stack_pde = k_stack_pe / PDT_ENTRIES;
     uint k_stack_pte = k_stack_pe % PDT_ENTRIES;
-    allocate_page(get_free_page(), k_stack_pe);
+    allocate_page(get_free_frame(), k_stack_pe);
 
     // Set process PDT entries: entries 0 to 767 map the process address space using its own page tables
     // Entries 768 to 1024 point to kernel page tables, so that kernel is mapped. Moreover, syscall handlers

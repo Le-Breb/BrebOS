@@ -2,11 +2,15 @@
 
 #include "fb.h"
 #include "keyboard.h"
-#include <kstdio.h>
+
+#include "interrupt_handler.h"
 #include "../processes/scheduler.h"
 #include "syscalls.h"
 #include "PIT.h"
 #include "PIC.h"
+
+
+Interrupt_handler* Interrupts::handlers[256] = {nullptr};
 
 /**
  * Changes current pdt
@@ -125,7 +129,7 @@ interrupt_handler(uint kesp, cpu_state_t cpu_state, uint interrupt, stack_state_
 	case 0x80:
 		Syscall::dispatcher(&cpu_state, &stack_state);
 	default:
-		printf_error("Received unknown interrupt: %u", interrupt);
+		Interrupts::dynamic_interrupt_dispatcher(interrupt, &cpu_state, &stack_state);
 		break;
 	}
 
@@ -164,3 +168,22 @@ void Interrupts::change_pdt_asm(uint pdt_phys_addr)
 {
 	change_pdt_asm_(pdt_phys_addr);
 }
+
+bool Interrupts::register_interrupt(uint interrupt_id, Interrupt_handler* handler)
+{
+	if (handlers[interrupt_id])
+		return false;
+
+	handlers[interrupt_id] = handler;
+	return true;
+}
+
+void Interrupts::dynamic_interrupt_dispatcher(uint interrupt, cpu_state_t* cpu_state, stack_state_t* stack_state)
+{
+	Interrupt_handler* handler = handlers[interrupt];
+	if (handler)
+		handler->fire(cpu_state, stack_state);
+	else
+		printf_error("Received unknown interrupt: %u", interrupt);
+}
+

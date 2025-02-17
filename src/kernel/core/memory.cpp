@@ -117,26 +117,20 @@ void operator delete []([[maybe_unused]] void* p, [[maybe_unused]] unsigned int 
 	free(p);
 }
 
-uint get_free_page()
+uint get_free_frame()
 {
-	uint page = lowest_free_frame;
-	uint i = lowest_free_frame + 1;
-	while (i < PDT_ENTRIES * PT_ENTRIES && FRAME_USED(i))
-		i++;
-	lowest_free_frame = i;
+	while (lowest_free_frame < PDT_ENTRIES * PT_ENTRIES && FRAME_USED(lowest_free_frame))
+		lowest_free_frame++;
 
-	return page;
+	return lowest_free_frame;
 }
 
 uint get_free_pe()
 {
-	uint pe = lowest_free_pe;
-	uint i = lowest_free_pe + 1;
-	while (i < PDT_ENTRIES * PT_ENTRIES && PTE_USED(i))
-		i++;
-	lowest_free_pe = i;
+	while (lowest_free_pe < PDT_ENTRIES * PT_ENTRIES && PTE_USED(lowest_free_pe))
+		lowest_free_pe++;
 
-	return pe;
+	return lowest_free_pe;
 }
 
 void init_page_bitmap()
@@ -317,7 +311,7 @@ void* sbrk(uint n, bool user)
 
 	// Allocate pages
 	for (uint i = b; i < e; ++i)
-		user ? allocate_page_user(get_free_page(), i) : allocate_page(get_free_page(), i);
+		user ? allocate_page_user(get_free_frame(), i) : allocate_page(get_free_frame(), i);
 
 	lowest_free_pe = e;
 	while (PTE_USED(lowest_free_pe))
@@ -616,4 +610,29 @@ void* mmap(int prot, const char* path, uint offset, size_t length)
 	}
 
 	return VFS::load_file(path, offset, length);
+}
+
+bool identity_map(uint addr, uint size)
+{
+	uint page_beg = addr & ~(PAGE_SIZE - 1);
+	uint num_pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
+	for (uint i = 0; i < num_pages; ++i)
+	{
+		uint pde = page_beg >> 22;
+		uint pte = (page_beg >> 12) & 0x3FF;
+		uint frame_id = page_beg / PAGE_SIZE;
+		if (page_tables[pde].entries[pte] & PAGE_PRESENT || FRAME_USED(frame_id))
+			return false;
+		page_beg += PAGE_SIZE;
+	}
+
+	page_beg = addr & ~(PAGE_SIZE - 1);
+	for (uint i = 0; i < num_pages; ++i)
+	{
+		uint frame_id = page_beg / PAGE_SIZE;
+		allocate_page(frame_id, frame_id);
+		page_beg += PAGE_SIZE;
+	}
+
+	return true;
 }

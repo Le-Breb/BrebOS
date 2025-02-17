@@ -134,7 +134,7 @@ void allocate_page_user(uint frame_id, uint page_id);
 void free_page(uint pde, uint pte);
 
 /** Get index of lowest free page id and update lowest_free_page to next free page id */
-uint get_free_page();
+uint get_free_frame();
 
 /** Get index of lowest free page entry id and update lowest_free_pe to next free page id */
 uint get_free_pe();
@@ -152,5 +152,8 @@ GRUB_module* get_grub_modules();
 uint* get_stack_top_ptr();
 
 void* mmap(int prot, const char* path, uint offset = 0, size_t length = 0);
+
+/** Attempts to identity map a memory region. Returns success status **/
+bool identity_map(uint addr, uint size);
 
 #endif //INCLUDE_MEMORY_H

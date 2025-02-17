@@ -30,9 +30,12 @@ struct stack_state
 
 typedef struct stack_state stack_state_t;
 
+class Interrupt_handler;
+
 class Interrupts
 {
 public:
+	static Interrupt_handler* handlers[256];
 	/**
 	 * Handles a page fault
 	 *
@@ -85,6 +88,10 @@ public:
 	[[noreturn]] static void resume_syscall_handler_asm(cpu_state_t cpu_state, uint iret_esp);
 
 	static void change_pdt_asm(uint pdt_phys_addr);
+
+	static bool register_interrupt(uint interrupt_id, Interrupt_handler* handler);
+
+	static void dynamic_interrupt_dispatcher(uint interrupt, cpu_state_t* cpu_state, stack_state_t* stack_state);
 };
 
 #endif /* INCLUDE_INTERRUPTS_H */
