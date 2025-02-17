@@ -11,15 +11,17 @@ OBJECTS = $(patsubst %.cpp, $(KERNEL_BUILD_DIR)/%.o, $(filter %.cpp, $(SRC))) \
 
 CC = i686-elf-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
--c -g -fno-exceptions -fno-rtti
+-c -fno-exceptions -fno-rtti
 AS = nasm
-ASFLAGS = -f elf -F dwarf -g
+ASFLAGS = -f elf -F dwarf
+LDFLAGS = -T link.ld -melf_i386
 ifdef RELEASE
 CFLAGS += -O3
 ASFLAGS += -O3
 else
-CFLAGS += -O0
-ASFLAGS += -O0
+CFLAGS += -O0 -g
+ASFLAGS += -O0 -g
+LDFLAGS += -g
 endif
 
 libgcc=$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
@@ -31,7 +33,6 @@ OBJ_LIST=$(CRTI_OBJ) $(CRTBEGIN_OBJ) $(OBJECTS) $(CRTEND_OBJ) $(CRTN_OBJ)
 INTERNAL_OBJS=$(CRTI_OBJ) $(OBJECTS) $(CRTN_OBJ)
 
 CPPFLAGS=-I$(SRC_DIR)/libc
-LDFLAGS = -T link.ld -melf_i386 -g
 LIBC=$(LIBC_BUILD_DIR)/libc.a
 LD=ld
 

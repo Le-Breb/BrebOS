@@ -1,11 +1,12 @@
 AS=nasm
-ASFLAGS = -f elf -F dwarf -g
+ASFLAGS = -f elf -F dwarf
 ifdef RELEASE
 CFLAGS += -O3
 ASFLAGS += -O3
 else
-CFLAGS += -O0
-ASFLAGS += -O0
+CFLAGS += -O0 -g
+ASFLAGS += -O0 -g
+LDFLAGS += -g
 endif
 
 BUILD_DIR=build

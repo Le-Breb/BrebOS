@@ -8,8 +8,9 @@ ifdef RELEASE
 CFLAGS += -O3
 ASFLAGS += -O3
 else
-CFLAGS += -O0
-ASFLAGS += -O0
+CFLAGS += -O0 -g
+ASFLAGS += -O0 -g
+LDFLAGS += -g
 endif
 LIBFLAGS = -fPIC -Wl,-shared
 BUILD_DIR=build
