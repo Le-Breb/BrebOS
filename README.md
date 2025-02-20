@@ -60,6 +60,14 @@ the instructionns on sections 2 and 3. <br>
 The build takes several minutes, don't forget to enable parallelization: whenever you execute the `make` command, add
 `-j $(lscpu | grep 'Core(s) per socket' | grep -o '[0-9]+')` at the end of the command.
 
+For QEMU, you need a few more setup:
+
+```sh
+sudo mkdir -p /etc/qemu # Create config directory
+echo "allow br0" | sudo tee /etc/qemu/bridge.conf # Write the config
+sudo setcap cap_net_admin+ep /usr/lib/qemu/qemu-bridge-helper # Give necessary permissions to QEMU bridge helper
+```
+
 ### Build
 
 This step assumes you fulfilled all the requirements aforementioned.
@@ -76,8 +84,15 @@ RELEASE=1 make
 #### Using QEMU
 
 ```sh
-RELEASE = 1 make run
+sudo RELEASE = 1 make run
 ```
+
+⚠️ Running the program interrupts your internet connection, because QEMU does... complex stuff (needed to have your
+computer and the virtual machine be able to send network stuff). Don't worry, every config necessary for the kernel to
+run is undone (by `network_utils/cleanup.sh`) after execution. Simply deactivate then reactivate the Wifi on your
+computer, and everything will be back on track. If it still doesn't work, reboot your computer, any operation done by
+this project is persistant across reboots. In case you want to check what is being executed, feel free to read
+`network_utils/setup.sh`. ⚠️
 
 #### On a real computer (Read carefully before proceeding)
 

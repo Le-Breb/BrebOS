@@ -128,11 +128,17 @@ $(OS_ISO): kernel.elf libdynlk programs
 	@grub-mkrescue -o $(OS_ISO) isodir
 
 run: $(OS_ISO)
-#	bochs -f bochsrc.txt -q
-	qemu-system-i386 -device isa-debug-exit -cdrom $(OS_ISO) -drive file=disk_image.img,format=raw,if=ide,index=0 -boot d
+	@#	bochs -f bochsrc.txt -q
+	@./network_utils/setup.sh
+	qemu-system-i386 -device isa-debug-exit -cdrom $(OS_ISO) -drive file=disk_image.img,format=raw,if=ide,index=0 -boot d -device e1000,netdev=net0 -netdev bridge,id=net0,helper=/usr/lib/qemu/qemu-bridge-helper || true
+	@./network_utils/cleanup.sh
+	@# -device isa-debug-exit -cdrom os.iso -gdb tcp::26000 -S -drive file=disk_image.img,format=raw,if=ide,index=0 -boot d -device e1000,netdev=net0 -netdev user,id=net0 -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap
+	@# -device isa-debug-exit -cdrom os.iso -gdb tcp::26000 -S -drive file=disk_image.img,format=raw,if=ide,index=0 -boot d -device e1000,netdev=net0 -netdev tap,id=net0,ifname=tap0,script=no,downscript=no -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap
 
 debug: $(OS_ISO)
-	qemu-system-i386 -device isa-debug-exit -cdrom $(OS_ISO) -gdb tcp::26000 -S -drive file=disk_image.img,format=raw,if=ide,index=0 -boot d
+	@./network_utils/setup.sh
+	qemu-system-i386 -device isa-debug-exit -cdrom $(OS_ISO) -gdb tcp::26000 -S -drive file=disk_image.img,format=raw,if=ide,index=0 -boot d -device e1000,netdev=net0 -netdev bridge,id=net0,helper=/usr/lib/qemu/qemu-bridge-helper -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap || true
+	@./network_utils/cleanup.sh
 
 clean:
 	rm -rf *.o $(OUT_BIN) $(OS_ISO)

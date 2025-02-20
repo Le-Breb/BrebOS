@@ -118,7 +118,7 @@ public:
  * which uses syscalls). This would be very poor and stupid in terms of performance, and would probably not run
  * properly (I guess ?)
  */
-__attribute__ ((format (printf, 1, 2))) int printf([[maybe_unused]] const char* format, ...);
+__attribute__ ((format (printf, 1, 2))) int printf(const char* format, ...);
 
 __attribute__ ((format (printf, 1, 2))) int printf_error(const char* format, ...);
 

@@ -28,7 +28,7 @@
 #define FRAME_FREE(i) !(FRAME_USED(i))
 #define MARK_FRAME_USED(i) frame_bitmap[i / 32] |= 1 << (i % 32)
 #define MARK_FRAME_FREE(i) frame_bitmap[i / 32] &= ~(1 << (i % 32))
-#define PHYS_ADDR(page_tables, virt_addr) (page_tables[virt_addr >> 22].entries[(virt_addr >> 12) & 0x3FF] & ~0x3FF)
+#define PHYS_ADDR(page_tables, virt_addr) ((page_tables[virt_addr >> 22].entries[(virt_addr >> 12) & 0x3FF] & ~0x3FF) | (virt_addr & 0xFFF))
 
 //https://wiki.osdev.org/Paging
 

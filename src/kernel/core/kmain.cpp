@@ -7,8 +7,8 @@
 #include "../processes/scheduler.h"
 #include "PIC.h"
 #include "IDT.h"
-#include "PCI.h"
 #include "../file_management/VFS.h"
+#include "../network/Network.h"
 
 extern "C" void _init(void); // NOLINT(*-reserved-identifier)
 
@@ -46,7 +46,9 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointe
 	init_mem((multiboot_info_t*)(ebx + KERNEL_VIRTUAL_BASE));
 	FB::ok();
 
-	PCI::checkAllBuses();
+	printf("Initialize network card and stack\n");
+	Network::init();
+	FB::ok();
 
 	// Activates preemptive scheduling.
 	// At this point, a kernel initialization process is created and will be preempted like any other process.
@@ -59,6 +61,8 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointe
 	printf("Initializing Virtual File System\n");
 	VFS::init();
 	FB::ok();
+
+	Network::run();
 
 	// Set INIT process ready
 	Scheduler::exec("shell", 0, 0, nullptr);

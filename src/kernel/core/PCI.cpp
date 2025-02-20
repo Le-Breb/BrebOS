@@ -2,7 +2,8 @@
 
 #include <kstdint.h>
 #include "fb.h"
-#include "../network/E1000.h"
+
+PCI::Device PCI::ethernet_card = Device(-1,-1, -1);
 
 void outl(uint16_t port, uint32_t value)
 {
@@ -39,8 +40,16 @@ uint8_t PCI::getHeaderType(uint8_t bus, uint8_t device, uint8_t function)
     return (uint8_t)(pciConfigReadWord(bus, device, function, 0x0E) & 0xFF);
 }
 
-void PCI::checkFunction([[maybe_unused]] uint8_t bus, [[maybe_unused]] uint8_t device,
-                        [[maybe_unused]] uint8_t function)
+void displayCard(const char* name)
+{
+    printf("Found ");
+    FB::set_fg(FB_LIGHTRED);
+    printf("%s", name);
+    FB::set_fg(FB_WHITE);
+    printf(" Card\n");
+}
+
+void PCI::checkFunction(uint8_t bus, uint8_t device, uint8_t function)
 {
         uint16_t vendorID = getVendorID(bus, device, function);
         if (vendorID == 0xFFFF) return; // No device, skip
@@ -48,14 +57,13 @@ void PCI::checkFunction([[maybe_unused]] uint8_t bus, [[maybe_unused]] uint8_t d
         uint16_t deviceID = pciConfigReadWord(bus, device, function, 2); // Read device ID
         uint8_t classCode = pciConfigReadWord(bus, device, function, 0x0A) >> 8; // PCI class code (network device class is 0x02)
 
-        printf("%x | %x | %x \n", vendorID, deviceID, classCode);
+        // printf("%x | %x | %x \n", vendorID, deviceID, classCode);
 
         if (vendorID == 0x8086 && deviceID == 0x100e) { // Intel PRO/1000 e1000
-            printf("Found Intel PRO/1000 Ethernet Card at bus %d, device %d, function %d\n", bus, device, function);
-            E1000 e1000(Device(bus, device, function));
-            e1000.start();
+            displayCard("Intel PRO/1000 Ethernet");
+            ethernet_card = Device(bus, device, function);
         } else if (vendorID == 0x1af4 && deviceID == 0x1000 && classCode == 0x02) { // Virtio Network Device
-            printf("Found Virtio Network Card at bus %d, device %d, function %d\n", bus, device, function);
+            displayCard("Virtio Network");
         } else {
             // Not an Ethernet card, you can add other devices' checks here if needed.
         }

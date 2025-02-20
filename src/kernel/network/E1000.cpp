@@ -1,49 +1,55 @@
 #include "E1000.h"
+
+#include <kstring.h>
+
+#include "ARP.h"
+#include "Endianness.h"
+#include "Ethernet.h"
 #include "ports.h"
 #include "../core/memory.h"
 #include "../core/fb.h"
 #include "../core/interrupts.h"
 #include "../core/PIC.h"
 
-uint8_t MMIOUtils::read8(uint64_t p_address)
+uint8_t MMIOUtils::read8(uint32_t p_address)
 {
     return *((volatile uint8_t*)(p_address));
 }
 
-uint16_t MMIOUtils::read16(uint64_t p_address)
+uint16_t MMIOUtils::read16(uint32_t p_address)
 {
     return *((volatile uint16_t*)(p_address));
 }
 
-uint32_t MMIOUtils::read32(uint64_t p_address)
+uint32_t MMIOUtils::read32(uint32_t p_address)
 {
     return *((volatile uint32_t*)(p_address));
 }
 
-uint64_t MMIOUtils::read64(uint64_t p_address)
+uint32_t MMIOUtils::read64(uint32_t p_address)
 {
-    return *((volatile uint64_t*)(p_address));
+    return *((volatile uint32_t*)(p_address));
 }
 
-void MMIOUtils::write8(uint64_t p_address, uint8_t p_value)
+void MMIOUtils::write8(uint32_t p_address, uint8_t p_value)
 {
     (*((volatile uint8_t*)(p_address))) = (p_value);
 }
 
-void MMIOUtils::write16(uint64_t p_address, uint16_t p_value)
+void MMIOUtils::write16(uint32_t p_address, uint16_t p_value)
 {
     (*((volatile uint16_t*)(p_address))) = (p_value);
 }
 
-void MMIOUtils::write32(uint64_t p_address, uint32_t p_value)
+void MMIOUtils::write32(uint32_t p_address, uint32_t p_value)
 {
     (*((volatile uint32_t*)(p_address))) = (p_value);
 }
 
-void MMIOUtils::write64(uint64_t p_address, uint64_t p_value)
+/*void MMIOUtils::write64(uint64_t p_address, uint64_t p_value)
 {
     (*((volatile uint64_t*)(p_address))) = (p_value);
-}
+}*/
 
 void E1000::writeCommand(uint16_t p_address, uint32_t p_value) const
 {
@@ -144,21 +150,24 @@ void E1000::rxinit()
     // Allocate buffer for receive descriptors. For simplicity, in my case khmalloc returns a virtual address that is identical to it physical mapped address.
     // In your case you should handle virtual and physical addresses as the addresses passed to the NIC should be physical ones
 
-    ptr = (uint8_t*)malloc(sizeof(struct e1000_rx_desc) * E1000_NUM_RX_DESC + 16); // Todo: check if this can be freed
+    ptr = (uint8_t*)malloc(sizeof(struct e1000_rx_desc) * E1000_NUM_RX_DESC + 16);
+    memset(ptr, 0, E1000_NUM_RX_DESC * sizeof(struct e1000_rx_desc) + 16);
+    ptr = (uint8_t*)(((uint)ptr + 15) & ~0xF); // 16 bits alignment, DMA requirement
 
     descs = (struct e1000_rx_desc*)ptr;
     for (int i = 0; i < E1000_NUM_RX_DESC; i++)
     {
         rx_descs[i] = (struct e1000_rx_desc*)((uint8_t*)descs + i * 16);
-        //rx_descs[i]->addr = (uint64_t)(uint8_t *)(kmalloc_ptr->khmalloc(8192 + 16));
-        rx_descs[i]->addr = (uint64_t)PHYS_ADDR(get_page_tables(), (uint)(malloc(8192 + 16)));
+        uint buf = ((uint)calloc(8192 + 16, 1) + 15) & ~0xF;
+        desc_addresses[i] = (char*)buf;
+        //printf("%x | %x\n", buf, PHYS_ADDR(get_page_tables(), buf));
+        rx_descs[i]->addr = PHYS_ADDR(get_page_tables(), buf);
         rx_descs[i]->status = 0;
     }
 
-    writeCommand(REG_TXDESCLO, (uint32_t)((uint64_t)ptr >> 32));
-    writeCommand(REG_TXDESCHI, (uint32_t)((uint64_t)ptr & 0xFFFFFFFF));
+    uint32_t phys_ptr = PHYS_ADDR(get_page_tables(), (uint)ptr);
 
-    writeCommand(REG_RXDESCLO, (uint64_t)ptr);
+    writeCommand(REG_RXDESCLO, phys_ptr);
     writeCommand(REG_RXDESCHI, 0);
 
     writeCommand(REG_RXDESCLEN, E1000_NUM_RX_DESC * 16);
@@ -177,21 +186,21 @@ void E1000::txinit()
 {
     uint8_t* ptr;
     struct e1000_tx_desc* descs;
-    // Allocate buffer for receive descriptors. For simplicity, in my case khmalloc returns a virtual address that is identical to it physical mapped address.
+    // Allocate buffer for transmit descriptors. For simplicity, in my case khmalloc returns a virtual address that is identical to it physical mapped address.
     // In your case you should handle virtual and physical addresses as the addresses passed to the NIC should be physical ones
     ptr = (uint8_t*)malloc(sizeof(struct e1000_tx_desc) * E1000_NUM_TX_DESC + 16);
+    ptr = (uint8_t*)(((uint)ptr + 15) & ~0xF); // 16 bits alignment, DMA requirement
 
     descs = (struct e1000_tx_desc*)ptr;
     for (int i = 0; i < E1000_NUM_TX_DESC; i++)
     {
         tx_descs[i] = (struct e1000_tx_desc*)((uint8_t*)descs + i * 16);
-        tx_descs[i]->addr = 0;
-        tx_descs[i]->cmd = 0;
-        tx_descs[i]->status = TSTA_DD;
+        memset(tx_descs[i], 0, sizeof(struct e1000_tx_desc));
     }
 
-    writeCommand(REG_TXDESCHI, (uint32_t)((uint64_t)ptr >> 32));
-    writeCommand(REG_TXDESCLO, (uint32_t)((uint64_t)ptr & 0xFFFFFFFF));
+    uint32_t phys_ptr = PHYS_ADDR(get_page_tables(), (uint)ptr);
+    writeCommand(REG_TXDESCLO, phys_ptr);
+    writeCommand(REG_TXDESCHI, 0);
 
 
     //now setup total length of descriptors
@@ -235,7 +244,7 @@ E1000::E1000(PCI::Device pci_device) : device(pci_device)
 
     uint32_t bar_size = PCI::getPCIBarSize(device.bus, device.device, device.function, bar_type);
     if (!identity_map(mem_base, bar_size))
-        printf_error("Couldn't identity 1000 MMIO address space");
+        printf_error("Couldn't identity E1000 MMIO address space");
 
     // Enable bus mastering
     PCI::enableBusMaster(device.bus, device.device, device.function);
@@ -264,60 +273,91 @@ bool E1000::start()
     printf_error("Couldn't register E1000 interrupt");
     return false;
 }
-
 void E1000::fire([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] stack_state_t* stack_state)
 {
     /* This might be needed here if your handler doesn't clear interrupts from each device and must be done before EOI if using the PIC.
            Without this, the card will spam interrupts as the int-line will stay high. */
-    writeCommand(REG_IMASK, 0x1);
+    // writeCommand(REG_IMASK, 0x1); // as we are writing back the status to ICR and calling PIC::acknowledge later,
+    // this does not appear to be required
 
-    uint32_t status = readCommand(0xc0);
-    if (status & 0x04)
+    const uint32_t status = readCommand(0xc0);
+    writeCommand(0xC0, status); // Write the value back to clear the interrupts
+    //printf_info("e1000 int: status: 0x%02X", status);
+
+    if (status & 0x02)
     {
-        //startLink();
+        //printf_info("E1000 empty queue");
+    } // Transmit queue empty, will be triggerred when initializing tx descriptors
+    else if (status & 0x04)
+    {
+        printf_info("E1000 link status changed");
     }
     else if (status & 0x10)
     {
         // good threshold
+        //printf_info("E1000 good threshold");
+        handleReceive();
     }
     else if (status & 0x80)
     {
+        //printf_info("Receive done");
         handleReceive();
     }
+    else
+    {
+        printf_error("Unknown E1000 interrupt status: %u", status);
+        uint32_t status2 = readCommand(REG_STATUS);
+        uint32_t txctl = readCommand(REG_TCTRL);
+        printf_error("NIC status: %x, TCTRL: %x", status2, txctl);
+    }
+}
+
+uint8_t* E1000::getMacAddress()
+{
+    return mac;
 }
 
 void E1000::handleReceive()
 {
-    [[maybe_unused]] uint16_t old_cur;
-    [[maybe_unused]] bool got_packet = false;
-
-    while ((rx_descs[rx_cur]->status & 0x1))
+    while (rx_descs[rx_cur]->status & TSTA_DD)
     {
-        got_packet = true;
-        [[maybe_unused]] uint8_t* buf = (uint8_t*)rx_descs[rx_cur]->addr;
-        [[maybe_unused]] uint16_t len = rx_descs[rx_cur]->length;
+        uint8_t* buf = (uint8_t*)desc_addresses[rx_cur];
+        // uint16_t len = rx_descs[rx_cur]->length;
 
-        // Here you should inject the received packet into your network stack
-
+        auto p = (Ethernet::packet*)buf;
+        auto type = Endianness::switch_endian16(p->type);
+        //printf("received ethernet packet of type: 0x%04x\n", type);
+        if (type == ETHERTYPE_ARP)
+        {
+            FB::set_fg(FB_RED);
+            auto arp = (ARP::packet*)(buf + sizeof(Ethernet::packet));
+            ARP::display_request(arp);
+            FB::set_fg(FB_WHITE);
+        }
 
         rx_descs[rx_cur]->status = 0;
-        old_cur = rx_cur;
+        writeCommand(REG_RXDESCTAIL, rx_cur);
         rx_cur = (rx_cur + 1) % E1000_NUM_RX_DESC;
-        writeCommand(REG_RXDESCTAIL, old_cur);
+
     }
 }
 
 int E1000::sendPacket(const void* p_data, uint16_t p_len)
 {
-    tx_descs[tx_cur]->addr = (uint64_t)p_data;
+    tx_descs[tx_cur]->addr = PHYS_ADDR(get_page_tables(), (uint32_t)p_data);
     tx_descs[tx_cur]->length = p_len;
-    tx_descs[tx_cur]->cmd = CMD_EOP | CMD_IFCS | CMD_RS;
+    tx_descs[tx_cur]->cmd = CMD_EOP | /*CMD_IFCS |*/ CMD_RS; // Todo: check if IFCS (for checksum) should be enabled back
     tx_descs[tx_cur]->status = 0;
     uint8_t old_cur = tx_cur;
     tx_cur = (tx_cur + 1) % E1000_NUM_TX_DESC;
+
     writeCommand(REG_TXDESCTAIL, tx_cur);
+
+
+
     while (!(tx_descs[old_cur]->status & 0xff))
     {
+        // printf("TX status: 0x%x\n", tx_descs[old_cur]->status);
     };
     return 0;
 }

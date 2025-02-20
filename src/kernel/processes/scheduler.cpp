@@ -241,6 +241,7 @@ void Scheduler::create_kernel_init_process()
     kernel->pdt = *get_pdt();
     uint pid = get_free_pid();
     kernel->pid = pid;
+
     if (pid == MAX_PROCESSES)
     {
         printf_error("No more PID available. Cannot finish kernel initialization.");

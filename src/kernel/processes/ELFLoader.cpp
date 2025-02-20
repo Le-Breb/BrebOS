@@ -241,7 +241,7 @@ bool ELFLoader::apply_relocations(ELF* elf, uint elf_runtime_load_address) const
                 if (ELF32_ST_BIND(symbol->st_info) == STB_WEAK && symbol->st_shndx == 0)
                     break;
                 Elf32_Addr symbol_address = symbol->st_value;
-                [[maybe_unused]] const char* symbol_name = &elf->dynsym_strtab[symbol->st_name];
+                //[[maybe_unused]] const char* symbol_name = &elf->dynsym_strtab[symbol->st_name];
                 Elf32_Addr S = B + symbol_address;
                 Elf32_Addr A = *(Elf32_Addr*)load_address;
 

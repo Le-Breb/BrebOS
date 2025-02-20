@@ -6,9 +6,8 @@ void PIC::init()
 	// Remap the PIC
 	remap(PIC1_START_INTERRUPT, PIC2_START_INTERRUPT);
 
-	// Only enable keyboard interrupts
-	outb(PIC1_DATA, ~0x02);
-	outb(PIC2_DATA, ~0x00);
+	outb(PIC1_DATA, ~(0x02 | 0x04)); // Enable keyboard interrupt and Cascade (make PIC1 recognize PIC2)
+	outb(PIC2_DATA, ~0x08); // Enable IRQ11, for networking
 	io_wait();
 }
 
@@ -51,7 +50,10 @@ void PIC::acknowledge(uint interrupt)
 	if (interrupt < PIC1_START_INTERRUPT || interrupt > PIC2_END_INTERRUPT)
 		return;
 
-	outb(interrupt < PIC2_START_INTERRUPT ? PIC1 : PIC2, PIC_ACK);
+	// If IRQ is handled by PIC2, acknowledge both PICs as PIC2 IRQs go through IRQ2 of PIC1
+	if (interrupt >= PIC2_START_INTERRUPT)
+		outb(PIC2, PIC_ACK);
+	outb(PIC1, PIC_ACK);
 }
 
 void PIC::enable_preemptive_scheduling()

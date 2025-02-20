@@ -73,7 +73,6 @@ void Interrupts::gpf_handler(stack_state* stack_state)
 	// Update time
 	PIT::ticks++;
 
-
 	Process* p = Scheduler::get_running_process();
 
 	if (p)

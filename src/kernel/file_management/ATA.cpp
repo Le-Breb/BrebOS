@@ -112,10 +112,12 @@ void IDE::init()
             FB::set_fg(FB_LIGHTMAGENTA);
             printf("%d", i);
             FB::set_fg(FB_WHITE);
-            printf(": %s Drive %dMB - %s\n",
+            printf(": %s Drive %dMB - ",
                    (const char*[]){"ATA", "ATAPI"}[devices[i].Type],
-                   devices[i].Size / 1024 / 2,
-                   devices[i].Model);
+                   devices[i].Size / 1024 / 2);
+            FB::set_fg(FB_LIGHTRED);
+            printf("%s\n", devices[i].Model);
+            FB::set_fg(FB_WHITE);
         }
 }
 

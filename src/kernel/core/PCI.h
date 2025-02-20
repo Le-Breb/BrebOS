@@ -17,8 +17,7 @@ class PCI
 
     static uint8_t getHeaderType(uint8_t bus, uint8_t device, uint8_t function);
 
-    static void checkFunction([[maybe_unused]] uint8_t bus, [[maybe_unused]] uint8_t device,
-                              [[maybe_unused]] uint8_t function);
+    static void checkFunction(uint8_t bus, uint8_t device, uint8_t function);
 
     static void checkDevice(uint8_t bus, uint8_t device);
 
@@ -34,6 +33,8 @@ public:
         {
         }
     };
+
+    static Device ethernet_card;
 
     static uint32_t getPCIBar(uint8_t bus, uint8_t device, uint8_t function, uint8_t barIndex);
 

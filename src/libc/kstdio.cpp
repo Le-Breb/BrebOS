@@ -554,7 +554,7 @@ int vprintf(const char* format, va_list list)
 	return chars;
 }
 
-__attribute__ ((format (printf, 1, 2))) int printf([[maybe_unused]] const char* format, ...)
+__attribute__ ((format (printf, 1, 2))) int printf(const char* format, ...)
 {
 	va_list list;
 	va_start (list, format);

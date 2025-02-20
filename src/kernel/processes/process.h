@@ -9,6 +9,7 @@
 
 typedef uint pid_t;
 
+// Process is ready to be executed
 #define P_READY 0
 // Process is terminated but not freed
 #define P_TERMINATED 1

@@ -627,11 +627,11 @@ bool identity_map(uint addr, uint size)
 	}
 
 	page_beg = addr & ~(PAGE_SIZE - 1);
+	uint frame_id = page_beg / PAGE_SIZE;
 	for (uint i = 0; i < num_pages; ++i)
 	{
-		uint frame_id = page_beg / PAGE_SIZE;
 		allocate_page(frame_id, frame_id);
-		page_beg += PAGE_SIZE;
+		frame_id++;
 	}
 
 	return true;
