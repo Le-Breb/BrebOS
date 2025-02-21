@@ -86,3 +86,20 @@ char* strtok_r(char* str, const char* delim, char** saveptr)
 
 	return start;
 }
+
+int memcmp(const void* s1, const void* s2, size_t n)
+{
+	auto s = (const unsigned char*) s1;
+    auto t = (const unsigned char*) s2;
+    for (size_t i = 0; i < n; i++)
+    {
+      	if (s[i] == t[i])
+          continue;
+        if (s[i] < t[i])
+          return -1;
+        if (s[i] > t[i])
+          return 1;
+    }
+
+    return 0;
+}

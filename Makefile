@@ -103,7 +103,7 @@ $(OS_ISO): kernel.elf libdynlk programs
 	@mmd -i disk_image.img ::/bin
 	@mcopy -i disk_image.img $(LIBC_BUILD_DIR)/libc.so ::/bin
 	@mcopy -i disk_image.img $(LIBDYNLK_BUILD_DIR)/libdynlk.so ::/bin
-	@for prog in $(shell find $(SRC_DIR)/programs/build); do \
+	@for prog in $(shell find $(SRC_DIR)/programs/build -type f); do \
     		mcopy -i disk_image.img $$prog ::/bin; \
 	done
 

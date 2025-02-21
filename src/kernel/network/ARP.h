@@ -5,6 +5,7 @@
 #include <kstring.h>
 
 #include "Endianness.h"
+#include "Ethernet.h"
 
 #define ARP_ETHERNET 1
 #define ARP_IPV4 0x800
@@ -20,20 +21,6 @@ class ARP {
     public:
     struct packet
     {
-        packet(uint16_t htype, uint16_t ptype, uint8_t hlen, uint8_t plen, uint16_t opcode, uint8_t srchw[ARP_MAC_ADDR_LEN],
-        uint32_t srcpr, uint8_t dsthw[ARP_MAC_ADDR_LEN], uint32_t dstpr)
-            : htype(Endianness::switch_endian16(htype)),
-              ptype(Endianness::switch_endian16(ptype)),
-              hlen(hlen),
-              plen(plen),
-              opcode(Endianness::switch_endian16(opcode)),
-              srcpr(srcpr),
-              dstpr(dstpr)
-        {
-            memcpy(this->srchw, srchw, ARP_MAC_ADDR_LEN);
-            memcpy(this->dsthw, dsthw, ARP_MAC_ADDR_LEN);
-        }
-
         uint16_t htype; // Hardware type
         uint16_t ptype; // Protocol type
         uint8_t  hlen; // Hardware address length (Ethernet = 6)
@@ -45,9 +32,30 @@ class ARP {
         uint32_t dstpr; // Destination protocol address - plen bytes (see above). If IPv4 can just be a "u32" type.
     } __attribute__((packed));
 
-    static packet* get_broadcast_request(uint8_t srchw[ARP_MAC_ADDR_LEN]);
+    typedef struct packet packet_t;
 
-    static void display_request(struct packet *p);
+    static void write_packet(packet_t* ptr, uint16_t htype, uint16_t ptype, uint8_t hlen, uint8_t plen, uint16_t opcode, uint8_t srchw[ARP_MAC_ADDR_LEN],
+        uint32_t srcpr, uint8_t dsthw[ARP_MAC_ADDR_LEN], uint32_t dstpr)
+    {
+        ptr->htype = Endianness::switch_endian16(htype);
+        ptr->ptype = Endianness::switch_endian16(ptype);
+        ptr->hlen = hlen;
+        ptr->plen = plen;
+        ptr->opcode = Endianness::switch_endian16(opcode);
+        ptr->htype = Endianness::switch_endian16(htype);
+        ptr->hlen = hlen;
+        ptr->plen = plen;
+        ptr->srcpr = srcpr;
+        ptr->dstpr = dstpr;
+        memcpy(ptr->srchw, srchw, ARP_MAC_ADDR_LEN);
+        memcpy(ptr->dsthw, dsthw, ARP_MAC_ADDR_LEN);
+    }
+
+    static Ethernet::packet_info* new_broadcast_request(uint8_t srchw[ARP_MAC_ADDR_LEN]);
+
+    static Ethernet::packet_info* new_reply(packet_t* request);
+
+    static void display_request(packet_t *p);
 };
 
 

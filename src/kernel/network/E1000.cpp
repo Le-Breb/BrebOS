@@ -5,6 +5,7 @@
 #include "ARP.h"
 #include "Endianness.h"
 #include "Ethernet.h"
+#include "Network.h"
 #include "ports.h"
 #include "../core/memory.h"
 #include "../core/fb.h"
@@ -159,7 +160,7 @@ void E1000::rxinit()
     {
         rx_descs[i] = (struct e1000_rx_desc*)((uint8_t*)descs + i * 16);
         uint buf = ((uint)calloc(8192 + 16, 1) + 15) & ~0xF;
-        desc_addresses[i] = (char*)buf;
+        rx_desc_virt_addresses[i] = (uint8_t*)buf;
         //printf("%x | %x\n", buf, PHYS_ADDR(get_page_tables(), buf));
         rx_descs[i]->addr = PHYS_ADDR(get_page_tables(), buf);
         rx_descs[i]->status = 0;
@@ -273,6 +274,7 @@ bool E1000::start()
     printf_error("Couldn't register E1000 interrupt");
     return false;
 }
+
 void E1000::fire([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] stack_state_t* stack_state)
 {
     /* This might be needed here if your handler doesn't clear interrupts from each device and must be done before EOI if using the PIC.
@@ -284,6 +286,10 @@ void E1000::fire([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] stack
     writeCommand(0xC0, status); // Write the value back to clear the interrupts
     //printf_info("e1000 int: status: 0x%02X", status);
 
+    if (status & 0x1)
+    {
+        tx_free();
+    }
     if (status & 0x02)
     {
         //printf_info("E1000 empty queue");
@@ -321,38 +327,56 @@ void E1000::handleReceive()
 {
     while (rx_descs[rx_cur]->status & TSTA_DD)
     {
-        uint8_t* buf = (uint8_t*)desc_addresses[rx_cur];
+        uint8_t* buf = rx_desc_virt_addresses[rx_cur];
         // uint16_t len = rx_descs[rx_cur]->length;
 
-        auto p = (Ethernet::packet*)buf;
+        auto p = (Ethernet::header*)buf;
         auto type = Endianness::switch_endian16(p->type);
         //printf("received ethernet packet of type: 0x%04x\n", type);
         if (type == ETHERTYPE_ARP)
         {
-            FB::set_fg(FB_RED);
-            auto arp = (ARP::packet*)(buf + sizeof(Ethernet::packet));
-            ARP::display_request(arp);
-            FB::set_fg(FB_WHITE);
+            auto arp = (ARP::packet*)(buf + sizeof(Ethernet::header));
+            if (!memcmp(&arp->dstpr, &Network::ip, sizeof(Network::ip))) // ARP request targeting us
+            {
+                FB::set_fg(FB_RED);
+                ARP::display_request(arp);
+                FB::set_fg(FB_WHITE);
+
+                auto reply = ARP::new_reply(arp);
+                sendPacket(reply);
+            }
         }
 
         rx_descs[rx_cur]->status = 0;
         writeCommand(REG_RXDESCTAIL, rx_cur);
         rx_cur = (rx_cur + 1) % E1000_NUM_RX_DESC;
-
     }
 }
 
-int E1000::sendPacket(const void* p_data, uint16_t p_len)
+void E1000::tx_free()
 {
-    tx_descs[tx_cur]->addr = PHYS_ADDR(get_page_tables(), (uint32_t)p_data);
-    tx_descs[tx_cur]->length = p_len;
-    tx_descs[tx_cur]->cmd = CMD_EOP | /*CMD_IFCS |*/ CMD_RS; // Todo: check if IFCS (for checksum) should be enabled back
+    for (int i = 0; i < E1000_NUM_TX_DESC; i++)
+    {
+        if (!(tx_descs[i]->status & TSTA_DD) || tx_descs[i]->addr == 0)
+            continue;
+        free(tx_desc_virt_addresses[i]);
+        tx_descs[i]->addr = 0;
+        tx_desc_virt_addresses[i] = nullptr;
+    }
+}
+
+int E1000::sendPacket(const Ethernet::packet_info* packet)
+{
+    tx_desc_virt_addresses[tx_cur] = (uint8_t*)packet->packet;
+    tx_descs[tx_cur]->addr = PHYS_ADDR(get_page_tables(), (uint32_t)packet->packet);
+    tx_descs[tx_cur]->length = packet->size;
+    tx_descs[tx_cur]->cmd = CMD_EOP | /*CMD_IFCS |*/ CMD_RS;
+    // Todo: check if IFCS (for checksum) should be enabled back
     tx_descs[tx_cur]->status = 0;
     uint8_t old_cur = tx_cur;
     tx_cur = (tx_cur + 1) % E1000_NUM_TX_DESC;
 
     writeCommand(REG_TXDESCTAIL, tx_cur);
-
 
 
     while (!(tx_descs[old_cur]->status & 0xff))

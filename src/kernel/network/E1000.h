@@ -2,6 +2,8 @@
 #define E100_H
 
 #include <kstdint.h>
+
+#include "Ethernet.h"
 #include "../core/PCI.h"
 #include "../core/interrupts.h"
 #include "../core/interrupt_handler.h"
@@ -156,7 +158,8 @@ private:
     struct e1000_tx_desc* tx_descs[E1000_NUM_TX_DESC]{}; // Transmit Descriptor Buffers
     uint16_t rx_cur; // Current Receive Descriptor Buffer
     uint16_t tx_cur; // Current Transmit Descriptor Buffer
-    char* desc_addresses[E1000_NUM_RX_DESC]{};
+    uint8_t* rx_desc_virt_addresses[E1000_NUM_RX_DESC]{};
+    uint8_t* tx_desc_virt_addresses[E1000_NUM_RX_DESC]{};
 
 
     // Send Commands and read results From NICs either using MMIO or IO Ports
@@ -172,6 +175,7 @@ private:
     void txinit(); // Initialize transmit descriptors an buffers
     void enableInterrupt() const; // Enable Interrupts
     void handleReceive(); // Handle a packet reception.
+    void tx_free(); // Free processed tx descriptor buffers
 public:
     explicit E1000(PCI::Device pci_device);
     // Constructor. takes as a parameter a pointer to an object that encapsulate all he PCI configuration data of the device
@@ -179,7 +183,7 @@ public:
     void fire(cpu_state_t* cpu_state, stack_state_t* stack_state) override;
     // This method should be called by the interrupt handler
     uint8_t* getMacAddress(); // Returns the MAC address
-    int sendPacket(const void* p_data, uint16_t p_len); // Send a packet
+    int sendPacket(const Ethernet::packet_info* packet); // Send a packet
     ~E1000() = default; // Default Destructor
 };
 #endif //E100_H
