@@ -6,6 +6,8 @@
 #include <kstdint.h>
 #include <kstddef.h>
 
+#include "IPV4.h"
+
 #define ICMP_ECHO_REPLY 0
 #define ICMP_ECHO_REQUEST 8
 
@@ -34,8 +36,7 @@ public:
         packet_t* packet;
         uint16_t size;
 
-
-        packet_info(void *ptr, uint16_t size)
+        packet_info(void* ptr, uint16_t size)
             : packet((struct packet*)ptr),
               size(size)
         {
@@ -44,11 +45,9 @@ public:
 
     typedef struct packet_info packet_info_t;
 
-private:
-    static void write_ping_reply(packet_info_t* ping_request, uint8_t* response_buf);
+    static void handlePacket(const packet_info_t* packet_info, uint8_t* response_buf);
 
-public:
-    static void handlePacket(packet_info_t* packet, uint8_t* response_buf);
+    static void write_ping_reply(const packet_info_t* ping_request, uint8_t* response_buf);
 
     static size_t get_response_size(const packet_info_t* packet_info);
 };

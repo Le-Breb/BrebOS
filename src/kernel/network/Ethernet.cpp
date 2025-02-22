@@ -6,11 +6,14 @@
 #include "Network.h"
 #include "../core/memory.h"
 
-void Ethernet::write_header(header_t* ptr, uint8_t dest[ETHERNET_MAC_LEN], uint8_t src[ETHERNET_MAC_LEN], uint16_t type)
+uint8_t* Ethernet::write_header(uint8_t* buf, uint8_t dest[MAC_ADDR_LEN], uint8_t src[MAC_ADDR_LEN], uint16_t type)
 {
-    memcpy(ptr->dest, dest, ETHERNET_MAC_LEN);
-    memcpy(ptr->src, src, ETHERNET_MAC_LEN);
-    ptr->type = Endianness::switch_endian16(type);
+    auto header = (header_t*)buf;
+    memcpy(header->dest, dest, MAC_ADDR_LEN);
+    memcpy(header->src, src, MAC_ADDR_LEN);
+    header->type = Endianness::switch_endian16(type);
+
+    return (uint8_t*)(header + 1);;
 }
 
 size_t Ethernet::get_response_size(packet_info* packet_info)
@@ -21,10 +24,10 @@ size_t Ethernet::get_response_size(packet_info* packet_info)
     switch (type)
     {
         case ETHERTYPE_ARP:
-            inner_size = ARP::get_response_size((ARP::packet*)packet_info->packet->payload);
+            inner_size = ARP::get_response_size(packet_info);
             break;
         case ETHERTYPE_IPV4:
-            inner_size = IPV4::get_response_size((IPV4::header_t*)packet_info->packet->payload);
+            inner_size = IPV4::get_response_size(packet_info);
             break;
         default:
             break;
@@ -43,36 +46,37 @@ void Ethernet::handle_packet(packet_info* packet_info)
     if (response_size == (size_t)-1) // Error or no need to process this packet
         return;
 
-    uint8_t* response_buf = nullptr;
-    if (response_size > 0)
-    {
-        response_buf = (uint8_t*)calloc(1, response_size);
-        write_header((header_t*)response_buf, (uint8_t*)Network::broadcast_mac, Network::mac, type);
-        response_buf += sizeof(header_t);
-    }
+    bool response_needed = response_size != 0;
+    uint8_t* response_buf = response_needed ?  (uint8_t*)calloc(1, response_size) : nullptr;
+    uint8_t* response_beg = response_buf;
+
+    if (response_needed)
+        response_buf = write_header(response_buf, packet_info->packet->header.src, Network::mac, type);
+
     switch (type)
     {
         case ETHERTYPE_ARP:
         {
-            auto arp = (ARP::packet*)(packet_info->packet->payload);
-            ARP::handlePacket(arp, response_buf);
-
+            ARP::handlePacket((ARP::packet_t*)packet_info->packet->payload, response_buf);
             break;
         }
         case ETHERTYPE_IPV4:
         {
-            auto ip = (IPV4::header_t*)packet_info->packet->payload;
-            IPV4::handlePacket(ip, response_buf);
+            IPV4::handlePacket((IPV4::packet_t*)packet_info->packet->payload, response_buf);
             break;
         }
         default:
             break; // Not supported
     }
 
-    if (response_size)
+    if (response_needed)
     {
-        response_buf -= sizeof(header_t);
-        auto response_packet_info = new packet_info_t((packet_t*)response_buf, response_size);
-        Network::sendPacket(response_packet_info);
+        auto packet_info = new packet_info_t((packet_t*)response_beg, response_size);
+        Network::sendPacket(packet_info);
     }
+}
+
+size_t Ethernet::get_headers_size()
+{
+    return sizeof(header_t);
 }

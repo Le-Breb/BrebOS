@@ -1,0 +1,7 @@
+#ifndef NETWORKDEFINES_H
+#define NETWORKDEFINES_H
+
+#define IPV4_ADDR_LEN 4
+#define MAC_ADDR_LEN 6
+
+#endif //NETWORKDEFINES_H

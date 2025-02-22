@@ -1,12 +1,12 @@
 #include "ICMP.h"
 
-#include "IPV4.h"
+#include "Endianness.h"
 #include "Network.h"
 #include "../core/fb.h"
 
-void ICMP::handlePacket(packet_info_t* packet, uint8_t* response_buf)
+void ICMP::handlePacket(const packet_info_t* packet_info, uint8_t* response_buf)
 {
-    write_ping_reply(packet, response_buf);
+    write_ping_reply(packet_info, response_buf);
 }
 
 size_t ICMP::get_response_size(const packet_info_t* packet_info)
@@ -32,7 +32,7 @@ size_t ICMP::get_response_size(const packet_info_t* packet_info)
     return packet_info->size; // Response is the same size as the request
 }
 
-void ICMP::write_ping_reply(packet_info_t* ping_request, uint8_t* response_buf)
+void ICMP::write_ping_reply(const packet_info_t* ping_request, uint8_t* response_buf)
 {
     auto header = (header_t*)response_buf;
     header->type = ICMP_ECHO_REPLY;

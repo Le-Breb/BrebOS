@@ -5,10 +5,10 @@
 #include "../core/PCI.h"
 
 E1000* Network::nic = nullptr;
-const uint8_t Network::ip[NETWORK_IPV4_LEN] = {192, 168, 100, 2};
-const uint8_t Network::broadcast_ip[NETWORK_IPV4_LEN] = {0xff, 0xff, 0xff, 0xff};
-const uint8_t Network::broadcast_mac[NETWORK_MAC_LEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-uint8_t Network::mac[NETWORK_MAC_LEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}; // -will be set in Network::run
+const uint8_t Network::ip[IPV4_ADDR_LEN] = {192, 168, 100, 2};
+const uint8_t Network::broadcast_ip[IPV4_ADDR_LEN] = {0xff, 0xff, 0xff, 0xff};
+const uint8_t Network::broadcast_mac[MAC_ADDR_LEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+uint8_t Network::mac[MAC_ADDR_LEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}; // -will be set in Network::run
 
 class E1000;
 

@@ -4,8 +4,7 @@
 #include <kstddef.h>
 #include <kstring.h>
 
-#define ETHERNET_MAC_LEN 6
-#define ETHERNET_IPV3_LEN 4
+#include "NetworkConsts.h"
 
 #define ETHERTYPE_IPV4      0x0800  // Internet Protocol version 4 (IPv4)
 #define ETHERTYPE_ARP       0x0806  // Address Resolution Protocol (ARP)
@@ -27,8 +26,8 @@ class Ethernet
 public:
     struct header
     {
-        uint8_t dest[ETHERNET_MAC_LEN]{};
-        uint8_t src[ETHERNET_MAC_LEN]{};
+        uint8_t dest[MAC_ADDR_LEN]{};
+        uint8_t src[MAC_ADDR_LEN]{};
         uint16_t type;
     };
 
@@ -56,7 +55,9 @@ public:
 
     typedef struct packet_info packet_info_t;
 
-    static void write_header(header_t* ptr, uint8_t dest[ETHERNET_MAC_LEN], uint8_t src[ETHERNET_MAC_LEN], uint16_t type);
+    static void handle_packet(packet_info* packet_info);
+
+    static size_t get_headers_size();
 
     /**
      * Compute the size of the buffer that will contain the response to a packet
@@ -66,7 +67,7 @@ public:
      */
     static size_t get_response_size(packet_info* packet_info);
 
-    static void handle_packet(packet_info* packet_info);
+    static uint8_t* write_header(uint8_t* buf, uint8_t dest[MAC_ADDR_LEN], uint8_t src[MAC_ADDR_LEN], uint16_t type);
 };
 
 
