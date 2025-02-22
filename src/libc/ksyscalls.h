@@ -50,4 +50,6 @@ void puts(const char* str);
 
 void putchar(char c);
 
+void clear_screen();
+
 #endif //INCLUDE_SYSCALLS_H

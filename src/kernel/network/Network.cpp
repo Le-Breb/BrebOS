@@ -22,8 +22,32 @@ void Network::run()
     nic = new E1000(PCI::ethernet_card);
     nic->start();
     memcpy(mac, nic->getMacAddress(), sizeof(mac));
+}
 
-    // Send a broadcast ARP request for testing purposes
-    Ethernet::packet_info* broadcast_request = ARP::new_broadcast_request(nic->getMacAddress());
-    nic->sendPacket(broadcast_request);
+void Network::sendPacket(Ethernet::packet_info* packet)
+{
+    nic->sendPacket(packet);
+}
+
+uint16_t Network::checksum(const void* addr, size_t count)
+{
+    uint32_t sum = 0;
+    auto* ptr = (uint16_t*)addr;
+
+    while (count > 1)
+    {
+        /*  This is the inner loop */
+        sum += *ptr++;
+        count -= 2;
+    }
+
+    /*  Add left-over byte, if any */
+    if (count > 0)
+        sum += *(uint8_t*)ptr;
+
+    /*  Fold 32-bit sum to 16 bits */
+    while (sum >> 16)
+        sum = (sum & 0xffff) + (sum >> 16);
+
+    return ~sum;
 }

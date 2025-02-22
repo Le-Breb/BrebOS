@@ -169,6 +169,9 @@ void Syscall::get_key()
     case 12:
         ls(&p->cpu_state);
         break;
+    case 13:
+        FB::clear_screen();
+        break;
     default:
         printf_error("Received unknown syscall id: %u", cpu_state->eax);
         break;

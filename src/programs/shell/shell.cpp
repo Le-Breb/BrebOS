@@ -81,6 +81,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 			touch(cmd + 6);
 		else if (cmd[0] == 'l' && cmd[1] == 's' && cmd[2] == ' ')
 			ls(cmd + 3);
+        else if (cmd[0] == 'c' && cmd[1] == 'l' && cmd[2] == 'e' && cmd[3] == 'a' && cmd[4] == 'r')
+          	clear_screen();
 		else
 			printf("Unknown command\n");
 

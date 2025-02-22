@@ -76,3 +76,8 @@ bool ls(const char* path)
 	__asm__ volatile("int $0x80" : "=a"(success): "a"(12), "D"(path));
 	return success;
 }
+
+void clear_screen()
+{
+	__asm__ volatile("int $0x80" :  : "a"(13));
+}

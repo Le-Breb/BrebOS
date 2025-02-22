@@ -51,11 +51,15 @@ class ARP {
         memcpy(ptr->dsthw, dsthw, ARP_MAC_ADDR_LEN);
     }
 
-    static Ethernet::packet_info* new_broadcast_request(uint8_t srchw[ARP_MAC_ADDR_LEN]);
+    static Ethernet::packet_info* new_arp_announcement(uint8_t srchw[ARP_MAC_ADDR_LEN]);
 
     static Ethernet::packet_info* new_reply(packet_t* request);
 
     static void display_request(packet_t *p);
+
+    static void handlePacket(packet_t *p, uint8_t* response_buf);
+
+    static size_t get_response_size(packet_t* packet);
 };
 
 

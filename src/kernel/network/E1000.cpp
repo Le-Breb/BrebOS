@@ -328,24 +328,10 @@ void E1000::handleReceive()
     while (rx_descs[rx_cur]->status & TSTA_DD)
     {
         uint8_t* buf = rx_desc_virt_addresses[rx_cur];
-        // uint16_t len = rx_descs[rx_cur]->length;
+        uint16_t len = rx_descs[rx_cur]->length;
 
-        auto p = (Ethernet::header*)buf;
-        auto type = Endianness::switch_endian16(p->type);
-        //printf("received ethernet packet of type: 0x%04x\n", type);
-        if (type == ETHERTYPE_ARP)
-        {
-            auto arp = (ARP::packet*)(buf + sizeof(Ethernet::header));
-            if (!memcmp(&arp->dstpr, &Network::ip, sizeof(Network::ip))) // ARP request targeting us
-            {
-                FB::set_fg(FB_RED);
-                ARP::display_request(arp);
-                FB::set_fg(FB_WHITE);
-
-                auto reply = ARP::new_reply(arp);
-                sendPacket(reply);
-            }
-        }
+        Ethernet::packet_info packet_info((Ethernet::packet_t*)buf, len);
+        Ethernet::handle_packet(&packet_info);
 
         rx_descs[rx_cur]->status = 0;
         writeCommand(REG_RXDESCTAIL, rx_cur);
@@ -365,7 +351,7 @@ void E1000::tx_free()
     }
 }
 
-int E1000::sendPacket(const Ethernet::packet_info* packet)
+int E1000::sendPacket(Ethernet::packet_info* packet)
 {
     tx_desc_virt_addresses[tx_cur] = (uint8_t*)packet->packet;
     tx_descs[tx_cur]->addr = PHYS_ADDR(get_page_tables(), (uint32_t)packet->packet);
@@ -375,6 +361,7 @@ int E1000::sendPacket(const Ethernet::packet_info* packet)
     tx_descs[tx_cur]->status = 0;
     uint8_t old_cur = tx_cur;
     tx_cur = (tx_cur + 1) % E1000_NUM_TX_DESC;
+    free(packet); // Free packet info struct, packet itself is still present in a tx descriptor
 
     writeCommand(REG_TXDESCTAIL, tx_cur);
 
