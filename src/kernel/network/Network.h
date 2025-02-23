@@ -20,7 +20,7 @@ public:
 
     static void run();
 
-    static void sendPacket(Ethernet::packet_info* packet);
+    static void send_packet(Ethernet::packet_info* packet);
 
     /*** Compute Internet Checksum for "count" bytes
      *         beginning at location "addr".

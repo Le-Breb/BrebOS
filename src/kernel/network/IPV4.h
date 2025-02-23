@@ -14,7 +14,8 @@
 #define IPV4_PROTOCOL_ICMP 1
 #define IPV4_PROTOCOL_UDP 17
 
-#define PV4_DEFAULT_TTL 64
+#define IPV4_DEFAULT_TTL 64
+#define IPV4_DEFAULT_IHL 5
 
 class IPV4
 {
@@ -55,13 +56,19 @@ public:
 
     static void handlePacket(const packet_t* packet, uint8_t* response_buffer);
 
-    static size_t get_response_size(const Ethernet::packet_info_t* packet_info);
+    [[nodiscard]] static size_t get_response_size(const packet_t* packet_info);
 
-    static size_t get_headers_size();
+    [[nodiscard]] static size_t get_headers_size();
+
+    [[nodiscard]] static size_t get_header_size();
 
     static void write_response(uint8_t* response_buf, const header_t* request_header, size_t payload_size);
 
-    static void write_packet(uint8_t* buf, uint8_t version, uint8_t ihl, uint8_t tos, uint16_t len, uint16_t id, uint8_t flags, uint8_t ttl, uint8_t proto, uint32_t saddr, uint32_t daddr);
+    static void write_packet(uint8_t* buf, uint8_t tos, uint16_t size, uint16_t id, uint8_t flags, uint8_t ttl,
+                             uint8_t proto, uint32_t daddr);
+
+    static uint8_t* write_headers(uint8_t* buf, uint16_t payload_size, uint8_t proto, uint32_t daddr,
+                                  uint8_t dst_mac[MAC_ADDR_LEN]);
 };
 
 

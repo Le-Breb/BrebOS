@@ -43,9 +43,9 @@ class ARP {
 
     static void handlePacket(packet_t* packet, uint8_t* response_buf);
 
-    static size_t get_response_size(Ethernet::packet_info* packet_info);
+    [[nodiscard]] static size_t get_response_size(packet_t* packet);
 
-    static size_t get_headers_size();
+    [[nodiscard]] static size_t get_headers_size();
 };
 
 

@@ -1,16 +1,28 @@
 #include "UDP.h"
 
+#include "Endianness.h"
 #include "IPV4.h"
 #include "Network.h"
 #include "../core/fb.h"
 
-void UDP::write_header(uint8_t* payload_beg, uint16_t src_port, uint16_t dst_port, uint16_t payload_length)
+void UDP::write_header(uint8_t* buf, uint16_t src_port, uint16_t dst_port, uint16_t payload_size)
 {
-    auto header = (header_t*)(payload_beg - sizeof(header_t));
-    header->src_port = src_port;
-    header->dst_port = dst_port;
-    header->length = sizeof(header_t) + payload_length;
-    header->checksum = Network::checksum(header, payload_length);
+    auto header = (header_t*)buf;
+    size_t size = get_header_size() + payload_size;
+    header->src_port = Endianness::switch16(src_port);
+    header->dst_port = Endianness::switch16(dst_port);
+    header->length = Endianness::switch16(size);
+    header->checksum = Network::checksum(header, size);
+}
+
+uint8_t* UDP::write_headers(uint8_t* buf, uint16_t src_port, uint16_t dst_port, uint16_t payload_size, uint32_t daddr,
+                            uint8_t dst_mac[6])
+{
+    size_t size = get_header_size() + payload_size;
+    buf = IPV4::write_headers(buf, size, IPV4_PROTOCOL_UDP, daddr, dst_mac);
+    write_header(buf, src_port, dst_port, payload_size);
+
+    return buf + get_header_size();
 }
 
 void UDP::handlePacket(const packet_info_t* packet_info, [[maybe_unused]] uint8_t* response_buffer)
@@ -29,5 +41,10 @@ size_t UDP::get_response_size([[maybe_unused]] const packet_info_t* packet_info)
 
 size_t UDP::get_headers_size()
 {
-    return sizeof(header_t) + IPV4::get_headers_size();
+    return get_header_size() + IPV4::get_headers_size();
+}
+
+size_t UDP::get_header_size()
+{
+    return sizeof(header_t);
 }

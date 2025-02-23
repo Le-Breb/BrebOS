@@ -361,7 +361,6 @@ int E1000::sendPacket(Ethernet::packet_info* packet)
     tx_descs[tx_cur]->status = 0;
     uint8_t old_cur = tx_cur;
     tx_cur = (tx_cur + 1) % E1000_NUM_TX_DESC;
-    free(packet); // Free packet info struct, packet itself is still present in a tx descriptor
 
     writeCommand(REG_TXDESCTAIL, tx_cur);
 

@@ -1,6 +1,7 @@
 #include "Network.h"
 
 #include "ARP.h"
+#include "DHCP.h"
 #include "Ethernet.h"
 #include "../core/PCI.h"
 
@@ -22,9 +23,11 @@ void Network::run()
     nic = new E1000(PCI::ethernet_card);
     nic->start();
     memcpy(mac, nic->getMacAddress(), sizeof(mac));
+
+    DHCP::send_discover(); // Ask for an IP address
 }
 
-void Network::sendPacket(Ethernet::packet_info* packet)
+void Network::send_packet(Ethernet::packet_info* packet)
 {
     nic->sendPacket(packet);
 }

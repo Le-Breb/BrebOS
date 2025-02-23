@@ -14,7 +14,7 @@ Ethernet::packet_info* ARP::new_arp_announcement(uint8_t srchw[MAC_ADDR_LEN])
     uint8_t dsthw[MAC_ADDR_LEN] = {0, 0, 0, 0, 0, 0};
 
     auto buf = (uint8_t*)calloc(1, get_headers_size() + 0); // + 0 because we don't need a payload
-    buf = Ethernet::write_header(buf, (uint8_t*)Network::broadcast_mac, Network::mac, ETHERTYPE_ARP);
+    buf = Ethernet::write_header(buf, (uint8_t*)Network::broadcast_mac, ETHERTYPE_ARP);
     write_packet(buf + sizeof(Ethernet::header_t), htype, ptype, hlen, plen, opcode, srchw,
                  *(uint32_t*)Network::ip, dsthw, *(uint32_t*)Network::ip);
 
@@ -23,8 +23,8 @@ Ethernet::packet_info* ARP::new_arp_announcement(uint8_t srchw[MAC_ADDR_LEN])
 
 void ARP::display_request(packet_t* p)
 {
-    uint32_t rev_srcpr = Endianness::switch_endian32(p->srcpr);
-    uint32_t rev_dstpr = Endianness::switch_endian32(p->dstpr);
+    uint32_t rev_srcpr = Endianness::switch32(p->srcpr);
+    uint32_t rev_dstpr = Endianness::switch32(p->dstpr);
     printf(
         "Hardware Type: 0x%04x, Protocol Type: 0x%04x, HW Len: %d, Protocol Len: %d, Opcode: %s, Src MAC: %02x:%02x:%02x:%02x:%02x:%02x, Src IP: %d.%d.%d.%d, Dst MAC: %02x:%02x:%02x:%02x:%02x:%02x, Dst IP: %d.%d.%d.%d\n",
         p->htype, p->ptype, p->hlen, p->plen, p->opcode == 1 ? "ARP Request" : "ARP Reply",
@@ -40,9 +40,8 @@ void ARP::handlePacket(packet_t* packet, uint8_t* response_buf)
                  *(uint32_t*)&Network::ip, packet->srchw, packet->srcpr);
 }
 
-size_t ARP::get_response_size(Ethernet::packet_info_t* packet_info)
+size_t ARP::get_response_size(packet_t* packet)
 {
-    auto packet = (packet_t*)packet_info->packet->payload;
     if (!(0 == memcmp(&packet->dstpr, &Network::ip, sizeof(Network::ip)) || 0 == memcmp(
         &packet->dstpr, &Network::ip, sizeof(Network::broadcast_ip)))) // check that request is targeting us
         return -1;
@@ -58,12 +57,12 @@ void ARP::write_packet(uint8_t* buf, uint16_t htype, uint16_t ptype, uint8_t hle
                        uint8_t srchw[MAC_ADDR_LEN], uint32_t srcpr, uint8_t dsthw[MAC_ADDR_LEN], uint32_t dstpr)
 {
     auto packet = (packet_t*)buf;
-    packet->htype = Endianness::switch_endian16(htype);
-    packet->ptype = Endianness::switch_endian16(ptype);
+    packet->htype = Endianness::switch16(htype);
+    packet->ptype = Endianness::switch16(ptype);
     packet->hlen = hlen;
     packet->plen = plen;
-    packet->opcode = Endianness::switch_endian16(opcode);
-    packet->htype = Endianness::switch_endian16(htype);
+    packet->opcode = Endianness::switch16(opcode);
+    packet->htype = Endianness::switch16(htype);
     packet->hlen = hlen;
     packet->plen = plen;
     packet->srcpr = srcpr;

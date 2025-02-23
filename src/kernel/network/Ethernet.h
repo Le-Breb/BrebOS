@@ -44,9 +44,9 @@ public:
     struct packet_info
     {
         packet_t* packet;
-        uint8_t size;
+        uint16_t size;
 
-        packet_info(packet_t* packet, uint8_t size)
+        packet_info(packet_t* packet, uint16_t size)
             : packet(packet),
               size(size)
         {
@@ -55,7 +55,7 @@ public:
 
     typedef struct packet_info packet_info_t;
 
-    static void handle_packet(packet_info* packet_info);
+    static void handle_packet(const packet_info* packet_info);
 
     static size_t get_headers_size();
 
@@ -65,9 +65,9 @@ public:
      * @return size of response. 0 if no response needed, -1 packet shouldn't be processed
      * (if error or if packet is not destined to us)
      */
-    static size_t get_response_size(packet_info* packet_info);
+    static size_t get_response_size(const packet_info* packet_info);
 
-    static uint8_t* write_header(uint8_t* buf, uint8_t dest[MAC_ADDR_LEN], uint8_t src[MAC_ADDR_LEN], uint16_t type);
+    static uint8_t* write_header(uint8_t* buf, uint8_t dest[MAC_ADDR_LEN], uint16_t type);
 };
 
 
