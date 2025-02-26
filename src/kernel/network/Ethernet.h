@@ -55,7 +55,7 @@ public:
 
     typedef struct packet_info packet_info_t;
 
-    static void handle_packet(const packet_info* packet_info);
+    static void handle_packet(const packet_info_t* packet_info);
 
     static size_t get_headers_size();
 

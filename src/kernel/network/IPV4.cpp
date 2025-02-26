@@ -98,13 +98,13 @@ size_t IPV4::get_response_size(const packet_t* packet)
         printf_error("Fragmented IP packet received, not handled yet");
         return -1;
     }
-    if (Network::checksum(header, sizeof(*header)))
+    if (Network::checksum(header, get_header_size()))
     {
         printf_error("IPV4 checksum error");
         return -1;
     }
 
-    size_t size = header->get_ihl() * sizeof(uint32_t);
+    size_t size = get_header_size();
     size_t inner_size = 0;
     switch (header->proto)
     {

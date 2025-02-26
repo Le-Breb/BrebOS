@@ -8,7 +8,7 @@ class Network
     static E1000* nic;
 
 public:
-    static const uint8_t ip[IPV4_ADDR_LEN];
+    static uint8_t ip[IPV4_ADDR_LEN];
 
     static const uint8_t broadcast_ip[IPV4_ADDR_LEN];
 

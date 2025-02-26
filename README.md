@@ -31,7 +31,7 @@
 
 BrebOS is a hand made x86 32 bits OS made for learning and fun!
 It is designed to work under QEMU, but it can also be used on real computers ! (It properly boots, though driver errors
-are likely to occur cause i did not add support for the specific hardware of the machine used).<br>
+are likely to occur because i did not add support for the specific hardware of the machine used).<br>
 BrebOS is written in C++ and ASM_x86.
 
 ### Creation process
@@ -54,6 +54,7 @@ Make sure you have installed the following packages, using `sudo apt install pac
 - **mtools** | DOS disks utilities
 - **xorriso** | ISO manipulator
 - **qemu-system-i386** | Emulator
+- **dnsmasq** | DHCP server
 
 You also need a **Cross compiler**: Please refer to [this page](https://wiki.osdev.org/GCC_Cross-Compiler), and follow
 the instructionns on sections 2 and 3. <br>
@@ -86,7 +87,7 @@ RELEASE=1 make
 RELEASE = 1 make run # Will ask for password because it does network stuff
 ```
 
-⚠️ Running the program interrupts your internet connection, because QEMU does... complex stuff (needed to have your computer and the virtual machine be able to send network stuff). Don't worry, every config necessary for the kernel to run is undone (by `network_utils/cleanup.sh`) after execution. Simply deactivate then reactivate the Wifi on your computer, and everything will be back on track. If it still doesn't work, reboot your computer, any operation done by this project is persistant across reboots. In case you want to check what is being executed, feel free to read `network_utils/setup.sh`. ⚠️ 
+ℹ️ This will ask for elevated privileges, which are required for setting up NAT. ℹ️
 
 #### On a real computer (Read carefully before proceeding)
 
@@ -141,6 +142,9 @@ To add your program, simply follow the following steps:
   your program and will add it at `/bin` in BrebOS' disk. <br>
   You can now run your program using `p your_awesome_program_name` in BrebOS.
 
+### Network
+If you have knowledge in networking, you can play with network stuff. VM uses NAT to talk with the outer world. For host-VM communication, host PC has IP 192.168.100.1, and the VM dynamically gets its IP from dnsmasq, a DHCP server running locally, which is automatically started when executing `make run`.
+
 ## Features ⚙️
 
 ### Core
@@ -165,6 +169,14 @@ To add your program, simply follow the following steps:
     - ATA driver (taken from osdev.com, not implemented by me)
     - FAT32 support
     - VFS which abstracts hardware/file_system specific details and provide a unified interface within the kernel.
+- **Network stack**
+    - E1000 ethernet card driver (mainly taken from [here](https://wiki.osdev.org/Intel_Ethernet_i217))
+    - Ethernet
+    - IPV4
+    - UDP
+    - ICMP ping reply
+    - ARP
+    - DHCP
 
 ### Misc
 
@@ -178,9 +190,6 @@ Those are things I'm willing to do. To not mistake it with things *I will* do.
 - **Multi core**
 - **Bootloader**
 - **C++ RTTI and exceptions support**
-- **Network**<br>
-  Complete network stack with every basic internet protocol (Ethernet, TCP, IP...). <br>
-  Ability to send a mail.
 
 - **Drivers** <br>
   Add various real-life hardware drivers to be able to fully use BrebOS on real machines.

@@ -6,7 +6,8 @@
 #include "../core/PCI.h"
 
 E1000* Network::nic = nullptr;
-const uint8_t Network::ip[IPV4_ADDR_LEN] = {192, 168, 100, 2};
+uint8_t Network::ip[IPV4_ADDR_LEN] = {0, 0, 0, 0};
+//uint8_t Network::ip[IPV4_ADDR_LEN] = {192, 168, 1, 2};
 const uint8_t Network::broadcast_ip[IPV4_ADDR_LEN] = {0xff, 0xff, 0xff, 0xff};
 const uint8_t Network::broadcast_mac[MAC_ADDR_LEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 uint8_t Network::mac[MAC_ADDR_LEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}; // -will be set in Network::run

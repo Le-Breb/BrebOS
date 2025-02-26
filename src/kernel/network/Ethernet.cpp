@@ -38,7 +38,7 @@ size_t Ethernet::get_response_size(const packet_info* packet_info)
     return size + inner_size;
 }
 
-void Ethernet::handle_packet(const packet_info* packet_info)
+void Ethernet::handle_packet(const packet_info_t* packet_info)
 {
     auto type = Endianness::switch16(packet_info->packet->header.type);
     size_t response_size = get_response_size(packet_info);
