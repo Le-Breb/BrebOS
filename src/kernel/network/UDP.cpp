@@ -28,11 +28,9 @@ uint8_t* UDP::write_headers(uint8_t* buf, uint16_t src_port, uint16_t dst_port, 
 
 void UDP::handlePacket(const packet_info_t* packet_info, [[maybe_unused]] uint8_t* response_buffer)
 {
-    if (packet_info->size >= DHCP::get_header_size())
-    {
-        printf("DHCP response xid: %x\n", ((DHCP::packet_t*)packet_info->packet->data)->xid);
+    if (DHCP::handle_packet(packet_info->packet))
         return;
-    }
+
     FB::set_fg(FB_CYAN);
     printf("UDP payload: ");
     for (uint i = 0; i < packet_info->size - sizeof(header_t); ++i)

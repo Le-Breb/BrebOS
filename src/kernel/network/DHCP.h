@@ -4,9 +4,21 @@
 #include <kstdint.h>
 #include <kstddef.h>
 
+#include "UDP.h"
+
 #define DHCP_MAGIC_COOKIE 0x63825363
 
-#define DHCP_DISCOVER 1
+#define BOOT_REQUEST 1
+#define BOOT_REPLY 2
+
+#define DHCP_DISCOVER  1  // Client broadcast to locate available servers
+#define DHCP_OFFER     2  // Server response offering an IP address
+#define DHCP_REQUEST   3  // Client request for offered IP address
+#define DHCP_DECLINE   4  // Client rejects offered IP (e.g., IP conflict)
+#define DHCP_ACK       5  // Server confirms client's lease
+#define DHCP_NAK       6  // Server rejects request (e.g., lease expired)
+#define DHCP_RELEASE   7  // Client releases its IP back to the server
+#define DHCP_INFORM    8  // Client requests configuration without IP lease
 
 #define DHCP_DISC_SRC_PORT 68
 #define DHCP_DISC_DST_PORT 67
@@ -141,6 +153,7 @@
 #pragma endregion
 
 #define DHCP_DISC_OPT_SIZE sizeof(option_t) + 1 + sizeof(option_t) + 4 + 1
+#define DHCP_REQUEST_OPT_SIZE sizeof(option_t) + 1 + sizeof(option_t) + 4 + sizeof(option_t) + 4
 
 #define DHCP_FLAG_BROADCAST 0x0080 // Broadcast flag. Bit order change because of endianness
 
@@ -190,14 +203,28 @@ public:
 
     static void send_discover();
 
-    static void write_header(uint8_t* buf, uint8_t op, uint16_t flags, uint32_t ciaddr, uint32_t yiaddr,
-                             uint32_t siaddr,
-                             uint32_t giaddr, uint8_t* options_buf, size_t num_options);
+    static void send_request(const packet_t* offer_packet);
+
+    static void write_header(uint8_t* buf, uint8_t op, uint32_t xid, uint16_t flags, uint32_t ciaddr,
+                             uint32_t yiaddr,
+                             uint32_t siaddr, uint32_t giaddr, uint8_t* options_buf, size_t num_options);
 
     [[nodiscard]] static size_t get_header_size();
 
+    static bool handle_packet(const UDP::packet_t* packet);
+
 private:
     [[nodiscard]] static size_t get_disc_header_size();
+
+    [[nodiscard]] static size_t get_request_header_size();
+
+    [[nodiscard]] static bool is_dhcp_offer(const UDP::packet_t* packet);
+
+    [[nodiscard]] static uint32_t generate_xid();
+
+    [[nodiscard]] static uint is_dhcp(const UDP::packet_t* packet);
+
+    static uint32_t dhcp_disc_xid;
 };
 
 
