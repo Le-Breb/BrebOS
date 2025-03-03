@@ -10,10 +10,11 @@
 #define ARP_ETHERNET 1
 #define ARP_IPV4 0x800
 
-
 #define ARP_REQUEST 1
 #define ARP_REPLY 2
 
+#define ARP_PENDING_QUEUE_SIZE 10
+#define ARP_CACHE_SIZE 10
 
 class ARP {
     public:
@@ -31,11 +32,25 @@ class ARP {
     } __attribute__((packed));
 
     typedef struct packet packet_t;
+private:
+    struct cache_entry
+    {
+        uint8_t ip[IPV4_ADDR_LEN]{};
+        uint8_t mac[MAC_ADDR_LEN]{};
+    };
 
-    static void write_packet(uint8_t* buf, uint16_t htype, uint16_t ptype, uint8_t hlen, uint8_t plen, uint16_t opcode, uint8_t srchw[MAC_ADDR_LEN],
-        uint32_t srcpr, uint8_t dsthw[MAC_ADDR_LEN], uint32_t dstpr);
+    typedef struct cache_entry cache_entry_t;
 
-    static Ethernet::packet_info* new_arp_announcement(uint8_t srchw[MAC_ADDR_LEN]);
+    static Ethernet::packet_info_t pending_queue[ARP_PENDING_QUEUE_SIZE];
+    static size_t pending_queue_head;
+    static cache_entry_t cache[ARP_CACHE_SIZE];
+    static size_t cache_head;
+    static void resolve_mac(const uint8_t ip[IPV4_ADDR_LEN]);
+public:
+    static void resolve_gateway_mac();
+
+    static void write_packet(uint8_t* buf, uint16_t htype, uint16_t ptype, uint8_t hlen, uint8_t plen, uint16_t opcode,
+                             uint32_t srcpr, uint32_t dstpr, uint8_t dsthw[]);
 
     static Ethernet::packet_info* new_reply(packet_t* request);
 
@@ -43,9 +58,13 @@ class ARP {
 
     static void handlePacket(packet_t* packet, uint8_t* response_buf);
 
-    [[nodiscard]] static size_t get_response_size(packet_t* packet);
+    static void resolve_and_send(const Ethernet::packet_info_t* packet_info);
+
+    [[nodiscard]] static size_t get_response_size(const packet_t* packet);
 
     [[nodiscard]] static size_t get_headers_size();
+
+    static void get_mac(const uint8_t ip[IPV4_ADDR_LEN], uint8_t mac[MAC_ADDR_LEN]);
 };
 
 

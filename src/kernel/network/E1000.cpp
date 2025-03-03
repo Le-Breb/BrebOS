@@ -302,12 +302,12 @@ void E1000::fire([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] stack
     {
         // good threshold
         //printf_info("E1000 good threshold");
-        handleReceive();
+        pollRx();
     }
     else if (status & 0x80)
     {
         //printf_info("Receive done");
-        handleReceive();
+        pollRx();
     }
     else
     {
@@ -323,8 +323,9 @@ uint8_t* E1000::getMacAddress()
     return mac;
 }
 
-void E1000::handleReceive()
+void E1000::pollRx()
 {
+
     while (rx_descs[rx_cur]->status & TSTA_DD)
     {
         uint8_t* buf = rx_desc_virt_addresses[rx_cur];
@@ -364,10 +365,10 @@ int E1000::sendPacket(Ethernet::packet_info* packet)
 
     writeCommand(REG_TXDESCTAIL, tx_cur);
 
-
     while (!(tx_descs[old_cur]->status & 0xff))
     {
         // printf("TX status: 0x%x\n", tx_descs[old_cur]->status);
     };
+
     return 0;
 }

@@ -83,6 +83,19 @@ uint8_t* IPV4::write_headers(uint8_t* buf, uint16_t payload_size, uint8_t proto,
     return buf + header_size;
 }
 
+bool IPV4::address_is_in_subnet(const uint8_t address[IPV4_ADDR_LEN])
+{
+    uint8_t masked_address[IPV4_ADDR_LEN];
+    uint8_t masked_ip[IPV4_ADDR_LEN];
+    for (size_t i = 0; i < IPV4_ADDR_LEN; i++)
+    {
+        masked_address[i] = address[i] & Network::subnet_mast[i];
+        masked_ip[i] = Network::ip[i] & Network::subnet_mast[i];
+    }
+
+    return memcmp(masked_address, masked_ip, IPV4_ADDR_LEN) == 0;
+}
+
 size_t IPV4::get_response_size(const packet_t* packet)
 {
     auto header = &packet->header;

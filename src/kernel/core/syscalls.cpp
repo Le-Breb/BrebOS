@@ -6,6 +6,8 @@
 #include "PIC.h"
 #include "../file_management/VFS.h"
 #include "fb.h"
+#include "../network/DNS.h"
+#include "../network/Network.h"
 
 void Syscall::start_process(cpu_state_t* cpu_state)
 {
@@ -39,12 +41,12 @@ void Syscall::malloc(Process* p, cpu_state_t* cpu_state)
     cpu_state->eax = (uint)p->allocate_dyn_memory(cpu_state->edi);
 }
 
-void Syscall::free(Process* p, cpu_state_t* cpu_state)
+void Syscall::free(Process* p, const cpu_state_t* cpu_state)
 {
     p->free_dyn_memory((void*)cpu_state->edi);
 }
 
-void Syscall::dynlk(cpu_state_t* cpu_state)
+void Syscall::dynlk(const cpu_state_t* cpu_state)
 {
     // Get calling process and verify its identity is as expected
     Process* p = Scheduler::get_running_process();
@@ -123,7 +125,7 @@ void Syscall::get_key()
     __asm__ volatile("int $0x20");
 }
 
-[[noreturn]] void Syscall::dispatcher(cpu_state_t* cpu_state, stack_state_t* stack_state)
+[[noreturn]] void Syscall::dispatcher(cpu_state_t* cpu_state, const stack_state_t* stack_state)
 {
     Process* p = Scheduler::get_running_process();
 
@@ -172,6 +174,9 @@ void Syscall::get_key()
     case 13:
         FB::clear_screen();
         break;
+    case 14:
+        dns(cpu_state);
+        break;
     default:
         printf_error("Received unknown syscall id: %u", cpu_state->eax);
         break;
@@ -180,6 +185,14 @@ void Syscall::get_key()
     // Todo: Check if process ESP should be reset to process kernel stack top here
     Interrupts::resume_user_process_asm(p->cpu_state, p->stack_state);
 }
+
+void Syscall::dns(const cpu_state_t* cpu_state)
+{
+    const char* domain = (const char*)cpu_state->edi;
+    DNS::send_query(domain);
+    Network::pollPackets(); // Process packets received during this interrupt
+}
+
 
 void Syscall::mkdir(cpu_state_t* cpu_state)
 {

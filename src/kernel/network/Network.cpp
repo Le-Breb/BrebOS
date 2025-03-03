@@ -3,14 +3,18 @@
 #include "ARP.h"
 #include "DHCP.h"
 #include "Ethernet.h"
+#include "IPV4.h"
 #include "../core/PCI.h"
 
 E1000* Network::nic = nullptr;
 uint8_t Network::ip[IPV4_ADDR_LEN] = {0, 0, 0, 0};
-//uint8_t Network::ip[IPV4_ADDR_LEN] = {192, 168, 1, 2};
+uint8_t Network::gateway_ip[IPV4_ADDR_LEN] = {0, 0, 0, 0};
+uint8_t Network::subnet_mast[IPV4_ADDR_LEN] = {0, 0, 0, 0};
 const uint8_t Network::broadcast_ip[IPV4_ADDR_LEN] = {0xff, 0xff, 0xff, 0xff};
 const uint8_t Network::broadcast_mac[MAC_ADDR_LEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 uint8_t Network::mac[MAC_ADDR_LEN] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}; // -will be set in Network::run
+uint8_t Network::null_mac[MAC_ADDR_LEN] = {};
+uint8_t Network::gateway_mac[MAC_ADDR_LEN] = {};
 
 class E1000;
 
@@ -30,6 +34,20 @@ void Network::run()
 
 void Network::send_packet(Ethernet::packet_info* packet)
 {
+    // Unknown destination MAC address
+    if (memcmp(&packet->packet->header.dest, null_mac, MAC_ADDR_LEN) == 0)
+    {
+        auto ip_header = (IPV4::header_t*)packet->packet->payload;
+        if (IPV4::address_is_in_subnet((uint8_t*)&ip_header->daddr))
+        {
+            // Destination is within the subnet, send directly using ARP
+            ARP::resolve_and_send(packet);
+            return;
+        }
+
+        // Destination is outside the subnet, send to the gateway
+        memcpy(&packet->packet->header.dest, gateway_mac, MAC_ADDR_LEN);
+    }
     nic->sendPacket(packet);
 }
 
@@ -54,4 +72,22 @@ uint16_t Network::checksum(const void* addr, size_t count)
         sum = (sum & 0xffff) + (sum >> 16);
 
     return ~sum;
+}
+
+uint32_t Network::generate_random_id32()
+{
+    uint64_t tsc;
+    asm volatile ("rdtsc" : "=A"(tsc));
+    return (uint32_t)(tsc & 0xFFFFFFFF) ^ (mac[0] << 16);
+}
+
+uint32_t Network::generate_random_id16()
+{
+    auto rid = generate_random_id32();
+    return (rid >> 16) + (rid & 0xFF);
+}
+
+void Network::pollPackets()
+{
+    nic->pollRx();
 }

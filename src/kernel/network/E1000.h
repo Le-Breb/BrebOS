@@ -174,11 +174,11 @@ private:
     void rxinit(); // Initialize receive descriptors an buffers
     void txinit(); // Initialize transmit descriptors an buffers
     void enableInterrupt() const; // Enable Interrupts
-    void handleReceive(); // Handle a packet reception.
     void tx_free(); // Free processed tx descriptor buffers
 public:
     explicit E1000(PCI::Device pci_device);
     // Constructor. takes as a parameter a pointer to an object that encapsulate all he PCI configuration data of the device
+    void pollRx(); // Handle a packet reception.
     bool start(); // perform initialization tasks and starts the driver
     void fire(cpu_state_t* cpu_state, stack_state_t* stack_state) override;
     // This method should be called by the interrupt handler

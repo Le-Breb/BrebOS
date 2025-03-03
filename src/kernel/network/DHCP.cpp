@@ -1,25 +1,21 @@
 #include "DHCP.h"
 
+#include "ARP.h"
+#include "DNS.h"
 #include "Endianness.h"
 #include "Network.h"
 #include "UDP.h"
 #include "../core/memory.h"
 #include "../core/fb.h"
 
-uint32_t DHCP::dhcp_disc_xid = 0;
+uint32_t DHCP::disc_id = 0;
+uint8_t DHCP::server_mac[MAC_ADDR_LEN] = {};
 
 size_t DHCP::get_response_size(const packet_t* packet)
 {
     if (packet->hlen != sizeof(packet_t))
         return -1;
     return sizeof(packet_t);
-}
-
-uint32_t DHCP::generate_xid()
-{
-    uint64_t tsc;
-    asm volatile ("rdtsc" : "=A"(tsc));
-    return (uint32_t)(tsc & 0xFFFFFFFF) ^ (Network::mac[0] << 16);
 }
 
 void DHCP::send_discover()
@@ -43,7 +39,7 @@ void DHCP::send_discover()
     *list_el++ = DHCP_OPT_ROUTER;
     *list_el++ = DHCP_OPT_DOMAIN_NAME;
     *list_el++ = DHCP_OPT_DOMAIN_NAME_SERVER;
-    write_header(buf, BOOT_REQUEST, generate_xid(), DHCP_FLAG_BROADCAST, 0, 0, 0, 0, opt_buf, 2);
+    write_header(buf, BOOT_REQUEST, Network::generate_random_id32(), DHCP_FLAG_BROADCAST, 0, 0, 0, 0, opt_buf, 2);
 
     auto ethernet = (Ethernet::packet_t*)buf_beg;
     auto packet_info = Ethernet::packet_info(ethernet, size);
@@ -86,7 +82,6 @@ void DHCP::write_header(uint8_t* buf, uint8_t op, uint32_t xid, uint16_t flags, 
     packet->htype = DHCP_HTYPE_ETHERNET;
     packet->hlen = MAC_ADDR_LEN;
     packet->hops = 0;
-    printf("DHCP Discover xid: %x\n", xid);
     packet->xid = xid;
     packet->secs = 0;
     packet->flags = flags;
@@ -98,18 +93,15 @@ void DHCP::write_header(uint8_t* buf, uint8_t op, uint32_t xid, uint16_t flags, 
     packet->magic_cookie = Endianness::switch32(DHCP_MAGIC_COOKIE);
 
     size_t opt_tot_len = 0;
-    bool last_isDHCP_OPT_REQUEST_LIST = false;
     for (size_t i = 0; i < num_options; i++)
     {
         auto dest_opt = (option_t*)(packet->options + opt_tot_len);
         auto src_opt = (option_t*)(options_buf + opt_tot_len);
         size_t opt_len = src_opt->len + sizeof(option_t);
         memcpy(dest_opt, src_opt, opt_len);
-            opt_tot_len += opt_len;
-        last_isDHCP_OPT_REQUEST_LIST = src_opt->code == DHCP_OPT_REQUEST_LIST;
+        opt_tot_len += opt_len;
     }
-    if (num_options && last_isDHCP_OPT_REQUEST_LIST)
-        *(packet->options + opt_tot_len) = DHCP_OPT_END;
+    *(packet->options + opt_tot_len) = DHCP_OPT_END;
 }
 
 size_t DHCP::get_header_size()
@@ -122,7 +114,10 @@ bool DHCP::handle_packet(const UDP::packet_t* packet)
     switch (is_dhcp(packet))
     {
         case DHCP_OFFER:
-            send_request((packet_t*)packet->data);
+            handle_offer((packet_t*)packet->payload);
+            break;
+        case DHCP_ACK:
+            handle_ack((packet_t*)packet->payload);
             break;
         default:
             return false;
@@ -140,27 +135,78 @@ uint DHCP::is_dhcp(const UDP::packet_t* packet)
     size_t len = packet->header.length;
     if (len < sizeof(packet_t))
         return false;
-    return is_dhcp_offer(packet) ? DHCP_OFFER : 0;
-}
-
-bool DHCP::is_dhcp_offer(const UDP::packet_t* packet)
-{
-    auto dhcp_packet = (packet_t*)packet->data;
+    auto dhcp_packet = (packet_t*)packet->payload;
     if (dhcp_packet->op != BOOT_REPLY)
         return false;
     if (dhcp_packet->magic_cookie != Endianness::switch32(DHCP_MAGIC_COOKIE))
         return false;
+    return is_dhcp_offer(packet) ? DHCP_OFFER : (is_dhcp_ack(packet) ? DHCP_ACK : 0);
+}
+
+void DHCP::handle_offer(const packet_t* packet)
+{
+    memcpy(server_mac, packet->chaddr, MAC_ADDR_LEN);
+    send_request(packet);
+}
+
+void DHCP::handle_ack(const packet_t* packet)
+{
+    memcpy(Network::ip, &packet->yiaddr, IPV4_ADDR_LEN);
+
+    auto* opt = (option_t*)packet->options;
+    while (opt->code != DHCP_OPT_END)
+    {
+        switch (opt->code)
+        {
+            case DHCP_OPT_ROUTER:
+                memcpy(Network::gateway_ip, opt->data, MAC_ADDR_LEN);
+                break;
+            case DHCP_OPT_SUBNET_MASK:
+                memcpy(Network::subnet_mast, opt->data, IPV4_ADDR_LEN);
+                break;
+            default:
+                break;
+        }
+        opt = (option_t*)((uint8_t*)opt + opt->len + sizeof(option_t));
+    }
+
+
+    printf("Received IP: %d.%d.%d.%d\n", Network::ip[0], Network::ip[1], Network::ip[2], Network::ip[3]);
+    printf("Gateway is: %d.%d.%d.%d\n", Network::gateway_ip[0], Network::gateway_ip[1], Network::gateway_ip[2],
+           Network::gateway_ip[3]);
+    ARP::resolve_gateway_mac();
+}
+
+bool DHCP::is_dhcp_offer(const UDP::packet_t* packet)
+{
+    auto dhcp_packet = (packet_t*)packet->payload;
     option_t* opt = (option_t*)dhcp_packet->options;
-    if ((uint8_t*)opt - packet->data + sizeof(option_t) > packet->header.length)
+    if ((uint8_t*)opt - packet->payload + sizeof(option_t) > packet->header.length)
         return false;
     while (opt->code != DHCP_OPT_MSG_TYPE)
     {
         opt = (option_t*)((uint8_t*)opt + opt->len + sizeof(option_t));
-        if ((uint8_t*)opt - packet->data + sizeof(option_t) > packet->header.length)
+        if ((uint8_t*)opt - packet->payload + sizeof(option_t) > packet->header.length)
             return false;
     }
 
     return *opt->data == DHCP_OFFER;
+}
+
+bool DHCP::is_dhcp_ack(const UDP::packet_t* packet)
+{
+    auto dhcp_packet = (packet_t*)packet->payload;
+    option_t* opt = (option_t*)dhcp_packet->options;
+    if ((uint8_t*)opt - packet->payload + sizeof(option_t) > packet->header.length)
+        return false;
+    while (opt->code != DHCP_OPT_MSG_TYPE)
+    {
+        opt = (option_t*)((uint8_t*)opt + opt->len + sizeof(option_t));
+        if ((uint8_t*)opt - packet->payload + sizeof(option_t) > packet->header.length)
+            return false;
+    }
+
+    return *opt->data == DHCP_ACK;
 }
 
 size_t DHCP::get_disc_header_size()

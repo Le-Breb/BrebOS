@@ -52,4 +52,6 @@ void putchar(char c);
 
 void clear_screen();
 
+void dns(const char* domain);
+
 #endif //INCLUDE_SYSCALLS_H

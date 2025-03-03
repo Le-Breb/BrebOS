@@ -69,6 +69,8 @@ public:
 
     static uint8_t* write_headers(uint8_t* buf, uint16_t payload_size, uint8_t proto, uint32_t daddr,
                                   uint8_t dst_mac[MAC_ADDR_LEN]);
+
+    [[nodiscard]] static bool address_is_in_subnet(const uint8_t address[IPV4_ADDR_LEN]);
 };
 
 

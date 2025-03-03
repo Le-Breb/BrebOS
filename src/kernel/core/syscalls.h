@@ -42,17 +42,19 @@ class Syscall
 	 * @param p calling process
 	 * @param cpu_state process CPU state
 	 */
-	static void free(Process* p, cpu_state_t* cpu_state);
+	static void free(Process* p, const cpu_state_t* cpu_state);
 
 	static void get_key();
 
-	static void dynlk(cpu_state_t* cpu_state);
+	static void dynlk(const cpu_state_t* cpu_state);
 
 	static void mkdir(cpu_state_t* cpu_state);
 
 	static void touch(cpu_state_t* cpu_state);
 
 	static void ls(cpu_state_t* cpu_state);
+
+	static void dns(const cpu_state_t* cpu_state);
 
 public:
 	/**
@@ -63,7 +65,7 @@ public:
 	 * */
 	[[noreturn]]
 
-	static void dispatcher(cpu_state_t* cpu_state, stack_state_t* stack_state);
+	static void dispatcher(cpu_state_t* cpu_state, const stack_state_t* stack_state);
 };
 
 #endif //INCLUDE_SYSCALLS_H

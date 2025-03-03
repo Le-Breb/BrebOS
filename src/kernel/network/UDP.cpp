@@ -1,9 +1,9 @@
 #include "UDP.h"
 
 #include "DHCP.h"
+#include "DNS.h"
 #include "Endianness.h"
 #include "IPV4.h"
-#include "Network.h"
 #include "../core/fb.h"
 
 void UDP::write_header(uint8_t* buf, uint16_t src_port, uint16_t dst_port, uint16_t payload_size)
@@ -30,11 +30,13 @@ void UDP::handlePacket(const packet_info_t* packet_info, [[maybe_unused]] uint8_
 {
     if (DHCP::handle_packet(packet_info->packet))
         return;
+    if (DNS::handle_packet(packet_info->packet))
+        return;
 
     FB::set_fg(FB_CYAN);
     printf("UDP payload: ");
     for (uint i = 0; i < packet_info->size - sizeof(header_t); ++i)
-        printf("%c", packet_info->packet->data[i]);
+        printf("%c", packet_info->packet->payload[i]);
     FB::set_fg(FB_WHITE);
 }
 

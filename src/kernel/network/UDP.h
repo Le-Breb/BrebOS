@@ -22,7 +22,7 @@ public:
     struct packet
     {
         header_t header;
-        uint8_t data[];
+        uint8_t payload[];
     };
 
     typedef struct packet packet_t;

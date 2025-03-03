@@ -83,6 +83,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 			ls(cmd + 3);
         else if (cmd[0] == 'c' && cmd[1] == 'l' && cmd[2] == 'e' && cmd[3] == 'a' && cmd[4] == 'r')
           	clear_screen();
+        else if (cmd[0] == 'd' && cmd[1] == 'n' && cmd[2] == 's')
+        	dns(c_id >= 4 ? cmd + 4 : "www.example.com");
 		else
 			printf("Unknown command\n");
 

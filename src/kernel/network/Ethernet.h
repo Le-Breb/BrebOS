@@ -43,8 +43,10 @@ public:
 
     struct packet_info
     {
-        packet_t* packet;
-        uint16_t size;
+        packet_t* packet{};
+        uint16_t size{};
+
+        packet_info() = default;
 
         packet_info(packet_t* packet, uint16_t size)
             : packet(packet),

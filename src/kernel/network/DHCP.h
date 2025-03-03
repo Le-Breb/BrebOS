@@ -153,7 +153,7 @@
 #pragma endregion
 
 #define DHCP_DISC_OPT_SIZE sizeof(option_t) + 1 + sizeof(option_t) + 4 + 1
-#define DHCP_REQUEST_OPT_SIZE sizeof(option_t) + 1 + sizeof(option_t) + 4 + sizeof(option_t) + 4
+#define DHCP_REQUEST_OPT_SIZE sizeof(option_t) + 1 + sizeof(option_t) + 4 + sizeof(option_t) + 4 + 1
 
 #define DHCP_FLAG_BROADCAST 0x0080 // Broadcast flag. Bit order change because of endianness
 
@@ -220,11 +220,17 @@ private:
 
     [[nodiscard]] static bool is_dhcp_offer(const UDP::packet_t* packet);
 
-    [[nodiscard]] static uint32_t generate_xid();
+    [[nodiscard]] static bool is_dhcp_ack(const UDP::packet_t* packet);
 
     [[nodiscard]] static uint is_dhcp(const UDP::packet_t* packet);
 
-    static uint32_t dhcp_disc_xid;
+    static void handle_offer(const packet_t* packet);
+
+    static void handle_ack(const packet_t* packet);
+
+    static uint32_t disc_id;
+
+    static uint8_t server_mac[MAC_ADDR_LEN];
 };
 
 
