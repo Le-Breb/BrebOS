@@ -159,7 +159,7 @@ void DHCP::handle_ack(const packet_t* packet)
         switch (opt->code)
         {
             case DHCP_OPT_ROUTER:
-                memcpy(Network::gateway_ip, opt->data, MAC_ADDR_LEN);
+                memcpy(Network::gateway_ip, opt->data, IPV4_ADDR_LEN);
                 break;
             case DHCP_OPT_SUBNET_MASK:
                 memcpy(Network::subnet_mast, opt->data, IPV4_ADDR_LEN);
