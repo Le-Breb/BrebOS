@@ -45,7 +45,7 @@ public:
 
     typedef struct packet_info packet_info_t;
 
-    static void handlePacket(const packet_info_t* packet_info, uint8_t* response_buf);
+    static void handle_packet(const packet_info_t* packet_info, uint8_t* response_buf);
 
     static void write_ping_reply(const packet_info_t* ping_request, uint8_t* response_buf);
 

@@ -4,7 +4,7 @@
 #include "Network.h"
 #include "../core/fb.h"
 
-void ICMP::handlePacket(const packet_info_t* packet_info, uint8_t* response_buf)
+void ICMP::handle_packet(const packet_info_t* packet_info, uint8_t* response_buf)
 {
     write_ping_reply(packet_info, response_buf);
 }

@@ -3,6 +3,7 @@
 #include "Endianness.h"
 #include "ICMP.h"
 #include "Network.h"
+#include "TCP.h"
 #include "UDP.h"
 #include "../core/fb.h"
 
@@ -10,22 +11,26 @@ void IPV4::handlePacket(const packet_t* packet, uint8_t* response_buffer)
 {
     size_t header_len = packet->header.get_ihl() * sizeof(uint32_t);
     auto payload_size = Endianness::switch16(packet->header.len) - header_len;
+    auto response_payload_size = payload_size;
     switch (packet->header.proto)
     {
         case IPV4_PROTOCOL_ICMP:
         {
             auto icmp_packet = (ICMP::packet_t*)((uint8_t*)packet + sizeof(header_t));
             auto icmp_packet_info = ICMP::packet_info_t(icmp_packet, payload_size);
-            ICMP::handlePacket(&icmp_packet_info, response_buffer + header_len);
+            ICMP::handle_packet(&icmp_packet_info, response_buffer + header_len);
             break;
         }
         case IPV4_PROTOCOL_UDP:
         {
             auto udp_packet = (UDP::packet_t*)((uint8_t*)packet + sizeof(header_t));
             auto udp_packet_info = UDP::packet_info_t(udp_packet, payload_size);
-            UDP::handlePacket(&udp_packet_info, response_buffer + header_len);
+            UDP::handle_packet(&udp_packet_info, response_buffer + header_len);
             break;
         }
+        case IPV4_PROTOCOL_TCP:
+            response_payload_size = TCP::handle_packet(packet, response_buffer + header_len);
+            break;
         default:
             break;
     }
@@ -33,7 +38,7 @@ void IPV4::handlePacket(const packet_t* packet, uint8_t* response_buffer)
     if (response_buffer == nullptr)
         return;
 
-    write_response(response_buffer, &packet->header, payload_size);
+    write_response(response_buffer, &packet->header, response_payload_size);
 }
 
 size_t IPV4::get_headers_size()
@@ -51,12 +56,12 @@ void IPV4::write_response(uint8_t* response_buf, const header_t* request_header,
     size_t header_len = request_header->get_ihl() * sizeof(uint32_t);
     size_t len = header_len + payload_size;
     write_packet(response_buf, request_header->tos, len, Endianness::switch16(request_header->id),
-                 request_header->get_flags(), IPV4_DEFAULT_TTL, IPV4_PROTOCOL_ICMP,
+                 request_header->get_flags(), IPV4_DEFAULT_TTL, request_header->proto,
                  request_header->saddr);
 }
 
 void IPV4::write_packet(uint8_t* buf, uint8_t tos, uint16_t size, uint16_t id,
-                        uint8_t flags, uint8_t ttl, uint8_t proto, uint32_t daddr)
+                       uint8_t flags, uint8_t ttl, uint8_t proto, uint32_t daddr)
 {
     auto reply = (header_t*)buf;
     reply->set_version(4);
@@ -70,10 +75,10 @@ void IPV4::write_packet(uint8_t* buf, uint8_t tos, uint16_t size, uint16_t id,
     reply->proto = proto;
     reply->saddr = *(uint32_t*)Network::ip;
     reply->daddr = daddr;
-    reply->csum = Network::checksum(buf, size);
+    reply->csum = Network::checksum(buf, reply->get_ihl() * sizeof(uint32_t));
 }
 
-uint8_t* IPV4::write_headers(uint8_t* buf, uint16_t payload_size, uint8_t proto, uint32_t daddr, uint8_t dst_mac[6])
+uint8_t* IPV4::write_headers(uint8_t* buf, uint16_t payload_size, uint8_t proto, uint32_t daddr, uint8_t dst_mac[MAC_ADDR_LEN])
 {
     buf = Ethernet::write_header(buf, dst_mac, ETHERTYPE_IPV4);
     size_t header_size = get_header_size();
@@ -119,24 +124,32 @@ size_t IPV4::get_response_size(const packet_t* packet)
 
     size_t size = get_header_size();
     size_t inner_size = 0;
+    auto payload_size = Endianness::switch16(header->len) - size;
     switch (header->proto)
     {
         case IPV4_PROTOCOL_ICMP:
         {
             auto icmp_packet = (ICMP::packet_t*)((uint8_t*)header + size);
-            ICMP::packet_info_t icmp(icmp_packet, Endianness::switch16(header->len) - size);
+            ICMP::packet_info_t icmp(icmp_packet, payload_size);
             inner_size = ICMP::get_response_size(&icmp);
             break;
         }
         case IPV4_PROTOCOL_UDP:
         {
             auto udp_packet = (UDP::packet_t*)((uint8_t*)header + size);
-            UDP::packet_info_t udp(udp_packet, Endianness::switch16(header->len) - size);
+            UDP::packet_info_t udp(udp_packet, payload_size);
             inner_size = UDP::get_response_size(&udp);
             break;
         }
+        case IPV4_PROTOCOL_TCP:
+        {
+            auto tcp_packet = (TCP::header_t*)((uint8_t*)header + size);
+            TCP::packet_info_t tcp{tcp_packet, Endianness::switch16(header->len) - size};
+            inner_size = TCP::get_response_size(&tcp);
+            break;
+        }
         default:
-            printf_error("IP Protocol not ICMP or UDP (is 0x%2x), not supported yet", header->proto);
+            printf_error("IP Protocol not supported (is 0x%2x), not supported yet", header->proto);
             return -1;
     }
 

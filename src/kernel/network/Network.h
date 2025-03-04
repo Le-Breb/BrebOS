@@ -41,6 +41,8 @@ public:
     [[nodiscard]] static uint32_t generate_random_id16();
 
     static void pollPackets();
+
+    [[nodiscard]] static uint16_t checksum_add(uint16_t checksum1, uint16_t checksum2);
 };
 
 

@@ -50,7 +50,7 @@ public:
     static uint8_t* write_headers(uint8_t* buf, uint16_t src_port, uint16_t dst_port, uint16_t payload_size,
                            uint32_t daddr, uint8_t dst_mac[MAC_ADDR_LEN]);
 
-    static void handlePacket(const packet_info_t* packet_info, uint8_t* response_buffer);
+    static void handle_packet(const packet_info_t* packet_info, uint8_t* response_buffer);
 
     static size_t get_response_size(const packet_info_t* packet_info);
 };
