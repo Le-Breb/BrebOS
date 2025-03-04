@@ -7,7 +7,6 @@
 #include "IPV4.h"
 #include "NetworkConsts.h"
 
-#define TCP_PORT 1234
 #define DEFAULT_TCP_WINDOW_SIZE 0xFFFF
 
 #define TCP_FLAG_FIN  0x01  // Finish: No more data from sender
@@ -80,13 +79,29 @@ private:
 
     static uint32_t sequence_number2; // Other side's sequence number
 
+    static void write_header(uint8_t* buf, uint32_t dest_ip, uint16_t src_port, uint16_t dest_port, uint32_t seq_num, uint32_t ack_num, uint8_t flags);
+
     static void write_sync_header(uint8_t* buf, uint32_t dest_ip);
 
-    static void write_syn_ack_header(uint8_t* buf, uint32_t dest_ip);
+    static void write_ack_header(uint8_t* buf, uint32_t dest_ip, const header_t* acked_packet);
+
+    static void write_reset_header(uint8_t* buf, uint32_t dest_ip, uint16_t src_port, uint16_t dest_port);
+
+    static void write_fin_header(uint8_t* buf, uint32_t dest_ip);
 
     static uint16_t compute_checksum(const header_t* header, uint32_t dest_ip, uint16_t payload_size);
 
     static State state;
+
+    static uint16_t port;
+
+    static uint16_t port2;
+
+    static uint16_t random_ephemeral_port();
+
+    static uint8_t dest_ip[IPV4_ADDR_LEN];
+
+    static void send_fin(const uint8_t dest_ip[IPV4_ADDR_LEN]);
 public:
     static void fill_pseudo_header(pseudo_header_t& pseudo_header, const header_t* header, uint32_t dest_ip, uint16_t payload_size);
 
@@ -94,7 +109,11 @@ public:
 
     [[nodiscard]] static size_t get_response_size(const packet_info_t* packet_info);
 
-    static uint16_t handle_packet(const IPV4::packet_t* packet, uint8_t* response_buf);
+    static uint16_t handle_packet(const IPV4::packet_t* packet, const header_t* tcp_packet, uint8_t* response_buf);
+
+    static void close_all_connections();
+
+    [[nodiscard]] static uint16_t get_headers_size();
 };
 
 #endif //TCP_H

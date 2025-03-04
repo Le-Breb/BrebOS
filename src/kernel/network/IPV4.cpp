@@ -29,8 +29,11 @@ void IPV4::handlePacket(const packet_t* packet, uint8_t* response_buffer)
             break;
         }
         case IPV4_PROTOCOL_TCP:
-            response_payload_size = TCP::handle_packet(packet, response_buffer + header_len);
+        {
+            auto tcp_packet = (TCP::header_t*)((uint8_t*)packet + sizeof(header_t));
+            response_payload_size = TCP::handle_packet(packet, tcp_packet, response_buffer + header_len);
             break;
+        }
         default:
             break;
     }
