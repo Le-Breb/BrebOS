@@ -4,14 +4,14 @@
 #include "IO.h"
 #include <kstdio.h>
 #include "../file_management/FAT.h"
-#include "../network/TCP.h"
+#include "../network/Socket.h"
 
 extern "C" uint is_running_in_qemu_asm();
 
 [[noreturn]] int System::shutdown()
 {
 	FAT_drive::shutdown();
-	TCP::close_all_connections();
+	Socket::close_all_connections();
 	uint qemu = is_running_in_qemu_asm();
 
 	if (qemu)

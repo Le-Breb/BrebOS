@@ -19,8 +19,12 @@
 #define TCP_FLAG_CWR  0x80  // Congestion Window Reduced (RFC 3168)
 #define TCP_FLAG_NS   0x100 // ECN Nonce Concealment Protection (RFC 3540)
 
+class Socket;
+
 class TCP
 {
+    friend class Socket;
+
 public:
     enum class State
     {
@@ -71,49 +75,37 @@ public:
     };
 
     typedef struct packet_info packet_info_t;
-private:
 
     [[nodiscard]] static size_t get_header_size();
 
-    static uint32_t sequence_number;
+private:
 
-    static uint32_t sequence_number2; // Other side's sequence number
+    static void write_header(uint8_t* buf, const Socket* socket, uint8_t flags);
 
-    static void write_header(uint8_t* buf, uint32_t dest_ip, uint16_t src_port, uint16_t dest_port, uint32_t seq_num, uint32_t ack_num, uint8_t flags);
+    static void write_sync_header(uint8_t* buf, const Socket* socket);
 
-    static void write_sync_header(uint8_t* buf, uint32_t dest_ip);
+    static void write_ack_header(uint8_t* buf, const Socket* socket);
 
-    static void write_ack_header(uint8_t* buf, uint32_t dest_ip, const header_t* acked_packet);
+    static void write_reset_header(uint8_t* buf, const Socket* socket);
 
-    static void write_reset_header(uint8_t* buf, uint32_t dest_ip, uint16_t src_port, uint16_t dest_port);
-
-    static void write_fin_header(uint8_t* buf, uint32_t dest_ip);
+    static void write_fin_header(uint8_t* buf, const Socket* socket);
 
     static uint16_t compute_checksum(const header_t* header, uint32_t dest_ip, uint16_t payload_size);
 
-    static State state;
+    static void send_fin(const Socket* socket);
 
-    static uint16_t port;
-
-    static uint16_t port2;
-
-    static uint16_t random_ephemeral_port();
-
-    static uint8_t dest_ip[IPV4_ADDR_LEN];
-
-    static void send_fin(const uint8_t dest_ip[IPV4_ADDR_LEN]);
-public:
     static void fill_pseudo_header(pseudo_header_t& pseudo_header, const header_t* header, uint32_t dest_ip, uint16_t payload_size);
 
-    static void send_sync(const uint8_t dest_ip[IPV4_ADDR_LEN]);
-
-    [[nodiscard]] static size_t get_response_size(const packet_info_t* packet_info);
-
-    static uint16_t handle_packet(const IPV4::packet_t* packet, const header_t* tcp_packet, uint8_t* response_buf);
-
-    static void close_all_connections();
+    static void send_sync(const Socket* socket);
 
     [[nodiscard]] static uint16_t get_headers_size();
+
+    [[nodiscard]] static uint16_t random_ephemeral_port();
+
+public:
+    static uint16_t handle_packet(const IPV4::packet_t* packet, const header_t* tcp_packet, uint8_t* response_buf);
+
+    [[nodiscard]] static size_t get_response_size(const packet_info_t* packet_info);
 };
 
 #endif //TCP_H

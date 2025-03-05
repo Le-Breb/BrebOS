@@ -315,6 +315,8 @@ bool list<E>::contains(E e)
 // Compile the types of lists we will need here to other files can use them
 #include "../file_management/FS.h"
 #include "../processes/ELF.h"
+class Socket;
 template class list<FS*>;
 template class list<ELF*>;
 template class list<uint>;
+template class list<Socket*>;
