@@ -55,7 +55,6 @@ void HTTP::on_data_received(void* packet, uint16_t packet_size)
 
 void* HTTP::create_packet(const request_t* request, uint16_t& packet_size)
 {
-
     packet_size = get_request_size(request);
     auto buf = (char*)calloc(packet_size, 1);
     auto buf_beg = buf;

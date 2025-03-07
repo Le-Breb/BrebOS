@@ -37,7 +37,7 @@ public:
 
     void on_data_received(void* packet, uint16_t packet_size) override;
 
-    private:
+private:
     [[nodiscard]] static void* create_packet(const request_t* request, uint16_t& packet_size);
 
     [[nodiscard]] static size_t get_request_size(const request_t* request);

@@ -89,7 +89,8 @@ void TCP::send_fin_ack(Socket* socket)
     Ethernet::packet_info_t response_info;
     uint8_t dest_mac[MAC_ADDR_LEN];
     ARP::get_mac(socket->peer_ip, dest_mac);
-    auto buf = IPV4::create_packet(header_size, IPV4_PROTOCOL_TCP, *(uint32_t*)socket->peer_ip, dest_mac, response_info);
+    auto buf = IPV4::create_packet(header_size, IPV4_PROTOCOL_TCP, *(uint32_t*)socket->peer_ip, dest_mac,
+                                   response_info);
     write_fin_ack_header(buf, socket);
 
     socket->seq_num++;
@@ -103,7 +104,8 @@ void TCP::send_sync(const Socket* socket)
     Ethernet::packet_info_t response_info;
     uint8_t dest_mac[MAC_ADDR_LEN];
     ARP::get_mac(socket->peer_ip, dest_mac);
-    auto buf = IPV4::create_packet(header_size, IPV4_PROTOCOL_TCP, *(uint32_t*)socket->peer_ip, dest_mac, response_info);
+    auto buf = IPV4::create_packet(header_size, IPV4_PROTOCOL_TCP, *(uint32_t*)socket->peer_ip, dest_mac,
+                                   response_info);
     write_sync_header(buf, socket);
 
     Network::send_packet(&response_info);
@@ -149,7 +151,8 @@ void TCP::send_data(const void* data, uint16_t data_size, const Socket* socket)
     Ethernet::packet_info_t response_info;
     uint8_t dest_mac[MAC_ADDR_LEN];
     ARP::get_mac(socket->peer_ip, dest_mac);
-    auto buf = IPV4::create_packet(tcp_packet_size, IPV4_PROTOCOL_TCP, *(uint32_t*)socket->peer_ip, dest_mac, response_info);
+    auto buf = IPV4::create_packet(tcp_packet_size, IPV4_PROTOCOL_TCP, *(uint32_t*)socket->peer_ip, dest_mac,
+                                   response_info);
     auto payload = buf + header_size;
     memcpy(payload, data, data_size); // Todo: Extend no-copy scheme to higher level protocols
     write_push_ack_header(buf, socket, data_size);
