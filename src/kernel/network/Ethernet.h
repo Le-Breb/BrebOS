@@ -70,6 +70,8 @@ public:
     static size_t get_response_size(const packet_info* packet);
 
     static uint8_t* write_header(uint8_t* buf, uint8_t dest[MAC_ADDR_LEN], uint16_t type);
+
+    [[nodiscard]] static uint8_t* create_packet(uint8_t dest[MAC_ADDR_LEN], uint16_t type, uint16_t payload_size, packet_info_t& packet_info);
 };
 
 

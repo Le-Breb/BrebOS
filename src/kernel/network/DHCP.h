@@ -20,8 +20,8 @@
 #define DHCP_RELEASE   7  // Client releases its IP back to the server
 #define DHCP_INFORM    8  // Client requests configuration without IP lease
 
-#define DHCP_DISC_SRC_PORT 68
-#define DHCP_DISC_DST_PORT 67
+#define DHCP_SRC_PORT 68
+#define DHCP_DST_PORT 67
 
 #define DHCP_HTYPE_ETHERNET   1  // Ethernet (10Mb)
 #define DHCP_HTYPE_IEEE802    6  // IEEE 802 Networks (e.g., Wi-Fi)
@@ -211,7 +211,7 @@ public:
 
     [[nodiscard]] static size_t get_header_size();
 
-    static bool handle_packet(const UDP::packet_t* packet);
+    static bool handle_packet(const UDP::packet_t* udp_packet);
 
 private:
     [[nodiscard]] static size_t get_disc_header_size();

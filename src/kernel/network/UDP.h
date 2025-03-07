@@ -5,6 +5,7 @@
 #include <kstddef.h>
 
 #include "Ethernet.h"
+#include "IPV4.h"
 #include "NetworkConsts.h"
 
 class UDP
@@ -46,12 +47,13 @@ public:
 
     [[nodiscard]] static size_t get_header_size();
 
-    static void write_header(uint8_t* buf, uint16_t src_port, uint16_t dst_port, uint16_t payload_size);
+    static uint16_t write_header(uint8_t* buf, uint16_t src_port, uint16_t dst_port, uint16_t payload_size);
 
-    static uint8_t* write_headers(uint8_t* buf, uint16_t src_port, uint16_t dst_port, uint16_t payload_size,
-                           uint32_t daddr, uint8_t dst_mac[MAC_ADDR_LEN]);
+    static uint8_t* create_packet(uint16_t src_port, uint16_t dst_port, uint16_t payload_size, uint32_t daddr,
+                                  uint8_t dst_mac[MAC_ADDR_LEN], Ethernet::packet_info_t& ethernet_packet_info);
 
-    static void handle_packet(const packet_info_t* packet_info, uint8_t* response_buffer, const Ethernet::packet_info_t* response_info);
+    static void handle_packet(const packet_info_t* packet_info, const IPV4::packet_t* ipv4_packet,
+                              const Ethernet::packet_t* ethernet_packet);
 
     static size_t get_response_size(const packet_info_t* packet_info);
 };

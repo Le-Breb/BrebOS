@@ -6,7 +6,7 @@
 #include "IPV4.h"
 #include "../core/fb.h"
 
-void UDP::write_header(uint8_t* buf, uint16_t src_port, uint16_t dst_port, uint16_t payload_size)
+uint16_t UDP::write_header(uint8_t* buf, uint16_t src_port, uint16_t dst_port, uint16_t payload_size)
 {
     auto header = (header_t*)buf;
     size_t size = get_header_size() + payload_size;
@@ -14,19 +14,21 @@ void UDP::write_header(uint8_t* buf, uint16_t src_port, uint16_t dst_port, uint1
     header->dst_port = Endianness::switch16(dst_port);
     header->length = Endianness::switch16(size);
     header->checksum = 0; // UDP checksum is not mandatory over IPV4 (+it includes pseudo-header, it's easier zeroing it)
+
+    return get_header_size();
 }
 
-uint8_t* UDP::write_headers(uint8_t* buf, uint16_t src_port, uint16_t dst_port, uint16_t payload_size, uint32_t daddr,
-                            uint8_t dst_mac[6])
+
+uint8_t* UDP::create_packet(uint16_t src_port, uint16_t dst_port, uint16_t payload_size, uint32_t daddr,
+    uint8_t dst_mac[6], Ethernet::packet_info_t& ethernet_packet_info)
 {
     size_t size = get_header_size() + payload_size;
-    buf = IPV4::write_headers(buf, size, IPV4_PROTOCOL_UDP, daddr, dst_mac);
-    write_header(buf, src_port, dst_port, payload_size);
+    auto buf = IPV4::create_packet(size, IPV4_PROTOCOL_UDP, daddr, dst_mac, ethernet_packet_info);
 
-    return buf + get_header_size();
+    return buf + write_header(buf, src_port, dst_port, payload_size);
 }
 
-void UDP::handle_packet(const packet_info_t* packet_info, [[maybe_unused]] uint8_t* response_buffer, [[maybe_unused]] const Ethernet::packet_info_t* response_info)
+void UDP::handle_packet(const packet_info_t* packet_info, [[maybe_unused]] const IPV4::packet_t* ipv4_packet, [[maybe_unused]] const Ethernet::packet_t* ethernet_packet)
 {
     if (DHCP::handle_packet(packet_info->packet))
         return;

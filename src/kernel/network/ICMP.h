@@ -45,7 +45,7 @@ public:
 
     typedef struct packet_info packet_info_t;
 
-    static void handle_packet(const packet_info_t* packet_info, uint8_t* response_buf, const Ethernet::packet_info_t* response_info);
+    static void handle_packet(const packet_info_t* packet_info, const IPV4::packet_t* ipv4_packet, const Ethernet::packet_t* ethernet_packet);
 
     static void write_ping_reply(const packet_info_t* ping_request, uint8_t* response_buf);
 

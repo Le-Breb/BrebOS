@@ -86,36 +86,27 @@ uint16_t TCP::compute_checksum(const header_t* header, uint32_t dest_ip, uint16_
 void TCP::send_fin_ack(Socket* socket)
 {
     auto header_size = get_header_size();
-    auto total_size = header_size + IPV4::get_headers_size();
-    auto buf = (uint8_t*)calloc(total_size, 1);
-    auto buf_beg = buf;
+    Ethernet::packet_info_t response_info;
     uint8_t dest_mac[MAC_ADDR_LEN];
     ARP::get_mac(socket->peer_ip, dest_mac);
-    buf = IPV4::write_headers(buf, header_size, IPV4_PROTOCOL_TCP, *(uint32_t*)socket->peer_ip, dest_mac);
+    auto buf = IPV4::create_packet(header_size, IPV4_PROTOCOL_TCP, *(uint32_t*)socket->peer_ip, dest_mac, response_info);
     write_fin_ack_header(buf, socket);
-
-    auto ethernet = (Ethernet::packet_t*)buf_beg;
-    auto packet_info = Ethernet::packet_info(ethernet, total_size);
 
     socket->seq_num++;
     socket->state = State::FIN_WAIT_1;
-    Network::send_packet(&packet_info);
+    Network::send_packet(&response_info);
 }
 
 void TCP::send_sync(const Socket* socket)
 {
     auto header_size = get_header_size();
-    auto total_size = header_size + IPV4::get_headers_size();
-    auto buf = (uint8_t*)calloc(total_size, 1);
-    auto buf_beg = buf;
+    Ethernet::packet_info_t response_info;
     uint8_t dest_mac[MAC_ADDR_LEN];
     ARP::get_mac(socket->peer_ip, dest_mac);
-    buf = IPV4::write_headers(buf, header_size, IPV4_PROTOCOL_TCP, *(uint32_t*)socket->peer_ip, dest_mac);
+    auto buf = IPV4::create_packet(header_size, IPV4_PROTOCOL_TCP, *(uint32_t*)socket->peer_ip, dest_mac, response_info);
     write_sync_header(buf, socket);
 
-    auto ethernet = (Ethernet::packet_t*)buf_beg;
-    auto packet_info = Ethernet::packet_info(ethernet, total_size);
-    Network::send_packet(&packet_info);
+    Network::send_packet(&response_info);
 }
 
 size_t TCP::get_response_size(const packet_info_t* packet_info)
@@ -126,26 +117,26 @@ size_t TCP::get_response_size(const packet_info_t* packet_info)
     return packet_info->packet->flags == TCP_FLAG_ACK ? 0 : get_header_size();
 }
 
-uint16_t TCP::handle_packet(const IPV4::packet_t* packet, const header_t* tcp_packet, uint8_t* response_buf,
-                            const Ethernet::packet_info_t* response_info)
+uint16_t TCP::handle_packet(const packet_info_t* packet_info, const IPV4::packet_t* ipv4_packet,
+                            const Ethernet::packet_t* ethernet_packet)
 {
+    auto packet = packet_info->packet;
     Socket* socket = nullptr;
-    if ((socket = Socket::port_used(Endianness::switch16(tcp_packet->dest_port))))
-    {
-        auto total_size = Endianness::switch16(packet->header.len);
-        auto header_size = packet->header.get_ihl() * sizeof(uint32_t);
-        auto payload_size = total_size - header_size;
-        socket->handle_packet(tcp_packet, response_buf, payload_size, response_info);
-    }
+    if ((socket = Socket::port_used(Endianness::switch16(packet->dest_port))))
+        socket->handle_packet(packet_info, ipv4_packet, ethernet_packet);
     else // Force close connection
     {
         // Create a socket specifically to send the RST, then delete it
-        auto response_socket = Socket::reset_response_socket((uint8_t*)&packet->header.saddr,
-                                                             Endianness::switch16(tcp_packet->src_port),
-                                                             Endianness::switch32(tcp_packet->seq_num));
-        write_reset_header(response_buf, response_socket);
+        auto response_socket = Socket::reset_response_socket((uint8_t*)&ipv4_packet->header.saddr,
+                                                             Endianness::switch16(packet->src_port),
+                                                             Endianness::switch32(packet->seq_num));
+        auto packet_size = get_header_size();
+        Ethernet::packet_info_t response_info;
+        auto buf = IPV4::create_packet(packet_size, IPV4_PROTOCOL_TCP, ipv4_packet->header.saddr,
+                                       (uint8_t*)ethernet_packet->header.src, response_info);
+        write_reset_header(buf, response_socket);
         delete response_socket;
-        Network::send_packet(response_info);
+        Network::send_packet(&response_info);
     }
 
     return get_header_size();
@@ -155,19 +146,15 @@ void TCP::send_data(const void* data, uint16_t data_size, const Socket* socket)
 {
     auto header_size = get_header_size();
     auto tcp_packet_size = header_size + data_size;
-    auto total_size = IPV4::get_headers_size() + tcp_packet_size;
-    auto buf = (uint8_t*)calloc(total_size, 1);
-    auto buf_beg = buf;
+    Ethernet::packet_info_t response_info;
     uint8_t dest_mac[MAC_ADDR_LEN];
     ARP::get_mac(socket->peer_ip, dest_mac);
-    buf = IPV4::write_headers(buf, tcp_packet_size, IPV4_PROTOCOL_TCP, *(uint32_t*)socket->peer_ip, dest_mac);
+    auto buf = IPV4::create_packet(tcp_packet_size, IPV4_PROTOCOL_TCP, *(uint32_t*)socket->peer_ip, dest_mac, response_info);
     auto payload = buf + header_size;
     memcpy(payload, data, data_size); // Todo: Extend no-copy scheme to higher level protocols
     write_push_ack_header(buf, socket, data_size);
 
-    auto ethernet = (Ethernet::packet_t*)buf_beg;
-    auto packet_info = Ethernet::packet_info(ethernet, total_size);
-    Network::send_packet(&packet_info);
+    Network::send_packet(&response_info);
 }
 
 uint16_t TCP::get_headers_size()

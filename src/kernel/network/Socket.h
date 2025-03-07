@@ -11,7 +11,7 @@
 
 class Socket
 {
-    public:
+public:
     struct packet
     {
         const void* data;
@@ -19,7 +19,8 @@ class Socket
     };
 
     typedef struct packet packet_t;
-    private:
+
+private:
     friend class TCP;
     uint16_t port = TCP::random_ephemeral_port();
     uint16_t peer_port;
@@ -40,6 +41,9 @@ class Socket
     void acknowledge(const TCP::header_t* packet, uint8_t* response_buf);
 
     void flush_waiting_queue();
+
+    [[nodiscard]] static uint8_t* create_packet_response(uint16_t payload_size, const IPV4::packet_t* ipv4_packet, const Ethernet::packet_t* ethernet_packet, Ethernet::packet_info_t& response_info);
+
 public:
     Socket(uint8_t peer_ip[IPV4_ADDR_LEN], uint16_t peer_port);
 
@@ -49,7 +53,8 @@ public:
 
     void initialize();
 
-    void handle_packet(const TCP::header_t* packet, uint8_t* response_buf, uint16_t packet_size, const Ethernet::packet_info_t* response_info);
+    void handle_packet(const TCP::packet_info_t* packet_info, const IPV4::packet_t* ipv4_packet,
+                       const Ethernet::packet_t* ethernet_packet);
 
     [[nodiscard]] static Socket* port_used(uint16_t port);
 

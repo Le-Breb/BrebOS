@@ -69,7 +69,7 @@ void* HTTP::create_packet(const request_t* request, uint16_t& packet_size)
     *buf++ = ' ';
     auto version_len = strlen(request->version);
     memcpy(buf, request->version, version_len);
-    buf += version_len;\
+    buf += version_len;
     *buf++ = '\r';
     *buf++ = '\n';
 

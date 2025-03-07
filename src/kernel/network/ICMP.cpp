@@ -4,10 +4,15 @@
 #include "Network.h"
 #include "../core/fb.h"
 
-void ICMP::handle_packet(const packet_info_t* packet_info, uint8_t* response_buf, const Ethernet::packet_info_t* response_info)
+void ICMP::handle_packet(const packet_info_t* packet_info, const IPV4::packet_t* ipv4_packet,
+                         const Ethernet::packet_t* ethernet_packet)
 {
-    write_ping_reply(packet_info, response_buf);
-    Network::send_packet(response_info);
+    Ethernet::packet_info_t response_info;
+    auto size = sizeof(packet_t);
+    auto buf = IPV4::create_packet(size, IPV4_PROTOCOL_ICMP, ipv4_packet->header.saddr,
+                                   (uint8_t*)ethernet_packet->header.src, response_info);
+    write_ping_reply(packet_info, buf);
+    Network::send_packet(&response_info);
 }
 
 size_t ICMP::get_response_size(const packet_info_t* packet_info)

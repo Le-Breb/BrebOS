@@ -122,7 +122,8 @@ char* parse_name_aux(const char* name, const uint8_t* packet_beg, bool& is_end)
     }
 
     res[res_idx - 1] = '\0';
-    is_end = true; // Indicate to caller that the name is fully parsed (a pointer can be the last element, thus not null-terminated)
+    is_end = true;
+    // Indicate to caller that the name is fully parsed (a pointer can be the last element, thus not null-terminated)
 
     return res;
 }
@@ -186,19 +187,17 @@ void DNS::display_response(const header_t* header)
 void DNS::send_query(const char* hostname)
 {
     size_t dns_packet_size = get_question_size(hostname);
-    size_t total_packet_size = dns_packet_size + UDP::get_headers_size();
-    auto* buf = (uint8_t*)calloc(total_packet_size, 1);
-    auto buf_beg = buf;
+    Ethernet::packet_info_t response_info;
     uint8_t dest_mac[MAC_ADDR_LEN];
     ARP::get_mac(google_dns_ip, dest_mac);
-    buf = UDP::write_headers(buf, DNS_PORT, DNS_PORT, dns_packet_size, *(uint32_t*)&google_dns_ip, dest_mac);
+    auto* buf = UDP::create_packet(DNS_PORT, DNS_PORT, dns_packet_size, *(uint32_t*)&google_dns_ip, dest_mac,
+                                   response_info);
+
     question_content_t question_content{Endianness::switch16(DNS_REQUEST_A), Endianness::switch16(DNS_IN)};
     question_t question{hostname, &question_content};
     write_header(buf, question);
 
-    auto ethernet_packet = (Ethernet::packet_t*)buf_beg;
-    auto packet_info = Ethernet::packet_info(ethernet_packet, total_packet_size);
-    Network::send_packet(&packet_info);
+    Network::send_packet(&response_info);
 }
 
 bool DNS::handle_packet(const UDP::packet_t* packet)

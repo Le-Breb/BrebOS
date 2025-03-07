@@ -7,23 +7,10 @@
 #include "UDP.h"
 #include "../core/fb.h"
 
-void IPV4::handlePacket(const packet_t* packet, uint8_t* response_buffer, const Ethernet::packet_info_t* response_info)
+void IPV4::handle_packet(const packet_t* packet, const Ethernet::packet_t* ethernet_packet)
 {
     size_t header_len = packet->header.get_ihl() * sizeof(uint32_t);
     auto payload_size = Endianness::switch16(packet->header.len) - header_len;
-    auto response_payload_size = payload_size;
-
-    if (response_buffer)
-    {
-        if (packet->header.proto == IPV4_PROTOCOL_TCP)
-        {
-            auto tcp_packet = (TCP::header_t*)((uint8_t*)packet + sizeof(header_t));
-            auto tcp_packet_info = TCP::packet_info_t{tcp_packet, payload_size};
-            response_payload_size = TCP::get_response_size(&tcp_packet_info);
-        }
-        write_response(response_buffer, &packet->header, response_payload_size);
-        response_buffer += header_len;
-    }
 
     switch (packet->header.proto)
     {
@@ -31,20 +18,21 @@ void IPV4::handlePacket(const packet_t* packet, uint8_t* response_buffer, const 
         {
             auto icmp_packet = (ICMP::packet_t*)((uint8_t*)packet + sizeof(header_t));
             auto icmp_packet_info = ICMP::packet_info_t(icmp_packet, payload_size);
-            ICMP::handle_packet(&icmp_packet_info, response_buffer, response_info);
+            ICMP::handle_packet(&icmp_packet_info, packet, ethernet_packet);
             break;
         }
         case IPV4_PROTOCOL_UDP:
         {
             auto udp_packet = (UDP::packet_t*)((uint8_t*)packet + sizeof(header_t));
             auto udp_packet_info = UDP::packet_info_t(udp_packet, payload_size);
-            UDP::handle_packet(&udp_packet_info, response_buffer, response_info);
+            UDP::handle_packet(&udp_packet_info, packet, ethernet_packet);
             break;
         }
         case IPV4_PROTOCOL_TCP:
         {
             auto tcp_packet = (TCP::header_t*)((uint8_t*)packet + sizeof(header_t));
-            response_payload_size = TCP::handle_packet(packet, tcp_packet, response_buffer, response_info);
+            auto tcp_packet_info = TCP::packet_info_t{tcp_packet, payload_size};
+            TCP::handle_packet(&tcp_packet_info, packet, ethernet_packet);
             break;
         }
         default:
@@ -62,17 +50,8 @@ size_t IPV4::get_header_size()
     return IPV4_DEFAULT_IHL * sizeof(uint32_t);
 }
 
-void IPV4::write_response(uint8_t* response_buf, const header_t* request_header, size_t payload_size)
-{
-    size_t header_len = request_header->get_ihl() * sizeof(uint32_t);
-    size_t len = header_len + payload_size;
-    write_packet(response_buf, request_header->tos, len, Endianness::switch16(request_header->id),
-                 request_header->get_flags(), IPV4_DEFAULT_TTL, request_header->proto,
-                 request_header->saddr);
-}
-
-void IPV4::write_packet(uint8_t* buf, uint8_t tos, uint16_t size, uint16_t id,
-                       uint8_t flags, uint8_t ttl, uint8_t proto, uint32_t daddr)
+uint16_t IPV4::write_packet(uint8_t* buf, uint8_t tos, uint16_t size, uint16_t id, uint8_t flags, uint8_t ttl,
+                            uint8_t proto, uint32_t daddr)
 {
     auto reply = (header_t*)buf;
     reply->set_version(4);
@@ -87,16 +66,18 @@ void IPV4::write_packet(uint8_t* buf, uint8_t tos, uint16_t size, uint16_t id,
     reply->saddr = *(uint32_t*)Network::ip;
     reply->daddr = daddr;
     reply->csum = Network::checksum(buf, reply->get_ihl() * sizeof(uint32_t));
+
+    return reply->get_ihl() * sizeof(uint32_t);
 }
 
-uint8_t* IPV4::write_headers(uint8_t* buf, uint16_t payload_size, uint8_t proto, uint32_t daddr, uint8_t dst_mac[MAC_ADDR_LEN])
+uint8_t* IPV4::create_packet(uint16_t payload_size, uint8_t proto, uint32_t daddr, uint8_t dst_mac[MAC_ADDR_LEN],
+                             Ethernet::packet_info_t& ethernet_packet_info)
 {
-    buf = Ethernet::write_header(buf, dst_mac, ETHERTYPE_IPV4);
     size_t header_size = get_header_size();
     size_t size = header_size + payload_size;
-    write_packet(buf, 0, size, 0, 0, IPV4_DEFAULT_TTL, proto, daddr);
+    auto buf = Ethernet::create_packet(dst_mac, ETHERTYPE_IPV4, size, ethernet_packet_info);
 
-    return buf + header_size;
+    return buf + write_packet(buf, 0, size, 0, 0, IPV4_DEFAULT_TTL, proto, daddr);
 }
 
 bool IPV4::address_is_in_subnet(const uint8_t address[IPV4_ADDR_LEN])

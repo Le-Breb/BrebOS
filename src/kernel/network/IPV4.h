@@ -55,7 +55,7 @@ public:
 
     typedef struct packet packet_t;
 
-    static void handlePacket(const packet_t* packet, uint8_t* response_buffer, const Ethernet::packet_info_t* response_info);
+    static void handle_packet(const packet_t* packet, const Ethernet::packet_t* ethernet_packet);
 
     [[nodiscard]] static size_t get_response_size(const packet_t* packet_info);
 
@@ -63,15 +63,13 @@ public:
 
     [[nodiscard]] static size_t get_header_size();
 
-    static void write_response(uint8_t* response_buf, const header_t* request_header, size_t payload_size);
-
-    static void write_packet(uint8_t* buf, uint8_t tos, uint16_t size, uint16_t id, uint8_t flags, uint8_t ttl,
-                             uint8_t proto, uint32_t daddr);
-
-    static uint8_t* write_headers(uint8_t* buf, uint16_t payload_size, uint8_t proto, uint32_t daddr,
-                                  uint8_t dst_mac[MAC_ADDR_LEN]);
-
     [[nodiscard]] static bool address_is_in_subnet(const uint8_t address[IPV4_ADDR_LEN]);
+
+    [[nodiscard]] static uint8_t* create_packet(uint16_t payload_size, uint8_t proto, uint32_t daddr, uint8_t dst_mac[MAC_ADDR_LEN],
+                                  Ethernet::packet_info_t& ethernet_packet_info);
+private:
+    static uint16_t write_packet(uint8_t* buf, uint8_t tos, uint16_t size, uint16_t id, uint8_t flags, uint8_t ttl,
+                             uint8_t proto, uint32_t daddr);
 };
 
 

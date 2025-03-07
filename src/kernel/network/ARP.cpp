@@ -24,21 +24,24 @@ void ARP::display_request(packet_t* p)
         (rev_dstpr >> 24) & 0xFF, (rev_dstpr >> 16) & 0xFF, (rev_dstpr >> 8) & 0xFF, rev_dstpr & 0xFF);
 }
 
-void ARP::handlePacket(const packet_t* packet, uint8_t* response_buf, const Ethernet::packet_info* response_info)
+void ARP::handle_packet(const packet_t* packet, const Ethernet::packet_t* ethernet_packet)
 {
     // Send response if it's an ARP request
     if (Endianness::switch16(packet->opcode) == ARP_REQUEST)
     {
-        write_packet(response_buf, ARP_ETHERNET, ARP_IPV4, MAC_ADDR_LEN, IPV4_ADDR_LEN, ARP_REPLY,
-                    *(uint32_t*)&Network::ip, packet->srcpr, (uint8_t*)packet->srchw);
-        Network::send_packet(response_info);
+        Ethernet::packet_info_t response_info;
+        auto buf = Ethernet::create_packet((uint8_t*)ethernet_packet->header.src, ETHERTYPE_ARP,
+                                           sizeof(packet_t), response_info);
+        write_packet(buf, ARP_ETHERNET, ARP_IPV4, MAC_ADDR_LEN, IPV4_ADDR_LEN, ARP_REPLY,
+                     *(uint32_t*)&Network::ip, packet->srcpr, (uint8_t*)packet->srchw);
+        Network::send_packet(&response_info);
     }
     else // Handle reply
     {
         // Cache the MAC address
         memcpy(&cache[cache_head].ip, &packet->srcpr, IPV4_ADDR_LEN);
         memcpy(&cache[cache_head].mac, packet->srchw, MAC_ADDR_LEN);
-        cache_head  = (cache_head + 1) % ARP_CACHE_SIZE;
+        cache_head = (cache_head + 1) % ARP_CACHE_SIZE;
 
         // Store gateway MAC address if it's the gateway that replied
         if (memcmp(&packet->srcpr, Network::gateway_ip, IPV4_ADDR_LEN) == 0)

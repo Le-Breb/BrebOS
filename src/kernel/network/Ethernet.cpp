@@ -16,6 +16,16 @@ uint8_t* Ethernet::write_header(uint8_t* buf, uint8_t dest[MAC_ADDR_LEN], uint16
     return (uint8_t*)(header + 1);;
 }
 
+uint8_t* Ethernet::create_packet(uint8_t dest[6], uint16_t type, uint16_t payload_size, packet_info_t& packet_info)
+{
+    auto packet_size = get_headers_size() + payload_size;
+    auto buf = (uint8_t*)calloc(packet_size, sizeof(uint8_t));
+    packet_info.size = packet_size;
+    packet_info.packet = (packet_t*)buf;
+
+    return write_header(buf, dest, type);
+}
+
 size_t Ethernet::get_response_size(const packet_info* packet_info)
 {
     auto type = Endianness::switch16(packet_info->packet->header.type);
@@ -46,26 +56,16 @@ void Ethernet::handle_packet(const packet_info_t* packet_info)
     if (response_size == (size_t)-1) // Error or no need to process this packet
         return;
 
-    bool response_needed = response_size != 0;
-    uint8_t* response_buf = response_needed ?  (uint8_t*)calloc(1, response_size) : nullptr;
-    packet_info_t* resp_packet_info = nullptr;
-
-    if (response_needed)
-    {
-        resp_packet_info = new packet_info_t((packet_t*)response_buf, response_size);
-        response_buf = write_header(response_buf, packet_info->packet->header.src, type);
-    }
-
     switch (type)
     {
         case ETHERTYPE_ARP:
         {
-            ARP::handlePacket((ARP::packet_t*)packet_info->packet->payload, response_buf, resp_packet_info);
+            ARP::handle_packet((ARP::packet_t*)packet_info->packet->payload, packet_info->packet);
             break;
         }
         case ETHERTYPE_IPV4:
         {
-            IPV4::handlePacket((IPV4::packet_t*)packet_info->packet->payload, response_buf, resp_packet_info);
+            IPV4::handle_packet((IPV4::packet_t*)packet_info->packet->payload, packet_info->packet);
             break;
         }
         default:

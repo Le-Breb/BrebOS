@@ -103,7 +103,7 @@ private:
     [[nodiscard]] static uint16_t random_ephemeral_port();
 
 public:
-    static uint16_t handle_packet(const IPV4::packet_t* packet, const header_t* tcp_packet, uint8_t* response_buf, const Ethernet::packet_info_t* response_info);
+    static uint16_t handle_packet(const packet_info_t* packet_info, const IPV4::packet_t* ipv4_packet, const Ethernet::packet_t* ethernet_packet);
 
     static void send_data(const void* data, uint16_t data_size, const Socket* socket);
 
