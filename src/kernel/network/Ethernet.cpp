@@ -48,31 +48,28 @@ void Ethernet::handle_packet(const packet_info_t* packet_info)
 
     bool response_needed = response_size != 0;
     uint8_t* response_buf = response_needed ?  (uint8_t*)calloc(1, response_size) : nullptr;
-    uint8_t* response_beg = response_buf;
+    packet_info_t* resp_packet_info = nullptr;
 
     if (response_needed)
+    {
+        resp_packet_info = new packet_info_t((packet_t*)response_buf, response_size);
         response_buf = write_header(response_buf, packet_info->packet->header.src, type);
+    }
 
     switch (type)
     {
         case ETHERTYPE_ARP:
         {
-            ARP::handlePacket((ARP::packet_t*)packet_info->packet->payload, response_buf);
+            ARP::handlePacket((ARP::packet_t*)packet_info->packet->payload, response_buf, resp_packet_info);
             break;
         }
         case ETHERTYPE_IPV4:
         {
-            IPV4::handlePacket((IPV4::packet_t*)packet_info->packet->payload, response_buf);
+            IPV4::handlePacket((IPV4::packet_t*)packet_info->packet->payload, response_buf, resp_packet_info);
             break;
         }
         default:
             break; // Not supported
-    }
-
-    if (response_needed)
-    {
-        auto resp_packet_info = packet_info_t((packet_t*)response_beg, response_size);
-        Network::send_packet(&resp_packet_info);
     }
 }
 

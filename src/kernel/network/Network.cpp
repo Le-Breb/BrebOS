@@ -32,7 +32,7 @@ void Network::run()
     DHCP::send_discover(); // Ask for an IP address
 }
 
-void Network::send_packet(Ethernet::packet_info* packet)
+void Network::send_packet(const Ethernet::packet_info* packet)
 {
     // Unknown destination MAC address
     if (memcmp(&packet->packet->header.dest, null_mac, MAC_ADDR_LEN) == 0)

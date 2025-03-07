@@ -80,7 +80,7 @@ public:
 
 private:
 
-    static void write_header(uint8_t* buf, const Socket* socket, uint8_t flags);
+    static void write_header(uint8_t* buf, const Socket* socket, uint8_t flags, uint16_t data_size);
 
     static void write_sync_header(uint8_t* buf, const Socket* socket);
 
@@ -88,24 +88,28 @@ private:
 
     static void write_reset_header(uint8_t* buf, const Socket* socket);
 
-    static void write_fin_header(uint8_t* buf, const Socket* socket);
+    static void write_fin_ack_header(uint8_t* buf, const Socket* socket);
+
+    static void write_push_ack_header(uint8_t* buf, const Socket* socket, uint16_t data_size);
 
     static uint16_t compute_checksum(const header_t* header, uint32_t dest_ip, uint16_t payload_size);
 
-    static void send_fin(const Socket* socket);
+    static void send_fin_ack(Socket* socket);
 
     static void fill_pseudo_header(pseudo_header_t& pseudo_header, const header_t* header, uint32_t dest_ip, uint16_t payload_size);
 
     static void send_sync(const Socket* socket);
 
-    [[nodiscard]] static uint16_t get_headers_size();
-
     [[nodiscard]] static uint16_t random_ephemeral_port();
 
 public:
-    static uint16_t handle_packet(const IPV4::packet_t* packet, const header_t* tcp_packet, uint8_t* response_buf);
+    static uint16_t handle_packet(const IPV4::packet_t* packet, const header_t* tcp_packet, uint8_t* response_buf, const Ethernet::packet_info_t* response_info);
+
+    static void send_data(const void* data, uint16_t data_size, const Socket* socket);
 
     [[nodiscard]] static size_t get_response_size(const packet_info_t* packet_info);
+
+    [[nodiscard]] static uint16_t get_headers_size();
 };
 
 #endif //TCP_H

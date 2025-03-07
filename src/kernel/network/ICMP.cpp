@@ -4,9 +4,10 @@
 #include "Network.h"
 #include "../core/fb.h"
 
-void ICMP::handle_packet(const packet_info_t* packet_info, uint8_t* response_buf)
+void ICMP::handle_packet(const packet_info_t* packet_info, uint8_t* response_buf, const Ethernet::packet_info_t* response_info)
 {
     write_ping_reply(packet_info, response_buf);
+    Network::send_packet(response_info);
 }
 
 size_t ICMP::get_response_size(const packet_info_t* packet_info)

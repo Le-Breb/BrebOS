@@ -24,12 +24,15 @@ void ARP::display_request(packet_t* p)
         (rev_dstpr >> 24) & 0xFF, (rev_dstpr >> 16) & 0xFF, (rev_dstpr >> 8) & 0xFF, rev_dstpr & 0xFF);
 }
 
-void ARP::handlePacket(packet_t* packet, uint8_t* response_buf)
+void ARP::handlePacket(const packet_t* packet, uint8_t* response_buf, const Ethernet::packet_info* response_info)
 {
     // Send response if it's an ARP request
     if (Endianness::switch16(packet->opcode) == ARP_REQUEST)
+    {
         write_packet(response_buf, ARP_ETHERNET, ARP_IPV4, MAC_ADDR_LEN, IPV4_ADDR_LEN, ARP_REPLY,
-                     *(uint32_t*)&Network::ip, packet->srcpr, packet->srchw);
+                    *(uint32_t*)&Network::ip, packet->srcpr, (uint8_t*)packet->srchw);
+        Network::send_packet(response_info);
+    }
     else // Handle reply
     {
         // Cache the MAC address

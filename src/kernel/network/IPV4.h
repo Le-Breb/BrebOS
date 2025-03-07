@@ -55,7 +55,7 @@ public:
 
     typedef struct packet packet_t;
 
-    static void handlePacket(const packet_t* packet, uint8_t* response_buffer);
+    static void handlePacket(const packet_t* packet, uint8_t* response_buffer, const Ethernet::packet_info_t* response_info);
 
     [[nodiscard]] static size_t get_response_size(const packet_t* packet_info);
 

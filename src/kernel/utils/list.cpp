@@ -81,6 +81,8 @@ bool list<E>::remove(E e)
         return false;
     }
 
+    s--;
+
     // if the first element
     if (current == head)
     {
@@ -100,8 +102,6 @@ bool list<E>::remove(E e)
 
     prev->next = current->next;
     delete current;
-
-    s--;
 
     return true;
 }

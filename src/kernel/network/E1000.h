@@ -183,7 +183,7 @@ public:
     void fire(cpu_state_t* cpu_state, stack_state_t* stack_state) override;
     // This method should be called by the interrupt handler
     uint8_t* getMacAddress(); // Returns the MAC address
-    int sendPacket(Ethernet::packet_info* packet); // Send a packet
+    int sendPacket(const Ethernet::packet_info* packet); // Send a packet
     ~E1000() = default; // Default Destructor
 };
 #endif //E100_H

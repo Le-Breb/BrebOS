@@ -56,7 +56,7 @@ public:
 
     static void display_request(packet_t *p);
 
-    static void handlePacket(packet_t* packet, uint8_t* response_buf);
+    static void handlePacket(const packet_t* packet, uint8_t* response_buf, const Ethernet::packet_info* response_info);
 
     static void resolve_and_send(const Ethernet::packet_info_t* packet_info);
 

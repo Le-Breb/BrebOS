@@ -7,7 +7,9 @@
 #include "../file_management/VFS.h"
 #include "fb.h"
 #include "../network/DNS.h"
+#include "../network/HTTP.h"
 #include "../network/Network.h"
+#include "../network/Socket.h"
 
 void Syscall::start_process(cpu_state_t* cpu_state)
 {
@@ -135,61 +137,63 @@ void Syscall::get_key()
 
     switch (cpu_state->eax)
     {
-    case 1:
-        terminate_process(p);
-    case 2:
-        FB::write((char*)cpu_state->esi);
-        break;
-    case 3:
-        PIC::disable_preemptive_scheduling(); // Is it necessary ? Isn't timer interrupt disabled when this runs ?
-        start_process(cpu_state);
-        PIC::enable_preemptive_scheduling();
-        break;
-    case 4:
-        get_key();
-        break;
-    case 5:
-        get_pid();
-        break;
-    case 6:
-        System::shutdown();
-    case 7:
-        dynlk(cpu_state);
-        break;
-    case 8:
-        malloc(p, &p->cpu_state);
-        break;
-    case 9:
-        free(p, &p->cpu_state);
-        break;
-    case 10:
-        mkdir(&p->cpu_state);
-        break;
-    case 11:
-        touch(&p->cpu_state);
-        break;
-    case 12:
-        ls(&p->cpu_state);
-        break;
-    case 13:
-        FB::clear_screen();
-        break;
-    case 14:
-        dns(cpu_state);
-        break;
-    default:
-        printf_error("Received unknown syscall id: %u", cpu_state->eax);
-        break;
+        case 1:
+            terminate_process(p);
+        case 2:
+            FB::write((char*)cpu_state->esi);
+            break;
+        case 3:
+            PIC::disable_preemptive_scheduling(); // Is it necessary ? Isn't timer interrupt disabled when this runs ?
+            start_process(cpu_state);
+            PIC::enable_preemptive_scheduling();
+            break;
+        case 4:
+            get_key();
+            break;
+        case 5:
+            get_pid();
+            break;
+        case 6:
+            System::shutdown();
+        case 7:
+            dynlk(cpu_state);
+            break;
+        case 8:
+            malloc(p, &p->cpu_state);
+            break;
+        case 9:
+            free(p, &p->cpu_state);
+            break;
+        case 10:
+            mkdir(&p->cpu_state);
+            break;
+        case 11:
+            touch(&p->cpu_state);
+            break;
+        case 12:
+            ls(&p->cpu_state);
+            break;
+        case 13:
+            FB::clear_screen();
+            break;
+        case 14:
+            dns(cpu_state);
+            break;
+        default:
+            printf_error("Received unknown syscall id: %u", cpu_state->eax);
+            break;
     }
 
     // Todo: Check if process ESP should be reset to process kernel stack top here
     Interrupts::resume_user_process_asm(p->cpu_state, p->stack_state);
 }
 
-void Syscall::dns(const cpu_state_t* cpu_state)
+void Syscall::dns([[maybe_unused]] const cpu_state_t* cpu_state)
 {
-    const char* domain = (const char*)cpu_state->edi;
-    DNS::send_query(domain);
+    //const char* domain = (const char*)cpu_state->edi;
+    //DNS::send_query(domain);
+    auto http = new HTTP{Network::gateway_ip, 1234};
+    http->send_get("www.example.com");
     Network::pollPackets(); // Process packets received during this interrupt
 }
 

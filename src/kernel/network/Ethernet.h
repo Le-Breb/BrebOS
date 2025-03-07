@@ -63,11 +63,11 @@ public:
 
     /**
      * Compute the size of the buffer that will contain the response to a packet
-     * @param packet_info Ethernet packet info
+     * @param packet Ethernet packet
      * @return size of response. 0 if no response needed, -1 packet shouldn't be processed
      * (if error or if packet is not destined to us)
      */
-    static size_t get_response_size(const packet_info* packet_info);
+    static size_t get_response_size(const packet_info* packet);
 
     static uint8_t* write_header(uint8_t* buf, uint8_t dest[MAC_ADDR_LEN], uint16_t type);
 };

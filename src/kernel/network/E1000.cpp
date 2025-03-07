@@ -352,7 +352,7 @@ void E1000::tx_free()
     }
 }
 
-int E1000::sendPacket(Ethernet::packet_info* packet)
+int E1000::sendPacket(const Ethernet::packet_info* packet)
 {
     tx_desc_virt_addresses[tx_cur] = (uint8_t*)packet->packet;
     tx_descs[tx_cur]->addr = PHYS_ADDR(get_page_tables(), (uint32_t)packet->packet);

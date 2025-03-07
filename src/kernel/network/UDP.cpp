@@ -26,7 +26,7 @@ uint8_t* UDP::write_headers(uint8_t* buf, uint16_t src_port, uint16_t dst_port, 
     return buf + get_header_size();
 }
 
-void UDP::handle_packet(const packet_info_t* packet_info, [[maybe_unused]] uint8_t* response_buffer)
+void UDP::handle_packet(const packet_info_t* packet_info, [[maybe_unused]] uint8_t* response_buffer, [[maybe_unused]] const Ethernet::packet_info_t* response_info)
 {
     if (DHCP::handle_packet(packet_info->packet))
         return;

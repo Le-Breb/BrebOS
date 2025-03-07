@@ -7,41 +7,49 @@
 #include "UDP.h"
 #include "../core/fb.h"
 
-void IPV4::handlePacket(const packet_t* packet, uint8_t* response_buffer)
+void IPV4::handlePacket(const packet_t* packet, uint8_t* response_buffer, const Ethernet::packet_info_t* response_info)
 {
     size_t header_len = packet->header.get_ihl() * sizeof(uint32_t);
     auto payload_size = Endianness::switch16(packet->header.len) - header_len;
     auto response_payload_size = payload_size;
+
+    if (response_buffer)
+    {
+        if (packet->header.proto == IPV4_PROTOCOL_TCP)
+        {
+            auto tcp_packet = (TCP::header_t*)((uint8_t*)packet + sizeof(header_t));
+            auto tcp_packet_info = TCP::packet_info_t{tcp_packet, payload_size};
+            response_payload_size = TCP::get_response_size(&tcp_packet_info);
+        }
+        write_response(response_buffer, &packet->header, response_payload_size);
+        response_buffer += header_len;
+    }
+
     switch (packet->header.proto)
     {
         case IPV4_PROTOCOL_ICMP:
         {
             auto icmp_packet = (ICMP::packet_t*)((uint8_t*)packet + sizeof(header_t));
             auto icmp_packet_info = ICMP::packet_info_t(icmp_packet, payload_size);
-            ICMP::handle_packet(&icmp_packet_info, response_buffer + header_len);
+            ICMP::handle_packet(&icmp_packet_info, response_buffer, response_info);
             break;
         }
         case IPV4_PROTOCOL_UDP:
         {
             auto udp_packet = (UDP::packet_t*)((uint8_t*)packet + sizeof(header_t));
             auto udp_packet_info = UDP::packet_info_t(udp_packet, payload_size);
-            UDP::handle_packet(&udp_packet_info, response_buffer + header_len);
+            UDP::handle_packet(&udp_packet_info, response_buffer, response_info);
             break;
         }
         case IPV4_PROTOCOL_TCP:
         {
             auto tcp_packet = (TCP::header_t*)((uint8_t*)packet + sizeof(header_t));
-            response_payload_size = TCP::handle_packet(packet, tcp_packet, response_buffer + header_len);
+            response_payload_size = TCP::handle_packet(packet, tcp_packet, response_buffer, response_info);
             break;
         }
         default:
             break;
     }
-
-    if (response_buffer == nullptr)
-        return;
-
-    write_response(response_buffer, &packet->header, response_payload_size);
 }
 
 size_t IPV4::get_headers_size()
