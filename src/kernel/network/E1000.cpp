@@ -302,12 +302,12 @@ void E1000::fire([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] stack
     {
         // good threshold
         //printf_info("E1000 good threshold");
-        pollRx();
+        //pollRx();
     }
     else if (status & 0x80)
     {
         //printf_info("Receive done");
-        pollRx();
+        //pollRx();
     }
     else
     {
@@ -316,6 +316,13 @@ void E1000::fire([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] stack
         uint32_t txctl = readCommand(REG_TCTRL);
         printf_error("NIC status: %x, TCTRL: %x", status2, txctl);
     }
+
+    // Naturally, this should only be done in 0x10 and 0x80. However, if packets arrive while the interrupt is running
+    // with a different status, packets won't be processed and will have to wait for the next packet arriving while
+    // fire is not running in order to be processed.
+    // In other words, by executing pollRx on each interrupt, we ensure we do not report the processing of received
+    // packets to the next time fire will be called.
+    pollRx();
 }
 
 uint8_t* E1000::getMacAddress()
@@ -325,7 +332,6 @@ uint8_t* E1000::getMacAddress()
 
 void E1000::pollRx()
 {
-
     while (rx_descs[rx_cur]->status & TSTA_DD)
     {
         uint8_t* buf = rx_desc_virt_addresses[rx_cur];
