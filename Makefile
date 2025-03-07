@@ -80,7 +80,7 @@ libdynlk:
 libc:
 	make -C $(SRC_DIR)/libc
 
-programs:
+programs: libc libdynlk
 	make -C $(SRC_DIR)/programs
 
 $(KERNEL_BUILD_DIR)/%.o: $(SRC_DIR)/kernel/%.cpp
