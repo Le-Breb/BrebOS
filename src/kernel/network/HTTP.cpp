@@ -106,3 +106,8 @@ size_t HTTP::get_request_size(const request_t* request)
 
     return size + 2;
 }
+
+void HTTP::on_connection_error()
+{
+    printf_error("HTTP connection error");
+}

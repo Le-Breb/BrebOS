@@ -16,6 +16,8 @@ public:
     virtual ~TCP_listener();
 
     virtual void on_data_received(void* packet, uint16_t packet_size) = 0;
+
+    virtual void on_connection_error() = 0;
 };
 
 

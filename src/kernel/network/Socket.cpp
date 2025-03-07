@@ -25,9 +25,11 @@ void Socket::flush_waiting_queue() // Todo: take peer window size into account
 }
 
 uint8_t* Socket::create_packet_response(uint16_t payload_size, const IPV4::packet_t* ipv4_packet,
-                               const Ethernet::packet_t* ethernet_packet, Ethernet::packet_info_t& response_info)
+                                        const Ethernet::packet_t* ethernet_packet,
+                                        Ethernet::packet_info_t& response_info)
 {
-    return IPV4::create_packet(payload_size, IPV4_PROTOCOL_TCP, ipv4_packet->header.saddr, (uint8_t*)ethernet_packet->header.src, response_info);
+    return IPV4::create_packet(payload_size, IPV4_PROTOCOL_TCP, ipv4_packet->header.saddr,
+                               (uint8_t*)ethernet_packet->header.src, response_info);
 }
 
 Socket::Socket(uint8_t peer_ip[IPV4_ADDR_LEN], uint16_t peer_port) : peer_port(peer_port)
@@ -66,7 +68,8 @@ void Socket::handle_packet(const TCP::packet_info_t* packet_info, const IPV4::pa
     {
         seq_num++;
         Ethernet::packet_info_t response_info;
-        acknowledge(packet, create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info));
+        acknowledge(
+            packet, create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info));
         state = TCP::State::ESTABLISHED;
         Network::send_packet(&response_info);
         printf("State is established\n");
@@ -77,14 +80,16 @@ void Socket::handle_packet(const TCP::packet_info_t* packet_info, const IPV4::pa
     else if (flags == (TCP_FLAG_FIN | TCP_FLAG_ACK) && state == TCP::State::FIN_WAIT_1)
     {
         Ethernet::packet_info_t response_info;
-        acknowledge(packet, create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info));
+        acknowledge(
+            packet, create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info));
         Network::send_packet(&response_info);
         state = TCP::State::CLOSED;
     }
     else if (flags == (TCP_FLAG_PSH | TCP_FLAG_ACK) && state == TCP::State::ESTABLISHED)
     {
         Ethernet::packet_info_t response_info;
-        acknowledge(packet, create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info));
+        acknowledge(
+            packet, create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info));
         Network::send_packet(&response_info);
         if (listener != nullptr)
         {
@@ -93,6 +98,14 @@ void Socket::handle_packet(const TCP::packet_info_t* packet_info, const IPV4::pa
             auto payload_size = Endianness::switch16(ipv4_packet->header.len) - header_size;
             listener->on_data_received(payload, payload_size);
         }
+    }
+    else if (flags == (TCP_FLAG_RST | TCP_FLAG_ACK) && state == TCP::State::SYN_SENT)
+    {
+        if (listener)
+            listener->on_connection_error();
+        printf_error("TCP handshake with %d.%d.%d.%d on port %d failed", peer_ip[0], peer_ip[1],
+                     peer_ip[2], peer_ip[3], peer_port);
+        state = TCP::State::CLOSED;
     }
     else // Not handled, force close connection
     {
