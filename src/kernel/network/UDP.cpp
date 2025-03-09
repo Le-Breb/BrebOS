@@ -30,6 +30,9 @@ uint8_t* UDP::create_packet(uint16_t src_port, uint16_t dst_port, uint16_t paylo
 
 void UDP::handle_packet(const packet_info_t* packet_info, [[maybe_unused]] const IPV4::packet_t* ipv4_packet, [[maybe_unused]] const Ethernet::packet_t* ethernet_packet)
 {
+    if (!packet_valid(packet_info))
+        return;
+
     if (DHCP::handle_packet(packet_info->packet))
         return;
     if (DNS::handle_packet(packet_info->packet))
@@ -42,14 +45,9 @@ void UDP::handle_packet(const packet_info_t* packet_info, [[maybe_unused]] const
     FB::set_fg(FB_WHITE);
 }
 
-size_t UDP::get_response_size([[maybe_unused]] const packet_info_t* packet_info)
+bool UDP::packet_valid(const packet_info_t* packet_info)
 {
-    return 0; // Todo: implement that
-}
-
-size_t UDP::get_headers_size()
-{
-    return get_header_size() + IPV4::get_headers_size();
+    return packet_info->size >= get_header_size(); // Todo: implement better checking, checking if port is open etc...
 }
 
 size_t UDP::get_header_size()

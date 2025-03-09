@@ -72,7 +72,6 @@ void Socket::handle_packet(const TCP::packet_info_t* packet_info, const IPV4::pa
             packet, create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info));
         state = TCP::State::ESTABLISHED;
         Network::send_packet(&response_info);
-        printf("State is established\n");
         flush_waiting_queue();
     }
     else if (flags == TCP_FLAG_ACK && state == TCP::State::ESTABLISHED)
@@ -93,7 +92,7 @@ void Socket::handle_packet(const TCP::packet_info_t* packet_info, const IPV4::pa
         Network::send_packet(&response_info);
         if (listener != nullptr)
         {
-            auto header_size = packet->header_len * sizeof(uint32_t);
+            auto header_size = packet->header_len * sizeof(uint32_t); // Todo: rewrite that
             auto payload = (uint8_t*)packet + header_size;
             auto payload_size = Endianness::switch16(ipv4_packet->header.len) - header_size;
             listener->on_data_received(payload, payload_size);
@@ -120,10 +119,7 @@ Socket* Socket::port_used(uint16_t port)
 {
     for (int i = 0; i < sockets.size(); i++)
     {
-        auto ssocket = sockets.get(i);
-        if (!ssocket)
-            printf_error("wtf\n");
-        auto socket = *ssocket;
+        auto socket = *sockets.get(i);
         if (socket->port == port)
             return socket;
     }

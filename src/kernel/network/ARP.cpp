@@ -26,14 +26,16 @@ void ARP::display_request(packet_t* p)
 
 void ARP::handle_packet(const packet_t* packet, const Ethernet::packet_t* ethernet_packet)
 {
+    if (!is_valid(packet))
+        return;
+
     // Send response if it's an ARP request
     if (Endianness::switch16(packet->opcode) == ARP_REQUEST)
     {
         Ethernet::packet_info_t response_info;
         auto buf = Ethernet::create_packet((uint8_t*)ethernet_packet->header.src, ETHERTYPE_ARP,
                                            sizeof(packet_t), response_info);
-        write_packet(buf, ARP_ETHERNET, ARP_IPV4, MAC_ADDR_LEN, IPV4_ADDR_LEN, ARP_REPLY,
-                     *(uint32_t*)&Network::ip, packet->srcpr, (uint8_t*)packet->srchw);
+        write_packet(buf, ARP_REPLY, packet->srcpr, (uint8_t*)packet->srchw);
         Network::send_packet(&response_info);
     }
     else // Handle reply
@@ -81,18 +83,12 @@ void ARP::resolve_and_send(const Ethernet::packet_info_t* packet_info)
     resolve_mac((uint8_t*)&ip_header->daddr);
 }
 
-size_t ARP::get_response_size(const packet_t* packet)
+bool ARP::is_valid(const packet_t* packet)
 {
-    // check that request is targeting us
     if (!(0 == memcmp(&packet->dstpr, &Network::ip, IPV4_ADDR_LEN) ||
         0 == memcmp(&packet->dstpr, &Network::ip, sizeof(Network::broadcast_ip))))
-        return -1;
-    return Endianness::switch16(packet->opcode) == ARP_REQUEST ? sizeof(packet_t) : 0;
-}
-
-size_t ARP::get_headers_size()
-{
-    return sizeof(packet_t) + Ethernet::get_headers_size();
+        return false;
+    return true;
 }
 
 void ARP::get_mac(const uint8_t ip[IPV4_ADDR_LEN], uint8_t mac[MAC_ADDR_LEN])
@@ -110,33 +106,29 @@ void ARP::get_mac(const uint8_t ip[IPV4_ADDR_LEN], uint8_t mac[MAC_ADDR_LEN])
     memset(mac, 0, MAC_ADDR_LEN);
 }
 
-void ARP::resolve_mac(const uint8_t ip[IPV4_ADDR_LEN])
+uint16_t ARP::get_header_size()
 {
-    auto headers_size = get_headers_size();
-    auto packet_size = headers_size + Ethernet::get_headers_size();
-    auto buf = (uint8_t*)calloc(1, packet_size);
-    auto buf_beg = buf;
-    buf = Ethernet::write_header(buf, (uint8_t*)Network::broadcast_mac, ETHERTYPE_ARP);
-    write_packet(buf, ARP_ETHERNET, ARP_IPV4, MAC_ADDR_LEN, IPV4_ADDR_LEN, ARP_REQUEST,
-                 *(uint32_t*)Network::ip, *(uint32_t*)ip, (uint8_t*)Network::broadcast_mac);
-
-    auto packet_info = Ethernet::packet_info((Ethernet::packet_t*)buf_beg, packet_size);
-    Network::send_packet(&packet_info);
+    return sizeof(packet_t);
 }
 
-void ARP::write_packet(uint8_t* buf, uint16_t htype, uint16_t ptype, uint8_t hlen, uint8_t plen, uint16_t opcode,
-                       uint32_t srcpr, uint32_t dstpr, uint8_t dsthw[MAC_ADDR_LEN])
+void ARP::resolve_mac(const uint8_t ip[IPV4_ADDR_LEN])
+{
+    Ethernet::packet_info_t response_info;
+    auto buf = Ethernet::create_packet((uint8_t*)Network::broadcast_mac, ETHERTYPE_ARP, get_header_size() , response_info);
+    write_packet(buf, ARP_REQUEST, *(uint32_t*)ip, (uint8_t*)Network::broadcast_mac);
+
+    Network::send_packet(&response_info);
+}
+
+void ARP::write_packet(uint8_t* buf, uint16_t opcode, uint32_t dstpr, uint8_t dsthw[MAC_ADDR_LEN])
 {
     auto packet = (packet_t*)buf;
-    packet->htype = Endianness::switch16(htype);
-    packet->ptype = Endianness::switch16(ptype);
-    packet->hlen = hlen;
-    packet->plen = plen;
+    packet->htype = Endianness::switch16(ARP_ETHERNET);
+    packet->ptype = Endianness::switch16(ARP_IPV4);
+    packet->hlen = MAC_ADDR_LEN;
+    packet->plen = IPV4_ADDR_LEN;
     packet->opcode = Endianness::switch16(opcode);
-    packet->htype = Endianness::switch16(htype);
-    packet->hlen = hlen;
-    packet->plen = plen;
-    packet->srcpr = srcpr;
+    packet->srcpr = *(uint32_t*)Network::ip;
     packet->dstpr = dstpr;
     memcpy(packet->srchw, Network::mac, MAC_ADDR_LEN);
     memcpy(packet->dsthw, dsthw, MAC_ADDR_LEN);

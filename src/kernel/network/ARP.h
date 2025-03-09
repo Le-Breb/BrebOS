@@ -46,11 +46,15 @@ private:
     static cache_entry_t cache[ARP_CACHE_SIZE];
     static size_t cache_head;
     static void resolve_mac(const uint8_t ip[IPV4_ADDR_LEN]);
+
+    [[nodiscard]] static bool is_valid(const packet_t* packet);
+
+    [[nodiscard]] static uint16_t get_header_size();
 public:
     static void resolve_gateway_mac();
 
-    static void write_packet(uint8_t* buf, uint16_t htype, uint16_t ptype, uint8_t hlen, uint8_t plen, uint16_t opcode,
-                             uint32_t srcpr, uint32_t dstpr, uint8_t dsthw[]);
+    static void write_packet(uint8_t* buf, uint16_t opcode,
+                             uint32_t dstpr, uint8_t dsthw[]);
 
     static Ethernet::packet_info* new_reply(packet_t* request);
 
@@ -59,10 +63,6 @@ public:
     static void handle_packet(const packet_t* packet, const Ethernet::packet_t* ethernet_packet);
 
     static void resolve_and_send(const Ethernet::packet_info_t* packet_info);
-
-    [[nodiscard]] static size_t get_response_size(const packet_t* packet);
-
-    [[nodiscard]] static size_t get_headers_size();
 
     static void get_mac(const uint8_t ip[IPV4_ADDR_LEN], uint8_t mac[MAC_ADDR_LEN]);
 };

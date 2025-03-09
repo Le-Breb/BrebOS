@@ -102,14 +102,11 @@ private:
 
     [[nodiscard]] static uint16_t random_ephemeral_port();
 
+    [[nodiscard]] static bool packet_valid(const packet_info_t* packet_info);
 public:
     static uint16_t handle_packet(const packet_info_t* packet_info, const IPV4::packet_t* ipv4_packet, const Ethernet::packet_t* ethernet_packet);
 
     static void send_data(const void* data, uint16_t data_size, const Socket* socket);
-
-    [[nodiscard]] static size_t get_response_size(const packet_info_t* packet_info);
-
-    [[nodiscard]] static uint16_t get_headers_size();
 };
 
 #endif //TCP_H

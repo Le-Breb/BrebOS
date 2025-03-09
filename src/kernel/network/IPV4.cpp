@@ -9,6 +9,9 @@
 
 void IPV4::handle_packet(const packet_t* packet, const Ethernet::packet_t* ethernet_packet)
 {
+    if (!packet_valid(packet))
+        return;
+
     size_t header_len = packet->header.get_ihl() * sizeof(uint32_t);
     auto payload_size = Endianness::switch16(packet->header.len) - header_len;
 
@@ -38,11 +41,6 @@ void IPV4::handle_packet(const packet_t* packet, const Ethernet::packet_t* ether
         default:
             break;
     }
-}
-
-size_t IPV4::get_headers_size()
-{
-    return get_header_size() + Ethernet::get_headers_size();
 }
 
 size_t IPV4::get_header_size()
@@ -93,59 +91,37 @@ bool IPV4::address_is_in_subnet(const uint8_t address[IPV4_ADDR_LEN])
     return memcmp(masked_address, masked_ip, IPV4_ADDR_LEN) == 0;
 }
 
-size_t IPV4::get_response_size(const packet_t* packet)
+bool IPV4::packet_valid(const packet_t* packet)
 {
     auto header = &packet->header;
     if (header->get_version() != 4)
-        return -1; // Not IPV4 - wtf, when can this happen ?
+        return false; // Not IPV4 - wtf, when can this happen ?
     if (header->get_ihl() != IPV4_DEFAULT_IHL)
-        return -1; // Additional header data, not supported yet
+        return false; // Additional header data, not supported yet
     // This packet is not destined to us
     if (!(header->daddr == *(uint32_t*)Network::ip || header->daddr == *(uint32_t*)Network::broadcast_ip))
-        return -1;
+        return false;
     if (header->get_frag_offset() != 0 || header->get_flags() & IPV4_FLAG_MORE_FRAGMENTS)
     {
         printf_error("Fragmented IP packet received, not handled yet");
-        return -1;
+        return false;
     }
     if (Network::checksum(header, get_header_size()))
     {
         printf_error("IPV4 checksum error");
-        return -1;
+        return false;
     }
 
-    size_t size = get_header_size();
-    size_t inner_size = 0;
-    auto payload_size = Endianness::switch16(header->len) - size;
     switch (header->proto)
     {
         case IPV4_PROTOCOL_ICMP:
-        {
-            auto icmp_packet = (ICMP::packet_t*)((uint8_t*)header + size);
-            ICMP::packet_info_t icmp(icmp_packet, payload_size);
-            inner_size = ICMP::get_response_size(&icmp);
-            break;
-        }
         case IPV4_PROTOCOL_UDP:
-        {
-            auto udp_packet = (UDP::packet_t*)((uint8_t*)header + size);
-            UDP::packet_info_t udp(udp_packet, payload_size);
-            inner_size = UDP::get_response_size(&udp);
-            break;
-        }
         case IPV4_PROTOCOL_TCP:
-        {
-            auto tcp_packet = (TCP::header_t*)((uint8_t*)header + size);
-            TCP::packet_info_t tcp{tcp_packet, Endianness::switch16(header->len) - size};
-            inner_size = TCP::get_response_size(&tcp);
             break;
-        }
         default:
             printf_error("IP Protocol not supported (is 0x%2x), not supported yet", header->proto);
-            return -1;
+            return false;
     }
 
-    if (inner_size == 0 || inner_size == (size_t)-1)
-        return inner_size;
-    return size + inner_size;
+    return true;
 }

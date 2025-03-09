@@ -47,9 +47,15 @@ public:
 
     static void handle_packet(const packet_info_t* packet_info, const IPV4::packet_t* ipv4_packet, const Ethernet::packet_t* ethernet_packet);
 
-    static void write_ping_reply(const packet_info_t* ping_request, uint8_t* response_buf);
+private:
 
-    static size_t get_response_size(const packet_info_t* packet_info);
+    static void write_ping_reply(uint8_t* response_buf, const packet_info_t* ping_request);
+
+    [[nodiscard]] static bool packet_valid(const packet_info_t* packet_info);
+
+    [[nodiscard]] static uint16_t get_packet_size();
+
+    [[nodiscard]] static uint16_t get_response_size(const packet_info_t* request);
 };
 
 

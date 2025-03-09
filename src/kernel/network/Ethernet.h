@@ -59,19 +59,12 @@ public:
 
     static void handle_packet(const packet_info_t* packet_info);
 
-    static size_t get_headers_size();
+    [[nodiscard]] static uint8_t* create_packet(uint8_t dest[MAC_ADDR_LEN], uint16_t type, uint16_t payload_size, packet_info_t& packet_info);
 
-    /**
-     * Compute the size of the buffer that will contain the response to a packet
-     * @param packet Ethernet packet
-     * @return size of response. 0 if no response needed, -1 packet shouldn't be processed
-     * (if error or if packet is not destined to us)
-     */
-    static size_t get_response_size(const packet_info* packet);
-
+private:
     static uint8_t* write_header(uint8_t* buf, uint8_t dest[MAC_ADDR_LEN], uint16_t type);
 
-    [[nodiscard]] static uint8_t* create_packet(uint8_t dest[MAC_ADDR_LEN], uint16_t type, uint16_t payload_size, packet_info_t& packet_info);
+    static size_t get_header_size();
 };
 
 

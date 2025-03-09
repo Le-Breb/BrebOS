@@ -111,12 +111,9 @@ void TCP::send_sync(const Socket* socket)
     Network::send_packet(&response_info);
 }
 
-size_t TCP::get_response_size(const packet_info_t* packet_info)
+bool TCP::packet_valid(const packet_info_t* packet_info)
 {
-    if (packet_info->size < sizeof(header_t))
-        return -1;
-
-    return packet_info->packet->flags == TCP_FLAG_ACK ? 0 : get_header_size();
+    return packet_info->size >= get_header_size();
 }
 
 uint16_t TCP::handle_packet(const packet_info_t* packet_info, const IPV4::packet_t* ipv4_packet,
@@ -158,9 +155,4 @@ void TCP::send_data(const void* data, uint16_t data_size, const Socket* socket)
     write_push_ack_header(buf, socket, data_size);
 
     Network::send_packet(&response_info);
-}
-
-uint16_t TCP::get_headers_size()
-{
-    return get_header_size() + IPV4::get_headers_size();
 }

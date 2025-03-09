@@ -197,8 +197,6 @@ public:
 
     typedef struct packet packet_t;
 
-    [[nodiscard]] static size_t get_response_size(const packet_t* packet);;
-
     static void handlePacket(packet_t* packet, uint8_t* response_buf);
 
     static void send_discover();
@@ -231,6 +229,8 @@ private:
     static uint32_t disc_id;
 
     static uint8_t server_mac[MAC_ADDR_LEN];
+
+    [[nodiscard]] static bool packet_valid(const packet_t* packet);;
 };
 
 

@@ -11,11 +11,9 @@
 uint32_t DHCP::disc_id = 0;
 uint8_t DHCP::server_mac[MAC_ADDR_LEN] = {};
 
-size_t DHCP::get_response_size(const packet_t* packet)
+bool DHCP::packet_valid(const packet_t* packet)
 {
-    if (packet->hlen != sizeof(packet_t))
-        return -1;
-    return sizeof(packet_t);
+    return packet->hlen == sizeof(packet_t);
 }
 
 void DHCP::send_discover()
