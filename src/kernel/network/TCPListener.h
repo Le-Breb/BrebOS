@@ -5,6 +5,10 @@
 
 class Socket;
 
+/**
+ * Interface for any class that listen to a certain socket.
+ * This allows to automatically call some callbacks when certain socket events occur
+ */
 class TCP_listener
 {
 protected:
@@ -15,8 +19,10 @@ public:
 
     virtual ~TCP_listener();
 
+    // Callback when a packet is received
     virtual void on_data_received(void* packet, uint16_t packet_size) = 0;
 
+    // Callback when connection fails
     virtual void on_connection_error() = 0;
 };
 

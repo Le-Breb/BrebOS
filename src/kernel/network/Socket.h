@@ -29,10 +29,9 @@ private:
     TCP::State state = TCP::State::CLOSED;
     uint32_t seq_num = Network::generate_random_id32();
     uint32_t ack_num = 0;
-    TCP_listener* listener = nullptr;
+    TCP_listener* listener = nullptr; // Listener to send callbacks to
 
-    static uint16_t socket_head;
-    static list<Socket*> sockets;
+    static list<Socket*> sockets; // List of all sockets
 
     uint16_t waiting_queue_size = 0;
     uint16_t waiting_queue_start = 0;
@@ -42,7 +41,10 @@ private:
 
     void flush_waiting_queue();
 
-    [[nodiscard]] static uint8_t* create_packet_response(uint16_t payload_size, const IPV4::packet_t* ipv4_packet, const Ethernet::packet_t* ethernet_packet, Ethernet::packet_info_t& response_info);
+    // Creates a buffer set up to respond to a received packet
+    [[nodiscard]] static uint8_t* create_packet_response(uint16_t payload_size, const IPV4::packet_t* ipv4_packet,
+                                                         const Ethernet::packet_t* ethernet_packet,
+                                                         Ethernet::packet_info_t& response_info);
 
 public:
     Socket(uint8_t peer_ip[IPV4_ADDR_LEN], uint16_t peer_port);
@@ -60,6 +62,7 @@ public:
 
     static void close_all_connections();
 
+    // Creates a dummy socket in order to send RST in unhandled situations
     static Socket* reset_response_socket(uint8_t peer_ip[IPV4_ADDR_LEN], uint16_t peer_port, uint32_t peer_seq_num);
 
     void send_data(const void* data, uint16_t size);

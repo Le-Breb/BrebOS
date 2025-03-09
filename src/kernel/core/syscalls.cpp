@@ -190,11 +190,10 @@ void Syscall::get_key()
 
 void Syscall::dns([[maybe_unused]] const cpu_state_t* cpu_state)
 {
-    //const char* domain = (const char*)cpu_state->edi;
-    //DNS::send_query(domain);
+    const char* domain = (const char*)cpu_state->edi;
+    DNS::send_query(domain);
     auto http = new HTTP{Network::gateway_ip, 1234};
     http->send_get("www.example.com");
-    Network::pollPackets(); // Process packets received during this interrupt
 }
 
 

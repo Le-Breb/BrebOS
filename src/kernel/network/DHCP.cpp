@@ -11,11 +11,6 @@
 uint32_t DHCP::disc_id = 0;
 uint8_t DHCP::server_mac[MAC_ADDR_LEN] = {};
 
-bool DHCP::packet_valid(const packet_t* packet)
-{
-    return packet->hlen == sizeof(packet_t);
-}
-
 void DHCP::send_discover()
 {
     auto header_size = get_request_header_size();
@@ -23,11 +18,16 @@ void DHCP::send_discover()
     auto buf = UDP::create_packet(DHCP_SRC_PORT, DHCP_DST_PORT, header_size, *(uint32_t*)Network::broadcast_ip,
                                   (uint8_t*)Network::broadcast_mac, response_info);
 
+    // Write options
     uint8_t opt_buf[DHCP_DISC_OPT_SIZE];
     auto dhcp_type_opt = (option_t*)opt_buf;
+
+    // Message type
     dhcp_type_opt->code = DHCP_OPT_MSG_TYPE;
     dhcp_type_opt->len = 1;
     dhcp_type_opt->data[0] = DHCP_DISCOVER;
+
+    // Request list
     auto dhcp_req_list_opt = (option_t*)((uint8_t*)(dhcp_type_opt + 1) + dhcp_type_opt->len);
     dhcp_req_list_opt->code = DHCP_OPT_REQUEST_LIST;
     dhcp_req_list_opt->len = 4;
@@ -36,6 +36,7 @@ void DHCP::send_discover()
     *list_el++ = DHCP_OPT_ROUTER;
     *list_el++ = DHCP_OPT_DOMAIN_NAME;
     *list_el++ = DHCP_OPT_DOMAIN_NAME_SERVER;
+
     write_header(buf, BOOT_REQUEST, Network::generate_random_id32(), DHCP_FLAG_BROADCAST, 0, 0, 0, 0, opt_buf, 2);
 
     Network::send_packet(&response_info);
@@ -48,19 +49,25 @@ void DHCP::send_request(const packet_t* offer_packet)
     auto buf = UDP::create_packet(DHCP_SRC_PORT, DHCP_DST_PORT, header_size, *(uint32_t*)Network::broadcast_ip,
                                   (uint8_t*)Network::broadcast_mac, response_info);
 
+    // Options
     uint8_t opt_buf[DHCP_REQUEST_OPT_SIZE]{};
     auto* dhcp_type_opt = (option_t*)opt_buf;
+
+    // Message type
     dhcp_type_opt->code = DHCP_OPT_MSG_TYPE;
     dhcp_type_opt->len = 1;
     dhcp_type_opt->data[0] = DHCP_REQUEST;
+
     auto dhcp_req_ip_opt = (option_t*)((uint8_t*)(dhcp_type_opt + 1) + dhcp_type_opt->len);
     dhcp_req_ip_opt->code = DHCP_OPT_IP_REQUEST;
     dhcp_req_ip_opt->len = 4;
     memcpy(dhcp_req_ip_opt->data, &offer_packet->yiaddr, IPV4_ADDR_LEN);
     auto dhcp_server_id_opt = (option_t*)((uint8_t*)(dhcp_req_ip_opt + 1) + dhcp_req_ip_opt->len);
+
     dhcp_server_id_opt->code = DHCP_OPT_SERVER_IDENTIFIER;
     dhcp_server_id_opt->len = 4;
     memcpy(dhcp_server_id_opt->data, &offer_packet->siaddr, IPV4_ADDR_LEN);
+
     write_header(buf, BOOT_REQUEST, offer_packet->xid, DHCP_FLAG_BROADCAST, 0, 0, offer_packet->siaddr, 0, opt_buf, 3);
 
     Network::send_packet(&response_info);
@@ -84,6 +91,7 @@ void DHCP::write_header(uint8_t* buf, uint8_t op, uint32_t xid, uint16_t flags, 
     memcpy(packet->chaddr, Network::mac, MAC_ADDR_LEN);
     packet->magic_cookie = Endianness::switch32(DHCP_MAGIC_COOKIE);
 
+    // Write options
     size_t opt_tot_len = 0;
     for (size_t i = 0; i < num_options; i++)
     {
@@ -93,7 +101,7 @@ void DHCP::write_header(uint8_t* buf, uint8_t op, uint32_t xid, uint16_t flags, 
         memcpy(dest_opt, src_opt, opt_len);
         opt_tot_len += opt_len;
     }
-    *(packet->options + opt_tot_len) = DHCP_OPT_END;
+    *(packet->options + opt_tot_len) = DHCP_OPT_END; // Last option marker
 }
 
 size_t DHCP::get_header_size()
@@ -103,7 +111,7 @@ size_t DHCP::get_header_size()
 
 bool DHCP::handle_packet(const UDP::packet_t* udp_packet)
 {
-    switch (is_dhcp(udp_packet))
+    switch (packet_valid(udp_packet))
     {
         case DHCP_OFFER:
             handle_offer((packet_t*)udp_packet->payload);
@@ -118,7 +126,7 @@ bool DHCP::handle_packet(const UDP::packet_t* udp_packet)
     return true;
 }
 
-uint DHCP::is_dhcp(const UDP::packet_t* packet)
+uint DHCP::packet_valid(const UDP::packet_t* packet)
 {
     uint16_t src_port = Endianness::switch16(packet->header.src_port);
     uint16_t dst_port = Endianness::switch16(packet->header.dst_port);

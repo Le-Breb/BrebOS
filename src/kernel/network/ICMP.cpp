@@ -15,6 +15,7 @@ void ICMP::handle_packet(const packet_info_t* packet_info, const IPV4::packet_t*
     auto buf = IPV4::create_packet(size, IPV4_PROTOCOL_ICMP, ipv4_packet->header.saddr,
                                    (uint8_t*)ethernet_packet->header.src, response_info);
     write_ping_reply(buf, packet_info);
+
     Network::send_packet(&response_info);
 }
 

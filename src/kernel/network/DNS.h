@@ -47,7 +47,7 @@ public:
 
     typedef struct header header_t;
 
-    struct  question_content
+    struct question_content
     {
         uint16_t qtype;
         uint16_t qclass;
@@ -93,16 +93,29 @@ private:
 
     [[nodiscard]] static size_t get_encoded_name_len(const char* name);
 
+    /**
+     * Writes name in DNS fashion
+     * @param buf where to write the encoded name
+     * @param name name to encode
+     * @return pointer pointing right after the end of the written encoded name
+     */
     static uint8_t* write_encoded_name(uint8_t* buf, const char* name);
 
     static void write_header(uint8_t* buf, const question_t& question);
 
-    [[nodiscard]] static char* parse_name(const char* name, const uint8_t* packet_beg);
+    /**
+     * Parses a DNS encoded name
+     * @param encoded_name name to parse
+     * @param packet_beg beginning of the packet that encoded name belongs to
+     * @return string containing decoded name
+     */
+    [[nodiscard]] static char* parse_name(const char* encoded_name, const uint8_t* packet_beg);
 
     static void display_response(const header_t* header);
-public:
+
     static const uint8_t google_dns_ip[IPV4_ADDR_LEN];
 
+public:
     static void send_query(const char* hostname);
 
     static bool handle_packet(const UDP::packet_t* packet);

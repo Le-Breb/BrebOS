@@ -79,7 +79,7 @@ char* parse_name_aux(const char* name, const uint8_t* packet_beg, bool& is_end)
 
     size_t buf_capacity = 5;
     size_t buf_size = 0;
-    auto res = (char*)malloc(buf_capacity);
+    auto res = new char[buf_capacity];
 
     size_t idx = 0;
     size_t res_idx = 0;
@@ -102,9 +102,9 @@ char* parse_name_aux(const char* name, const uint8_t* packet_beg, bool& is_end)
         if (buf_size + l + 1 > buf_capacity)
         {
             buf_capacity *= 2;
-            auto nb = (char*)malloc(buf_capacity);
+            auto nb = new char[buf_capacity];
             memcpy(nb, res, buf_size);
-            free(res);
+            delete res;
             res = nb;
         }
 
@@ -118,7 +118,7 @@ char* parse_name_aux(const char* name, const uint8_t* packet_beg, bool& is_end)
         res_idx += l + 1;
 
         if (pointer)
-            free((char*)sub);
+            delete sub;
     }
 
     res[res_idx - 1] = '\0';
@@ -128,10 +128,10 @@ char* parse_name_aux(const char* name, const uint8_t* packet_beg, bool& is_end)
     return res;
 }
 
-char* DNS::parse_name(const char* name, const uint8_t* packet_beg)
+char* DNS::parse_name(const char* encoded_name, const uint8_t* packet_beg)
 {
     bool is_end = false;
-    return parse_name_aux(name, packet_beg, is_end);
+    return parse_name_aux(encoded_name, packet_beg, is_end);
 }
 
 void DNS::display_response(const header_t* header)
@@ -169,7 +169,7 @@ void DNS::display_response(const header_t* header)
             {
                 const char* alias_name = parse_name((const char*)rc->data, (uint8_t*)header);
                 printf("%s is an alias for %s\n", name, alias_name);
-                free((char*)alias_name);
+                delete alias_name;
                 break;
             }
             case DNS_REQUEST_A:
@@ -178,7 +178,7 @@ void DNS::display_response(const header_t* header)
             default:
                 break;
         }
-        free((char*)name);
+        delete name;
 
         b = (uint8_t*)(rc + 1) + Endianness::switch16(rc->data_len);
     }

@@ -87,11 +87,6 @@ uint32_t Network::generate_random_id16()
     return (rid >> 16) + (rid & 0xFF);
 }
 
-void Network::pollPackets()
-{
-    nic->pollRx();
-}
-
 uint16_t Network::checksum_add(uint16_t checksum1, uint16_t checksum2)
 {
     uint32_t sum = checksum1 + checksum2;

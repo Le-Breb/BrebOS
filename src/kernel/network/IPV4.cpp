@@ -15,6 +15,7 @@ void IPV4::handle_packet(const packet_t* packet, const Ethernet::packet_t* ether
     size_t header_len = packet->header.get_ihl() * sizeof(uint32_t);
     auto payload_size = Endianness::switch16(packet->header.len) - header_len;
 
+    // Dispatch packet according to payload protocol
     switch (packet->header.proto)
     {
         case IPV4_PROTOCOL_ICMP:

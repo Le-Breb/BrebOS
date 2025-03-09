@@ -93,6 +93,7 @@ bool ARP::is_valid(const packet_t* packet)
 
 void ARP::get_mac(const uint8_t ip[IPV4_ADDR_LEN], uint8_t mac[MAC_ADDR_LEN])
 {
+    // Loop through cache
     for (size_t i = 0; i < ARP_CACHE_SIZE; i++)
     {
         auto cache_entry = &cache[(cache_head + i) % ARP_CACHE_SIZE];
@@ -103,6 +104,7 @@ void ARP::get_mac(const uint8_t ip[IPV4_ADDR_LEN], uint8_t mac[MAC_ADDR_LEN])
         }
     }
 
+    // Not found, zero out
     memset(mac, 0, MAC_ADDR_LEN);
 }
 

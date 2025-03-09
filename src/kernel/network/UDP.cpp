@@ -33,11 +33,13 @@ void UDP::handle_packet(const packet_info_t* packet_info, [[maybe_unused]] const
     if (!packet_valid(packet_info))
         return;
 
+    // Let higher level protocols try to handle the payload
     if (DHCP::handle_packet(packet_info->packet))
         return;
     if (DNS::handle_packet(packet_info->packet))
         return;
 
+    // We received something which is not one of the protocols checked above, then we simply display payload content
     FB::set_fg(FB_CYAN);
     printf("UDP payload: ");
     for (uint i = 0; i < packet_info->size - sizeof(header_t); ++i)

@@ -5,11 +5,10 @@
 #include "../core/fb.h"
 
 list<Socket*> Socket::sockets = {};
-uint16_t Socket::socket_head = 0;
 
 void Socket::acknowledge(const TCP::header_t* packet, uint8_t* response_buf)
 {
-    ack_num = Endianness::switch32(packet->seq_num) + 1;
+    ack_num = Endianness::switch32(packet->seq_num) + 1; // Set next expected packet
     TCP::write_ack_header(response_buf, this);
 }
 
@@ -17,9 +16,14 @@ void Socket::flush_waiting_queue() // Todo: take peer window size into account
 {
     for (uint i = 0; i < waiting_queue_size; i++)
     {
+        // Get packet
         auto idx = (waiting_queue_start + i) % WAITING_QUEUE_CAPACITY;
         auto packet = waiting_queue[idx];
+
+        // Send packet
         send_data(packet->data, packet->size);
+
+        // Clear queue entry
         waiting_queue[idx] = nullptr;
     }
 }
@@ -66,30 +70,39 @@ void Socket::handle_packet(const TCP::packet_info_t* packet_info, const IPV4::pa
     auto flags = packet->flags;
     if (flags == (TCP_FLAG_SYN | TCP_FLAG_ACK) && state == TCP::State::SYN_SENT) // SYN response
     {
-        seq_num++;
+        seq_num++; // We are about to send a new packet, update seq
         Ethernet::packet_info_t response_info;
         acknowledge(
             packet, create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info));
         state = TCP::State::ESTABLISHED;
+
         Network::send_packet(&response_info);
+
+        // Now that connection is established, we can send any packet we've been asked to send so far
         flush_waiting_queue();
     }
-    else if (flags == TCP_FLAG_ACK && state == TCP::State::ESTABLISHED)
+    else if (flags == TCP_FLAG_ACK && state == TCP::State::ESTABLISHED) // Peer acknowledges it has received our packet
         return;
-    else if (flags == (TCP_FLAG_FIN | TCP_FLAG_ACK) && state == TCP::State::FIN_WAIT_1)
+    else if (flags == (TCP_FLAG_FIN | TCP_FLAG_ACK) && state == TCP::State::FIN_WAIT_1) // Peer confirms connection end
     {
+        // Acknowledge we received the confirmation and definitely close the connection
         Ethernet::packet_info_t response_info;
         acknowledge(
             packet, create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info));
+
         Network::send_packet(&response_info);
+
         state = TCP::State::CLOSED;
     }
-    else if (flags == (TCP_FLAG_PSH | TCP_FLAG_ACK) && state == TCP::State::ESTABLISHED)
+    else if (flags == (TCP_FLAG_PSH | TCP_FLAG_ACK) && state == TCP::State::ESTABLISHED) // Data received
     {
         Ethernet::packet_info_t response_info;
         acknowledge(
             packet, create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info));
+
         Network::send_packet(&response_info);
+
+        // Trigger data received callback
         if (listener != nullptr)
         {
             auto header_size = packet->header_len * sizeof(uint32_t); // Todo: rewrite that
@@ -98,12 +111,15 @@ void Socket::handle_packet(const TCP::packet_info_t* packet_info, const IPV4::pa
             listener->on_data_received(payload, payload_size);
         }
     }
-    else if (flags == (TCP_FLAG_RST | TCP_FLAG_ACK) && state == TCP::State::SYN_SENT)
+    else if (flags == (TCP_FLAG_RST | TCP_FLAG_ACK) && state == TCP::State::SYN_SENT) // Peer port is very likely to be closed
     {
+        // Trigger connection error callback
         if (listener)
             listener->on_connection_error();
+
         printf_error("TCP handshake with %d.%d.%d.%d on port %d failed", peer_ip[0], peer_ip[1],
                      peer_ip[2], peer_ip[3], peer_port);
+
         state = TCP::State::CLOSED;
     }
     else // Not handled, force close connection
@@ -111,6 +127,7 @@ void Socket::handle_packet(const TCP::packet_info_t* packet_info, const IPV4::pa
         Ethernet::packet_info_t response_info;
         auto buf = create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info);
         TCP::write_reset_header(buf, this);
+
         Network::send_packet(&response_info);
     }
 }
@@ -144,7 +161,7 @@ void Socket::close_all_connections()
     }
 }
 
-Socket* Socket::reset_response_socket(uint8_t peer_ip[4], uint16_t peer_port, uint32_t peer_seq_num)
+Socket* Socket::reset_response_socket(uint8_t peer_ip[IPV4_ADDR_LEN], uint16_t peer_port, uint32_t peer_seq_num)
 {
     auto socket = new Socket(peer_ip, peer_port);
     socket->ack_num = peer_seq_num + 1;
@@ -153,6 +170,7 @@ Socket* Socket::reset_response_socket(uint8_t peer_ip[4], uint16_t peer_port, ui
 
 void Socket::send_data(const void* data, uint16_t size)
 {
+    // Connection not ready, save enqueue packet and initialize
     if (state == TCP::State::CLOSED)
     {
         if (waiting_queue_size == WAITING_QUEUE_CAPACITY)
@@ -163,7 +181,7 @@ void Socket::send_data(const void* data, uint16_t size)
         waiting_queue[(waiting_queue_start + waiting_queue_size++) % WAITING_QUEUE_CAPACITY] = new packet_t{data, size};
         initialize();
     }
-    else
+    else // Send data
     {
         TCP::send_data(data, size, this);
         seq_num += size;

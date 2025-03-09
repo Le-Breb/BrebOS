@@ -42,7 +42,6 @@ private:
 
     [[nodiscard]] static size_t get_request_size(const request_t* request);
 
-public:
     void on_connection_error() override;
 };
 

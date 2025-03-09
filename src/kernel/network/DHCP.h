@@ -197,15 +197,13 @@ public:
 
     typedef struct packet packet_t;
 
-    static void handlePacket(packet_t* packet, uint8_t* response_buf);
-
     static void send_discover();
 
     static void send_request(const packet_t* offer_packet);
 
     static void write_header(uint8_t* buf, uint8_t op, uint32_t xid, uint16_t flags, uint32_t ciaddr,
-                             uint32_t yiaddr,
-                             uint32_t siaddr, uint32_t giaddr, uint8_t* options_buf, size_t num_options);
+                             uint32_t yiaddr, uint32_t siaddr, uint32_t giaddr, uint8_t* options_buf,
+                             size_t num_options);
 
     [[nodiscard]] static size_t get_header_size();
 
@@ -220,7 +218,12 @@ private:
 
     [[nodiscard]] static bool is_dhcp_ack(const UDP::packet_t* packet);
 
-    [[nodiscard]] static uint is_dhcp(const UDP::packet_t* packet);
+    /**
+     * Checks if a packet is a valid DHCP packet
+     * @param packet packet to be checked
+     * @return 0 if packet is invalid, packet type otherwise
+     */
+    [[nodiscard]] static uint packet_valid(const UDP::packet_t* packet);
 
     static void handle_offer(const packet_t* packet);
 
@@ -229,8 +232,6 @@ private:
     static uint32_t disc_id;
 
     static uint8_t server_mac[MAC_ADDR_LEN];
-
-    [[nodiscard]] static bool packet_valid(const packet_t* packet);;
 };
 
 
