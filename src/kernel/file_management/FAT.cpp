@@ -564,10 +564,20 @@ bool FAT_drive::ls(const Dentry& dentry)
 		return false;
 
 	// Skip used dir entries, aka files/folders inside wd
+	bool prev_is_lfn = false;
 	while (dir_entry_id * sizeof(DirEntry) < FAT_Buf_size && !entries[dir_entry_id].is_free())
 	{
-		printf("%s\n", entries[dir_entry_id].get_name());
+		auto entry = entries + dir_entry_id;
+		bool is_lfn = entry->is_LFN();
+		if (!prev_is_lfn)
+		{
+			char* entry_name = is_lfn ? ((LongDirEntry*)entry)->get_uglily_converted_utf8_name() : entry->get_name();
+			printf("%s\n", entry_name);
+			delete[] entry_name;
+		}
+
 		dir_entry_id++;
+		prev_is_lfn = is_lfn;
 	}
 
 	return true;
