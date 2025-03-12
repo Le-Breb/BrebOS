@@ -37,7 +37,7 @@ private:
     uint16_t waiting_queue_start = 0;
     packet_t* waiting_queue[WAITING_QUEUE_CAPACITY]{};
 
-    void acknowledge(const TCP::header_t* packet, uint8_t* response_buf);
+    void acknowledge(const TCP::packet_info_t* packet_info, uint8_t* response_buf, bool fin = false);
 
     void flush_waiting_queue();
 
@@ -46,6 +46,7 @@ private:
                                                          const Ethernet::packet_t* ethernet_packet,
                                                          Ethernet::packet_info_t& response_info);
 
+    void close();
 public:
     Socket(uint8_t peer_ip[IPV4_ADDR_LEN], uint16_t peer_port);
 

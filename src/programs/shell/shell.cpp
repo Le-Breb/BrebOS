@@ -85,6 +85,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
           	clear_screen();
         else if (cmd[0] == 'd' && cmd[1] == 'n' && cmd[2] == 's')
         	dns(c_id >= 4 ? cmd + 4 : "www.example.com");
+        else if (cmd[0] == 't' && cmd[1] == 'c' && cmd[2] == 'p')
+        	tcp();
 		else
 			printf("Unknown command\n");
 

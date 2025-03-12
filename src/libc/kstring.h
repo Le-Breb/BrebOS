@@ -19,4 +19,6 @@ char* strtok_r(char* str, const char* delim, char** saveptr);
 
 int memcmp(const void* s1, const void* s2, size_t n);
 
+void to_lower_in_place(char* str);
+
 #endif //INCLUDE_OS_STRING_H

@@ -84,7 +84,7 @@ private:
 
     static void write_sync_header(uint8_t* buf, const Socket* socket);
 
-    static void write_ack_header(uint8_t* buf, const Socket* socket);
+    static void write_ack_header(uint8_t* buf, const Socket* socket, bool fin = false);
 
     static void write_reset_header(uint8_t* buf, const Socket* socket);
 

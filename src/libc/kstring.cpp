@@ -103,3 +103,14 @@ int memcmp(const void* s1, const void* s2, size_t n)
 
     return 0;
 }
+
+void to_lower_in_place(char* str)
+{
+  	while (*str)
+    {
+    	if (*str >= 'A' && *str <= 'Z')
+          *str += 'a' - 'A';
+
+        str++;
+    }
+}

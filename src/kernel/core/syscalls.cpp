@@ -179,6 +179,9 @@ void Syscall::get_key()
         case 14:
             dns(cpu_state);
             break;
+        case 15:
+            tcp();
+            break;
         default:
             printf_error("Received unknown syscall id: %u", cpu_state->eax);
             break;
@@ -188,14 +191,17 @@ void Syscall::get_key()
     Interrupts::resume_user_process_asm(p->cpu_state, p->stack_state);
 }
 
-void Syscall::dns([[maybe_unused]] const cpu_state_t* cpu_state)
+void Syscall::dns(const cpu_state_t* cpu_state)
 {
     const char* domain = (const char*)cpu_state->edi;
     DNS::send_query(domain);
-    auto http = new HTTP{Network::gateway_ip, 1234};
-    http->send_get("www.example.com");
 }
 
+void Syscall::tcp()
+{
+    auto http = new HTTP{Network::gateway_ip, 8080};
+    http->send_get("test.txt");
+}
 
 void Syscall::mkdir(cpu_state_t* cpu_state)
 {

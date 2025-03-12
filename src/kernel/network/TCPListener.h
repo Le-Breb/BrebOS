@@ -24,6 +24,8 @@ public:
 
     // Callback when connection fails
     virtual void on_connection_error() = 0;
+
+    virtual void on_connection_terminated() = 0;
 };
 
 

@@ -45,9 +45,12 @@ void TCP::write_sync_header(uint8_t* buf, const Socket* socket)
     write_header(buf, socket, TCP_FLAG_SYN, 0);
 }
 
-void TCP::write_ack_header(uint8_t* buf, const Socket* socket)
+void TCP::write_ack_header(uint8_t* buf, const Socket* socket, bool fin)
 {
-    write_header(buf, socket, TCP_FLAG_ACK, 0);
+    auto flags = TCP_FLAG_ACK;
+    if (fin)
+        flags |= TCP_FLAG_FIN;
+    write_header(buf, socket, flags, 0);
 }
 
 void TCP::write_reset_header(uint8_t* buf, const Socket* socket)

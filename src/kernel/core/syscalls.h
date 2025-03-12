@@ -56,6 +56,8 @@ class Syscall
 
 	static void dns(const cpu_state_t* cpu_state);
 
+	static void tcp();
+
 public:
 	/**
 	 * Handles a syscall

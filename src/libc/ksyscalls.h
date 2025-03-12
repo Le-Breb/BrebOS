@@ -54,4 +54,6 @@ void clear_screen();
 
 void dns(const char* domain);
 
+void tcp();
+
 #endif //INCLUDE_SYSCALLS_H

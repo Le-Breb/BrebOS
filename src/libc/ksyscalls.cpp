@@ -86,3 +86,8 @@ void dns(const char* domain)
 {
 	__asm__ volatile("int $0x80" :  : "a"(14), "D"(domain));
 }
+
+void tcp()
+{
+	__asm__ volatile("int $0x80" :  : "a"(15));
+}

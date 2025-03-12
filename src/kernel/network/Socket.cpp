@@ -6,10 +6,11 @@
 
 list<Socket*> Socket::sockets = {};
 
-void Socket::acknowledge(const TCP::header_t* packet, uint8_t* response_buf)
+void Socket::acknowledge(const TCP::packet_info_t* packet_info, uint8_t* response_buf, bool fin)
 {
-    ack_num = Endianness::switch32(packet->seq_num) + 1; // Set next expected packet
-    TCP::write_ack_header(response_buf, this);
+    auto payload_size = packet_info->size - (packet_info->packet->header_len >> 4) * sizeof(uint32_t);
+    ack_num = Endianness::switch32(packet_info->packet->seq_num) + payload_size + 1; // Set next expected packet
+    TCP::write_ack_header(response_buf, this, fin);
 }
 
 void Socket::flush_waiting_queue() // Todo: take peer window size into account
@@ -34,6 +35,16 @@ uint8_t* Socket::create_packet_response(uint16_t payload_size, const IPV4::packe
 {
     return IPV4::create_packet(payload_size, IPV4_PROTOCOL_TCP, ipv4_packet->header.saddr,
                                (uint8_t*)ethernet_packet->header.src, response_info);
+}
+
+void Socket::close()
+{
+    state = TCP::State::CLOSED;
+
+    if (!listener)
+        return;
+
+    listener->on_connection_terminated();
 }
 
 Socket::Socket(uint8_t peer_ip[IPV4_ADDR_LEN], uint16_t peer_port) : peer_port(peer_port)
@@ -68,50 +79,74 @@ void Socket::handle_packet(const TCP::packet_info_t* packet_info, const IPV4::pa
 {
     auto packet = packet_info->packet;
     auto flags = packet->flags;
-    if (flags == (TCP_FLAG_SYN | TCP_FLAG_ACK) && state == TCP::State::SYN_SENT) // SYN response
+
+    if (flags & (TCP_FLAG_NS | TCP_FLAG_CWR | TCP_FLAG_URG)) // Not handled, force close connection
+    {
+        Ethernet::packet_info_t response_info;
+        auto buf = create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info);
+        TCP::write_reset_header(buf, this);
+
+        Network::send_packet(&response_info);
+        return;
+    }
+
+    if (flags & (TCP_FLAG_SYN | TCP_FLAG_ACK) && state == TCP::State::SYN_SENT) // SYN response
     {
         seq_num++; // We are about to send a new packet, update seq
         Ethernet::packet_info_t response_info;
         acknowledge(
-            packet, create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info));
+            packet_info, create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info));
         state = TCP::State::ESTABLISHED;
 
         Network::send_packet(&response_info);
 
         // Now that connection is established, we can send any packet we've been asked to send so far
         flush_waiting_queue();
-    }
-    else if (flags == TCP_FLAG_ACK && state == TCP::State::ESTABLISHED) // Peer acknowledges it has received our packet
         return;
-    else if (flags == (TCP_FLAG_FIN | TCP_FLAG_ACK) && state == TCP::State::FIN_WAIT_1) // Peer confirms connection end
+    }
+    if (flags == TCP_FLAG_ACK && state == TCP::State::ESTABLISHED) // Peer acknowledges it has received our packet
+        return;
+    if (flags == TCP_FLAG_ACK && state == TCP::State::CLOSE_WAIT)
+    {
+        close();
+        return;
+    }
+    if (flags & (TCP_FLAG_FIN | TCP_FLAG_ACK) && state == TCP::State::FIN_WAIT_1) // Peer confirms connection end
     {
         // Acknowledge we received the confirmation and definitely close the connection
         Ethernet::packet_info_t response_info;
         acknowledge(
-            packet, create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info));
+            packet_info, create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info));
 
         Network::send_packet(&response_info);
 
-        state = TCP::State::CLOSED;
+        close();
+        return;
     }
-    else if (flags == (TCP_FLAG_PSH | TCP_FLAG_ACK) && state == TCP::State::ESTABLISHED) // Data received
+    if (flags & (TCP_FLAG_PSH | TCP_FLAG_ACK) && state == TCP::State::ESTABLISHED) // Data received
     {
         Ethernet::packet_info_t response_info;
-        acknowledge(
-            packet, create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info));
+        auto response_buf = create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info);
+        bool fin = flags & TCP_FLAG_FIN;
+        acknowledge(packet_info, response_buf, fin);
+        if (fin)
+            state = TCP::State::CLOSE_WAIT;
 
         Network::send_packet(&response_info);
 
         // Trigger data received callback
         if (listener != nullptr)
         {
-            auto header_size = packet->header_len * sizeof(uint32_t); // Todo: rewrite that
+            auto header_size = (packet->header_len >> 4) * sizeof(uint32_t);
             auto payload = (uint8_t*)packet + header_size;
-            auto payload_size = Endianness::switch16(ipv4_packet->header.len) - header_size;
+            auto payload_size = packet_info->size - header_size;
             listener->on_data_received(payload, payload_size);
         }
+
+        return;
     }
-    else if (flags == (TCP_FLAG_RST | TCP_FLAG_ACK) && state == TCP::State::SYN_SENT) // Peer port is very likely to be closed
+    if (flags == (TCP_FLAG_RST | TCP_FLAG_ACK) && state == TCP::State::SYN_SENT)
+    // Peer port is very likely to be closed
     {
         // Trigger connection error callback
         if (listener)
@@ -120,16 +155,18 @@ void Socket::handle_packet(const TCP::packet_info_t* packet_info, const IPV4::pa
         printf_error("TCP handshake with %d.%d.%d.%d on port %d failed", peer_ip[0], peer_ip[1],
                      peer_ip[2], peer_ip[3], peer_port);
 
-        state = TCP::State::CLOSED;
+        close();
+        return;
     }
-    else // Not handled, force close connection
-    {
-        Ethernet::packet_info_t response_info;
-        auto buf = create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info);
-        TCP::write_reset_header(buf, this);
 
-        Network::send_packet(&response_info);
-    }
+    // Not handled, force close connection
+    Ethernet::packet_info_t response_info;
+    auto buf = create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info);
+    TCP::write_reset_header(buf, this);
+
+    Network::send_packet(&response_info);
+
+    close();
 }
 
 Socket* Socket::port_used(uint16_t port)
