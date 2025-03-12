@@ -60,7 +60,7 @@ bool VFS::touch(const char* pathname)
 	uint i = path_length - 1;
 	while (pathname[i] != '/')
 		i--;
-	memset(p + i, 0, path_length - i);
+	memset(p + i + 1, 0, path_length - i);
 	// Extract file name
 	const char* file_name = pathname + i + 1;
 	if (!strlen(file_name))
@@ -315,6 +315,11 @@ void VFS::free_unused_cache_entries()
 
 Dentry* VFS::browse_to(const char* path)
 {
+	if (path[0] == '\0')
+	{
+		printf_error("Attempting to browse to an empty path");
+		return nullptr;
+	}
 	if (path[0] == '/')
 		return browse_to(path, dentries[0]);
 
