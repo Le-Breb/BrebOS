@@ -42,37 +42,37 @@ bool ELFLoader::dynamic_loading(uint start_address, ELF* elf)
     {
         switch (d->d_tag)
         {
-        case DT_STRTAB:
-            dyn_str_table = (char*)(start_address + d->d_un.d_ptr - base_addr);
-            break;
-        case DT_SYMTAB:
-            dynsymtab = (void*)(start_address + d->d_un.d_ptr - base_addr);
-            break;
-        case DT_NEEDED:
-            lib_name_idx = d->d_un.d_val;
-            break;
-        case DT_PLTGOT:
-            file_got_addr = (uint*)(start_address + d->d_un.d_val - base_addr);
-            break;
-        case DT_HASH:
-            dynsyntab_num_entries = *(((uint*)(start_address + d->d_un.d_val - base_addr)) +
-                1); // nchain
-            break;
-        case DT_SYMENT:
-            dynsymtab_ent_size = d->d_un.d_val;
-            break;
-        case DT_GNU_HASH:
-        case DT_STRSZ:
-        case DT_DEBUG:
-        case DT_PLTRELSZ:
-        case DT_PLTREL:
-        case DT_JMPREL:
-        case DT_INIT:
-        case DT_FINI:
-            break;
-        default:
-            printf_error("Unknown dynamic table entry: %u|%x", d->d_tag, d->d_tag);
-            break;
+            case DT_STRTAB:
+                dyn_str_table = (char*)(start_address + d->d_un.d_ptr - base_addr);
+                break;
+            case DT_SYMTAB:
+                dynsymtab = (void*)(start_address + d->d_un.d_ptr - base_addr);
+                break;
+            case DT_NEEDED:
+                lib_name_idx = d->d_un.d_val;
+                break;
+            case DT_PLTGOT:
+                file_got_addr = (uint*)(start_address + d->d_un.d_val - base_addr);
+                break;
+            case DT_HASH:
+                dynsyntab_num_entries = *(((uint*)(start_address + d->d_un.d_val - base_addr)) +
+                    1); // nchain
+                break;
+            case DT_SYMENT:
+                dynsymtab_ent_size = d->d_un.d_val;
+                break;
+            case DT_GNU_HASH:
+            case DT_STRSZ:
+            case DT_DEBUG:
+            case DT_PLTRELSZ:
+            case DT_PLTREL:
+            case DT_JMPREL:
+            case DT_INIT:
+            case DT_FINI:
+                break;
+            default:
+                printf_error("Unknown dynamic table entry: %u|%x", d->d_tag, d->d_tag);
+                break;
         }
     }
     if (dyn_str_table == nullptr)
@@ -196,7 +196,7 @@ bool ELFLoader::apply_relocations(ELF* elf, uint elf_runtime_load_address) const
         Elf32_Addr load_address = VIRT_ADDR(sys_pde_id, sys_pte_id, reloc->r_offset % PAGE_SIZE);
         switch (reloc_type)
         {
-        case R_386_GLOB_DAT:
+            case R_386_GLOB_DAT:
             {
                 uint symbol_id = ELF32_R_SYM(reloc->r_info);
                 Elf32_Sym* symbol = &elf->symbols[symbol_id];
@@ -207,13 +207,13 @@ bool ELFLoader::apply_relocations(ELF* elf, uint elf_runtime_load_address) const
                 *(Elf32_Addr*)load_address = S;
                 break;
             }
-        case R_386_RELATIVE:
+            case R_386_RELATIVE:
             {
                 Elf32_Addr A = *(Elf32_Addr*)load_address;
                 *(Elf32_Addr*)load_address = B + A;
                 break;
             }
-        case R_386_PC32:
+            case R_386_PC32:
             {
                 uint symbol_id = ELF32_R_SYM(reloc->r_info);
                 Elf32_Sym* symbol = &elf->symbols[symbol_id];
@@ -233,7 +233,7 @@ bool ELFLoader::apply_relocations(ELF* elf, uint elf_runtime_load_address) const
                 *(Elf32_Addr*)load_address = S + A - P;*/
                 break;
             }
-        case R_386_32:
+            case R_386_32:
             {
                 uint symbol_id = ELF32_R_SYM(reloc->r_info);
                 Elf32_Sym* symbol = &elf->symbols[symbol_id];
@@ -249,8 +249,8 @@ bool ELFLoader::apply_relocations(ELF* elf, uint elf_runtime_load_address) const
                 *(Elf32_Addr*)load_address = S + A;
                 break;
             }
-        default: // Shouldn't happen, supported relocation types are checked in ELF::is_valid
-            break;
+            default: // Shouldn't happen, supported relocation types are checked in ELF::is_valid
+                break;
         }
     }
 
@@ -417,13 +417,13 @@ void ELFLoader::register_elf_init_and_fini(ELF* elf, uint runtime_load_address)
     {
         switch (d->d_tag)
         {
-        case DT_INIT:
-            init_address = runtime_load_address + d->d_un.d_val;
-            break;
-        case DT_FINI:
-            fini_address = runtime_load_address + d->d_un.d_val;
-            break;
-        case DT_INIT_ARRAY:
+            case DT_INIT:
+                init_address = runtime_load_address + d->d_un.d_val;
+                break;
+            case DT_FINI:
+                fini_address = runtime_load_address + d->d_un.d_val;
+                break;
+            case DT_INIT_ARRAY:
             {
                 Elf32_Addr runtime_address = runtime_load_address + d->d_un.d_val;
                 uint sys_pe_id = proc->pte[runtime_address / PAGE_SIZE];
@@ -432,7 +432,7 @@ void ELFLoader::register_elf_init_and_fini(ELF* elf, uint runtime_load_address)
                 init_array = (Elf32_Addr*)VIRT_ADDR(sys_pde_id, sys_pte_id, d->d_un.d_val % PAGE_SIZE);
                 break;
             }
-        case DT_FINI_ARRAY:
+            case DT_FINI_ARRAY:
             {
                 Elf32_Addr runtime_address = runtime_load_address + d->d_un.d_val;
                 uint sys_pe_id = proc->pte[runtime_address / PAGE_SIZE];
@@ -441,14 +441,14 @@ void ELFLoader::register_elf_init_and_fini(ELF* elf, uint runtime_load_address)
                 fini_array = (Elf32_Addr*)VIRT_ADDR(sys_pde_id, sys_pte_id, d->d_un.d_val % PAGE_SIZE);
                 break;
             }
-        case DT_INIT_ARRAYSZ:
-            init_arr_byte_size = d->d_un.d_val;
-            break;
-        case DT_FINI_ARRAYSZ:
-            fini_arr_byte_size = d->d_un.d_val;
-            break;
-        default:
-            break;
+            case DT_INIT_ARRAYSZ:
+                init_arr_byte_size = d->d_un.d_val;
+                break;
+            case DT_FINI_ARRAYSZ:
+                fini_arr_byte_size = d->d_un.d_val;
+                break;
+            default:
+                break;
         }
     }
 

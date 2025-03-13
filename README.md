@@ -62,6 +62,7 @@ The build takes several minutes, don't forget to enable parallelization: wheneve
 `-j $(lscpu | grep 'Core(s) per socket' | grep -o '[0-9]+')` at the end of the command.
 
 For QEMU, you need a few more setup:
+
 ```sh
 sudo mkdir -p /etc/qemu # Create config directory
 echo "allow br0" | sudo tee /etc/qemu/bridge.conf # Write the config
@@ -143,7 +144,10 @@ To add your program, simply follow the following steps:
   You can now run your program using `p your_awesome_program_name` in BrebOS.
 
 ### Network
-If you have knowledge in networking, you can play with network stuff. VM uses NAT to talk with the outer world. For host-VM communication, host PC has IP 192.168.100.1, and the VM dynamically gets its IP from dnsmasq, a DHCP server running locally, which is automatically started when executing `make run`.
+
+If you have knowledge in networking, you can play with network stuff. VM uses NAT to talk with the outer world. For
+host-VM communication, host PC has IP 192.168.100.1, and the VM dynamically gets its IP from dnsmasq, a DHCP server
+running locally, which is automatically started when executing `make run`.
 
 ## Features ⚙️
 

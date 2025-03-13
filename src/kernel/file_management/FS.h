@@ -12,7 +12,6 @@ class FS
 	friend Superblock;
 
 protected:
-
 	Superblock* superblock;
 
 public:

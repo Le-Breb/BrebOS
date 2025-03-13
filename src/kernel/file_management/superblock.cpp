@@ -7,7 +7,7 @@ Superblock* Superblock::block_list[MAX_DEVICES] = {nullptr};
 Superblock::Superblock(const char* mount_pathname, FS* fs) : fs(fs)
 {
 	this->mount_pathname = new char[strlen(mount_pathname)];
-	strcpy((char*) this->mount_pathname, mount_pathname);
+	strcpy((char*)this->mount_pathname, mount_pathname);
 }
 
 bool Superblock::add(const char* mount_pathname, FS* fs)

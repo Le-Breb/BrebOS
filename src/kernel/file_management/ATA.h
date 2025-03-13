@@ -95,23 +95,23 @@
 
 typedef struct
 {
-	unsigned short base;  // I/O Base.
-	unsigned short ctrl;  // Control Base
+	unsigned short base; // I/O Base.
+	unsigned short ctrl; // Control Base
 	unsigned short bmide; // Bus Master IDE
-	unsigned char nIEN;  // nIEN (No Interrupt);
+	unsigned char nIEN; // nIEN (No Interrupt);
 } IDEChannelRegisters;
 
 typedef struct
 {
-	unsigned char Reserved;    // 0 (Empty) or 1 (This Drive really exists).
-	unsigned char Channel;     // 0 (Primary Channel) or 1 (Secondary Channel).
-	unsigned char Drive;       // 0 (Master Drive) or 1 (Slave Drive).
-	unsigned short Type;        // 0: ATA, 1:ATAPI.
-	unsigned short Signature;   // Drive Signature
-	unsigned short Capabilities;// Features.
+	unsigned char Reserved; // 0 (Empty) or 1 (This Drive really exists).
+	unsigned char Channel; // 0 (Primary Channel) or 1 (Secondary Channel).
+	unsigned char Drive; // 0 (Master Drive) or 1 (Slave Drive).
+	unsigned short Type; // 0: ATA, 1:ATAPI.
+	unsigned short Signature; // Drive Signature
+	unsigned short Capabilities; // Features.
 	uint CommandSets; // Command Sets Supported.
-	uint Size;        // Size in Sectors.
-	unsigned char Model[41];   // Model in string.
+	uint Size; // Size in Sectors.
+	unsigned char Model[41]; // Model in string.
 } ide_device;
 
 class FAT_drive;
@@ -133,7 +133,7 @@ class IDE
 	static void write(unsigned char channel, unsigned char reg, unsigned char data);
 
 	static void read_buffer(unsigned char channel, unsigned char reg, void* buffer,
-							uint quads);
+	                        uint quads);
 
 	static unsigned char polling(unsigned char channel, uint advanced_check);
 
@@ -155,17 +155,16 @@ class ATA
 	 * @return
 	 */
 	static unsigned char access(unsigned char direction, unsigned char drive, uint lba,
-								unsigned char numsects, unsigned short selector, uint edi);
+	                            unsigned char numsects, unsigned short selector, uint edi);
 
 	static void init();
 
 public:
-
 	static int read_sectors(unsigned char drive, unsigned char numsects, uint lba,
-							unsigned short es, uint edi);
+	                        unsigned short es, uint edi);
 
 	static int write_sectors(unsigned char drive, unsigned char numsects, uint lba,
-							 unsigned short es, uint edi);
+	                         unsigned short es, uint edi);
 
 	static uint get_drive_size(unsigned char drive);
 

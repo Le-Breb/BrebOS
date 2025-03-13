@@ -66,18 +66,18 @@ bool LongDirEntry::is_EOF() const
 FAT_drive* FAT_drive::from_drive(unsigned char drive)
 {
 	unsigned char buf[ATA_SECTOR_SIZE];
-	if (ATA::read_sectors(drive, 1, 0, 0x10, (uint) buf))
+	if (ATA::read_sectors(drive, 1, 0, 0x10, (uint)buf))
 		return nullptr;
 	auto* fat_boot = new fat_BS_t;
 	memcpy(fat_boot, buf, sizeof(*fat_boot));
 
-	auto* extBS_32 = (fat_extBS_32*) &fat_boot->extended_section;
+	auto* extBS_32 = (fat_extBS_32*)&fat_boot->extended_section;
 	uint total_sectors = (fat_boot->total_sectors_16 == 0) ? fat_boot->total_sectors_32 : fat_boot->total_sectors_16;
 	uint root_dir_sectors =
-			((fat_boot->root_entry_count * 32) + (fat_boot->bytes_per_sector - 1)) / fat_boot->bytes_per_sector;
+		((fat_boot->root_entry_count * 32) + (fat_boot->bytes_per_sector - 1)) / fat_boot->bytes_per_sector;
 	uint fat_size = (fat_boot->table_size_16 == 0) ? extBS_32->table_size_32 : fat_boot->table_size_16;
 	uint data_sectors =
-			total_sectors - (fat_boot->reserved_sector_count + (fat_boot->table_count * fat_size) + root_dir_sectors);
+		total_sectors - (fat_boot->reserved_sector_count + (fat_boot->table_count * fat_size) + root_dir_sectors);
 	uint total_clusters = data_sectors / fat_boot->sectors_per_cluster;
 	FAT_type fat_type;
 	if (fat_boot->bytes_per_sector == 0)
@@ -96,7 +96,7 @@ FAT_drive* FAT_drive::from_drive(unsigned char drive)
 }
 
 FAT_drive::FAT_drive(unsigned char id, fat_BS_t* bs) : bs(*bs),
-                                                       extBS_32(*(fat_extBS_32*) this->bs.extended_section),
+                                                       extBS_32(*(fat_extBS_32*)this->bs.extended_section),
                                                        total_sectors((bs->total_sectors_16 == 0)
 	                                                                     ? bs->total_sectors_32
 	                                                                     : bs->total_sectors_16),
@@ -104,8 +104,8 @@ FAT_drive::FAT_drive(unsigned char id, fat_BS_t* bs) : bs(*bs),
 	                                                                ? extBS_32.table_size_32
 	                                                                : bs->table_size_16),
                                                        root_dir_sectors(((bs->root_entry_count * 32) +
-                                                                         (bs->bytes_per_sector - 1)) /
-                                                                        bs->bytes_per_sector),
+		                                                       (bs->bytes_per_sector - 1)) /
+	                                                       bs->bytes_per_sector),
                                                        first_data_sector(
 	                                                       bs->reserved_sector_count +
 	                                                       (bs->table_count * fat_size) +
@@ -114,23 +114,23 @@ FAT_drive::FAT_drive(unsigned char id, fat_BS_t* bs) : bs(*bs),
                                                        data_sectors(
 	                                                       total_sectors -
 	                                                       (bs->reserved_sector_count +
-	                                                        (bs->table_count * fat_size) +
-	                                                        root_dir_sectors)),
+		                                                       (bs->table_count * fat_size) +
+		                                                       root_dir_sectors)),
                                                        total_clusters(data_sectors / bs->sectors_per_cluster),
                                                        id(id),
                                                        FAT_Buf_size(ATA_SECTOR_SIZE * extBS_32.table_size_32)
 {
 	FAT = new unsigned char[ATA_SECTOR_SIZE];
 	buf = new char[ATA_SECTOR_SIZE];
-	entries = (DirEntry*) buf;
+	entries = (DirEntry*)buf;
 
 	if (bs->sectors_per_cluster != 1)
 		printf_error("FAT driver only supports 1 sector per cluster, current value: %d.\n"
-			   "(drive ID: %d). Drive accesses could misbehave.", id, bs->sectors_per_cluster);
+		             "(drive ID: %d). Drive accesses could misbehave.", id, bs->sectors_per_cluster);
 
 	if (bs->bytes_per_sector != ATA_SECTOR_SIZE)
 		printf_error("FAT driver only supports %d bytes per sector, current value: %d.\n"
-			   "(drive ID: %d). Drive accesses could misbehave.", ATA_SECTOR_SIZE, bs->bytes_per_sector, id);
+		             "(drive ID: %d). Drive accesses could misbehave.", ATA_SECTOR_SIZE, bs->bytes_per_sector, id);
 }
 
 const char** FAT_drive::split_at_slashes(const char* str, uint* num_tokens)
@@ -169,7 +169,7 @@ const char** FAT_drive::split_at_slashes(const char* str, uint* num_tokens)
 	res[tok_id][l - beg] = '\0';
 
 	*num_tokens = num_slashes + 1;
-	return (const char**) res;
+	return (const char**)res;
 }
 
 uint FAT_drive::get_free_cluster() const
@@ -177,7 +177,7 @@ uint FAT_drive::get_free_cluster() const
 	for (uint sector = first_fat_sector; sector < total_sectors; ++sector) // Entries 0 and 1 are reserved
 	{
 		uint32_t fat_buf[ATA_SECTOR_SIZE / sizeof(uint32_t)];
-		if (ATA::read_sectors(id, 1, sector, 0x10,(uint)fat_buf))
+		if (ATA::read_sectors(id, 1, sector, 0x10, (uint)fat_buf))
 		{
 			printf_error("Drive read error");
 			return 0;
@@ -212,7 +212,7 @@ bool FAT_drive::change_active_cluster(uint new_active_cluster, uint& active_clus
 	active_sector = FIRST_SECTOR_OF_CLUSTER(active_cluster, bs.sectors_per_cluster, first_data_sector);
 
 	// Read data from drive
-	if (ATA::read_sectors(id, 1, active_sector, 0x10, (uint) buf))
+	if (ATA::read_sectors(id, 1, active_sector, 0x10, (uint)buf))
 	{
 		printf_error("Drive read error");
 		return false;
@@ -221,13 +221,13 @@ bool FAT_drive::change_active_cluster(uint new_active_cluster, uint& active_clus
 	FAT_offset = active_cluster * sizeof(uint32_t);
 	FAT_sector = first_fat_sector + (FAT_offset / ATA_SECTOR_SIZE);
 	FAT_entry_offset = FAT_offset % ATA_SECTOR_SIZE;
-	if (ATA::read_sectors(id, 1, FAT_sector, 0x10, (uint) FAT))
+	if (ATA::read_sectors(id, 1, FAT_sector, 0x10, (uint)FAT))
 	{
 		printf_error("Drive read error");
 		return false;
 	}
 
-	table_value = *(uint*) &FAT[FAT_entry_offset];
+	table_value = *(uint*)&FAT[FAT_entry_offset];
 	/*if (fat32) */
 	table_value &= 0x0FFFFFFF;
 	dir_entry_id = 0;
@@ -252,12 +252,12 @@ bool FAT_drive::browse_to_folder_parent(const char** path, uint num_tokens, uint
 	bool prev_is_lfn = false, found_in_lfn = false, found = false;
 	while (!entries[dir_entry_id].is_free())
 	{
-		if (!(unsigned char) entries[dir_entry_id].is_unused()) // Skip unused entry
+		if (!(unsigned char)entries[dir_entry_id].is_unused()) // Skip unused entry
 		{
 			// Long directory entry
 			if (entries[dir_entry_id].is_LFN())
 			{
-				LongDirEntry* l_entry = (LongDirEntry*) &entries[dir_entry_id]; // Cast entry
+				LongDirEntry* l_entry = (LongDirEntry*)&entries[dir_entry_id]; // Cast entry
 				// Ensure the long entries chain only contains one element
 				if (!(l_entry->is_EOF()))
 				{
@@ -334,7 +334,7 @@ void FAT_drive::init()
 		drives[i] = ATA::drive_present(i) && IDE::devices[i].Type == IDE_ATA ? FAT_drive::from_drive(i) : nullptr;
 
 	// Register FS
-	for (auto & drive : drives)
+	for (auto& drive : drives)
 	{
 		if (!drive)
 			continue;
@@ -344,7 +344,7 @@ void FAT_drive::init()
 
 void FAT_drive::shutdown()
 {
-	for (auto & drive : drives)
+	for (auto& drive : drives)
 		delete drive;
 }
 
@@ -360,7 +360,7 @@ void* FAT_drive::load_file_to_buf(const char* file_name, Dentry* parent_dentry, 
 
 	// Skip used dir entries, aka files/folders inside wd
 	while (dir_entry_id * sizeof(DirEntry) < FAT_Buf_size && !entries[dir_entry_id].is_free() &&
-	       strcmp(entries[dir_entry_id].get_name(), file_name) != 0)
+		strcmp(entries[dir_entry_id].get_name(), file_name) != 0)
 		dir_entry_id++;
 
 	if (dir_entry_id * sizeof(DirEntry) >= FAT_Buf_size || entries[dir_entry_id].is_free())
@@ -419,7 +419,7 @@ Dentry* FAT_drive::get_child_entry(Dentry& parent_dentry, const char* name)
 			break;
 		bool lfn = entries[dir_entry_id].is_LFN();
 		char* entry_name = lfn
-			                   ? ((LongDirEntry*) &entries[dir_entry_id])->get_uglily_converted_utf8_name()
+			                   ? ((LongDirEntry*)&entries[dir_entry_id])->get_uglily_converted_utf8_name()
 			                   : entries[dir_entry_id].get_name();
 
 		bool match = !strcmp(entry_name, name);
@@ -464,7 +464,7 @@ Dentry* FAT_drive::touch(Dentry& parent_dentry, const char* entry_name)
 
 	// Skip used dir entries, aka files/folders inside wd
 	while (dir_entry_id * sizeof(DirEntry) < FAT_Buf_size && !entries[dir_entry_id].is_free() &&
-	       strcmp(entries[dir_entry_id].get_name(), entry_name) != 0)
+		strcmp(entries[dir_entry_id].get_name(), entry_name) != 0)
 		dir_entry_id++;
 
 	// No free entry in wd cluster
@@ -485,7 +485,7 @@ Dentry* FAT_drive::touch(Dentry& parent_dentry, const char* entry_name)
 	// Write file entry
 	DirEntry new_entry(entry_name, 0, file_content_cluster, 0);
 	memcpy(&entries[dir_entry_id], &new_entry, sizeof(DirEntry));
-	if (ATA::write_sectors(id, 1, active_sector, 0x10, (uint) buf))
+	if (ATA::write_sectors(id, 1, active_sector, 0x10, (uint)buf))
 	{
 		printf_error("Drive write error");
 		return nullptr;
@@ -497,8 +497,8 @@ Dentry* FAT_drive::touch(Dentry& parent_dentry, const char* entry_name)
 		return nullptr;
 
 	// Indicate that dir content cluster is the end of the cluster chain it belongs to
-	*(uint*) &FAT[FAT_entry_offset] = CLUSTER_EOC;
-	if (ATA::write_sectors(id, 1, FAT_sector, 0x10, (uint) FAT)) // Write new FAT
+	*(uint*)&FAT[FAT_entry_offset] = CLUSTER_EOC;
+	if (ATA::write_sectors(id, 1, FAT_sector, 0x10, (uint)FAT)) // Write new FAT
 	{
 		printf_error("drive write error");
 		return nullptr;
@@ -546,7 +546,7 @@ bool FAT_drive::mkdir(const Dentry& parent_dentry, const char* entry_name)
 	// Write new entry
 	DirEntry new_entry(entry_name, DIRECTORY, dir_content_cluster, 0);
 	memcpy(&entries[dir_entry_id], &new_entry, sizeof(DirEntry));
-	if (ATA::write_sectors(id, 1, active_sector, 0x10, (uint) buf))
+	if (ATA::write_sectors(id, 1, active_sector, 0x10, (uint)buf))
 	{
 		printf_error("Drive write error");
 		return false;
@@ -560,15 +560,15 @@ bool FAT_drive::mkdir(const Dentry& parent_dentry, const char* entry_name)
 	uint dir_content_sector = active_sector;
 
 	// Indicate that dir content cluster is the end of the cluster chain it belongs to
-	*(uint*) &FAT[FAT_entry_offset] = CLUSTER_EOC;
-	if (ATA::write_sectors(id, 1, FAT_sector, 0x10, (uint) FAT)) // Write new FAT
+	*(uint*)&FAT[FAT_entry_offset] = CLUSTER_EOC;
+	if (ATA::write_sectors(id, 1, FAT_sector, 0x10, (uint)FAT)) // Write new FAT
 	{
 		printf_error("drive write error");
 		return false;
 	}
 
 	// Note: I guess this is unnecessary since dir content cluster is supposed to be empty
-	if (ATA::read_sectors(id, 1, dir_content_sector, 0x10, (uint) buf))
+	if (ATA::read_sectors(id, 1, dir_content_sector, 0x10, (uint)buf))
 	{
 		printf_error("drive read error");
 		return false;
@@ -581,7 +581,7 @@ bool FAT_drive::mkdir(const Dentry& parent_dentry, const char* entry_name)
 	memcpy(&entries[1], &dot_dot_entry, sizeof(DirEntry));
 
 	// Write them to disk
-	if (ATA::write_sectors(id, 1, dir_content_sector, 0x10, (uint) buf))
+	if (ATA::write_sectors(id, 1, dir_content_sector, 0x10, (uint)buf))
 	{
 		printf_error("Drive write error");
 		return false;
@@ -649,7 +649,7 @@ bool FAT_drive::write_buf_to_file(const Dentry& dentry, const void* buf, uint le
 
 	// ~cd parent directory
 	if (!change_active_cluster(parent_cluster, active_cluster, active_sector, FAT_entry_offset, FAT_offset,
-							   FAT_sector, table_value, dir_entry_id))
+	                           FAT_sector, table_value, dir_entry_id))
 		return false;
 
 	// Find file entry
@@ -690,17 +690,17 @@ bool FAT_drive::write_buf_to_file(const Dentry& dentry, const void* buf, uint le
 	while (wrote_bytes < length && next_cluster != CLUSTER_EOC)
 	{
 		if (!change_active_cluster(next_cluster, active_cluster, active_sector, FAT_entry_offset, FAT_offset,
-								   FAT_sector, table_value, dir_entry_id))
+		                           FAT_sector, table_value, dir_entry_id))
 			return false;
 
 		// If there is more than ATA_SECTOR_SIZE bytes to write, use provided buffer, otherwise copy remaining data to buf
 		// and use buf, as its size is ATA_SECTOR_SIZE
 		auto b = this->buf;
 		if (length - wrote_bytes > ATA_SECTOR_SIZE)
-			b = (char*) buf + wrote_bytes;
+			b = (char*)buf + wrote_bytes;
 		else
-			memcpy(b, (char*) buf + wrote_bytes, length - wrote_bytes);
-		if (ATA::write_sectors(id, 1, active_sector, 0x10, (uint) b))
+			memcpy(b, (char*)buf + wrote_bytes, length - wrote_bytes);
+		if (ATA::write_sectors(id, 1, active_sector, 0x10, (uint)b))
 		{
 			printf_error("Drive write error");
 			return false;
@@ -714,12 +714,12 @@ bool FAT_drive::write_buf_to_file(const Dentry& dentry, const void* buf, uint le
 
 	// ~cd parent directory
 	if (!change_active_cluster(parent_cluster, active_cluster, active_sector, FAT_entry_offset, FAT_offset,
-							   FAT_sector, table_value, dir_entry_id))
+	                           FAT_sector, table_value, dir_entry_id))
 		return false;
 
 	// Update file size
 	entries[entry_id].file_size = length;
-	if (ATA::write_sectors(id, 1, active_sector, 0x10, (uint) this->buf))
+	if (ATA::write_sectors(id, 1, active_sector, 0x10, (uint)this->buf))
 	{
 		printf_error("Drive write error");
 		return false;
@@ -742,7 +742,7 @@ bool FAT_drive::cat(const Dentry& dentry, file_printer printer)
 
 	// ~cd parent directory
 	if (!change_active_cluster(parent_cluster, active_cluster, active_sector, FAT_entry_offset, FAT_offset,
-							   FAT_sector, table_value, dir_entry_id))
+	                           FAT_sector, table_value, dir_entry_id))
 		return false;
 
 	// Find file entry
@@ -784,7 +784,7 @@ bool FAT_drive::cat(const Dentry& dentry, file_printer printer)
 	while (printed_size < file_size && next_cluster != CLUSTER_EOC)
 	{
 		if (!change_active_cluster(next_cluster, active_cluster, active_sector, FAT_entry_offset, FAT_offset,
-								   FAT_sector, table_value, dir_entry_id))
+		                           FAT_sector, table_value, dir_entry_id))
 			return false;
 
 		// Todo: handle multiple sectors per cluster
@@ -832,7 +832,7 @@ bool DirEntry::is_free() const
 
 bool DirEntry::is_unused() const
 {
-	return (unsigned char) name[0] == 0xE5;
+	return (unsigned char)name[0] == 0xE5;
 }
 
 bool DirEntry::is_LFN() const
@@ -864,7 +864,7 @@ DirEntry::DirEntry(const char* name, uint8_t attrs, uint32_t first_cluster_addr,
 		uint i = l - 1;
 		for (; i < DIR_ENTRY_NAME_LEN && name[i] != '.'; i--)
 			this->name[10 - (l - 1 - i)] = name[i];
-		if (i == (uint) -1)
+		if (i == (uint)-1)
 		{
 			memset(this->name, NAME_PADDING_BYTE, DIR_ENTRY_NAME_LEN);
 			i = l;
