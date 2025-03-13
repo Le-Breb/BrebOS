@@ -44,47 +44,23 @@ void VFS::init()
 		printf_error("Failed to add /bin to path");
 }
 
-bool VFS::touch(const char* pathname)
+Dentry* VFS::touch(const char* pathname)
 {
-	// Basic path checks
-	if (!pathname || pathname[0] != '/' || !strcmp(pathname, "/"))
-	{
-		printf_error("Invalid path");
-		return false;
-	}
+	const char* file_name;
+	Dentry* parent_dentry = get_file_parent_dentry(pathname, file_name);
+	if (!parent_dentry)
+		return nullptr;
 
-	// Extract parent directory path
-	size_t path_length = strlen(pathname);
-	char* p = new char[path_length + 1]; // Path of parent directory
-	strcpy(p, pathname);
-	uint i = path_length - 1;
-	while (pathname[i] != '/')
-		i--;
-	memset(p + i + 1, 0, path_length - i);
-	// Extract file name
-	const char* file_name = pathname + i + 1;
-	if (!strlen(file_name))
-	{
-		printf_error("Empty file name");
-		delete[] p;
-		return false;
-	}
+	auto dentry = parent_dentry->inode->superblock->get_fs()->touch(*parent_dentry, file_name);
+	cache_dentry(dentry);
 
-	Dentry* dentry = browse_to(p);
-	if (!dentry || dentry->inode->type != Inode::Dir)
-	{
-		printf_error("%s no such/not a directory", pathname);
-		return false;
-	}
-	delete[] p;
-
-	return dentry->inode->superblock->get_fs()->touch(*dentry, file_name);
+	return dentry;
 }
 
 bool VFS::ls(const char* pathname)
 {
 	// Basic path checks
-	if (!pathname)
+	if (!pathname || pathname[0] != '/')
 	{
 		printf_error("Invalid path");
 		return false;
@@ -141,7 +117,48 @@ bool VFS::mkdir(const char* pathname)
 	}
 	delete[] parent_dir_path;
 
-	return dentry->inode->superblock->get_fs()->mkdir(*dentry, dir_name);
+	return dentry->inode->superblock->get_fs()->mkdir(*dentry, dir_name); // Todo: make mkdir return dentry and cache it
+}
+
+bool VFS::cat(const char* pathname)
+{
+	Dentry* dentry = get_file_dentry(pathname);
+	if (!dentry)
+		return false;
+
+	return dentry->inode->superblock->get_fs()->cat(*dentry, file_printer);
+}
+
+bool VFS::write_buf_to_file(const char* pathname, const void* buf, uint length)
+{
+	Dentry* dentry = get_file_dentry(pathname);
+	if (dentry)
+	{
+		printf_error("%s: already exists", pathname);
+		return false;
+	}
+
+	if (!((dentry = touch(pathname))))
+		return false;
+
+	return dentry->inode->superblock->get_fs()->write_buf_to_file(*dentry, buf, length);
+}
+
+void VFS::file_printer(const void* buf, size_t len, const char* extension)
+{
+	if (!strcmp(extension, "txt"))
+	{
+		auto cbuf = (char*)buf;
+		for (uint i = 0; i < len; i++)
+			FB::putchar(cbuf[i]);
+	}
+	else
+	{
+		auto bbuf = (uint8_t*)buf;
+		for (uint i = 0; i < len; i++)
+			printf("%02x", bbuf[i]);
+	}
+	FB::putchar('\n');
 }
 
 
@@ -313,6 +330,53 @@ void VFS::free_unused_cache_entries()
 	free_unused_inode_cache_entries();
 }
 
+Dentry* VFS::get_file_parent_dentry(const char* pathname, const char*& file_name)
+{
+	// Basic path checks
+	if (!pathname || pathname[0] != '/' || !strcmp(pathname, "/"))
+	{
+		printf_error("Invalid path");
+		return nullptr;
+	}
+
+	// Extract parent directory path
+	size_t path_length = strlen(pathname);
+	char* p = new char[path_length + 1]; // Path of parent directory
+	strcpy(p, pathname);
+	uint i = path_length - 1;
+	while (pathname[i] != '/')
+		i--;
+	memset(p + i + 1, 0, path_length - i);
+	// Extract file name
+	file_name = pathname + i + 1;
+	if (!strlen(file_name))
+	{
+		printf_error("Empty file name");
+		delete[] p;
+		return nullptr;
+	}
+
+	Dentry* dentry = browse_to(p);
+	if (!dentry || dentry->inode->type != Inode::Dir)
+	{
+		printf_error("%s no such/not a directory", pathname);
+		return nullptr;
+	}
+	delete[] p;
+
+	return dentry;
+}
+
+Dentry* VFS::get_file_dentry(const char* pathname)
+{
+	const char* file_name;
+	Dentry* parent_dentry = get_file_parent_dentry(pathname, file_name);
+	if (!parent_dentry)
+		return nullptr;
+
+	return browse_to(file_name, parent_dentry);
+}
+
 Dentry* VFS::browse_to(const char* path)
 {
 	if (path[0] == '\0')
@@ -387,7 +451,7 @@ bool VFS::mount_rootfs(FS* fs)
 
 	// Get and register FS root
 	Inode* n = fs->get_root_node();
-	Dentry* d = new Dentry(n, nullptr, mount_point);
+	auto d = new Dentry(n, nullptr, mount_point);
 
 	if (!cache_dentry(d))
 	{

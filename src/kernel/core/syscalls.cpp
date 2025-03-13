@@ -182,6 +182,9 @@ void Syscall::get_key()
         case 15:
             tcp();
             break;
+        case 16:
+            cat(cpu_state);
+            break;
         default:
             printf_error("Received unknown syscall id: %u", cpu_state->eax);
             break;
@@ -195,6 +198,12 @@ void Syscall::dns(const cpu_state_t* cpu_state)
 {
     const char* domain = (const char*)cpu_state->edi;
     DNS::send_query(domain);
+}
+
+void Syscall::cat(const cpu_state_t* cpu_state)
+{
+    const char* path = (const char*)cpu_state->edi;
+    VFS::cat(path);
 }
 
 void Syscall::tcp()

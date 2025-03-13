@@ -113,8 +113,10 @@ $(OS_ISO): kernel.elf libdynlk programs
 	@mmd -i disk_image.img ::/fold
 	@mmd -i disk_image.img ::/fold2
 	@mmd -i disk_image.img ::/bin
+	@mmd -i disk_image.img ::/downloads
 	@mcopy -i disk_image.img $(LIBC_BUILD_DIR)/libc.so ::/bin
 	@mcopy -i disk_image.img $(LIBDYNLK_BUILD_DIR)/libdynlk.so ::/bin
+	@echo "this is a text file :D" | mcopy -i disk_image.img - ::/"text-file.txt"
 	@for prog in $(shell find $(SRC_DIR)/programs/build -type f); do \
     		mcopy -i disk_image.img $$prog ::/bin; \
 	done

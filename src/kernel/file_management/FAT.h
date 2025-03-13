@@ -96,7 +96,7 @@ public:
 class __attribute__((packed)) DirEntry
 {
 public:
-	char name[DIR_ENTRY_NAME_LEN];
+	char name[DIR_ENTRY_NAME_LEN]{};
 	uint8_t attrs;
 	const uint8_t NTRes = 0;
 	uint8_t creation_time_tenth;
@@ -124,7 +124,9 @@ public:
 
 	[[nodiscard]] char* get_name() const;
 
-	uint32_t first_cluster_addr();
+	[[nodiscard]] uint32_t first_cluster_addr() const;
+
+	[[nodiscard]] char* get_extension() const;
 };
 
 struct directory
@@ -166,7 +168,7 @@ class FAT_drive : public FS
 	 */
 	static const char** split_at_slashes(const char* str, uint* num_tokens);
 
-	uint get_free_cluster(uint num_FAT_entries);
+	uint get_free_cluster() const;
 
 	/**Set environment to target a certain cluster
 	 *
@@ -193,8 +195,10 @@ class FAT_drive : public FS
 
 	Dentry* get_child_entry(Dentry& parent_dentry, const char* name) override;
 
+	Dentry* dir_entry_to_dentry(const DirEntry& dir_entry, Dentry& parent_dentry, const char* name) const;
+
 public:
-	bool touch(const Dentry& parent_dentry, const char* entry_name) override;
+	Dentry* touch(Dentry& parent_dentry, const char* entry_name) override;
 
 	bool mkdir(const Dentry& parent_dentry, const char* entry_name) override;
 
@@ -211,6 +215,10 @@ public:
 	~FAT_drive() override;
 
 	Inode* get_root_node() override;
+
+	bool write_buf_to_file(const Dentry& dentry, const void* buf, uint length) override;
+
+	bool cat(const Dentry& dentry, file_printer printer) override;
 };
 
 

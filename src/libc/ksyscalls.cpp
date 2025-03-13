@@ -91,3 +91,8 @@ void tcp()
 {
 	__asm__ volatile("int $0x80" :  : "a"(15));
 }
+
+void cat(const char* path)
+{
+	__asm__ volatile("int $0x80" :  : "a"(16), "D"(path));
+}

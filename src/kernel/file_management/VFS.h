@@ -50,14 +50,24 @@ class VFS
 
 	static void free_unused_cache_entries();
 
+	static Dentry* get_file_parent_dentry(const char* pathname, const char*& file_name);
+
+	static Dentry* get_file_dentry(const char* pathname);
+
+	static void file_printer(const void* buf, size_t len, const char* extension);
+
 public:
 	static void init();
 
-	static bool touch(const char* pathname);
+	static Dentry* touch(const char* pathname);
 
 	static bool ls(const char* pathname);
 
 	static bool mkdir(const char* pathname);
+
+	static bool cat(const char* pathname);
+
+	static bool write_buf_to_file(const char* pathname, const void* buf, uint length);
 
 	/**
 	 * Mounts a file system at /mnt/FS_index

@@ -56,4 +56,6 @@ void dns(const char* domain);
 
 void tcp();
 
+void cat(const char* path);
+
 #endif //INCLUDE_SYSCALLS_H
