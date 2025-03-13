@@ -17,10 +17,12 @@ SRC_DIR=src
 SRC=$(shell cd $(SRC_DIR)/kernel; find . -name '*.cpp' -o -name '*.s' | sed 's|^\./||')
 OBJECTS = $(patsubst %.cpp, $(KERNEL_BUILD_DIR)/%.o, $(filter %.cpp, $(SRC))) \
           $(patsubst %.s, $(KERNEL_BUILD_DIR)/%.o, $(filter %.s, $(SRC)))
+DEPS=$(OBJECTS:.o=.d)
+-include $(DEPS)
 
 CC = i686-elf-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
--c -fno-exceptions -fno-rtti
+-c -fno-exceptions -fno-rtti -MMD -MP
 AS = nasm
 ASFLAGS = -f elf -F dwarf
 LDFLAGS = -T link.ld -melf_i386
