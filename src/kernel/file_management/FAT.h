@@ -195,14 +195,14 @@ class FAT_drive : public FS
 
 	Dentry* get_child_entry(Dentry& parent_dentry, const char* name) override;
 
-	Dentry* dir_entry_to_dentry(const DirEntry& dir_entry, Dentry& parent_dentry, const char* name) const;
+	Dentry* dir_entry_to_dentry(const DirEntry& dir_entry, Dentry* parent_dentry, const char* name) const;
 
 public:
 	Dentry* touch(Dentry& parent_dentry, const char* entry_name) override;
 
 	bool mkdir(const Dentry& parent_dentry, const char* entry_name) override;
 
-	bool ls(const Dentry& dentry) override;
+	bool ls(const Dentry& dentry, ls_printer printer) override;
 
 	[[nodiscard]] static bool drive_present(uint drive_id);
 
@@ -218,7 +218,7 @@ public:
 
 	bool write_buf_to_file(const Dentry& dentry, const void* buf, uint length) override;
 
-	bool cat(const Dentry& dentry, file_printer printer) override;
+	bool cat(const Dentry& dentry, cat_printer printer) override;
 };
 
 

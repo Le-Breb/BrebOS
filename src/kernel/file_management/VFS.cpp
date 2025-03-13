@@ -52,7 +52,8 @@ Dentry* VFS::touch(const char* pathname)
 		return nullptr;
 
 	auto dentry = parent_dentry->inode->superblock->get_fs()->touch(*parent_dentry, file_name);
-	cache_dentry(dentry);
+	if (dentry)
+		cache_dentry(dentry);
 
 	return dentry;
 }
@@ -75,7 +76,7 @@ bool VFS::ls(const char* pathname)
 		return false;
 	}
 
-	return dentry->inode->superblock->get_fs()->ls(*dentry);
+	return dentry->inode->superblock->get_fs()->ls(*dentry, ls_printer);
 }
 
 bool VFS::mkdir(const char* pathname)
@@ -131,7 +132,8 @@ bool VFS::cat(const char* pathname)
 
 bool VFS::write_buf_to_file(const char* pathname, const void* buf, uint length)
 {
-	Dentry* dentry = get_file_dentry(pathname);
+	// Todo: update code so that it does not throw printf_error is not called since we expect the file not to exist
+	Dentry* dentry = get_file_dentry(pathname, false);
 	if (dentry)
 	{
 		printf_error("%s: already exists", pathname);
@@ -158,7 +160,20 @@ void VFS::file_printer(const void* buf, size_t len, const char* extension)
 		for (uint i = 0; i < len; i++)
 			printf("%02x", bbuf[i]);
 	}
+}
+
+void VFS::ls_printer(const Dentry& dentry)
+{
+	bool is_dir = dentry.inode->type == Inode::Dir;
+	if (is_dir)
+		FB::set_fg(FB_BROWN);
+	else
+		FB::set_fg(FB_MAGENTA);
+	FB::write(dentry.name);
+	if (is_dir)
+		FB::putchar('/');
 	FB::putchar('\n');
+	FB::set_fg(FB_WHITE);
 }
 
 
@@ -191,7 +206,7 @@ bool VFS::add_to_path(const char* path)
 	return true;
 }
 
-Dentry* VFS::browse_to(const char* path, Dentry* starting_point)
+Dentry* VFS::browse_to(const char* path, Dentry* starting_point, bool print_errors)
 {
 	char* svptr; // Internal pointer for strok_r calls
 
@@ -216,7 +231,8 @@ Dentry* VFS::browse_to(const char* path, Dentry* starting_point)
 	// Pure virtual node, cannot do anything there
 	if (!dentry->inode->superblock)
 	{
-		printf_error("Path targets full virtual Inode");
+		if (print_errors)
+			printf_error("Path targets full virtual Inode");
 		delete[] p;
 		return nullptr;
 	}
@@ -224,7 +240,8 @@ Dentry* VFS::browse_to(const char* path, Dentry* starting_point)
 	// We browsed up to a file's cached dentry but we haven't finished browsing (i.e., part of the path targets a file)
 	if (token && dentry->inode->type != Inode::Dir)
 	{
-		printf_error("%s no such directory", path);
+		if (print_errors)
+			printf_error("%s no such directory", path);
 		delete[] p;
 		return nullptr;
 	}
@@ -235,21 +252,24 @@ Dentry* VFS::browse_to(const char* path, Dentry* starting_point)
 	{
 		if (dentry->inode->type != Inode::Dir)
 		{
-			printf_error("%s not a directory", path);
+			if (print_errors)
+				printf_error("%s not a directory", path);
 			delete[] p;
 			return nullptr;
 		}
 		dentry = fs->get_child_entry(*dentry, token);
 		if (!dentry)
 		{
-			printf_error("%s no such directory", path);
+			if (print_errors)
+				printf_error("%s no such directory", path);
 			delete[] p;
 			return nullptr;
 		}
 
 		if (!cache_dentry(dentry))
 		{
-			printf_error("Too many inodes or dentries");
+			if (print_errors)
+				printf_error("Too many inodes or dentries");
 			delete[] p;
 			return nullptr;
 		}
@@ -367,14 +387,14 @@ Dentry* VFS::get_file_parent_dentry(const char* pathname, const char*& file_name
 	return dentry;
 }
 
-Dentry* VFS::get_file_dentry(const char* pathname)
+Dentry* VFS::get_file_dentry(const char* pathname, bool print_errors)
 {
 	const char* file_name;
 	Dentry* parent_dentry = get_file_parent_dentry(pathname, file_name);
 	if (!parent_dentry)
 		return nullptr;
 
-	return browse_to(file_name, parent_dentry);
+	return browse_to(file_name, parent_dentry, print_errors);
 }
 
 Dentry* VFS::browse_to(const char* path)

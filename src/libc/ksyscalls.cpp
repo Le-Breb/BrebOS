@@ -87,9 +87,9 @@ void dns(const char* domain)
 	__asm__ volatile("int $0x80" :  : "a"(14), "D"(domain));
 }
 
-void tcp()
+void wget(const char* uri)
 {
-	__asm__ volatile("int $0x80" :  : "a"(15));
+	__asm__ volatile("int $0x80" :  : "a"(15), "D"(uri));
 }
 
 void cat(const char* path)

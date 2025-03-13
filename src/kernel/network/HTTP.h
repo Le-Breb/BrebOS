@@ -91,7 +91,8 @@ private:
     uint8_t* buf = nullptr;
     uint16_t buf_capacity = 0;
     uint16_t buf_size = 0;
-    response_t* response;
+    request_t* request = nullptr;
+    response_t* response = nullptr;
 
     [[nodiscard]] static void* create_packet(const request_t* request, uint16_t& packet_size);
 

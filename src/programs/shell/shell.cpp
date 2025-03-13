@@ -85,8 +85,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
           	clear_screen();
         else if (cmd[0] == 'd' && cmd[1] == 'n' && cmd[2] == 's')
         	dns(c_id >= 4 ? cmd + 4 : "www.example.com");
-        else if (cmd[0] == 't' && cmd[1] == 'c' && cmd[2] == 'p')
-        	tcp();
+        else if (cmd[0] == 'w' && cmd[1] == 'g' && cmd[2] == 'e' && cmd[3] == 't' && cmd[4] == ' ')
+        	wget(cmd + 5);
         else if (cmd[0] == 'c' && cmd[1] == 'a' && cmd[2] == 't' && cmd[3] == ' ')
         	cat(cmd + 4);
 		else

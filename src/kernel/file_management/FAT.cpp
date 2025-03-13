@@ -174,7 +174,7 @@ const char** FAT_drive::split_at_slashes(const char* str, uint* num_tokens)
 
 uint FAT_drive::get_free_cluster() const
 {
-	for (uint sector = first_fat_sector; sector < total_sectors; ++sector) // Entries 0 and 1 are reserved
+	for (uint sector = first_fat_sector; sector < total_sectors; ++sector)
 	{
 		uint32_t fat_buf[ATA_SECTOR_SIZE / sizeof(uint32_t)];
 		if (ATA::read_sectors(id, 1, sector, 0x10, (uint)fat_buf))
@@ -191,7 +191,6 @@ uint FAT_drive::get_free_cluster() const
 				return cluster_number;
 			}
 	}
-	printf_error("get free cluster not implemented");
 
 	return 0;
 }
@@ -437,15 +436,15 @@ Dentry* FAT_drive::get_child_entry(Dentry& parent_dentry, const char* name)
 	if (dir_entry_id * sizeof(DirEntry) >= FAT_Buf_size || entries[dir_entry_id].is_free())
 		return nullptr;
 
-	return dir_entry_to_dentry(entries[dir_entry_id], parent_dentry, name);
+	return dir_entry_to_dentry(entries[dir_entry_id], &parent_dentry, name);
 }
 
-Dentry* FAT_drive::dir_entry_to_dentry(const DirEntry& dir_entry, Dentry& parent_dentry, const char* name) const
+Dentry* FAT_drive::dir_entry_to_dentry(const DirEntry& dir_entry, Dentry* parent_dentry, const char* name) const
 {
 	Inode::Type inode_type = dir_entry.attrs & DIRECTORY ? Inode::Dir : Inode::File;
 	auto inode = new Inode(superblock, dir_entry.file_size, dir_entry.first_cluster_addr(), inode_type);
 
-	return new Dentry(inode, &parent_dentry, name);
+	return new Dentry(inode, parent_dentry, name);
 }
 
 Dentry* FAT_drive::touch(Dentry& parent_dentry, const char* entry_name)
@@ -504,7 +503,7 @@ Dentry* FAT_drive::touch(Dentry& parent_dentry, const char* entry_name)
 		return nullptr;
 	}
 
-	return dir_entry_to_dentry(new_entry, parent_dentry, entry_name);
+	return dir_entry_to_dentry(new_entry, &parent_dentry, entry_name);
 }
 
 bool FAT_drive::mkdir(const Dentry& parent_dentry, const char* entry_name)
@@ -590,7 +589,7 @@ bool FAT_drive::mkdir(const Dentry& parent_dentry, const char* entry_name)
 	return true;
 }
 
-bool FAT_drive::ls(const Dentry& dentry)
+bool FAT_drive::ls(const Dentry& dentry, ls_printer printer)
 {
 	uint parent_sector = dentry.inode->lba;
 	uint parent_cluster = parent_sector * bs.sectors_per_cluster;
@@ -609,7 +608,9 @@ bool FAT_drive::ls(const Dentry& dentry)
 		if (!prev_is_lfn)
 		{
 			char* entry_name = is_lfn ? ((LongDirEntry*)entry)->get_uglily_converted_utf8_name() : entry->get_name();
-			printf("%s\n", entry_name);
+			Dentry* dentry = dir_entry_to_dentry(is_lfn ? *(entry + 1) : *entry, nullptr, entry_name);
+			printer(*dentry);
+			delete dentry;
 			delete[] entry_name;
 		}
 
@@ -728,7 +729,7 @@ bool FAT_drive::write_buf_to_file(const Dentry& dentry, const void* buf, uint le
 	return true;
 }
 
-bool FAT_drive::cat(const Dentry& dentry, file_printer printer)
+bool FAT_drive::cat(const Dentry& dentry, cat_printer printer)
 {
 	if (dentry.inode->type != Inode::File)
 	{

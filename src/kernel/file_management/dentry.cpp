@@ -12,7 +12,10 @@ Dentry::Dentry(Inode* inode, Dentry* parent, const char* name) : inode(inode), p
 
 Dentry::~Dentry()
 {
-	parent->rc--;
-	inode->rc--;
+	if (parent)
+	{
+		parent->rc--;
+		inode->rc--;
+	}
 	delete[] name;
 }

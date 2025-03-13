@@ -180,7 +180,7 @@ void Syscall::get_key()
             dns(cpu_state);
             break;
         case 15:
-            tcp();
+            wget(cpu_state);
             break;
         case 16:
             cat(cpu_state);
@@ -206,10 +206,11 @@ void Syscall::cat(const cpu_state_t* cpu_state)
     VFS::cat(path);
 }
 
-void Syscall::tcp()
+void Syscall::wget(const cpu_state_t* cpu_state)
 {
     auto http = new HTTP{Network::gateway_ip, 8080};
-    http->send_get("test.txt");
+    const char* uri = (const char*)cpu_state->edi;
+    http->send_get(uri);
 }
 
 void Syscall::mkdir(cpu_state_t* cpu_state)

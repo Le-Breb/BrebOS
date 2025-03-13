@@ -6,6 +6,8 @@
 #include "TCP.h"
 #include "../core/fb.h"
 #include "../core/memory.h"
+#include "../file_management/VFS.h"
+#include <kstring.h>
 
 uint16_t HTTP::request::get_size() const
 {
@@ -149,7 +151,7 @@ HTTP::header_t* HTTP::response::get_header(const char* name) const
     return nullptr;
 }
 
-HTTP::HTTP(uint8_t peer_ip[4], uint16_t peer_port): TCP_listener(peer_ip, peer_port), response(nullptr)
+HTTP::HTTP(uint8_t peer_ip[4], uint16_t peer_port): TCP_listener(peer_ip, peer_port)
 {
 }
 
@@ -162,24 +164,25 @@ void HTTP::display_response(const response_t* response)
 
 void HTTP::send_get(const char* uri)
 {
-    request_t request{};
+    request = new request_t();
 
-    request.method = (char*)"GET";
-    request.uri = (char*)uri;
-    request.version = (char*)"HTTP/1.1";
+    request->method = (char*)"GET";
+    request->uri = new char[strlen(uri) + 1];
+    strcpy(request->uri, uri);
+    request->version = (char*)"HTTP/1.1";
     constexpr uint16_t num_headers = 3;
-    request.num_headers = num_headers;
+    request->num_headers = num_headers;
     header_t headers[num_headers]{};
     headers[0].name = (char*)"Host";
-    headers[0].value = (char*)uri; // Todo: write something that makes sense here
+    headers[0].value = request->uri; // Todo: write something that makes sense here
     headers[1].name = (char*)"User-Agent";
     headers[1].value = (char*)"BrebOS";
     headers[2].name = (char*)"Accept";
     headers[2].value = (char*)"*/*";
-    request.headers = headers;
+    request->headers = headers;
 
     uint16_t packet_size;
-    void* packet = create_packet(&request, packet_size);
+    void* packet = create_packet(request, packet_size);
 
     state = State::GET_SENT;
 
@@ -250,23 +253,27 @@ void HTTP::on_connection_terminated()
     {
         state = State::RESPONSE_COMPLETE;
 
-        printf("HTTP response: \n");
-        display_response(response);
-        auto content_type_header = response->get_header("Content-Type");
-        // Display text/plain as text, otherwise as hex
-        if (0 == strcmp("text/plain", content_type_header->value))
-        {
-            for (uint16_t i = 0; i < buf_size; i++)
-                printf("%c", buf[i]);
-        }
+        // Build file path
+        const char save_path[] = "/downloads/";
+        auto pathname_length = sizeof(save_path) + strlen(request->uri) ;
+        char pathname[pathname_length + 1];
+        pathname[pathname_length] = '\0';
+        strcpy(pathname, save_path);
+        strcat(pathname, request->uri);
+
+        // Save file
+        if (VFS::write_buf_to_file(pathname, buf, buf_size))
+            printf_info("%s downloaded and saved at %s", request->uri, pathname);
         else
-            for (uint16_t i = 0; i < buf_size; i++)
-                printf("%02x", buf[i]);
+            printf_error("Error while saving downloaded file %s at %s", request->uri, pathname);
     }
     else
         printf_error("HTTP connection terminated before response was fully received");
 
     state = State::CLOSED;
+    delete[] buf;
+    buf_size = 0;
+    buf_capacity = 0;
 }
 
 const char* HTTP::find_char(const char* str, char c, uint16_t len)
@@ -396,5 +403,6 @@ uint16_t HTTP::atoi(const char* str)
 
 HTTP::~HTTP()
 {
+    delete request;
     delete response;
 }

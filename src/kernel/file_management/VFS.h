@@ -40,7 +40,7 @@ class VFS
 
 	static bool add_to_path(const char* path);
 
-	static Dentry* browse_to(const char* path, Dentry* starting_point);
+	static Dentry* browse_to(const char* path, Dentry* starting_point, bool print_errors = true);
 
 	static bool cache_dentry(Dentry* dentry);
 
@@ -52,9 +52,11 @@ class VFS
 
 	static Dentry* get_file_parent_dentry(const char* pathname, const char*& file_name);
 
-	static Dentry* get_file_dentry(const char* pathname);
+	static Dentry* get_file_dentry(const char* pathname, bool print_errors = true);
 
 	static void file_printer(const void* buf, size_t len, const char* extension);
+
+	static void ls_printer(const Dentry& dentry);
 
 public:
 	static void init();

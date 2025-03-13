@@ -54,7 +54,7 @@ void clear_screen();
 
 void dns(const char* domain);
 
-void tcp();
+void wget(const char* uri);
 
 void cat(const char* path);
 
