@@ -1,5 +1,7 @@
 #include "Socket.h"
 
+#include <kstdio.h>
+
 #include "Endianness.h"
 #include "Network.h"
 #include "../core/fb.h"
@@ -37,14 +39,18 @@ uint8_t* Socket::create_packet_response(uint16_t payload_size, const IPV4::packe
                                (uint8_t*)ethernet_packet->header.src, response_info);
 }
 
-void Socket::close()
+void Socket::close(const char* error_message)
 {
     state = TCP::State::CLOSED;
 
     if (!listener)
+    {
+        if (error_message)
+            printf_warn("%s\n", error_message);
         return;
+    }
 
-    listener->on_connection_terminated();
+    listener->on_connection_terminated(error_message);
 }
 
 Socket::Socket(uint8_t peer_ip[IPV4_ADDR_LEN], uint16_t peer_port) : peer_port(peer_port)
@@ -90,7 +96,7 @@ void Socket::handle_packet(const TCP::packet_info_t* packet_info, const IPV4::pa
         return;
     }
 
-    if (flags & (TCP_FLAG_SYN | TCP_FLAG_ACK) && state == TCP::State::SYN_SENT) // SYN response
+    if (flags & TCP_FLAG_SYN && flags && TCP_FLAG_ACK && state == TCP::State::SYN_SENT) // SYN response
     {
         seq_num++; // We are about to send a new packet, update seq
         Ethernet::packet_info_t response_info;
@@ -111,7 +117,7 @@ void Socket::handle_packet(const TCP::packet_info_t* packet_info, const IPV4::pa
         close();
         return;
     }
-    if (flags & (TCP_FLAG_FIN | TCP_FLAG_ACK) && state == TCP::State::FIN_WAIT_1) // Peer confirms connection end
+    if (flags & TCP_FLAG_FIN && flags & TCP_FLAG_ACK && state == TCP::State::FIN_WAIT_1) // Peer confirms connection end
     {
         // Acknowledge we received the confirmation and definitely close the connection
         Ethernet::packet_info_t response_info;
@@ -123,7 +129,7 @@ void Socket::handle_packet(const TCP::packet_info_t* packet_info, const IPV4::pa
         close();
         return;
     }
-    if (flags & (TCP_FLAG_PSH | TCP_FLAG_ACK) && state == TCP::State::ESTABLISHED) // Data received
+    if (flags & TCP_FLAG_PSH && flags & TCP_FLAG_ACK && state == TCP::State::ESTABLISHED) // Data received
     {
         Ethernet::packet_info_t response_info;
         auto response_buf = create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info);
@@ -148,25 +154,31 @@ void Socket::handle_packet(const TCP::packet_info_t* packet_info, const IPV4::pa
     if (flags == (TCP_FLAG_RST | TCP_FLAG_ACK) && state == TCP::State::SYN_SENT)
     // Peer port is very likely to be closed
     {
-        // Trigger connection error callback
-        if (listener)
-            listener->on_connection_error();
+        char error_msg[100]{};
+        sprintf(error_msg, "TCP handshake with %d.%d.%d.%d on port %d failed", peer_ip[0], peer_ip[1],
+                peer_ip[2], peer_ip[3], peer_port);
 
-        printf_error("TCP handshake with %d.%d.%d.%d on port %d failed", peer_ip[0], peer_ip[1],
-                     peer_ip[2], peer_ip[3], peer_port);
-
-        close();
+        close(error_msg);
         return;
     }
 
-    // Not handled, force close connection
-    Ethernet::packet_info_t response_info;
-    auto buf = create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info);
-    TCP::write_reset_header(buf, this);
+    bool reset = flags & TCP_FLAG_RST;
+    if (!reset)
+    {
+        // Not handled, force close connection
+        Ethernet::packet_info_t response_info;
+        auto buf = create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info);
+        TCP::write_reset_header(buf, this);
 
-    Network::send_packet(&response_info);
+        Network::send_packet(&response_info);
+    }
 
-    close();
+    char error_message[100]{};
+    if (reset)
+        strcpy(error_message, "Peer closed connection");
+    else
+        sprintf(error_message, "Unknown TCP packet received. Flags: %x", flags);
+    close(error_message);
 }
 
 Socket* Socket::port_used(uint16_t port)

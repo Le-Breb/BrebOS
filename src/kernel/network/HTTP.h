@@ -6,6 +6,7 @@
 
 #include "NetworkConsts.h"
 #include "TCPListener.h"
+#include "../utils/list.h"
 
 #define DIGIT(c) (c >= '0' && c <= '9')
 
@@ -88,6 +89,7 @@ public:
     ~HTTP() override;
 
 private:
+    static list<HTTP*> instances;
     uint8_t* buf = nullptr;
     uint16_t buf_capacity = 0;
     uint16_t buf_size = 0;
@@ -97,8 +99,6 @@ private:
     [[nodiscard]] static void* create_packet(const request_t* request, uint16_t& packet_size);
 
     [[nodiscard]] static size_t get_request_size(const request_t* request);
-
-    void on_connection_error() override;
 
     State state = State::CLOSED;
 
@@ -118,7 +118,9 @@ private:
     void handle_response_descriptor(const void* packet, uint16_t packet_size);
 
     // Socket listener callback
-    void on_connection_terminated() override;
+    void on_connection_terminated(const char* error_message) override;
+
+    static void close_instance(HTTP* instance);
 };
 
 

@@ -163,7 +163,7 @@ bool ELFLoader::apply_relocations(ELF* elf, uint elf_runtime_load_address) const
     // adds the elf runtime load address to GOT entries, so that PLT stubs' first JMP remain valid, calling
     // stub 0 afterwards, which will then call dynlk thanks to the address in GOT[2]. Dynlk will then perform
     // the complete relocation at runtime.
-    for (size_t i = 0; i < elf->num_plt_relocs; i++) // Todo: check if this isn't bypassing lazy binding
+    for (size_t i = 0; i < elf->num_plt_relocs; i++)
     {
         // Get GOT entry runtime address
         Elf32_Rel* reloc = elf->plt_relocs + i;

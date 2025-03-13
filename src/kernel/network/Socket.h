@@ -45,8 +45,6 @@ private:
     [[nodiscard]] static uint8_t* create_packet_response(uint16_t payload_size, const IPV4::packet_t* ipv4_packet,
                                                          const Ethernet::packet_t* ethernet_packet,
                                                          Ethernet::packet_info_t& response_info);
-
-    void close();
 public:
     Socket(uint8_t peer_ip[IPV4_ADDR_LEN], uint16_t peer_port);
 
@@ -67,6 +65,8 @@ public:
     static Socket* reset_response_socket(uint8_t peer_ip[IPV4_ADDR_LEN], uint16_t peer_port, uint32_t peer_seq_num);
 
     void send_data(const void* data, uint16_t size);
+
+    void close(const char* error_message = nullptr);
 };
 
 

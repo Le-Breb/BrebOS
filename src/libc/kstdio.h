@@ -20,6 +20,8 @@ typedef char* va_list;
 
 __attribute__ ((format (printf, 1, 2))) int printf(const char* format, ...);
 
+__attribute__((format(printf, 2, 3))) int sprintf(char* str, const char *format, ...);
+
 void flush();
 
 /*

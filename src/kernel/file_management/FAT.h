@@ -200,7 +200,7 @@ class FAT_drive : public FS
 public:
 	Dentry* touch(Dentry& parent_dentry, const char* entry_name) override;
 
-	bool mkdir(const Dentry& parent_dentry, const char* entry_name) override;
+	Dentry* mkdir(Dentry& parent_dentry, const char* entry_name) override;
 
 	bool ls(const Dentry& dentry, ls_printer printer) override;
 

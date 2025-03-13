@@ -208,8 +208,14 @@ void Syscall::cat(const cpu_state_t* cpu_state)
 
 void Syscall::wget(const cpu_state_t* cpu_state)
 {
-    auto http = new HTTP{Network::gateway_ip, 8080};
     const char* uri = (const char*)cpu_state->edi;
+    if (!*uri)
+    {
+        printf_error("Please provide a URI to wget");
+        return;
+    }
+
+    auto http = new HTTP{Network::gateway_ip, 8080};
     http->send_get(uri);
 }
 

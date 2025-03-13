@@ -91,6 +91,9 @@ public:
     /** Write an info decorator without trailing newline*/
     static void info_decorator();
 
+    /** Write an warm decorator without trailing newline*/
+    static void warn_decorator();
+
     /** Write an ok decorator */
     static void ok();
 
@@ -99,6 +102,9 @@ public:
 
     /** Write an info decorator */
     static void info();
+
+    /** Write an info decorator */
+    static void warn();
 
     /** Scroll one line up  */
     static void scroll();
@@ -123,5 +129,7 @@ __attribute__ ((format (printf, 1, 2))) int printf(const char* format, ...);
 __attribute__ ((format (printf, 1, 2))) int printf_error(const char* format, ...);
 
 __attribute__ ((format (printf, 1, 2))) int printf_info(const char* format, ...);
+
+__attribute__ ((format (printf, 1, 2))) int printf_warn(const char* format, ...);
 
 #endif /* INCLUDE_FB_H */

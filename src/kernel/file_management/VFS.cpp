@@ -118,7 +118,10 @@ bool VFS::mkdir(const char* pathname)
 	}
 	delete[] parent_dir_path;
 
-	return dentry->inode->superblock->get_fs()->mkdir(*dentry, dir_name); // Todo: make mkdir return dentry and cache it
+	dentry = dentry->inode->superblock->get_fs()->mkdir(*dentry, dir_name);
+	if (dentry)
+		cache_dentry(dentry);
+	return dentry;
 }
 
 bool VFS::cat(const char* pathname)
@@ -132,7 +135,6 @@ bool VFS::cat(const char* pathname)
 
 bool VFS::write_buf_to_file(const char* pathname, const void* buf, uint length)
 {
-	// Todo: update code so that it does not throw printf_error is not called since we expect the file not to exist
 	Dentry* dentry = get_file_dentry(pathname, false);
 	if (dentry)
 	{
@@ -179,12 +181,12 @@ void VFS::ls_printer(const Dentry& dentry)
 
 Dentry* VFS::get_cached_dentry(Dentry* parent, const char* name) // Todo: use a hash map
 {
-	for (uint i = 0; i < MAX_DENTRIES; ++i)
+	for (auto & dentry : dentries)
 	{
-		if (!dentries[i])
+		if (!dentry)
 			continue;
-		if (!strcmp(dentries[i]->name, name) && dentries[i]->parent == parent)
-			return dentries[i];
+		if (!strcmp(dentry->name, name) && dentry->parent == parent)
+			return dentry;
 	}
 
 	return nullptr;

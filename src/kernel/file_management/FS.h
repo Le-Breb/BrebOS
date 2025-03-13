@@ -28,7 +28,7 @@ public:
 
 	virtual Dentry* touch(Dentry& parent_dentry, const char* entry_name) = 0;
 
-	virtual bool mkdir(const Dentry& parent_dentry, const char* entry_name) = 0;
+	virtual Dentry* mkdir(Dentry& parent_dentry, const char* entry_name) = 0;
 
 	virtual bool ls(const Dentry& dentry, ls_printer printer) = 0;
 

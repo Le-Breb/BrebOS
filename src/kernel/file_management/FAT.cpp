@@ -506,14 +506,14 @@ Dentry* FAT_drive::touch(Dentry& parent_dentry, const char* entry_name)
 	return dir_entry_to_dentry(new_entry, &parent_dentry, entry_name);
 }
 
-bool FAT_drive::mkdir(const Dentry& parent_dentry, const char* entry_name)
+Dentry* FAT_drive::mkdir(Dentry& parent_dentry, const char* entry_name)
 
 {
 	uint l = strlen(entry_name);
 	if (l >= 12 - 3)
 	{
 		printf_error("Dir name requires LFN support");
-		return false;
+		return nullptr;
 	}
 
 	uint parent_sector = parent_dentry.inode->lba;
@@ -522,7 +522,7 @@ bool FAT_drive::mkdir(const Dentry& parent_dentry, const char* entry_name)
 	// ~= cd wd
 	if (!change_active_cluster(parent_cluster, active_cluster, active_sector, FAT_entry_offset, FAT_offset,
 	                           FAT_sector, table_value, dir_entry_id))
-		return false;
+		return nullptr;
 
 	// Skip used dir entries, aka files/folders inside wd
 	while (dir_entry_id * sizeof(DirEntry) < FAT_Buf_size && !entries[dir_entry_id].is_free())
@@ -532,14 +532,14 @@ bool FAT_drive::mkdir(const Dentry& parent_dentry, const char* entry_name)
 	if (dir_entry_id * sizeof(DirEntry) == bs.bytes_per_sector * bs.sectors_per_cluster)
 	{
 		printf_error("Working directory cluster is full, chaining implementation is needed");
-		return false;
+		return nullptr;
 	}
 
 	uint dir_content_cluster = get_free_cluster();
 	if (!dir_content_cluster)
 	{
 		printf_error("no free cluster found");
-		return false;
+		return nullptr;
 	}
 
 	// Write new entry
@@ -548,13 +548,13 @@ bool FAT_drive::mkdir(const Dentry& parent_dentry, const char* entry_name)
 	if (ATA::write_sectors(id, 1, active_sector, 0x10, (uint)buf))
 	{
 		printf_error("Drive write error");
-		return false;
+		return nullptr;
 	}
 
 	// ~= cd new directory
 	if (!change_active_cluster(dir_content_cluster, active_cluster, active_sector, FAT_entry_offset, FAT_offset,
 	                           FAT_sector, table_value, dir_entry_id))
-		return false;
+		return nullptr;
 
 	uint dir_content_sector = active_sector;
 
@@ -563,14 +563,14 @@ bool FAT_drive::mkdir(const Dentry& parent_dentry, const char* entry_name)
 	if (ATA::write_sectors(id, 1, FAT_sector, 0x10, (uint)FAT)) // Write new FAT
 	{
 		printf_error("drive write error");
-		return false;
+		return nullptr;
 	}
 
 	// Note: I guess this is unnecessary since dir content cluster is supposed to be empty
 	if (ATA::read_sectors(id, 1, dir_content_sector, 0x10, (uint)buf))
 	{
 		printf_error("drive read error");
-		return false;
+		return nullptr;
 	}
 
 	// Create dot and dot dot entries
@@ -583,10 +583,10 @@ bool FAT_drive::mkdir(const Dentry& parent_dentry, const char* entry_name)
 	if (ATA::write_sectors(id, 1, dir_content_sector, 0x10, (uint)buf))
 	{
 		printf_error("Drive write error");
-		return false;
+		return nullptr;
 	}
 
-	return true;
+	return dir_entry_to_dentry(new_entry, &parent_dentry, entry_name);
 }
 
 bool FAT_drive::ls(const Dentry& dentry, ls_printer printer)
@@ -787,8 +787,6 @@ bool FAT_drive::cat(const Dentry& dentry, cat_printer printer)
 		if (!change_active_cluster(next_cluster, active_cluster, active_sector, FAT_entry_offset, FAT_offset,
 		                           FAT_sector, table_value, dir_entry_id))
 			return false;
-
-		// Todo: handle multiple sectors per cluster
 
 		uint rem = file_size - printed_size;
 		uint num = rem < ATA_SECTOR_SIZE ? rem : ATA_SECTOR_SIZE;

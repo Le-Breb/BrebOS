@@ -102,6 +102,12 @@ void FB::info()
     putchar('\n');
 }
 
+void FB::warn()
+{
+    warn_decorator();
+    putchar('\n');
+}
+
 void FB::ok_decorator()
 {
     putchar('[');
@@ -125,6 +131,15 @@ void FB::info_decorator()
     putchar('[');
     set_fg(FB_BLUE);
     write("INFO");
+    set_fg(FB_WHITE);
+    putchar(']');
+}
+
+void FB::warn_decorator()
+{
+    putchar('[');
+    set_fg(FB_BROWN);
+    write("WARN");
     set_fg(FB_WHITE);
     putchar(']');
 }
@@ -235,492 +250,523 @@ char* k__int_str(intmax_t i, char b[], int base, uint plusSignIfNeeded, uint spa
     return b;
 }
 
-void kdisplayCharacter(char c, int* a)
+int kvprintf(const char* format, void (*output_char_func)(char, int*), void (*output_string_func)(const char*, int*), va_list list)
 {
-    FB::putchar(c);
+	int chars = 0;
+	char intStrBuffer[256] = {0};
+
+	for (int i = 0; format[i]; ++i)
+	{
+
+		char specifier = '\0';
+		char length = '\0';
+
+		int lengthSpec = 0;
+		int precSpec = 0;
+		uint leftJustify = 0;
+		uint zeroPad = 0;
+		uint spaceNoSign = 0;
+		uint altForm = 0;
+		uint plusSign = 0;
+		uint emode = 0;
+		int expo = 0;
+
+		if (format[i] == '%')
+		{
+			++i;
+
+			uint extBreak = 0;
+			while (1)
+			{
+
+				switch (format[i])
+				{
+					case '-':
+						leftJustify = 1;
+						++i;
+						break;
+
+					case '+':
+						plusSign = 1;
+						++i;
+						break;
+
+					case '#':
+						altForm = 1;
+						++i;
+						break;
+
+					case ' ':
+						spaceNoSign = 1;
+						++i;
+						break;
+
+					case '0':
+						zeroPad = 1;
+						++i;
+						break;
+
+					default:
+						extBreak = 1;
+						break;
+				}
+
+				if (extBreak) break;
+			}
+
+			while (isdigit(format[i]))
+			{
+				lengthSpec *= 10;
+				lengthSpec += format[i] - 48;
+				++i;
+			}
+
+			if (format[i] == '*')
+			{
+				lengthSpec = va_arg(list, int);
+				++i;
+			}
+
+			if (format[i] == '.')
+			{
+				++i;
+				while (isdigit(format[i]))
+				{
+					precSpec *= 10;
+					precSpec += format[i] - 48;
+					++i;
+				}
+
+				if (format[i] == '*')
+				{
+					precSpec = va_arg(list, int);
+					++i;
+				}
+			}
+			else
+			{
+				precSpec = 6;
+			}
+
+			if (format[i] == 'h' || format[i] == 'l' || format[i] == 'j' ||
+				format[i] == 'z' || format[i] == 't' || format[i] == 'L')
+			{
+				length = format[i];
+				++i;
+				if (format[i] == 'h')
+				{
+					length = 'H';
+				}
+				else if (format[i] == 'l')
+				{
+					length = 'q';
+					++i;
+				}
+			}
+			specifier = format[i];
+
+			memset(intStrBuffer, 0, 256);
+
+			int base = 10;
+			if (specifier == 'o')
+			{
+				base = 8;
+				specifier = 'u';
+				if (altForm)
+				{
+					output_string_func("0", &chars);
+				}
+			}
+			if (specifier == 'p')
+			{
+				base = 16;
+				length = 'z';
+				specifier = 'u';
+			}
+			switch (specifier)
+			{
+				case 'X':
+					base = 16;
+					// fallthrough
+				case 'x':
+					base = base == 10 ? 17 : base;
+					if (altForm)
+					{
+						output_string_func("0x", &chars);
+					}
+					// fallthrough
+				case 'u':
+				{
+					switch (length)
+					{
+						case 0:
+						{
+							uint integer = va_arg(list, uint);
+							k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
+									  zeroPad);
+							output_string_func(intStrBuffer, &chars);
+							break;
+						}
+						case 'H':
+						{
+							unsigned char integer = (unsigned char) va_arg(list, uint);
+							k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
+									  zeroPad);
+							output_string_func(intStrBuffer, &chars);
+							break;
+						}
+						case 'h':
+						{
+							unsigned short int integer = va_arg(list, uint);
+							k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
+									  zeroPad);
+							output_string_func(intStrBuffer, &chars);
+							break;
+						}
+						case 'l':
+						{
+							unsigned long integer = va_arg(list, unsigned long);
+							k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
+									  zeroPad);
+							output_string_func(intStrBuffer, &chars);
+							break;
+						}
+						case 'q':
+						{
+							unsigned long long integer = va_arg(list, unsigned long long);
+							k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
+									  zeroPad);
+							output_string_func(intStrBuffer, &chars);
+							break;
+						}
+						case 'j':
+						{
+							uintmax_t integer = va_arg(list, uintmax_t);
+							k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
+									  zeroPad);
+							output_string_func(intStrBuffer, &chars);
+							break;
+						}
+						case 'z':
+						{
+							size_t integer = va_arg(list, size_t);
+							k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
+									  zeroPad);
+							output_string_func(intStrBuffer, &chars);
+							break;
+						}
+						case 't':
+						{
+							ptrdiff_t integer = va_arg(list, ptrdiff_t);
+							k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
+									  zeroPad);
+							output_string_func(intStrBuffer, &chars);
+							break;
+						}
+						default:
+							break;
+					}
+					break;
+				}
+
+				case 'd':
+				case 'i':
+				{
+					switch (length)
+					{
+						case 0:
+						{
+							int integer = va_arg(list, int);
+							k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
+									  zeroPad);
+							output_string_func(intStrBuffer, &chars);
+							break;
+						}
+						case 'H':
+						{
+							signed char integer = (signed char) va_arg(list, int);
+							k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
+									  zeroPad);
+							output_string_func(intStrBuffer, &chars);
+							break;
+						}
+						case 'h':
+						{
+							short int integer = va_arg(list, int);
+							k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
+									  zeroPad);
+							output_string_func(intStrBuffer, &chars);
+							break;
+						}
+						case 'l':
+						{
+							long integer = va_arg(list, long);
+							k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
+									  zeroPad);
+							output_string_func(intStrBuffer, &chars);
+							break;
+						}
+						case 'q':
+						{
+							long long integer = va_arg(list, long long);
+							k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
+									  zeroPad);
+							output_string_func(intStrBuffer, &chars);
+							break;
+						}
+						case 'j':
+						{
+							intmax_t integer = va_arg(list, intmax_t);
+							k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
+									  zeroPad);
+							output_string_func(intStrBuffer, &chars);
+							break;
+						}
+						case 'z':
+						{
+							size_t integer = va_arg(list, size_t);
+							k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
+									  zeroPad);
+							output_string_func(intStrBuffer, &chars);
+							break;
+						}
+						case 't':
+						{
+							ptrdiff_t integer = va_arg(list, ptrdiff_t);
+							k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
+									  zeroPad);
+							output_string_func(intStrBuffer, &chars);
+							break;
+						}
+						default:
+							break;
+					}
+					break;
+				}
+
+				case 'c':
+				{
+					if (length == 'l')
+					{
+						output_char_func(va_arg(list, wint_t), &chars);
+					}
+					else
+					{
+						output_char_func(va_arg(list, int), &chars);
+					}
+
+					break;
+				}
+
+				case 's':
+				{
+					output_string_func(va_arg(list, char*), &chars);
+					break;
+				}
+
+				case 'n':
+				{
+					switch (length)
+					{
+						case 'H':
+							*(va_arg(list, signed char*)) = chars;
+							break;
+						case 'h':
+							*(va_arg(list, short int*)) = chars;
+							break;
+
+						case 0:
+						{
+							int* a = va_arg(list, int*);
+							*a = chars;
+							break;
+						}
+
+						case 'l':
+							*(va_arg(list, long*)) = chars;
+							break;
+						case 'q':
+							*(va_arg(list, long long*)) = chars;
+							break;
+						case 'j':
+							*(va_arg(list, intmax_t*)) = chars;
+							break;
+						case 'z':
+							*(va_arg(list, size_t*)) = chars;
+							break;
+						case 't':
+							*(va_arg(list, ptrdiff_t*)) = chars;
+							break;
+						default:
+							break;
+					}
+					break;
+				}
+
+				case 'e':
+				case 'E':
+					emode = 1;
+					// fallthrough
+
+				case 'f':
+				case 'F':
+				case 'g':
+				case 'G':
+				{
+					double floating = va_arg(list, double);
+
+					while (emode && floating >= 10)
+					{
+						floating /= 10;
+						++expo;
+					}
+
+					int form = lengthSpec - precSpec - expo - (precSpec || altForm ? 1 : 0);
+					if (emode)
+					{
+						form -= 4;      // 'e+00'
+					}
+					if (form < 0)
+					{
+						form = 0;
+					}
+
+					k__int_str(floating, intStrBuffer, base, plusSign, spaceNoSign, form, \
+                              leftJustify, zeroPad);
+
+					output_string_func(intStrBuffer, &chars);
+
+					floating -= (int) floating;
+
+					for (int i = 0; i < precSpec; ++i)
+					{
+						floating *= 10;
+					}
+					intmax_t decPlaces = (intmax_t) (floating + 0.5);
+
+					if (precSpec)
+					{
+						output_char_func('.', &chars);
+						k__int_str(decPlaces, intStrBuffer, 10, 0, 0, 0, 0, 0);
+						intStrBuffer[precSpec] = 0;
+						output_string_func(intStrBuffer, &chars);
+					}
+					else if (altForm)
+					{
+						output_char_func('.', &chars);
+					}
+
+					break;
+				}
+
+
+				case 'a':
+				case 'A':
+					//ACK! Hexadecimal floating points...
+					break;
+
+				default:
+					break;
+			}
+
+			if (specifier == 'e')
+			{
+				output_string_func("e+", &chars);
+			}
+			else if (specifier == 'E')
+			{
+				output_string_func("E+", &chars);
+			}
+
+			if (specifier == 'e' || specifier == 'E')
+			{
+				k__int_str(expo, intStrBuffer, 10, 0, 0, 2, 0, 1);
+				output_string_func(intStrBuffer, &chars);
+			}
+
+		}
+		else
+		{
+			output_char_func(format[i], &chars);
+		}
+	}
+
+	return chars;
+}
+
+#define string_method_of_char_method_name(method) method##_string
+
+#define string_version_of_char_method(method_name) \
+	void string_method_of_char_method_name(method_name)(const char* c, int* a) \
+	{ \
+		for (int i = 0; c[i]; ++i) \
+		{ \
+			method_name(c[i], a); \
+		} \
+	}
+
+void kprintf_output(char c, int* a)
+{
+	FB::putchar(c);
+	*a += 1;
+}
+
+string_version_of_char_method(kprintf_output)
+
+static char* ksprintf_buf = nullptr;
+void ksprintf_output(char c, int* a)
+{
+  	*ksprintf_buf++ = c;
     *a += 1;
 }
 
-void kdisplayString(const char* c, int* a)
-{
-    for (int i = 0; c[i]; ++i)
-    {
-        kdisplayCharacter(c[i], a);
-    }
-}
+string_version_of_char_method(ksprintf_output)
 
-int kvprintf(const char* format, va_list list)
-{
-    int chars = 0;
-    char intStrBuffer[256] = {0};
-
-    for (int i = 0; format[i]; ++i)
-    {
-        char specifier = '\0';
-        char length = '\0';
-
-        int lengthSpec = 0;
-        int precSpec = 0;
-        uint leftJustify = 0;
-        uint zeroPad = 0;
-        uint spaceNoSign = 0;
-        uint altForm = 0;
-        uint plusSign = 0;
-        uint emode = 0;
-        int expo = 0;
-
-        if (format[i] == '%')
-        {
-            ++i;
-
-            uint extBreak = 0;
-            while (1)
-            {
-                switch (format[i])
-                {
-                case '-':
-                    leftJustify = 1;
-                    ++i;
-                    break;
-
-                case '+':
-                    plusSign = 1;
-                    ++i;
-                    break;
-
-                case '#':
-                    altForm = 1;
-                    ++i;
-                    break;
-
-                case ' ':
-                    spaceNoSign = 1;
-                    ++i;
-                    break;
-
-                case '0':
-                    zeroPad = 1;
-                    ++i;
-                    break;
-
-                default:
-                    extBreak = 1;
-                    break;
-                }
-
-                if (extBreak) break;
-            }
-
-            while (isdigit(format[i]))
-            {
-                lengthSpec *= 10;
-                lengthSpec += format[i] - 48;
-                ++i;
-            }
-
-            if (format[i] == '*')
-            {
-                lengthSpec = va_arg(list, int);
-                ++i;
-            }
-
-            if (format[i] == '.')
-            {
-                ++i;
-                while (isdigit(format[i]))
-                {
-                    precSpec *= 10;
-                    precSpec += format[i] - 48;
-                    ++i;
-                }
-
-                if (format[i] == '*')
-                {
-                    precSpec = va_arg(list, int);
-                    ++i;
-                }
-            }
-            else
-            {
-                precSpec = 6;
-            }
-
-            if (format[i] == 'h' || format[i] == 'l' || format[i] == 'j' ||
-                format[i] == 'z' || format[i] == 't' || format[i] == 'L')
-            {
-                length = format[i];
-                ++i;
-                if (format[i] == 'h')
-                {
-                    length = 'H';
-                }
-                else if (format[i] == 'l')
-                {
-                    length = 'q';
-                    ++i;
-                }
-            }
-            specifier = format[i];
-
-            memset(intStrBuffer, 0, 256);
-
-            int base = 10;
-            if (specifier == 'o')
-            {
-                base = 8;
-                specifier = 'u';
-                if (altForm)
-                {
-                    kdisplayString("0", &chars);
-                }
-            }
-            if (specifier == 'p')
-            {
-                base = 16;
-                length = 'z';
-                specifier = 'u';
-            }
-            switch (specifier)
-            {
-            case 'X':
-                base = 16;
-            // fallthrough
-            case 'x':
-                base = base == 10 ? 17 : base;
-                if (altForm)
-                {
-                    kdisplayString("0x", &chars);
-                }
-            // fallthrough
-            case 'u':
-                {
-                    switch (length)
-                    {
-                    case 0:
-                        {
-                            uint integer = va_arg(list, uint);
-                            k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
-                                       zeroPad);
-                            kdisplayString(intStrBuffer, &chars);
-                            break;
-                        }
-                    case 'H':
-                        {
-                            unsigned char integer = (unsigned char)va_arg(list, uint);
-                            k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
-                                       zeroPad);
-                            kdisplayString(intStrBuffer, &chars);
-                            break;
-                        }
-                    case 'h':
-                        {
-                            unsigned short int integer = va_arg(list, uint);
-                            k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
-                                       zeroPad);
-                            kdisplayString(intStrBuffer, &chars);
-                            break;
-                        }
-                    case 'l':
-                        {
-                            unsigned long integer = va_arg(list, unsigned long);
-                            k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
-                                       zeroPad);
-                            kdisplayString(intStrBuffer, &chars);
-                            break;
-                        }
-                    case 'q':
-                        {
-                            unsigned long long integer = va_arg(list, unsigned long long);
-                            k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
-                                       zeroPad);
-                            kdisplayString(intStrBuffer, &chars);
-                            break;
-                        }
-                    case 'j':
-                        {
-                            uintmax_t integer = va_arg(list, uintmax_t);
-                            k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
-                                       zeroPad);
-                            kdisplayString(intStrBuffer, &chars);
-                            break;
-                        }
-                    case 'z':
-                        {
-                            size_t integer = va_arg(list, size_t);
-                            k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
-                                       zeroPad);
-                            kdisplayString(intStrBuffer, &chars);
-                            break;
-                        }
-                    case 't':
-                        {
-                            ptrdiff_t integer = va_arg(list, ptrdiff_t);
-                            k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
-                                       zeroPad);
-                            kdisplayString(intStrBuffer, &chars);
-                            break;
-                        }
-                    default:
-                        break;
-                    }
-                    break;
-                }
-
-            case 'd':
-            case 'i':
-                {
-                    switch (length)
-                    {
-                    case 0:
-                        {
-                            int integer = va_arg(list, int);
-                            k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
-                                       zeroPad);
-                            kdisplayString(intStrBuffer, &chars);
-                            break;
-                        }
-                    case 'H':
-                        {
-                            signed char integer = (signed char)va_arg(list, int);
-                            k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
-                                       zeroPad);
-                            kdisplayString(intStrBuffer, &chars);
-                            break;
-                        }
-                    case 'h':
-                        {
-                            short int integer = va_arg(list, int);
-                            k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
-                                       zeroPad);
-                            kdisplayString(intStrBuffer, &chars);
-                            break;
-                        }
-                    case 'l':
-                        {
-                            long integer = va_arg(list, long);
-                            k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
-                                       zeroPad);
-                            kdisplayString(intStrBuffer, &chars);
-                            break;
-                        }
-                    case 'q':
-                        {
-                            long long integer = va_arg(list, long long);
-                            k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
-                                       zeroPad);
-                            kdisplayString(intStrBuffer, &chars);
-                            break;
-                        }
-                    case 'j':
-                        {
-                            intmax_t integer = va_arg(list, intmax_t);
-                            k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
-                                       zeroPad);
-                            kdisplayString(intStrBuffer, &chars);
-                            break;
-                        }
-                    case 'z':
-                        {
-                            size_t integer = va_arg(list, size_t);
-                            k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
-                                       zeroPad);
-                            kdisplayString(intStrBuffer, &chars);
-                            break;
-                        }
-                    case 't':
-                        {
-                            ptrdiff_t integer = va_arg(list, ptrdiff_t);
-                            k__int_str(integer, intStrBuffer, base, plusSign, spaceNoSign, lengthSpec, leftJustify,
-                                       zeroPad);
-                            kdisplayString(intStrBuffer, &chars);
-                            break;
-                        }
-                    default:
-                        break;
-                    }
-                    break;
-                }
-
-            case 'c':
-                {
-                    if (length == 'l')
-                    {
-                        kdisplayCharacter(va_arg(list, wint_t), &chars);
-                    }
-                    else
-                    {
-                        kdisplayCharacter(va_arg(list, int), &chars);
-                    }
-
-                    break;
-                }
-
-            case 's':
-                {
-                    kdisplayString(va_arg(list, char*), &chars);
-                    break;
-                }
-
-            case 'n':
-                {
-                    switch (length)
-                    {
-                    case 'H':
-                        *(va_arg(list, signed char*)) = chars;
-                        break;
-                    case 'h':
-                        *(va_arg(list, short int*)) = chars;
-                        break;
-
-                    case 0:
-                        {
-                            int* a = va_arg(list, int*);
-                            *a = chars;
-                            break;
-                        }
-
-                    case 'l':
-                        *(va_arg(list, long*)) = chars;
-                        break;
-                    case 'q':
-                        *(va_arg(list, long long*)) = chars;
-                        break;
-                    case 'j':
-                        *(va_arg(list, intmax_t*)) = chars;
-                        break;
-                    case 'z':
-                        *(va_arg(list, size_t*)) = chars;
-                        break;
-                    case 't':
-                        *(va_arg(list, ptrdiff_t*)) = chars;
-                        break;
-                    default:
-                        break;
-                    }
-                    break;
-                }
-
-            case 'e':
-            case 'E':
-                emode = 1;
-            // fallthrough
-
-            case 'f':
-            case 'F':
-            case 'g':
-            case 'G':
-                {
-                    double floating = va_arg(list, double);
-
-                    while (emode && floating >= 10)
-                    {
-                        floating /= 10;
-                        ++expo;
-                    }
-
-                    int form = lengthSpec - precSpec - expo - (precSpec || altForm ? 1 : 0);
-                    if (emode)
-                    {
-                        form -= 4; // 'e+00'
-                    }
-                    if (form < 0)
-                    {
-                        form = 0;
-                    }
-
-                    k__int_str(floating, intStrBuffer, base, plusSign, spaceNoSign, form,
-                               leftJustify, zeroPad);
-
-                    kdisplayString(intStrBuffer, &chars);
-
-                    floating -= (int)floating;
-
-                    for (int i = 0; i < precSpec; ++i)
-                    {
-                        floating *= 10;
-                    }
-                    intmax_t decPlaces = (intmax_t)(floating + 0.5);
-
-                    if (precSpec)
-                    {
-                        kdisplayCharacter('.', &chars);
-                        k__int_str(decPlaces, intStrBuffer, 10, 0, 0, 0, 0, 0);
-                        intStrBuffer[precSpec] = 0;
-                        kdisplayString(intStrBuffer, &chars);
-                    }
-                    else if (altForm)
-                    {
-                        kdisplayCharacter('.', &chars);
-                    }
-
-                    break;
-                }
-            case 'a':
-            case 'A':
-                //ACK! Hexadecimal floating points...
-                break;
-
-            default:
-                break;
-            }
-
-            if (specifier == 'e')
-            {
-                kdisplayString("e+", &chars);
-            }
-            else if (specifier == 'E')
-            {
-                kdisplayString("E+", &chars);
-            }
-
-            if (specifier == 'e' || specifier == 'E')
-            {
-                k__int_str(expo, intStrBuffer, 10, 0, 0, 2, 0, 1);
-                kdisplayString(intStrBuffer, &chars);
-            }
-        }
-        else
-        {
-            kdisplayCharacter(format[i], &chars);
-        }
-    }
-
-    return chars;
-}
+#define output_funcs(method_name) method_name, string_method_of_char_method_name(method_name)
 
 __attribute__ ((format (printf, 1, 2))) int printf(const char* format, ...)
 {
-    va_list list;
-    va_start(list, format);
-    int i = kvprintf(format, list);
-    va_end(list);
-    return i;
+	va_list list;
+	va_start (list, format);
+	int i = kvprintf(format, output_funcs(kprintf_output), list);
+	va_end (list);
+	return i;
+}
+
+__attribute__((format(printf, 2, 3))) int sprintf(char* str, const char *format, ...)
+{
+  	ksprintf_buf = str;
+	va_list list;
+	va_start (list, format);
+	int i = kvprintf(format, output_funcs(ksprintf_output), list);
+	va_end (list);
+	ksprintf_buf = nullptr;
+	return i;
+}
+
+#define MSG_PRINTF(type, format) { \
+    FB::type##_decorator(); \
+    FB::putchar(' '); \
+    va_list list; \
+    va_start(list, format); \
+    int i = kvprintf(format, output_funcs(kprintf_output), list); \
+    va_end(list); \
+    FB::putchar(' '); \
+    FB::type(); \
+    return i; \
 }
 
 __attribute__ ((format (printf, 1, 2))) int printf_error(const char* format, ...)
 {
-    FB::error_decorator();
-    FB::putchar(' ');
-    va_list list;
-    va_start(list, format);
-    int i = kvprintf(format, list);
-    va_end(list);
-    FB::putchar(' ');
-    FB::error();
-
-    return i;
+    MSG_PRINTF(error, format)
 }
 
 __attribute__ ((format (printf, 1, 2))) int printf_info(const char* format, ...)
 {
-    FB::info_decorator();
-    FB::putchar(' ');
-    va_list list;
-    va_start(list, format);
-    int i = kvprintf(format, list);
-    va_end(list);
-    FB::putchar(' ');
-    FB::info();
+    MSG_PRINTF(info, format)
+}
 
-    return i;
+int printf_warn(const char* format, ...)
+{
+    MSG_PRINTF(warn, format)
 }

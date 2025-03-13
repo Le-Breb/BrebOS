@@ -22,10 +22,11 @@ public:
     // Callback when a packet is received
     virtual void on_data_received(void* packet, uint16_t packet_size) = 0;
 
-    // Callback when connection fails
-    virtual void on_connection_error() = 0;
-
-    virtual void on_connection_terminated() = 0;
+    /**
+     * Callback when the connection is terminated
+     * @param error_message message describing the error that occurred, nullptr if no error
+     */
+    virtual void on_connection_terminated(const char* error_message) = 0;
 };
 
 

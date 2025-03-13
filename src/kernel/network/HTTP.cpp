@@ -9,6 +9,8 @@
 #include "../file_management/VFS.h"
 #include <kstring.h>
 
+list<HTTP*> HTTP::instances = {};
+
 uint16_t HTTP::request::get_size() const
 {
     auto size = strlen(method) + strlen(uri) + strlen(version) + 6; //  for 3 * '\r' + '\n'
@@ -153,6 +155,7 @@ HTTP::header_t* HTTP::response::get_header(const char* name) const
 
 HTTP::HTTP(uint8_t peer_ip[4], uint16_t peer_port): TCP_listener(peer_ip, peer_port)
 {
+    instances.add(this);
 }
 
 void HTTP::display_response(const response_t* response)
@@ -199,15 +202,16 @@ void HTTP::on_data_received(void* packet, uint16_t packet_size)
         case State::RECEIVING_RESPONSE: // Get response body
             if (buf_size + packet_size > buf_capacity)
             {
-                // Todo: implement and call socket close
+                socket->close();
                 printf_error("size of received data exceed buffer capacity");
                 state = State::CLOSED;
             }
             memcpy(buf + buf_size, packet, packet_size);
             buf_size += packet_size;
             break;
-        default: // Todo: implement and call socket close
+        default:
             printf("HTTP packet received while on state %d\n", (int)state);
+            socket->close();
             break;
     }
 }
@@ -218,15 +222,15 @@ void HTTP::handle_response_descriptor(const void* packet, uint16_t packet_size)
 
     if (response->method == nullptr)
     {
-        // Todo: implement and call socket close
         printf("malformed HTTP packet received\n");
+        socket->close();
         state = State::CLOSED;
         return;
     }
     if (!(state == State::GET_SENT && response->status == HTTP_OK))
     {
-        // Todo: implement and call socket close
         printf("Incoherent HTTP response or status is not OK\n");
+        socket->close();
         state = State::CLOSED;
         return;
     }
@@ -234,8 +238,8 @@ void HTTP::handle_response_descriptor(const void* packet, uint16_t packet_size)
     auto content_length_header = response->get_header("Content-Length");
     if (content_length_header == nullptr)
     {
-        // Todo: implement and call socket close
         printf("No content length header\n");
+        socket->close();
         state = State::CLOSED;
         return;
     }
@@ -246,34 +250,48 @@ void HTTP::handle_response_descriptor(const void* packet, uint16_t packet_size)
     state = State::RECEIVING_RESPONSE;
 }
 
-void HTTP::on_connection_terminated()
+void HTTP::on_connection_terminated(const char* error_message)
 {
-    // Response body completely received
-    if (buf_size == buf_capacity)
-    {
-        state = State::RESPONSE_COMPLETE;
-
-        // Build file path
-        const char save_path[] = "/downloads/";
-        auto pathname_length = sizeof(save_path) + strlen(request->uri) ;
-        char pathname[pathname_length + 1];
-        pathname[pathname_length] = '\0';
-        strcpy(pathname, save_path);
-        strcat(pathname, request->uri);
-
-        // Save file
-        if (VFS::write_buf_to_file(pathname, buf, buf_size))
-            printf_info("%s downloaded and saved at %s", request->uri, pathname);
-        else
-            printf_error("Error while saving downloaded file %s at %s", request->uri, pathname);
-    }
+    if (error_message)
+        printf_warn("HTTP error: %s", error_message);
     else
-        printf_error("HTTP connection terminated before response was fully received");
+    {
+        // Response body completely received
+        if (buf_size == buf_capacity && state == State::RECEIVING_RESPONSE)
+        {
+            state = State::RESPONSE_COMPLETE;
+
+            // Build file path
+            const char save_path[] = "/downloads/";
+            auto pathname_length = sizeof(save_path) + strlen(request->uri);
+            char pathname[pathname_length + 1];
+            pathname[pathname_length] = '\0';
+            strcpy(pathname, save_path);
+            strcat(pathname, request->uri);
+
+            // Save file
+            if (VFS::write_buf_to_file(pathname, buf, buf_size))
+                printf_info("%s downloaded and saved at %s", request->uri, pathname);
+            else
+                printf_error("Error while saving downloaded file %s at %s", request->uri, pathname);
+        }
+        else
+            printf_error("HTTP connection terminated before response was fully received");
+    }
 
     state = State::CLOSED;
     delete[] buf;
     buf_size = 0;
     buf_capacity = 0;
+
+    close_instance(this);
+    // Do not write any code here as 'this' is deleted at this point!
+}
+
+void HTTP::close_instance(HTTP* instance)
+{
+    instances.remove(instance);
+    delete instance;
 }
 
 const char* HTTP::find_char(const char* str, char c, uint16_t len)
@@ -382,11 +400,6 @@ size_t HTTP::get_request_size(const request_t* request)
     return size + 2;
 }
 
-void HTTP::on_connection_error()
-{
-    printf_error("HTTP connection error");
-}
-
 uint16_t HTTP::atoi(const char* str)
 {
     uint16_t ret = 0;
@@ -405,4 +418,5 @@ HTTP::~HTTP()
 {
     delete request;
     delete response;
+    instances.remove(this);
 }
