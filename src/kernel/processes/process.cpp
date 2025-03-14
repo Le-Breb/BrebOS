@@ -54,9 +54,16 @@ extern "C" void change_pdt_asm_(uint pdt_phys_addr);
 
 Process::~Process()
 {
+    printf_info("Destroying process %u !", pid);
     if (!(flags & P_TERMINATED))
     {
         printf_error("Process %u is not terminated", pid);
+        return;
+    }
+
+    if(!(get_current_thread()->is_terminated()))
+    {
+        printf_error("Thread %u is not terminated", get_current_thread_tid());
         return;
     }
 
@@ -71,22 +78,25 @@ Process::~Process()
     delete pte;
     delete elf_dependence_list;
 
-    flags |= P_TERMINATED;
 
     printf_info("Process %u exited", pid);
 }
 
 Process::Process(uint num_pages, ELF* elf, Elf32_Addr runtime_load_address, const char* path) : quantum(0), priority(0),
     num_pages(num_pages), pte((uint*)calloc(num_pages, sizeof(uint))),
-    pid(MAX_PROCESSES), ppid(MAX_PROCESSES), k_stack_top(-1), flags(P_READY),
+    pid(MAX_PROCESSES), ppid(MAX_PROCESSES), flags(P_READY),
     elf_dependence_list(new struct elf_dependence_list(path, elf, runtime_load_address))
 {
+    this->current_thread = Scheduler::add_thread(this);
+    printf_info("Creating process with pid: %u and main thread tid: %u", pid, get_current_thread_tid());
 }
 
 
 void Process::terminate()
 {
     flags |= P_TERMINATED;
+    if (get_current_thread() != nullptr)
+        get_current_thread()->terminate();
 }
 
 void* Process::allocate_dyn_memory(uint n)
@@ -135,16 +145,7 @@ pid_t Process::get_pid() const
 void Process::set_flag(uint flag)
 {
     flags |= flag;
-}
-
-bool Process::is_terminated() const
-{
-    return flags & P_TERMINATED;
-}
-
-bool Process::is_waiting_key() const
-{
-    return flags & P_WAITING_KEY;
+    this->get_current_thread()->set_flag(flag);
 }
 
 uint Process::get_symbol_runtime_address(const struct elf_dependence_list* dep, const char* symbol_name)
@@ -164,3 +165,24 @@ uint Process::get_symbol_runtime_address(const struct elf_dependence_list* dep, 
 
     return 0x00;
 }
+
+void Process::set_thread_pid(pid_t pid, Thread* thread)
+{
+    threads[pid] = thread;
+}
+
+Thread *Process::get_current_thread() const
+{
+    if (current_thread >= MAX_THREADS) {
+        printf_error("Invalid thread index %u", current_thread);
+        return nullptr;
+    }
+    return threads[current_thread];
+}
+
+tid_t Process::get_current_thread_tid() const {
+    return current_thread;
+}
+
+
+

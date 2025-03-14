@@ -1,6 +1,7 @@
 #include "scheduler.h"
 
 #include "ELFLoader.h"
+#include "thread.h"
 #include "../core/PIT.h"
 #include "../core/system.h"
 #include "../core/GDT.h"
@@ -9,84 +10,90 @@
 #include "../file_management/VFS.h"
 
 uint Scheduler::pid_pool = 0;
-pid_t Scheduler::running_process = MAX_PROCESSES;
+uint Scheduler::tid_pool = 0;
+pid_t Scheduler::running_thread = MAX_PROCESSES;
 ready_queue_t Scheduler::ready_queue;
 ready_queue_t Scheduler::waiting_queue;
 Process* Scheduler::processes[MAX_PROCESSES];
+Thread* Scheduler::threads[MAX_THREADS];
 
-Process* Scheduler::get_next_process()
+
+Thread* Scheduler::get_next_thread()
 {
-    Process* p = nullptr;
-    running_process = MAX_PROCESSES;
+    Thread* t = nullptr;
+    running_thread = MAX_THREADS;
 
-    // Find next process to execute
-    while (p == nullptr)
+    // Find next thread to execute
+    while (t == nullptr)
     {
         // Nothing to run
         if (ready_queue.count == 0)
             return nullptr;
 
         // Get process
-        pid_t pid = running_process = ready_queue.arr[ready_queue.start];
-        Process* proc = processes[pid];
+        tid_t tid = running_thread = ready_queue.arr[ready_queue.start];
+        Thread* thread = threads[tid];
 
-        if (proc->is_terminated())
+        if (thread->is_terminated())
             relinquish_first_ready_process();
-        else if (proc->is_waiting_key())
+        else if (thread->is_waiting_key())
             set_first_ready_process_asleep_waiting_key_press();
         else
         {
             // Update queue
-            if (proc->quantum)
+            if (thread->quantum)
             {
-                p = proc;
-                p->quantum -= CLOCK_TICK_MS;
+                t = thread;
+                t->quantum -= CLOCK_TICK_MS;
             }
             else
             {
                 ready_queue.arr[ready_queue.start] = MAX_PROCESSES;
-                ready_queue.arr[(ready_queue.start + ready_queue.count) % MAX_PROCESSES] = proc->get_pid();
-                RESET_QUANTUM(proc);
+                ready_queue.arr[(ready_queue.start + ready_queue.count) % MAX_PROCESSES] = thread->get_tid();
+                RESET_QUANTUM(thread);
                 ready_queue.start = (ready_queue.start + 1) % MAX_PROCESSES;
             }
         }
     }
 
-    return p;
+    //printf_info("running thread with tid %u", t->get_tid());
+
+    return t;
 }
 
 void Scheduler::relinquish_first_ready_process()
 {
-    pid_t pid = running_process = ready_queue.arr[ready_queue.start];
-    Process* proc = processes[pid];
-    free_terminated_process(*proc);
-    ready_queue.start = (ready_queue.start + 1) % MAX_PROCESSES;
+    tid_t tid = running_thread = ready_queue.arr[ready_queue.start];
+    Thread* thread = threads[tid];
+    free_terminated_process(*thread->get_process());
+    ready_queue.start = (ready_queue.start + 1) % MAX_THREADS;
     ready_queue.count--;
 }
 
 void Scheduler::set_first_ready_process_asleep_waiting_key_press()
 {
-    pid_t pid = running_process = ready_queue.arr[ready_queue.start];
+    tid_t tid = running_thread = ready_queue.arr[ready_queue.start];
     ready_queue.arr[ready_queue.start] = MAX_PROCESSES;
     ready_queue.start = (ready_queue.start + 1) % MAX_PROCESSES;
     ready_queue.count--;
-    waiting_queue.arr[(waiting_queue.start + waiting_queue.count) % MAX_PROCESSES] = pid;
+    waiting_queue.arr[(waiting_queue.start + waiting_queue.count) % MAX_PROCESSES] = tid;
     waiting_queue.count++;
 }
 
 [[noreturn]] void Scheduler::schedule()
 {
-    Process* p = get_next_process();
+    Thread* t = get_next_thread();
 
-    if (p == nullptr)
+    if (t == nullptr)
     {
+        //printf_info("Ready queue : %u, Waiting queue : %u", ready_queue.count, waiting_queue.count);
         if (waiting_queue.count == 0)
             System::shutdown();
         else
         {
             // All processes are waiting for a key press. Thus, we can halt the CPU
-            running_process = MAX_PROCESSES; // Indicate that no process is running
-
+            running_thread = MAX_PROCESSES; // Indicate that no thread is running
+            //printf_info("All processes are waiting for a key press. Halting CPU");
             __asm__ volatile("mov %0, %%esp" : : "r"(get_stack_top_ptr())); // Use global kernel stack
             __asm__ volatile("sti"); // Make sure interrupts are enabled
             __asm__ volatile("hlt"); // Halt
@@ -96,19 +103,19 @@ void Scheduler::set_first_ready_process_asleep_waiting_key_press()
     }
 
     // Set TSS esp0 to point to the syscall handler stack (i.e. tell the CPU where is syscall handler stack)
-    GDT::set_tss_kernel_stack(p->k_stack_top);
+    GDT::set_tss_kernel_stack(t->k_stack_top);
 
     // Use process' address space
-    Interrupts::change_pdt_asm(PHYS_ADDR(get_page_tables(), (uint) &p->pdt));
+    Interrupts::change_pdt_asm(PHYS_ADDR(get_page_tables(), (uint) &t->get_process()->pdt));
 
     // Jump
-    if (p->flags & P_SYSCALL_INTERRUPTED)
+    if (t->flags & P_SYSCALL_INTERRUPTED)
     {
-        p->flags &= ~P_SYSCALL_INTERRUPTED;
-        Interrupts::resume_syscall_handler_asm(p->k_cpu_state, p->k_stack_state.esp - 12);
+        t->flags &= ~P_SYSCALL_INTERRUPTED;
+        Interrupts::resume_syscall_handler_asm(t->k_cpu_state, t->k_stack_state.esp - 12);
     }
     else
-        Interrupts::resume_user_process_asm(p->cpu_state, p->stack_state);
+        Interrupts::resume_user_process_asm(t->cpu_state, t->stack_state);
 }
 
 void Scheduler::start_module(uint module, pid_t ppid, int argc, const char** argv)
@@ -132,7 +139,7 @@ void Scheduler::start_module(uint module, pid_t ppid, int argc, const char** arg
         return;
 
     processes[pid] = proc;
-    set_process_ready(proc);
+    set_thread_ready(proc->get_current_thread());
 }
 
 int Scheduler::exec(const char* path, pid_t ppid, int argc, const char** argv)
@@ -159,34 +166,50 @@ int Scheduler::exec(const char* path, pid_t ppid, int argc, const char** argv)
         return -1;
 
     processes[pid] = proc;
-    set_process_ready(proc);
+    set_thread_ready(proc->get_current_thread());
 
     return pid;
 }
 
 
-pid_t Scheduler::get_free_pid()
+uint Scheduler::get_free_spot(uint& values, uint max_value)
 {
-    for (uint i = 0; i < MAX_PROCESSES; ++i)
+    for (uint i = 0; i < max_value; ++i)
     {
-        if (!(pid_pool & (1 << i)))
+        if (!(values & (1 << i)))
         {
-            pid_pool |= (1 << i); // Mark PID as used
+            values |= (1 << i); // Mark PID as used
             return i;
         }
     }
 
-    return MAX_PROCESSES; // No PID available
+    return max_value;
 }
+
+
+pid_t Scheduler::get_free_pid()
+{
+    return get_free_spot(pid_pool, MAX_PROCESSES);
+}
+
+pid_t Scheduler::get_free_tid()
+{
+    return get_free_spot(tid_pool, MAX_THREADS);
+}
+
 
 void Scheduler::init()
 {
     PIT::init();
     for (uint i = 0; i < MAX_PROCESSES; ++i)
     {
-        ready_queue.arr[i] = MAX_PROCESSES;
-        waiting_queue.arr[i] = MAX_PROCESSES;
         processes[i] = nullptr;
+    }
+    for (uint i = 0; i < MAX_THREADS; ++i)
+    {
+        ready_queue.arr[i] = MAX_THREADS;
+        waiting_queue.arr[i] = MAX_THREADS;
+        threads[i] = nullptr;
     }
     ready_queue.start = ready_queue.count = 0;
 
@@ -198,12 +221,25 @@ void Scheduler::init()
 
 pid_t Scheduler::get_running_process_pid()
 {
-    return running_process;
+    return running_thread;
 }
 
-Process* Scheduler::get_running_process()
+Thread* Scheduler::get_running_thread()
 {
-    return running_process == MAX_PROCESSES ? nullptr : processes[running_process];
+    return running_thread >= MAX_THREADS ? nullptr : threads[running_thread];
+}
+
+Thread **Scheduler::get_threads()
+{
+    return threads;
+}
+
+
+Process * Scheduler::get_running_process()
+{
+    if (get_running_thread() == nullptr)
+        return nullptr;
+    return get_running_thread()->get_process();
 }
 
 void Scheduler::wake_up_key_waiting_processes(char key)
@@ -211,27 +247,32 @@ void Scheduler::wake_up_key_waiting_processes(char key)
     for (uint i = 0; i < waiting_queue.count; ++i)
     {
         // Add process to ready queue and remove it from waiting queue
-        pid_t pid = waiting_queue.arr[(waiting_queue.start + waiting_queue.count - 1) % MAX_PROCESSES];
+        tid_t tid = waiting_queue.arr[(waiting_queue.start + waiting_queue.count - 1) % MAX_PROCESSES];
         waiting_queue.arr[(waiting_queue.start + waiting_queue.count - 1) % MAX_PROCESSES] = MAX_PROCESSES;
-        ready_queue.arr[(ready_queue.start + ready_queue.count++) % MAX_PROCESSES] = pid;
+        ready_queue.arr[(ready_queue.start + ready_queue.count++) % MAX_PROCESSES] = tid;
 
-        processes[pid]->cpu_state.eax = (uint)key; // Return key
-        processes[pid]->flags &= ~P_WAITING_KEY; // Clear flag
+        threads[tid]->cpu_state.eax = (uint)key; // Return key
+        threads[tid]->flags &= ~P_WAITING_KEY; // Clear flag
     }
 
     // Clear waiting queue
     waiting_queue.count = 0;
 }
 
-void Scheduler::set_process_ready(Process* p)
+void Scheduler::set_thread_ready(Thread* t)
 {
-    ready_queue.arr[(ready_queue.start + ready_queue.count++) % MAX_PROCESSES] = p->pid;
-    RESET_QUANTUM(processes[p->pid]);
+    ready_queue.arr[(ready_queue.start + ready_queue.count++) % MAX_PROCESSES] = t->get_tid();
+    RESET_QUANTUM(threads[t->get_tid()]);
 }
 
 void Scheduler::release_pid(pid_t pid)
 {
     pid_pool &= ~(1 << pid);
+}
+
+void Scheduler::release_tid(tid_t tid)
+{
+    tid_pool &= ~(1 << tid);
 }
 
 void Scheduler::create_kernel_init_process()
@@ -247,16 +288,22 @@ void Scheduler::create_kernel_init_process()
         printf_error("No more PID available. Cannot finish kernel initialization.");
         System::shutdown();
     }
+    printf_info("Init process created with pid: %u and main thread tid: %u", pid, kernel->get_current_thread_tid());
     processes[pid] = kernel;
-    set_process_ready(kernel);
-    running_process = pid;
+    set_thread_ready(kernel->get_current_thread());
+    running_thread = kernel->get_current_thread_tid();
 }
 
 void Scheduler::free_terminated_process(Process& p)
 {
     release_pid(p.pid);
-    ready_queue.arr[ready_queue.start] = MAX_PROCESSES;
+    release_tid(p.get_current_thread_tid());
+
+    ready_queue.arr[ready_queue.start] = MAX_THREADS;
+
     processes[p.pid] = nullptr;
+    threads[p.get_current_thread_tid()] = nullptr;
+
     delete &p;
 }
 
@@ -271,3 +318,12 @@ void Scheduler::stop_kernel_init_process()
     // which will free the process and select another one to be executed
     TRIGGER_TIMER_INTERRUPT
 }
+
+tid_t Scheduler::add_thread(Process *process)
+{
+    tid_t tid = get_free_tid();
+    threads[tid] = new Thread(process,tid);
+    process->set_thread_pid(tid,threads[tid]);
+    return tid;
+}
+

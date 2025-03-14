@@ -19,8 +19,10 @@ void Syscall::start_process(cpu_state_t* cpu_state)
 void Syscall::get_pid()
 {
     Process* running_process = Scheduler::get_running_process();
-
-    running_process->cpu_state.eax = running_process->get_pid(); // Return PID
+    if (running_process == nullptr) {
+        printf_error("error in get_pid");
+    }
+    running_process->get_current_thread()->cpu_state.eax = running_process->get_pid(); // Return PID
 }
 
 [[noreturn]] void Syscall::terminate_process(Process* p)
@@ -115,7 +117,7 @@ void Syscall::dynlk(const cpu_state_t* cpu_state)
     uint got_entry_addr = rel->r_offset + dep->runtime_load_address;
 
     *(void**)got_entry_addr = symbol_addr; // Write symbol address to GOT
-    Scheduler::get_running_process()->cpu_state.eax = (uint)symbol_addr; // Return symbol address to userland dynlk
+    Scheduler::get_running_process()->get_current_thread()->cpu_state.eax = (uint)symbol_addr; // Return symbol address to userland dynlk
 }
 
 void Syscall::get_key()
@@ -128,10 +130,12 @@ void Syscall::get_key()
 [[noreturn]] void Syscall::dispatcher(cpu_state_t* cpu_state, const stack_state_t* stack_state)
 {
     Process* p = Scheduler::get_running_process();
-
+    if (p == nullptr) {
+        printf_error("error in dispatcher ");
+    }
     // Update PCB
-    p->cpu_state = *cpu_state;
-    p->stack_state = *stack_state;
+    p->get_current_thread()->cpu_state = *cpu_state;
+    p->get_current_thread()->stack_state = *stack_state;
 
     switch (cpu_state->eax)
     {
@@ -157,19 +161,19 @@ void Syscall::get_key()
         dynlk(cpu_state);
         break;
     case 8:
-        malloc(p, &p->cpu_state);
+        malloc(p, &p->get_current_thread()->cpu_state);
         break;
     case 9:
-        free(p, &p->cpu_state);
+        free(p, &p->get_current_thread()->cpu_state);
         break;
     case 10:
-        mkdir(&p->cpu_state);
+        mkdir(&p->get_current_thread()->cpu_state);
         break;
     case 11:
-        touch(&p->cpu_state);
+        touch(&p->get_current_thread()->cpu_state);
         break;
     case 12:
-        ls(&p->cpu_state);
+        ls(&p->get_current_thread()->cpu_state);
         break;
     case 13:
         FB::clear_screen();
@@ -183,7 +187,7 @@ void Syscall::get_key()
     }
 
     // Todo: Check if process ESP should be reset to process kernel stack top here
-    Interrupts::resume_user_process_asm(p->cpu_state, p->stack_state);
+    Interrupts::resume_user_process_asm(p->get_current_thread()->cpu_state, p->get_current_thread()->stack_state);
 }
 
 void Syscall::dns(const cpu_state_t* cpu_state)

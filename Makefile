@@ -62,6 +62,8 @@ all: init $(OS_ISO)
 
 .PHONY: libc libdynlk programs
 
+export PATH := $(HOME)/opt/cross/bin/:$(PATH)
+
 init:
 	@echo "$(CYAN)Compiling$(WHITE)"
 
@@ -80,7 +82,7 @@ libdynlk:
 libc:
 	make -C $(SRC_DIR)/libc
 
-programs:
+programs: directories libc libdynlk
 	make -C $(SRC_DIR)/programs
 
 $(KERNEL_BUILD_DIR)/%.o: $(SRC_DIR)/kernel/%.cpp
@@ -147,7 +149,8 @@ run: $(OS_ISO)
 	@echo "$(CYAN)Restoring default network configuration...$(WHITE)"
 	@sudo ./network_utils/cleanup.sh
 	@echo "$(CYAN)Done$(WHITE)"
-	@# -device isa-debug-exit -cdrom os.iso -gdb tcp::26000 -S -drive file=disk_image.img,format=raw,if=ide,index=0 -boot d -device e1000,netdev=net0 -netdev user,id=net0 -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap
+	@# -device isa-debug-exit -cdrom os.iso -gdb tcp::
+# -S -drive file=disk_image.img,format=raw,if=ide,index=0 -boot d -device e1000,netdev=net0 -netdev user,id=net0 -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap
 	@# -device isa-debug-exit -cdrom os.iso -gdb tcp::26000 -S -drive file=disk_image.img,format=raw,if=ide,index=0 -boot d -device e1000,netdev=net0 -netdev tap,id=net0,ifname=tap0,script=no,downscript=no -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap
 
 clean:

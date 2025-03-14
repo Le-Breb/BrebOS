@@ -72,33 +72,36 @@ void Interrupts::gpf_handler(stack_state* stack_state)
 {
 	// Update time
 	PIT::ticks++;
+	Thread* t = nullptr;
+    if (Scheduler::get_running_process())
+    {
+        t = Scheduler::get_running_process()->get_current_thread();
+    }
 
-	Process* p = Scheduler::get_running_process();
-
-	if (p)
+	if (t)
 	{
 		// Did we interrupt a syscall handler ?
 		uint syscall_interrupted = stack_state->cs == 0x08;
 		if (syscall_interrupted)
-			p->set_flag(P_SYSCALL_INTERRUPTED);
+			t->set_flag(P_SYSCALL_INTERRUPTED);
 
 		// Don't do anything if the process has been terminated
-		if (!(p->is_terminated()))
+		if (!(t->is_terminated()))
 		{
 			// Update syscall handler state
 			if (syscall_interrupted)
 			{
-				p->k_cpu_state = *cpu_state;
-				p->k_stack_state = *stack_state;
+				t->k_cpu_state = *cpu_state;
+				t->k_stack_state = *stack_state;
 
 				// Update ESP and SS manually because the CPU did not push them as no privilege level change occurred
-				p->k_stack_state.esp = kesp;
-				__asm__ volatile("mov %%ss, %0" : "=r"(p->k_stack_state.ss));
+				t->k_stack_state.esp = kesp;
+				__asm__ volatile("mov %%ss, %0" : "=r"(t->k_stack_state.ss));
 			}
 			else // Update PCB
 			{
-				p->cpu_state = *cpu_state;
-				p->stack_state = *stack_state;
+				t->cpu_state = *cpu_state;
+				t->stack_state = *stack_state;
 			}
 		}
 	}

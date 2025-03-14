@@ -149,7 +149,7 @@ bool ELFLoader::dynamic_loading(uint start_address, ELF* elf)
     *(void**)(got_addr + 2) = libdynlk_entry_point;
 
     // Indicate entry point
-    proc->stack_state.eip = elf->global_hdr.e_entry;
+    proc->get_current_thread()->stack_state.eip = elf->global_hdr.e_entry;
 
     return true;
 }
@@ -613,15 +613,15 @@ void ELFLoader::finalize_process_setup(int argc, const char** argv, pid_t pid, p
     proc->pid = pid;
     proc->ppid = ppid;
     proc->priority = 1;
-    proc->k_stack_top = VIRT_ADDR(k_stack_pde, k_stack_pte, (PAGE_SIZE - sizeof(int)));
+    proc->get_current_thread()->k_stack_top = VIRT_ADDR(k_stack_pde, k_stack_pte, (PAGE_SIZE - sizeof(int)));
     //proc->stack_state.eip = 0;
-    proc->stack_state.ss = 0x20 | 0x03;
-    proc->stack_state.cs = 0x18 | 0x03;
-    proc->stack_state.esp = write_args_to_stack(p_stack_top_v_addr, argc, argv, init_fini.init_array,
+    proc->get_current_thread()->stack_state.ss = 0x20 | 0x03;
+    proc->get_current_thread()->stack_state.cs = 0x18 | 0x03;
+    proc->get_current_thread()->stack_state.esp = write_args_to_stack(p_stack_top_v_addr, argc, argv, init_fini.init_array,
                                                 init_fini.fini_array);
-    proc->stack_state.eflags = 0x200;
-    proc->stack_state.error_code = 0;
-    memset(&proc->cpu_state, 0, sizeof(proc->cpu_state));
+    proc->get_current_thread()->stack_state.eflags = 0x200;
+    proc->get_current_thread()->stack_state.error_code = 0;
+    memset(&proc->get_current_thread()->cpu_state, 0, sizeof(proc->get_current_thread()->cpu_state));
 }
 
 Process* ELFLoader::setup_elf_process(uint start_addr, pid_t pid, pid_t ppid, int argc, const char** argv,

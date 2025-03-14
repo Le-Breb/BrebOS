@@ -1,11 +1,16 @@
 #ifndef INCLUDE_PROCESS_H
 #define INCLUDE_PROCESS_H
-
 #include "../core/memory.h"
 #include "../core/interrupts.h"
 #include "ELF.h"
 #include "../utils/list.h"
 #include <kstddef.h>
+
+#include "scheduler.h"
+#include "thread.h"
+
+
+#define MAX_THREADS (sizeof(uint) * 8)
 
 typedef uint pid_t;
 
@@ -17,6 +22,7 @@ typedef uint pid_t;
 #define P_SYSCALL_INTERRUPTED 2
 // Process is waiting for a key press
 #define P_WAITING_KEY 4
+
 
 class Scheduler;
 
@@ -37,17 +43,16 @@ private:
 
 	pid_t pid; // PID
 	pid_t ppid; // Parent PID
+	tid_t current_thread = 0;
 
-	uint k_stack_top; // Top of syscall handlers' stack
 	uint flags; // Process state
 
 	list<uint> allocs{}; // list of memory blocks allocated by the process
+
+	Thread* threads[MAX_THREADS];
 public:
+
 	struct elf_dependence_list* elf_dependence_list;
-	cpu_state_t cpu_state{}; // Registers
-	cpu_state_t k_cpu_state{}; // Syscall handler registers
-	stack_state_t stack_state{}; // Execution context
-	stack_state_t k_stack_state{}; // Syscall handler execution context
 
 private:
 	/** Page aligned allocator **/
@@ -104,11 +109,9 @@ public:
 	 */
 	void set_flag(uint flag);
 
-	/** Checks whether the program is terminated */
-	[[nodiscard]] bool is_terminated() const;
+
 
 	/** Checks whether the program is waiting for a key press */
-	[[nodiscard]] bool is_waiting_key() const;
 
 	/**
 	* Computes the runtime address of a symbol referenced by an ELF.
@@ -119,6 +122,14 @@ public:
 	* @return runtime address of the symbol, 0x00 if not found
 	*/
 	static uint get_symbol_runtime_address(const struct elf_dependence_list* dep, const char* symbol_name);
+
+	[[nodiscard]] Thread* get_current_thread() const;
+
+	[[nodiscard]] tid_t get_current_thread_tid() const;
+
+	[[nodiscard]] Thread* next_thread() const;
+
+	void set_thread_pid(pid_t pid, Thread* thread);
 };
 
 #endif //INCLUDE_PROCESS_H

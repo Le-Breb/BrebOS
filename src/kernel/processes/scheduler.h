@@ -5,12 +5,19 @@
 
 // Maximum concurrent processes. Limit defined by size of pid_pool
 #define MAX_PROCESSES (sizeof(uint) * 8)
+#define MAX_THREADS (sizeof(uint) * 8)
 
-#define RESET_QUANTUM(p) (p->quantum = p->priority * CLOCK_TICK_MS)
+typedef uint pid_t;
+typedef uint tid_t;
+
+class Process;
+class Thread;
+
+#define RESET_QUANTUM(t) (t->quantum = t->get_process()->priority * CLOCK_TICK_MS)
 
 typedef struct
 {
-	pid_t arr[MAX_PROCESSES];
+	pid_t arr[MAX_THREADS];
 	uint start, count;
 } ready_queue_t;
 
@@ -20,21 +27,27 @@ private:
 	// Bitmap of available PID. Ith LSB indicates PID state ; 1 = used, 0 = free.
 	// Thus, 32 = sizeof(uint) PIDs are available, allowing up to 32 processes to run concurrently
 	static uint pid_pool;
+	static uint tid_pool;
 
-	static pid_t running_process;
+	static pid_t running_thread;
 	static ready_queue_t ready_queue;
 	static ready_queue_t waiting_queue;
 	static Process* processes[MAX_PROCESSES];
+	static Thread* threads[MAX_THREADS];
 
 	/**
 	 * Round-robin scheduler
-	 * @return next process to run, NULL if there is no process to run
+	 * @return next thread to run, NULL if there is no thread to run
 	 */
-	static Process* get_next_process();
+	static Thread* get_next_thread();
 
 	static pid_t get_free_pid();
 
+	static pid_t get_free_tid();
+
 	static void release_pid(pid_t pid);
+
+	static void release_tid(tid_t tid);
 
 	/**
 	 * Create and st ready a process that will perform kernel initialization
@@ -43,6 +56,8 @@ private:
 	 */
 	static void create_kernel_init_process();
 
+	static uint get_free_spot(uint& values, uint max_value);
+
 public:
 	/**
 	 * Executes next process in the ready queue
@@ -50,6 +65,7 @@ public:
 	[[noreturn]] static void schedule();
 
 	static void start_module(uint module, pid_t ppid, int argc, const char** argv);
+
 
 	/**
 	 * 
@@ -65,11 +81,15 @@ public:
 
 	static pid_t get_running_process_pid();
 
+	static Thread* get_running_thread();
+
+	static Thread** get_threads();
+
 	static Process* get_running_process();
 
 	static void wake_up_key_waiting_processes(char key);
 
-	static void set_process_ready(Process* p);
+	static void set_thread_ready(Thread* p);
 
 	static void free_terminated_process(Process& p);
 
@@ -77,11 +97,15 @@ public:
 
 	static void relinquish_first_ready_process();
 
+
+
 	/**
 	 * Stop kernel initialization process, leaving only potential user programs
 	 * in the waiting queue
 	 */
 	static void stop_kernel_init_process();
+
+	[[nodiscard]] static tid_t add_thread(Process* process);
 };
 
 
