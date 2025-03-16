@@ -342,9 +342,9 @@ bool ELFLoader::alloc_and_add_lib_pages_to_process(ELF& lib_elf) const
             uint pte_id = proc->num_pages + h->p_vaddr / PAGE_SIZE + j;
             if (proc->pte[pte_id])
                 continue;
-            uint pe = get_free_pe(); // Get PTE id
+            uint pe = Memory::get_free_pe(); // Get PTE id
             proc->pte[pte_id] = pe; // Reference PTE
-            allocate_page_user(get_free_frame(), pe); // Allocate page
+            Memory::allocate_page_user(Memory::get_free_frame(), pe); // Allocate page
         }
     }
     proc->num_pages += lib_num_code_pages;
@@ -377,9 +377,9 @@ Process* ELFLoader::init_process(ELF* elf, const char* path)
             uint pte_id = h->p_vaddr / PAGE_SIZE + j;
             if (proc->pte[pte_id])
                 continue;
-            uint pe = get_free_pe(); // Get PTE id
+            uint pe = Memory::get_free_pe(); // Get PTE id
             proc->pte[pte_id] = pe; // Reference PTE
-            allocate_page_user(get_free_frame(), pe); // Allocate page
+            Memory::allocate_page_user(Memory::get_free_frame(), pe); // Allocate page
         }
     }
 
@@ -468,7 +468,7 @@ void ELFLoader::register_elf_init_and_fini(ELF* elf, uint runtime_load_address)
 void ELFLoader::map_elf(ELF* load_elf, uint pte_offset) const
 {
     uint* elf_pte = proc->pte + pte_offset;
-    page_table_t* sys_page_tables = get_page_tables();
+    Memory::page_table_t* sys_page_tables = Memory::get_page_tables();
 
     for (int k = 0; k < load_elf->global_hdr.e_phnum; ++k)
     {
@@ -580,22 +580,22 @@ Process* ELFLoader::process_from_elf(uint start_address, int argc, const char** 
 void ELFLoader::finalize_process_setup(int argc, const char** argv, pid_t pid, pid_t ppid) const
 {
     // Allocate process stack page
-    uint p_stack_pe_id = get_free_pe();
-    allocate_page_user(get_free_frame(), p_stack_pe_id);
+    uint p_stack_pe_id = Memory::get_free_pe();
+    Memory::allocate_page_user(Memory::get_free_frame(), p_stack_pe_id);
     uint p_stack_top_v_addr = p_stack_pe_id * PAGE_SIZE + PAGE_SIZE;
 
     // Allocate syscall handler stack page
-    uint k_stack_pe = get_free_pe();
+    uint k_stack_pe = Memory::get_free_pe();
     uint k_stack_pde = k_stack_pe / PDT_ENTRIES;
     uint k_stack_pte = k_stack_pe % PDT_ENTRIES;
-    allocate_page(get_free_frame(), k_stack_pe);
+    Memory::allocate_page(Memory::get_free_frame(), k_stack_pe);
 
     // Set process PDT entries: entries 0 to 767 map the process address space using its own page tables
     // Entries 768 to 1024 point to kernel page tables, so that kernel is mapped. Moreover, syscall handlers
     // will not need to switch to kernel pdt to make changes in kernel memory as it is mapped the same way
     // in every process' PDT
     // Set process pdt entries to target process page tables
-    page_table_t* page_tables = get_page_tables();
+    Memory::page_table_t* page_tables = Memory::get_page_tables();
     for (int i = 0; i < 768; ++i)
         proc->pdt.entries[i] = PHYS_ADDR(page_tables, (uint) &proc->page_tables[i]) | PAGE_USER | PAGE_WRITE |
             PAGE_PRESENT;

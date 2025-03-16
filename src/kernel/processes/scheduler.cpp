@@ -87,7 +87,7 @@ void Scheduler::set_first_ready_process_asleep_waiting_key_press()
             // All processes are waiting for a key press. Thus, we can halt the CPU
             running_process = MAX_PROCESSES; // Indicate that no process is running
 
-            __asm__ volatile("mov %0, %%esp" : : "r"(get_stack_top_ptr())); // Use global kernel stack
+            __asm__ volatile("mov %0, %%esp" : : "r"(Memory::get_stack_top_ptr())); // Use global kernel stack
             __asm__ volatile("sti"); // Make sure interrupts are enabled
             __asm__ volatile("hlt"); // Halt
         }
@@ -99,7 +99,7 @@ void Scheduler::set_first_ready_process_asleep_waiting_key_press()
     GDT::set_tss_kernel_stack(p->k_stack_top);
 
     // Use process' address space
-    Interrupts::change_pdt_asm(PHYS_ADDR(get_page_tables(), (uint) &p->pdt));
+    Interrupts::change_pdt_asm(PHYS_ADDR(Memory::get_page_tables(), (uint) &p->pdt));
 
     // Jump
     if (p->flags & P_SYSCALL_INTERRUPTED)
@@ -127,7 +127,7 @@ void Scheduler::start_module(uint module, pid_t ppid, int argc, const char** arg
 
     char path[] = "GRUB_module_x";
     path[strlen(path) - 1] = '0' + module;
-    Process* proc = ELFLoader::setup_elf_process(get_grub_modules()[module].start_addr, pid, ppid, argc, argv, path);
+    Process* proc = ELFLoader::setup_elf_process(Memory::get_grub_modules()[module].start_addr, pid, ppid, argc, argv, path);
     if (!proc)
         return;
 
@@ -238,7 +238,7 @@ void Scheduler::create_kernel_init_process()
 {
     Process* kernel = new Process(0, nullptr, -1, "");
     kernel->priority = 2;
-    kernel->pdt = *get_pdt();
+    kernel->pdt = *Memory::get_pdt();
     uint pid = get_free_pid();
     kernel->pid = pid;
 

@@ -42,8 +42,8 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointe
     Interrupts::enable_asm();
     FB::ok();
 
-    printf("Initialize memory\n");
-    init_mem((multiboot_info_t*)(ebx + KERNEL_VIRTUAL_BASE));
+    printf("Initialize memory\n"
+    Memory::init((multiboot_info_t*)(ebx + KERNEL_VIRTUAL_BASE));
     FB::ok();
 
     printf("Initialize network card and stack\n");

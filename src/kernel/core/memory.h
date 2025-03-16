@@ -32,45 +32,110 @@
 
 //https://wiki.osdev.org/Paging
 
-typedef struct
+namespace Memory
 {
-	uint entries[PT_ENTRIES];
-} page_table_t;
-
-typedef struct
-{
-	uint entries[PDT_ENTRIES];
-} pdt_t;
-
-typedef double Align;
-
-typedef union memory_header /* memory block header */
-{
-	struct
+	typedef struct
 	{
-		union memory_header* ptr; /* next block */
-		uint size; /* size of this block */
-	} s;
+		uint entries[PT_ENTRIES];
+	} page_table_t;
 
-	Align x; /* force alignment of blocks */
-} memory_header;
+	typedef struct
+	{
+		uint entries[PDT_ENTRIES];
+	} pdt_t;
 
-typedef struct
-{
-	uint start_addr, size;
-} GRUB_module;
+	typedef double Align;
 
-/** Initialize memory, by referencing free pages, allocating pages to store 1024 pages tables
- *
- * @param minfo Multiboot info structure
- */
-void init_mem(multiboot_info_t* minfo);
+	typedef union memory_header /* memory block header */
+	{
+		struct
+		{
+			union memory_header* ptr; /* next block */
+			uint size; /* size of this block */
+		} s;
+
+		Align x; /* force alignment of blocks */
+	} memory_header;
+
+	typedef struct
+	{
+		uint start_addr, size;
+	} GRUB_module;
+
+	/** Initialize memory, by referencing free pages, allocating pages to store 1024 pages tables
+	 *
+	 * @param minfo Multiboot info structure
+	 */
+	void init(multiboot_info_t* minfo);
+
+	void* mmap(size_t length, [[maybe_unused]] int prot, char* path, [[maybe_unused]] uint offset);
+
+	/**
+	 * Allocate page-aligned memory
+	 *
+	 * @param size Size of memory to allocate
+	 *
+	 * @return Pointer to page-aligned memory
+	 */
+	void* page_aligned_malloc(uint size);
+
+	/**
+	 * Free page-aligned memory
+	 *
+	 * @param ptr Pointer to page-aligned memory to free
+	 */
+	void page_aligned_free(void* ptr);
+
+	/** Allocate a page
+	 *
+	 * @param frame_id Physical page id
+	 * @param page_id Page id
+	 */
+	void allocate_page(uint frame_id, uint page_id);
+
+	/** Allocate a page with user permissions
+	 *
+	 * @param frame_id Physical page id
+	 * @param page_id Page id
+	 */
+	void allocate_page_user(uint frame_id, uint page_id);
+
+	/**
+	 * Free a page
+	 * @param pde PDE
+	 * @param pte PTE
+	 */
+	void free_page(uint pde, uint pte);
+
+	/** Get index of lowest free page id and update lowest_free_page to next free page id */
+	uint get_free_frame();
+
+	/** Get index of lowest free page entry id and update lowest_free_pe to next free page id */
+	uint get_free_pe();
+
+	/** Get pdt */
+	pdt_t* get_pdt();
+
+	/** Get page tables */
+	page_table_t* get_page_tables();
+
+	/** Get grub modules */
+	GRUB_module* get_grub_modules();
+
+	/** Get pointer to top of kernel stack */
+	uint* get_stack_top_ptr();
+
+	void* mmap(int prot, const char* path, uint offset = 0, size_t length = 0);
+
+	/** Attempts to identity map a memory region. Returns success status **/
+	bool identity_map(uint addr, uint size);
+}
 
 /** Tries to allocate a contiguous block of memory
- *
- * @param n Size of the block in bytes
- * @return Address of the beginning of allocated block if allocation was successful, NULL otherwise
- */
+	 *
+	 * @param n Size of the block in bytes
+	 * @return Address of the beginning of allocated block if allocation was successful, NULL otherwise
+	 */
 extern "C" void* malloc(uint n);
 
 /** Tries to allocate a contiguous block of memory on pages marked with PAGE_USER
@@ -81,17 +146,6 @@ extern "C" void* malloc(uint n);
 void* user_malloc(uint n);
 
 extern "C" void* calloc(size_t nmemb, size_t size);
-
-void* mmap(size_t length, [[maybe_unused]] int prot, char* path, [[maybe_unused]] uint offset);
-
-/**
- * Allocate page-aligned memory
- *
- * @param size Size of memory to allocate
- *
- * @return Pointer to page-aligned memory
- */
-void* page_aligned_malloc(uint size);
 
 /** Frees some memory
  *
@@ -104,56 +158,5 @@ extern "C" void free(void* ptr);
  * @param ptr Pointer to the memory block to free
  */
 void user_free(void* ptr);
-
-/**
- * Free page-aligned memory
- *
- * @param ptr Pointer to page-aligned memory to free
- */
-void page_aligned_free(void* ptr);
-
-/** Allocate a page
- *
- * @param frame_id Physical page id
- * @param page_id Page id
- */
-void allocate_page(uint frame_id, uint page_id);
-
-/** Allocate a page with user permissions
- *
- * @param frame_id Physical page id
- * @param page_id Page id
- */
-void allocate_page_user(uint frame_id, uint page_id);
-
-/**
- * Free a page
- * @param pde PDE
- * @param pte PTE
- */
-void free_page(uint pde, uint pte);
-
-/** Get index of lowest free page id and update lowest_free_page to next free page id */
-uint get_free_frame();
-
-/** Get index of lowest free page entry id and update lowest_free_pe to next free page id */
-uint get_free_pe();
-
-/** Get pdt */
-pdt_t* get_pdt();
-
-/** Get page tables */
-page_table_t* get_page_tables();
-
-/** Get grub modules */
-GRUB_module* get_grub_modules();
-
-/** Get pointer to top of kernel stack */
-uint* get_stack_top_ptr();
-
-void* mmap(int prot, const char* path, uint offset = 0, size_t length = 0);
-
-/** Attempts to identity map a memory region. Returns success status **/
-bool identity_map(uint addr, uint size);
 
 #endif //INCLUDE_MEMORY_H

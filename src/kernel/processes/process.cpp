@@ -65,7 +65,7 @@ Process::~Process()
     {
         if (!pte[i])
             continue;
-        free_page(pte[i] / PDT_ENTRIES, pte[i] % PDT_ENTRIES);
+        Memory::free_page(pte[i] / PDT_ENTRIES, pte[i] % PDT_ENTRIES);
     }
 
     delete pte;
@@ -108,7 +108,7 @@ void Process::free_dyn_memory(void* ptr)
 
 void* Process::operator new(size_t size)
 {
-    return page_aligned_malloc(size);
+    return Memory::page_aligned_malloc(size);
 }
 
 void* Process::operator new[]([[maybe_unused]] size_t size)
@@ -119,7 +119,7 @@ void* Process::operator new[]([[maybe_unused]] size_t size)
 
 void Process::operator delete(void* p)
 {
-    page_aligned_free(p);
+    Memory::page_aligned_free(p);
 }
 
 void Process::operator delete[]([[maybe_unused]] void* p)

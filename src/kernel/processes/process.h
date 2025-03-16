@@ -27,8 +27,8 @@ class Process
 
 private:
 	// Process page tables. Process can use all virtual addresses below the kernel virtual location at pde 768
-	page_table_t page_tables[768]{};
-	pdt_t pdt{}; // process page directory table
+	Memory::page_table_t page_tables[768]{};
+	Memory::pdt_t pdt{}; // process page directory table
 
 	uint quantum, priority;
 
