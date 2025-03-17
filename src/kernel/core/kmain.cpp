@@ -12,8 +12,6 @@
 
 extern "C" void _init(void); // NOLINT(*-reserved-identifier)
 
-//Todo: Investigate about whether page 184 (VGA buffer start address is mapped twice)
-//Todo: same for page pde 771 pte11 at the end of run_module
 //Todo: Add support for multiple dynamically linked libs (register dyn lib dependencies)
 //Todo: Advanced memory freeing (do something when free_pages do not manage to have free_bytes < FREE_THRESHOLD)
 //Todo: Implement process schedule_timeout to have sleeping processes out of the scheduler ready queue (usage: sleep)
@@ -42,7 +40,7 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointe
     Interrupts::enable_asm();
     FB::ok();
 
-    printf("Initialize memory\n"
+    printf("Initialize memory\n");
     Memory::init((multiboot_info_t*)(ebx + KERNEL_VIRTUAL_BASE));
     FB::ok();
 
