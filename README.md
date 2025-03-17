@@ -181,6 +181,8 @@ running locally, which is automatically started when executing `make run`.
     - ICMP ping reply
     - ARP
     - DHCP
+    - TCP (weak for now)
+    - HTTP GET
 
 ### Misc
 
