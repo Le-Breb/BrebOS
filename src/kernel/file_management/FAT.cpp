@@ -875,8 +875,8 @@ DirEntry::DirEntry(const char* name, uint8_t attrs, uint32_t first_cluster_addr,
 
 char* DirEntry::get_name() const
 {
-	char* n = new char[12];
-	memset(n, 0, 12);
+	char* n = new char[DIR_ENTRY_NAME_LEN + 2]; // One for dot, one for '\0'
+	memset(n, 0, DIR_ENTRY_NAME_LEN + 2);
 	uint i = 0;
 	for (int j = 0; j < 8; ++j)
 	{
