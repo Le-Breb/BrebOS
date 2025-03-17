@@ -8,6 +8,7 @@
 #include "syscalls.h"
 #include "PIT.h"
 #include "PIC.h"
+#include "system.h"
 
 
 Interrupt_handler* Interrupts::handlers[256] = {nullptr};
@@ -57,7 +58,8 @@ void Interrupts::page_fault_handler(stack_state_t* stack_state)
 	printf("Shadow stack: %s\n", err & 64 ? "True" : "False");
 	printf("SGX: %s\n", err & 32768 ? "True" : "False");
 
-	Scheduler::get_running_process()->terminate();
+	System::shutdown();
+	Scheduler::get_running_process()->terminate(GPF_RET_VAL);
 }
 
 void Interrupts::gpf_handler(stack_state* stack_state)
@@ -65,7 +67,7 @@ void Interrupts::gpf_handler(stack_state* stack_state)
 	printf_error("General protection fault");
 	printf("Segment selector: %x\n", stack_state->error_code);
 
-	Scheduler::get_running_process()->terminate();
+	Scheduler::get_running_process()->terminate(GPF_RET_VAL);
 }
 
 [[noreturn]] void Interrupts::interrupt_timer(uint kesp, cpu_state_t* cpu_state, stack_state_t* stack_state)
