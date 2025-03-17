@@ -288,7 +288,7 @@ namespace Memory
         if (n < N_ALLOC)
             n = N_ALLOC;
 
-        memory_header* h = (memory_header*)sbrk(sizeof(memory_header) * n, user);
+        auto* h = (memory_header*)sbrk(sizeof(memory_header) * n, user);
 
         if ((int*)h == nullptr)
             return nullptr;
@@ -304,7 +304,7 @@ namespace Memory
         return user ? user_freep : freep;
     }
 
-    void free_release_pages()
+    void free_release_pages() // Todo: add user version, sane for free_bytes
     {
         memory_header* p = freep;
         for (memory_header* c = freep->s.ptr;; p = c, c = c->s.ptr)
@@ -577,20 +577,30 @@ void* user_malloc(uint n)
     return malloc(n, true);
 }
 
-extern "C" void* calloc(size_t nmemb, size_t size)
+void* calloc(size_t nmemb, size_t size, bool user)
 {
     if (!nmemb || !size)
-        return malloc(1);
+        return malloc(1, user);
     size_t total_size;
     if (__builtin_mul_overflow(nmemb, size, &total_size))
-        return NULL;
+        return nullptr;
 
-    void* mem = malloc(total_size);
+    void* mem = malloc(total_size, user);
     if (!mem)
-        return NULL;
+        return nullptr;
     memset((char*)mem, 0, total_size);
 
     return mem;
+}
+
+void* user_calloc(size_t nmemb, size_t size)
+{
+    return calloc(nmemb, size, true);
+}
+
+extern "C" void* calloc(size_t nmemb, size_t size)
+{
+    return calloc(nmemb, size, false);
 }
 
 void free(void* ptr, bool user)
@@ -641,4 +651,68 @@ void user_free(void* ptr)
 extern "C" void free(void* ptr)
 {
     free(ptr, false);
+}
+
+void* realloc(void* ptr, size_t size, bool user)
+{
+    if (!ptr) // realloc on null = malloc
+        return malloc(size, user);
+    if (!size) // realloc with size 0 = free
+    {
+        free(ptr, user);
+        return nullptr;
+    }
+
+    // Get header
+    memory_header* h = (memory_header*)ptr - 1;
+
+    // Block is big enough
+    if ((h->s.size - 1) * sizeof(memory_header) >= size) // (-1 because size accounts for the memory header itself)
+        return ptr;
+
+    memory_header* p; // previous header
+    memory_header** free_list_beg = user ? &user_freep : &freep;
+
+    // Loop until p < h < p->s.ptr
+    for (p = *free_list_beg; !(h > p && h < p->s.ptr); p = p->s.ptr)
+        //Break when arrived at the end of the list and c goes before beginning or after end
+            if (p >= p->s.ptr && (h < p->s.ptr || h > p))
+                break;
+
+    memory_header* next = p->s.ptr;
+    auto block_content_byte_size = (h->s.size - 1) * sizeof(memory_header);
+    // Check if there is a contiguous free block whose combined size if large enough to contain 'size' bytes
+    if  (h + h->s.size == next && block_content_byte_size + next->s.size * sizeof(memory_header) >= size)
+    {
+        h->s.size += next->s.size; // Add size of contiguous free block in current block
+
+        // Update free block chain
+        p->s.ptr = next->s.ptr;
+        *free_list_beg = p;
+
+        return ptr;
+    }
+
+    // We have no choice left but to copy data in a newly allocated buffer and free original data
+    void *new_mem = malloc(size, user);
+
+    if (!new_mem)
+        return ptr; // If realloc fails, the man page indicates it should return the unchanged original buffer
+
+    memcpy(new_mem, ptr, block_content_byte_size);
+    free(ptr, user);
+
+    return new_mem;
+
+}
+
+
+void* realloc(void* ptr, size_t size)
+{
+    return realloc(ptr, size, false);
+}
+
+void* user_realloc(void* ptr, size_t size)
+{
+    return realloc(ptr, size, true);
 }

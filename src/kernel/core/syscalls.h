@@ -27,8 +27,9 @@ class Syscall
 	/**
 	 * Terminates a process
 	 * @param p process to terminate
+	 * @param ret_val
 	 */
-	[[noreturn]] static void terminate_process(Process* p);
+	[[noreturn]] static void terminate_process(Process* p, int ret_val);
 
 	/**
 	 * Tries to allocate dynamic memory for a given process
@@ -37,12 +38,16 @@ class Syscall
 	 */
 	static void malloc(Process* p, cpu_state_t* cpu_state);
 
+	static void calloc(Process* p, cpu_state_t* cpu_state);
+
 	/**
 	 * Frees dynamic memory of a given process
 	 * @param p calling process
 	 * @param cpu_state process CPU state
 	 */
 	static void free(Process* p, const cpu_state_t* cpu_state);
+
+	static void realloc(Process* p, cpu_state_t* cpu_state);
 
 	static void get_key();
 
@@ -59,7 +64,6 @@ class Syscall
 	static void cat(const cpu_state_t* cpu_state);
 
 	static void wget(const cpu_state_t* cpu_state);
-
 public:
 	/**
 	 * Handles a syscall

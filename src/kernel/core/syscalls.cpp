@@ -25,9 +25,9 @@ void Syscall::get_pid()
     running_process->cpu_state.eax = running_process->get_pid(); // Return PID
 }
 
-[[noreturn]] void Syscall::terminate_process(Process* p)
+[[noreturn]] void Syscall::terminate_process(Process* p, int ret_val)
 {
-    p->terminate();
+    p->terminate(ret_val);
 
     // We definitely do not want to continue as next step is to resume the process we just terminated !
     // Instead, we manually raise a timer interrupt which will schedule another process
@@ -40,12 +40,22 @@ void Syscall::get_pid()
 
 void Syscall::malloc(Process* p, cpu_state_t* cpu_state)
 {
-    cpu_state->eax = (uint)p->allocate_dyn_memory(cpu_state->edi);
+    cpu_state->eax = (uint)p->malloc(cpu_state->edi);
+}
+
+void Syscall::calloc(Process* p, cpu_state_t* cpu_state)
+{
+    cpu_state->eax = (uint)p->calloc(cpu_state->edi, cpu_state->esi);
 }
 
 void Syscall::free(Process* p, const cpu_state_t* cpu_state)
 {
-    p->free_dyn_memory((void*)cpu_state->edi);
+    p->free((void*)cpu_state->edi);
+}
+
+void Syscall::realloc(Process* p, cpu_state_t* cpu_state)
+{
+    cpu_state->eax = (uint)p->realloc((void*)cpu_state->edi, (size_t)cpu_state->esi);
 }
 
 void Syscall::dynlk(const cpu_state_t* cpu_state)
@@ -74,7 +84,7 @@ void Syscall::dynlk(const cpu_state_t* cpu_state)
     if (reloc_table == nullptr)
     {
         printf_error("no reloc table");
-        terminate_process(p);
+        terminate_process(p, INIT_ERR_RET_VAL);
     }
 
     // Check required symbol's relocation
@@ -84,7 +94,7 @@ void Syscall::dynlk(const cpu_state_t* cpu_state)
     if (type != R_386_JMP_SLOT)
     {
         printf_error("Unhandled relocation type: %d", type);
-        terminate_process(p);
+        terminate_process(p, INIT_ERR_RET_VAL);
     }
 
     // Get dynsym and its string table
@@ -92,7 +102,7 @@ void Syscall::dynlk(const cpu_state_t* cpu_state)
     if (dynsym_hdr == nullptr)
     {
         printf_error("Where tf is dynsym ?");
-        terminate_process(p);
+        terminate_process(p, INIT_ERR_RET_VAL);
     }
 
     // Check symbol index makes sense
@@ -138,7 +148,7 @@ void Syscall::get_key()
     switch (cpu_state->eax)
     {
         case 1:
-            terminate_process(p);
+            terminate_process(p, (int)cpu_state->edi);
         case 2:
             FB::write((char*)cpu_state->esi);
             break;
@@ -185,6 +195,12 @@ void Syscall::get_key()
         case 16:
             cat(cpu_state);
             break;
+        case 17:
+            calloc(p, cpu_state);
+            break;
+        case 18:
+            realloc(p, cpu_state);
+            break;
         default:
             printf_error("Received unknown syscall id: %u", cpu_state->eax);
             break;
@@ -215,7 +231,8 @@ void Syscall::wget(const cpu_state_t* cpu_state)
         return;
     }
 
-    auto http = new HTTP{Network::gateway_ip, 8080};
+    uint8_t dest_ip[] = {192, 168, 1, 184};
+    auto http = new HTTP{dest_ip, 8080};
     http->send_get(uri);
 }
 

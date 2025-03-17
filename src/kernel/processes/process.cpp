@@ -73,7 +73,7 @@ Process::~Process()
 
     flags |= P_TERMINATED;
 
-    printf_info("Process %u exited", pid);
+    printf_info("Process %u exited with code %d", pid, ret_val);
 }
 
 Process::Process(uint num_pages, ELF* elf, Elf32_Addr runtime_load_address, const char* path) : quantum(0), priority(0),
@@ -84,12 +84,13 @@ Process::Process(uint num_pages, ELF* elf, Elf32_Addr runtime_load_address, cons
 }
 
 
-void Process::terminate()
+void Process::terminate(int ret_val)
 {
     flags |= P_TERMINATED;
+    this->ret_val = ret_val;
 }
 
-void* Process::allocate_dyn_memory(uint n)
+void* Process::malloc(uint n)
 {
     void* mem = user_malloc(n);
 
@@ -99,7 +100,28 @@ void* Process::allocate_dyn_memory(uint n)
     return mem;
 }
 
-void Process::free_dyn_memory(void* ptr)
+void* Process::calloc(size_t nmemb, size_t size)
+{
+    void* mem = user_calloc(nmemb, size);
+
+    if (mem)
+        allocs.addFirst((uint)mem);
+
+    return mem;
+}
+
+void* Process::realloc(void* ptr, [[maybe_unused]] size_t size)
+{
+    if (!allocs.remove((uint)ptr))
+        printf_error("Process dyn memory ptr not found in process allocs");
+
+    void* mem = user_realloc(ptr, size);
+    if (mem)
+        allocs.addFirst((uint)mem);
+    return mem;
+}
+
+void Process::free(void* ptr)
 {
     if (!allocs.remove((uint)ptr))
         printf_error("Process dyn memory ptr not found in process allocs");

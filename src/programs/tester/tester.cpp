@@ -1,5 +1,6 @@
 #include <kstdio.h>
 #include <ksyscalls.h>
+#include <kstdlib.h>
 
 extern "C" int main(int argc, char** argv)
 {
@@ -8,8 +9,8 @@ extern "C" int main(int argc, char** argv)
 		printf("argv[%d]: %s\n", i, argv[i]);
 
 	// Testing lazy binding - first call triggers libdynkl, next calls have the relocation resolved
-	unsigned int pid = get_pid();
-	unsigned int pid2 = get_pid();
+	unsigned int pid = getpid();
+	unsigned int pid2 = getpid();
 	printf("PID:%i - Lazy binding functional: %s\n", pid2, pid == pid2 ? "True" : "False");
 
 	char* a = (char*) malloc(10);

@@ -28,6 +28,8 @@ section .text
 
 .Lmain:
     call main ; execute code, store return value in eax
+    add esp, 0xC ; ABI alignment
+    push eax ; save return value
 
 .Lfini:
     mov ebx, esp
@@ -47,8 +49,9 @@ section .text
     jmp .Lfini_array_loop
 
 .Lexit:
-    sub esp, 0xc0 ; for ABI 16 bytes alignement
+    sub esp, 0xC ; for ABI alignment
     push 0x00 ; instruct cxa finalize to call all destructors
     call __cxa_finalize ; call global destructors registered by __cxa_atexit. Why isn't this called by gcc routines ??
     add esp, 0x10
+
     call exit

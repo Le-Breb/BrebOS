@@ -9,9 +9,11 @@ extern "C" void memset(void* ptr, int value, unsigned long num);
 
 extern "C" void memcpy(void* dest, const void* src, unsigned long num);
 
-void strcpy(char* dest, const char* src);
+char* strcpy(char* dest, const char* src);
 
-void strcat(char* dest, const char* src);
+char* strcat(char* dest, const char* src);
+
+char* strncat(char* dest, const char* src, size_t ssize);
 
 int strcmp(const char* str1, const char* str2);
 
@@ -20,5 +22,17 @@ char* strtok_r(char* str, const char* delim, char** saveptr);
 int memcmp(const void* s1, const void* s2, size_t n);
 
 void to_lower_in_place(char* str);
+
+size_t strspn(const char *s, const char *accept);
+
+size_t strcspn(const char *s, const char *reject);
+
+char* strdup(const char *s);
+
+char* strndup(const char* s, size_t n);
+
+void *memmove(void *dest, const void *src, size_t n);
+
+char* strchr(const char *s, int c);
 
 #endif //INCLUDE_OS_STRING_H

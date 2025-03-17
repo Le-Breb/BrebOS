@@ -10,6 +10,13 @@
 
 static stream s = stream(stream::Policy::STREAM_NEWLINE_FLUSHED);
 
+static FILE _stdin = {};
+static FILE _stdout = {1};
+static FILE _stderr = {2};
+static FILE* stdin = &_stdin;
+static FILE* stdout = &_stdout;
+static FILE* stderr = &_stderr;
+
 char* __int_str(intmax_t i, char b[], int base, uint plusSignIfNeeded, uint spaceSignIfNeeded,
 				int paddingNo, uint justify, uint zeroPad)
 {
@@ -586,6 +593,20 @@ __attribute__((format(printf, 2, 3))) int sprintf(char* str, const char *format,
 	int i = vprintf(format, sprintf_output_char, sprintf_output_string, list);
 	va_end (list);
 	sprintf_buf = nullptr;
+	return i;
+}
+
+__attribute__((format(printf, 2, 3))) int fprintf(FILE *stream, const char* format, ...)
+{
+	if (stream->fd != stdout->fd && stream->fd != stderr->fd)
+	{
+		printf("libc error: fprintf does not support streams other that stdout and stderr");
+		return 0;
+	}
+	va_list list;
+	va_start (list, format);
+	int i = printf(format, list);
+	va_end (list);
 	return i;
 }
 

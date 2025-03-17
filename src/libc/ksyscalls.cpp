@@ -1,11 +1,5 @@
 #include "ksyscalls.h"
 
-extern "C" [[noreturn]] void exit()
-{
-	__asm__ volatile("int $0x80" : : "a"(1));
-	__builtin_unreachable();
-}
-
 void exec(const char* path, int argc, const char** argv)
 {
 	__asm__ volatile("int $0x80" : : "a"(3), "D"(path), "S"(argc), "d"(argv));
@@ -22,7 +16,7 @@ void puts(const char* str)
 	__asm__ volatile("int $0x80" : : "a"(2), "S"(str));
 }
 
-unsigned int get_pid()
+unsigned int getpid()
 {
 	unsigned int pid;
 	__asm__ volatile("int $0x80" : "=a"(pid) : "a"(5));
@@ -42,18 +36,6 @@ char get_keystroke()
 	__asm__ volatile("int $0x80" : : "a"(6));
 
 	__builtin_unreachable();
-}
-
-void* malloc(unsigned int n)
-{
-	void* ptr;
-	__asm__ volatile("int $0x80" : "=a"(ptr): "a"(8), "D"(n));
-	return ptr;
-}
-
-void free(void* ptr)
-{
-	__asm__ volatile("int $0x80" : : "a"(9), "D"(ptr));
 }
 
 bool mkdir(const char* path)

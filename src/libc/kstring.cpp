@@ -1,3 +1,4 @@
+#include <kstdlib.h>
 #include <kstring.h>
 
 extern "C" unsigned long strlen(char const* str)
@@ -15,20 +16,45 @@ void memset(void* ptr, int value, unsigned long num)
 		p[i] = value;
 }
 
-void strcpy(char* dest, const char* src)
+char* strcpy(char* dest, const char* src)
 {
+  	char* ret = dest;
 	while (*src)
 		*dest++ = *src++;
 	*dest = '\0';
+
+    return ret;
 }
 
-void strcat(char* dest, const char* src)
+char* strcat(char* dest, const char* src)
 {
+	char* ret = dest;
+
 	while (*dest)
 		dest++;
 	while (*src)
 		*dest++ = *src++;
 	*dest = '\0';
+
+	return ret;
+}
+
+char* strncat(char* dest, const char* src, size_t ssize)
+{
+	char* ret = dest;
+
+	while (*dest)
+		dest++;
+
+	size_t copied = 0;
+	while (*src && copied < ssize)
+	{
+		*dest++ = *src++;
+		copied++;
+	}
+	*dest = '\0';
+
+	return ret;
 }
 
 extern "C" void memcpy(void* dest, const void* src, unsigned long num)
@@ -113,4 +139,111 @@ void to_lower_in_place(char* str)
 
         str++;
     }
+}
+
+size_t strspn(const char* s, const char* accept)
+{
+	size_t res = 0;
+	while (*s)
+	{
+		const char* a = accept;
+		bool contained = false;
+		while (*a)
+		{
+			if (*a == *s)
+			{
+				contained = true;
+				break;
+			}
+			a++;
+		}
+		if (contained)
+			res++;
+		s++;
+	}
+
+	return res;
+}
+
+size_t strcspn(const char* s, const char* reject)
+{
+	size_t res = 0;
+	while (*s)
+	{
+		const char* a = reject;
+		bool contained = false;
+		while (*a)
+		{
+			if (*a == *s)
+			{
+				contained = true;
+				break;
+			}
+			a++;
+		}
+		if (!contained)
+			res++;
+		s++;
+	}
+
+	return res;
+}
+
+char* strdup(const char* s)
+{
+	auto len = strlen(s);
+	char* dest = (char*)malloc(len + 1);
+
+	if (!dest)
+		return nullptr;
+
+	memcpy(dest, s, len + 1);
+	return dest;
+}
+
+char* strndup(const char* s, size_t n)
+{
+	auto slen = strlen(s);
+	auto len = slen > n ? n : slen;
+	char* dest = (char*)malloc(len + 1);
+
+	if (!dest)
+		return nullptr;
+
+	memcpy(dest, s, len + 1);
+	return dest;
+}
+
+void *memmove(void *dest, const void *src, size_t n)
+{
+	char *p = (char*)dest;
+	const char *s = (const char*)src;
+	size_t ov = ((p >= s) && (s + n >= p)) ? s + n - p : 0;
+
+	if (n == 0)
+		return dest;
+
+	if (ov > 0)
+	{
+		for (size_t i = n - 1; i > 0; i--)
+			*(p + i) = *(s + i);
+		*p = *s;
+	}
+	else
+		for (size_t i = 0; i < n; i++)
+			*(p + i) = *(s + i);
+
+	return dest;
+}
+
+char* strchr(const char* s, int c)
+{
+	while (*s)
+	{
+		if (*s == c)
+			return (char*)s;
+		s++;
+	}
+
+	return nullptr;
 }

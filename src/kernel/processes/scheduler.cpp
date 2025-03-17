@@ -262,7 +262,7 @@ void Scheduler::free_terminated_process(Process& p)
 
 void Scheduler::stop_kernel_init_process()
 {
-    processes[0]->terminate();
+    processes[0]->terminate(0);
 
     // We asked for termination of kernel init process.
     // It is this precise process running those instructions.

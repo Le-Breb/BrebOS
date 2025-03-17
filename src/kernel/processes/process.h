@@ -18,6 +18,10 @@ typedef uint pid_t;
 // Process is waiting for a key press
 #define P_WAITING_KEY 4
 
+#define SEGFAULT_RET_VAL 255
+#define GPF_RET_VAL 254
+#define INIT_ERR_RET_VAL 253
+
 class Scheduler;
 
 class Process
@@ -42,6 +46,8 @@ private:
 	uint flags; // Process state
 
 	list<uint> allocs{}; // list of memory blocks allocated by the process
+
+	int ret_val{};
 public:
 	struct elf_dependence_list* elf_dependence_list;
 	cpu_state_t cpu_state{}; // Registers
@@ -83,20 +89,24 @@ public:
 	/**
 	 * Terminates a process
 	 */
-	void terminate();
+	void terminate(int ret_val);
 
 	/**
 	 * Contiguous heap memory allocator
 	 * @param n required memory quantity
 	 * @return pointer to the beginning of allocated heap memory, NULL if an error occurred
 	 */
-	[[nodiscard]] void* allocate_dyn_memory(uint n);
+	[[nodiscard]] void* malloc(uint n);
+
+	[[nodiscard]] void* calloc(size_t nmemb, size_t size);
+
+	[[nodiscard]] void* realloc(void * ptr, size_t size);
 
 	/**
 	 * Contiguous heap memory free
 	 * @param ptr pointer to the beginning of allocated heap memory
 	 */
-	void free_dyn_memory(void* ptr);
+	void free(void* ptr);
 
 	/**
 	 * Sets a flag
