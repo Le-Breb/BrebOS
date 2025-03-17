@@ -16,22 +16,13 @@
 char* k__int_str(intmax_t i, char b[], int base, uint plusSignIfNeeded, uint spaceSignIfNeeded,
 				int paddingNo, uint justify, uint zeroPad);
 
-struct FILE
-{
-	int fd;
-};
-
-extern FILE* stdin;
-extern FILE* stdout;
-extern FILE* stderr;
-
 typedef char* va_list;
 
 __attribute__ ((format (printf, 1, 2))) int printf(const char* format, ...);
 
 __attribute__((format(printf, 2, 3))) int sprintf(char* str, const char *format, ...);
 
-__attribute__((format(printf, 2, 3))) int fprintf(FILE *stream, const char* format, ...);
+//__attribute__((format(printf, 2, 3))) int fprintf(FILE *stream, const char* format, ...);
 
 
 void flush();
