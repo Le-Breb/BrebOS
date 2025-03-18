@@ -33,9 +33,9 @@ void handlechar(char c)
 {
 	if (c == '\b')
 	{
-          if (!c_id)
+        if (!c_id)
 			return;
-          c_id--;
+		cmd[--c_id] = '\0';
     }
 	else cmd[c_id++] = c;
 
