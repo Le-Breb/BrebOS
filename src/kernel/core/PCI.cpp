@@ -59,14 +59,18 @@ void PCI::checkFunction(uint8_t bus, uint8_t device, uint8_t function)
 
         // printf("%x | %x | %x \n", vendorID, deviceID, classCode);
 
-        if (vendorID == 0x8086 && deviceID == 0x100e) { // Intel PRO/1000 e1000
-            displayCard("Intel PRO/1000 Ethernet");
-            ethernet_card = Device(bus, device, function);
-        } else if (vendorID == 0x1af4 && deviceID == 0x1000 && classCode == 0x02) { // Virtio Network Device
-            displayCard("Virtio Network");
-        } else {
-            // Not an Ethernet card, you can add other devices' checks here if needed.
-        }
+    if (vendorID == 0x8086 && deviceID == 0x100e) { // Intel PRO/1000 e1000
+        displayCard("Intel PRO/1000 Ethernet");
+        ethernet_card = Device(bus, device, function);
+    }// else if (vendorID == 0x8086 && deviceID == 0x1209) {
+    //    displayCard("Intel 8255x");
+    //    ethernet_card = Device(bus, device, function);
+    //}
+    else if (vendorID == 0x1af4 && deviceID == 0x1000 && classCode == 0x02) { // Virtio Network Device
+        displayCard("Virtio Network");
+    } else {
+        // Not an Ethernet card, you can add other devices' checks here if needed.
+    }
 }
 
 void PCI::checkDevice(uint8_t bus, uint8_t device)

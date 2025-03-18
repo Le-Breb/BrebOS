@@ -25,6 +25,8 @@ void Network::init()
 
 void Network::run()
 {
+    if (PCI::ethernet_card.bus == (uint8_t)-1)
+        return; // No network card found
     nic = new E1000(PCI::ethernet_card);
     nic->start();
     memcpy(mac, nic->getMacAddress(), sizeof(mac));

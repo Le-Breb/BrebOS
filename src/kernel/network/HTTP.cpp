@@ -111,6 +111,8 @@ HTTP::response::response(const void* packet, uint16_t packet_size) : method(null
         headers[i].value[header_value_len] = '\0';
         bool starts_with_space = header_name_len && *cpacket == ' ';
         memcpy(headers[i].value, cpacket + starts_with_space, header_value_len - starts_with_space);
+        if (starts_with_space)
+            headers[i].value[header_value_len - 1] = '\0';
 
         // Update pointers and sizes
         cpacket += header_value_len + 2; // + \r + \n
@@ -173,15 +175,18 @@ void HTTP::send_get(const char* uri)
     request->uri = new char[strlen(uri) + 1];
     strcpy(request->uri, uri);
     request->version = (char*)"HTTP/1.1";
-    constexpr uint16_t num_headers = 3;
+    constexpr uint16_t num_headers = 4;
     request->num_headers = num_headers;
     header_t headers[num_headers]{};
     headers[0].name = (char*)"Host";
-    headers[0].value = request->uri; // Todo: write something that makes sense here
+    //headers[0].value = (char*)uri;
+    headers[0].value = (char*)"www.example.com";
     headers[1].name = (char*)"User-Agent";
     headers[1].value = (char*)"BrebOS";
     headers[2].name = (char*)"Accept";
     headers[2].value = (char*)"*/*";
+    headers[3].name = (char*)"Connection";
+    headers[3].value = (char*)"close";
     request->headers = headers;
 
     uint16_t packet_size;
@@ -189,6 +194,9 @@ void HTTP::send_get(const char* uri)
 
     state = State::GET_SENT;
 
+    auto peer_ip = socket->get_peer_ip();
+    printf_info("Downloading %s from %u.%u.%u.%u:%u", uri, peer_ip[0], peer_ip[1], peer_ip[2], peer_ip[3],
+                socket->get_peer_port());
     socket->send_data(packet, packet_size);
 }
 
@@ -208,6 +216,7 @@ void HTTP::on_data_received(void* packet, uint16_t packet_size)
             }
             memcpy(buf + buf_size, packet, packet_size);
             buf_size += packet_size;
+            printf("Received %u/%u bytes\n", buf_size, buf_capacity);
             break;
         default:
             printf("HTTP packet received while on state %d\n", (int)state);
@@ -243,11 +252,34 @@ void HTTP::handle_response_descriptor(const void* packet, uint16_t packet_size)
         state = State::CLOSED;
         return;
     }
+    size_t content_len_len = 0;
+    while (content_length_header->value[content_len_len])
+    {
+        buf_capacity *= 10;
+        buf_capacity += content_length_header->value[content_len_len] - '0';
+        content_len_len++;
+    }
 
     // Create a buffer to store response body
-    buf = new uint8_t[buf_capacity = atoi(content_length_header->value)];
+    buf = new uint8_t[buf_capacity];
 
     state = State::RECEIVING_RESPONSE;
+
+    // Gather remaining data
+    uint16_t i = 0; // Skip HTTP response
+    char* cpacket = (char*)packet;
+    while (i < packet_size - 3 && !(cpacket[i] == '\r' && cpacket[i + 1] == '\n' && cpacket[i + 2] == '\r' &&
+           cpacket[i + 3] == '\n'))
+        i++;
+
+    // Copy remaining data
+    auto data_size = packet_size - i - 4; // -4 for \r\n\r\n
+    memcpy(buf, cpacket + i + 4, data_size);
+
+    buf_size = data_size;
+
+    if (buf_size)
+        printf("Received %u/%u bytes\n", buf_size, buf_capacity);
 }
 
 void HTTP::on_connection_terminated(const char* error_message)
@@ -276,7 +308,7 @@ void HTTP::on_connection_terminated(const char* error_message)
                 printf_error("Error while saving downloaded file %s at %s", request->uri, pathname);
         }
         else
-            printf_error("HTTP connection terminated before response was fully received");
+            printf_error("HTTP closed with incomplete response: %d/%d", buf_size, buf_capacity);
     }
 
     state = State::CLOSED;
@@ -389,7 +421,8 @@ void* HTTP::create_packet(const request_t* request, uint16_t& packet_size)
 
 size_t HTTP::get_request_size(const request_t* request)
 {
-    size_t size = strlen(request->method) + 1 + strlen(request->uri) + 1 + strlen(request->version) + 2; // +2 for 2 * ' ' and +2 for \r\n
+    size_t size = strlen(request->method) + 1 + strlen(request->uri) + 1 + strlen(request->version) + 2;
+    // +2 for 2 * ' ' and +2 for \r\n
 
     for (auto i = 0; i < request->num_headers; i++)
     {

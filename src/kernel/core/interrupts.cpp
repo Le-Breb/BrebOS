@@ -58,7 +58,6 @@ void Interrupts::page_fault_handler(stack_state_t* stack_state)
 	printf("Shadow stack: %s\n", err & 64 ? "True" : "False");
 	printf("SGX: %s\n", err & 32768 ? "True" : "False");
 
-	System::shutdown();
 	Scheduler::get_running_process()->terminate(GPF_RET_VAL);
 }
 

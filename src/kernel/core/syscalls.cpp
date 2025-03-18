@@ -234,8 +234,10 @@ void Syscall::wget(const cpu_state_t* cpu_state)
         return;
     }
 
-    uint8_t dest_ip[] = {192, 168, 1, 184};
-    auto http = new HTTP{dest_ip, 8080};
+    //uint8_t dest_ip[] = {92,122,166,178};
+    //uint8_t dest_ip[] = {192, 168, 1, 184};
+    //auto http = new HTTP{dest_ip, 80};
+    auto http = new HTTP{Network::gateway_ip, 8080};
     http->send_get(uri);
 }
 

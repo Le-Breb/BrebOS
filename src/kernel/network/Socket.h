@@ -67,6 +67,10 @@ public:
     void send_data(const void* data, uint16_t size);
 
     void close(const char* error_message = nullptr);
+
+    [[nodiscard]] const uint8_t* get_peer_ip() const;
+
+    [[nodiscard]] uint16_t get_peer_port() const;
 };
 
 

@@ -11,7 +11,9 @@ list<Socket*> Socket::sockets = {};
 void Socket::acknowledge(const TCP::packet_info_t* packet_info, uint8_t* response_buf, bool fin)
 {
     auto payload_size = packet_info->size - (packet_info->packet->header_len >> 4) * sizeof(uint32_t);
-    ack_num = Endianness::switch32(packet_info->packet->seq_num) + payload_size + 1; // Set next expected packet
+    ack_num = Endianness::switch32(packet_info->packet->seq_num) + payload_size; // Set next expected packet;
+    if (packet_info->packet->flags & (TCP_FLAG_SYN | TCP_FLAG_FIN)) // SYN and FIN consume a sequence number
+        ack_num++;
     TCP::write_ack_header(response_buf, this, fin);
 }
 
@@ -51,6 +53,16 @@ void Socket::close(const char* error_message)
     }
 
     listener->on_connection_terminated(error_message);
+}
+
+const uint8_t* Socket::get_peer_ip() const
+{
+    return peer_ip;
+}
+
+uint16_t Socket::get_peer_port() const
+{
+    return peer_port;
 }
 
 Socket::Socket(uint8_t peer_ip[IPV4_ADDR_LEN], uint16_t peer_port) : peer_port(peer_port)
@@ -110,8 +122,6 @@ void Socket::handle_packet(const TCP::packet_info_t* packet_info, const IPV4::pa
         flush_waiting_queue();
         return;
     }
-    if (flags == TCP_FLAG_ACK && state == TCP::State::ESTABLISHED) // Peer acknowledges it has received our packet
-        return;
     if (flags == TCP_FLAG_ACK && state == TCP::State::CLOSE_WAIT)
     {
         close();
@@ -129,28 +139,6 @@ void Socket::handle_packet(const TCP::packet_info_t* packet_info, const IPV4::pa
         close();
         return;
     }
-    if (flags & TCP_FLAG_PSH && flags & TCP_FLAG_ACK && state == TCP::State::ESTABLISHED) // Data received
-    {
-        Ethernet::packet_info_t response_info;
-        auto response_buf = create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet, response_info);
-        bool fin = flags & TCP_FLAG_FIN;
-        acknowledge(packet_info, response_buf, fin);
-        if (fin)
-            state = TCP::State::CLOSE_WAIT;
-
-        Network::send_packet(&response_info);
-
-        // Trigger data received callback
-        if (listener != nullptr)
-        {
-            auto header_size = (packet->header_len >> 4) * sizeof(uint32_t);
-            auto payload = (uint8_t*)packet + header_size;
-            auto payload_size = packet_info->size - header_size;
-            listener->on_data_received(payload, payload_size);
-        }
-
-        return;
-    }
     if (flags == (TCP_FLAG_RST | TCP_FLAG_ACK) && state == TCP::State::SYN_SENT)
     // Peer port is very likely to be closed
     {
@@ -159,6 +147,31 @@ void Socket::handle_packet(const TCP::packet_info_t* packet_info, const IPV4::pa
                 peer_ip[2], peer_ip[3], peer_port);
 
         close(error_msg);
+        return;
+    }
+    if (flags & TCP_FLAG_ACK && state == TCP::State::ESTABLISHED)
+    {
+        auto header_size = (packet->header_len >> 4) * sizeof(uint32_t);
+        auto payload = (uint8_t*)packet + header_size;
+        auto payload_size = packet_info->size - header_size;
+
+        bool fin = flags & TCP_FLAG_FIN;
+        if (payload_size || fin) // Data received
+        {
+            Ethernet::packet_info_t response_info;
+            auto response_buf = create_packet_response(TCP::get_header_size(), ipv4_packet, ethernet_packet,
+                                                       response_info);
+            acknowledge(packet_info, response_buf, fin);
+            if (fin)
+                state = TCP::State::CLOSE_WAIT;
+
+            Network::send_packet(&response_info);
+
+            // Trigger data received callback
+            if (listener != nullptr)
+                listener->on_data_received(payload, payload_size);
+        }
+
         return;
     }
 
