@@ -589,19 +589,21 @@ __attribute__((format(printf, 2, 3))) int sprintf(char* str, const char *format,
 	return i;
 }
 
-// __attribute__((format(printf, 2, 3))) int fprintf(FILE *stream, const char* format, ...)
-// {
-// 	if (stream->fd != stdout->fd && stream->fd != stderr->fd)
-// 	{
-// 		printf("libc error: fprintf does not support streams other that stdout and stderr");
-// 		return 0;
-// 	}
-// 	va_list list;
-// 	va_start (list, format);
-// 	int i = printf(format, list);
-// 	va_end (list);
-// 	return i;
-// }
+__attribute__((format(printf, 2, 3))) int fprintf(int stream, const char* format, ...)
+{
+	if (stream != stdout && stream != stderr)
+	{
+		printf("libc error: fprintf does not support streams other that stdout and stderr");
+		return 0;
+	}
+
+	// Todo: add specific behaviour for stderr
+	va_list list;
+	va_start (list, format);
+	int i = printf(format, list);
+	va_end (list);
+	return i;
+}
 
 
 void flush()

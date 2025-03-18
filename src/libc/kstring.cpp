@@ -9,11 +9,13 @@ extern "C" unsigned long strlen(char const* str)
 	return len;
 }
 
-void memset(void* ptr, int value, unsigned long num)
+void* memset(void* ptr, int value, unsigned long num)
 {
 	unsigned char* p = (unsigned char*) ptr;
 	for (unsigned long i = 0; i < num; i++)
 		p[i] = value;
+
+	return ptr;
 }
 
 char* strcpy(char* dest, const char* src)
@@ -57,12 +59,14 @@ char* strncat(char* dest, const char* src, size_t ssize)
 	return ret;
 }
 
-extern "C" void memcpy(void* dest, const void* src, unsigned long num)
+extern "C" void* memcpy(void* dest, const void* src, unsigned long num)
 {
 	unsigned char* d = (unsigned char*) dest;
 	const unsigned char* s = (const unsigned char*) src;
 	for (unsigned long i = 0; i < num; i++)
 		d[i] = s[i];
+
+	return dest;
 }
 
 int strcmp(const char* str1, const char* str2)
@@ -244,6 +248,60 @@ char* strchr(const char* s, int c)
 			return (char*)s;
 		s++;
 	}
+
+	return nullptr;
+}
+
+char* strncpy(char *dst, const char* src, size_t dsize)
+{
+	stpncpy(dst, src, dsize);
+	return dst;
+}
+
+char* stpncpy(char * dst, const char * src, size_t dsize)
+{
+	size_t  dlen;
+
+	dlen = strnlen(src, dsize);
+	return (char*)memset(mempcpy(dst, src, dlen), 0, dsize - dlen);
+}
+
+void* mempcpy(void* dest, const void* src, size_t n)
+{
+	return (char*)memcpy(dest,src,n) + n;
+}
+
+size_t strnlen(const char* s, size_t maxlen)
+{
+	size_t l = 0;
+	for (; *s && l < maxlen; s++, l++) {}
+
+	return l;
+}
+
+int strstr_match(const char *in, const char *patt)
+{
+	size_t i = 0;
+	while (in[i] && patt[i] && in[i] == patt[i])
+		i++;
+
+	return !patt[i];
+}
+
+char* strstr(const char *haystack, const char *needle)
+{
+	size_t nl = strlen(needle);
+
+	if (nl == 0)
+		return nullptr;
+
+	size_t hl = strlen(haystack);
+	if (nl > hl)
+		return nullptr;
+
+	for (size_t i = 0; i < hl - nl + 1; i++)
+		if (strstr_match(haystack + i, needle))
+			return (char*)haystack + i;
 
 	return nullptr;
 }

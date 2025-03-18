@@ -201,6 +201,9 @@ void Syscall::get_key()
         case 18:
             realloc(p, cpu_state);
             break;
+        case 19:
+            getenv(p, cpu_state);
+            break;
         default:
             printf_error("Received unknown syscall id: %u", cpu_state->eax);
             break;
@@ -255,4 +258,23 @@ void Syscall::ls(cpu_state_t* cpu_state)
     const char* path = (const char*)cpu_state->edi;
 
     cpu_state->eax = (uint)VFS::ls(path);
+}
+
+void Syscall::getenv(Process* p, cpu_state_t* cpu_state)
+{
+    char* env = Process::get_env((char*)cpu_state->edi);
+    if (env)
+    {
+        auto len = strlen(env);
+        auto user_env = (char*)p->malloc(len + 1);
+        if (!user_env)
+        {
+            cpu_state->eax = 0;
+            return;
+        }
+        strcpy(user_env, env);
+        cpu_state->eax = (uint)user_env;
+    }
+    else
+        cpu_state->eax = 0;
 }

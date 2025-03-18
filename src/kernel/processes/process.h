@@ -29,6 +29,12 @@ class Process
 	friend class Scheduler; // Scheduler managers processes, it needs complete access to do its stuff
 	friend class ELFLoader; // ELFLoader creates processes, it acts like the constructor, it initializes most fields
 
+	struct env_var
+	{
+		const char* name;
+		char* value;
+	};
+
 private:
 	// Process page tables. Process can use all virtual addresses below the kernel virtual location at pde 768
 	Memory::page_table_t page_tables[768]{};
@@ -48,6 +54,8 @@ private:
 	list<uint> allocs{}; // list of memory blocks allocated by the process
 
 	int ret_val{};
+
+	static list<env_var*> env_list; // Todo: make env var process specific
 public:
 	struct elf_dependence_list* elf_dependence_list;
 	cpu_state_t cpu_state{}; // Registers
@@ -129,6 +137,12 @@ public:
 	* @return runtime address of the symbol, 0x00 if not found
 	*/
 	static uint get_symbol_runtime_address(const struct elf_dependence_list* dep, const char* symbol_name);
+
+	static void init();
+
+	static char* get_env(const char* name);
+
+	static void set_env(const char* name, const char* value);
 };
 
 #endif //INCLUDE_PROCESS_H

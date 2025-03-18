@@ -56,3 +56,10 @@ extern "C" [[noreturn]] void exit(int status)
     __asm__ volatile("int $0x80" : : "a"(1), "D"(status));
     __builtin_unreachable();
 }
+
+char* getenv(const char* name)
+{
+    char* env;
+    __asm__ volatile("int $0x80" : "=a"(env): "a"(19), "D"(name));
+    return env;
+}

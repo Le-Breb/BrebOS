@@ -64,6 +64,8 @@ class Syscall
 	static void cat(const cpu_state_t* cpu_state);
 
 	static void wget(const cpu_state_t* cpu_state);
+
+	static void getenv(Process* p, cpu_state_t* cpu_state);
 public:
 	/**
 	 * Handles a syscall

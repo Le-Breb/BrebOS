@@ -7,6 +7,8 @@
 #include "../core/memory.h"
 #include "../core/fb.h"
 
+list<Process::env_var*> Process::env_list = {};
+
 /** Change current pdt */
 extern "C" void change_pdt_asm_(uint pdt_phys_addr);
 
@@ -185,4 +187,39 @@ uint Process::get_symbol_runtime_address(const struct elf_dependence_list* dep, 
     }
 
     return 0x00;
+}
+
+void Process::init()
+{
+    env_list.add(new env_var{strdup("PWD"), strdup("/")});
+    env_list.add(new env_var{strdup("OLDPWD"), strdup("/")});
+    env_list.add(new env_var{strdup("IFS"), strdup(" \t\n")});
+}
+
+char* Process::get_env(const char* name)
+{
+    for (auto i = 0; i < env_list.size(); i++)
+    {
+        auto e = *env_list.get(i);
+        if (strcmp(name, e->name) == 0)
+            return e->value;
+    }
+
+    return nullptr;
+}
+
+void Process::set_env(const char* name, const char* value)
+{
+    for (auto i = 0; i < env_list.size(); i++)
+    {
+        auto e = *env_list.get(i);
+        if (strcmp(name, e->name) == 0)
+        {
+            delete e->value;
+            e->value = strdup(value);
+            return;
+        }
+    }
+
+    env_list.add(new env_var{strdup(name), strdup(value)});
 }

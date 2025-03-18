@@ -5,6 +5,10 @@
 #include "kstdint.h"
 #include "kstddef.h"
 
+#define stdin 0
+#define stdout 1
+#define stderr 2
+
 #define va_start(ap, last_arg) (ap = (va_list)&last_arg + sizeof(last_arg))
 
 // Define va_arg macro
@@ -22,7 +26,7 @@ __attribute__ ((format (printf, 1, 2))) int printf(const char* format, ...);
 
 __attribute__((format(printf, 2, 3))) int sprintf(char* str, const char *format, ...);
 
-//__attribute__((format(printf, 2, 3))) int fprintf(FILE *stream, const char* format, ...);
+__attribute__((format(printf, 2, 3))) int fprintf(int stream, const char* format, ...);
 
 
 void flush();

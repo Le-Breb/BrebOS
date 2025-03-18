@@ -30,4 +30,6 @@ void* realloc(void *ptr, size_t size);
  * */
 extern "C" [[noreturn]] void exit(int status);
 
+char *getenv(const char *name);
+
 #endif //KSTDLIB_H

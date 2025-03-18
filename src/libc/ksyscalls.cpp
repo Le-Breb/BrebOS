@@ -16,9 +16,9 @@ void puts(const char* str)
 	__asm__ volatile("int $0x80" : : "a"(2), "S"(str));
 }
 
-unsigned int getpid()
+pid_t getpid()
 {
-	unsigned int pid;
+	pid_t pid;
 	__asm__ volatile("int $0x80" : "=a"(pid) : "a"(5));
 	return pid;
 }

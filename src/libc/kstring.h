@@ -5,9 +5,9 @@
 
 extern "C" unsigned long strlen(char const* str);
 
-extern "C" void memset(void* ptr, int value, unsigned long num);
+extern "C" void* memset(void* ptr, int value, unsigned long num);
 
-extern "C" void memcpy(void* dest, const void* src, unsigned long num);
+extern "C" void* memcpy(void* dest, const void* src, unsigned long num);
 
 char* strcpy(char* dest, const char* src);
 
@@ -35,4 +35,13 @@ void *memmove(void *dest, const void *src, size_t n);
 
 char* strchr(const char *s, int c);
 
+char* strncpy(char *dst, const char* src, size_t dsize);
+
+char* stpncpy(char * dst, const char * src, size_t dsize);
+
+void* mempcpy(void* dest, const void* src, size_t n);
+
+size_t strnlen(const char* s, size_t maxlen);
+
+char* strstr(const char *haystack, const char *needle);
 #endif //INCLUDE_OS_STRING_H

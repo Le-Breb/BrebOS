@@ -1,7 +1,9 @@
 #ifndef INCLUDE_SYSCALLS_H
 #define INCLUDE_SYSCALLS_H
 
-/** Executes a GRUB module
+typedef int pid_t;
+
+/** Executes a program
  *
  * @param path program path
  */
@@ -11,7 +13,7 @@ void exec(const char* path, int argc, const char** argv);
  * Gets PID
  * @return PID
  */
-unsigned int getpid();
+pid_t getpid();
 
 /**
  * Blocks the process until a key is pressed and return it

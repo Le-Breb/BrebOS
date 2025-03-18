@@ -182,6 +182,7 @@ pid_t Scheduler::get_free_pid()
 void Scheduler::init()
 {
     PIT::init();
+    Process::init();
     for (uint i = 0; i < MAX_PROCESSES; ++i)
     {
         ready_queue.arr[i] = MAX_PROCESSES;

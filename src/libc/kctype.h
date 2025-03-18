@@ -5,4 +5,12 @@
 
 bool isdigit(uint c);
 
+bool isupper(char c);
+
+bool islower(char c);
+
+bool isalpha(char c);
+
+bool isalnum(char c);
+
 #endif //INCLUDE_CTYPE_H
