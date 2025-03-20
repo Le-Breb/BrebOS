@@ -168,7 +168,7 @@ class FAT_drive : public FS
 	 */
 	static const char** split_at_slashes(const char* str, uint* num_tokens);
 
-	uint get_free_cluster() const;
+	uint* get_free_clusters(size_t n) const;
 
 	/**Set environment to target a certain cluster
 	 *
@@ -219,6 +219,8 @@ public:
 	bool write_buf_to_file(const Dentry& dentry, const void* buf, uint length) override;
 
 	bool cat(const Dentry& dentry, cat_printer printer) override;
+
+	bool resize(const Dentry& dentry, uint new_size) override;
 };
 
 

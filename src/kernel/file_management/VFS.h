@@ -69,6 +69,13 @@ public:
 
 	static bool cat(const char* pathname);
 
+	/**
+	 * Writes a buffer to a file. If the file already exists, it is resized to length. If it doesn't exist, it is created.
+	 * @param pathname path of the file
+	 * @param buf data buffer
+	 * @param length length of buffer
+	 * @return boolean indicating success state
+	 */
 	static bool write_buf_to_file(const char* pathname, const void* buf, uint length);
 
 	/**
@@ -94,6 +101,14 @@ public:
 	static Dentry* browse_to(const char* path);
 
 	static void* load_file(const char* path, uint offset = 0, uint length = 0);
+
+	/**
+	 * Resizes a file
+	 * @param dentry dentry of the file to resize
+	 * @param new_size new size of the file
+	 * @return boolean indicating success of the operation
+	 */
+	static bool resize(const Dentry& dentry, size_t new_size);
 };
 
 

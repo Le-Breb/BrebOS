@@ -136,14 +136,13 @@ bool VFS::cat(const char* pathname)
 bool VFS::write_buf_to_file(const char* pathname, const void* buf, uint length)
 {
 	Dentry* dentry = get_file_dentry(pathname, false);
-	if (dentry)
+	if (!dentry)
 	{
-		printf_error("%s: already exists", pathname);
-		return false;
+		if (!((dentry = touch(pathname))))
+			return false;
+		if (!resize(*dentry, length))
+			return false;
 	}
-
-	if (!((dentry = touch(pathname))))
-		return false;
 
 	return dentry->inode->superblock->get_fs()->write_buf_to_file(*dentry, buf, length);
 }
@@ -432,6 +431,11 @@ void* VFS::load_file(const char* path, uint offset, uint length)
 
 	return dentry->inode->superblock->get_fs()->load_file_to_buf(dentry->name, dentry->parent, offset,
 	                                                             length ? length : dentry->inode->size);
+}
+
+bool VFS::resize(const Dentry& dentry, size_t new_size)
+{
+	return dentry.inode->superblock->get_fs()->resize(dentry, new_size);
 }
 
 bool VFS::mount(FS* fs)

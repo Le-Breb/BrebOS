@@ -38,6 +38,8 @@ public:
 
 	virtual bool cat(const Dentry& dentry, cat_printer printer) = 0;
 
+	virtual bool resize(const Dentry& dentry, uint new_size) = 0;
+
 	[[nodiscard]] virtual Inode* get_root_node() = 0;
 };
 
