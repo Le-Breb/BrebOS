@@ -122,7 +122,8 @@ available:
 | `q`                                    | Quit (Shutdown).                                                                                                                                                                                      |
 | `ls <path>`                            | Lists files and directories at `path`.                                                                                                                                                                |
 | `mkdir <path/dir_name>`                | Creates the directory `dir_name` at `path`.                                                                                                                                                           |
-| `touch <path/file_name>`               | Creates the file `dir_name` at `path`.                                                                                                                                                                |
+| `touch <dir_path/file_name>`               | Creates the file `file_name` at `dir_path`.                                                                                                                                                                |
+| `cat <path>`               | Prints the content of the file at `path`. Output if formatted according to the file extension.                                                                                                                                                                |
 
 ### Running your own programs inside BrebOS (How cool is this !?)
 
