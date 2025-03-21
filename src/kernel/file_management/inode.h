@@ -19,7 +19,7 @@ public:
 public:
 	const Superblock* superblock;
 
-	const uint size;
+	uint size;
 
 	const uint lba; // Logical block address, will be interpreted as needed by FS driver
 

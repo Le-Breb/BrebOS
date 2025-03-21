@@ -137,12 +137,8 @@ bool VFS::write_buf_to_file(const char* pathname, const void* buf, uint length)
 {
 	Dentry* dentry = get_file_dentry(pathname, false);
 	if (!dentry)
-	{
 		if (!((dentry = touch(pathname))))
 			return false;
-		if (!resize(*dentry, length))
-			return false;
-	}
 
 	return dentry->inode->superblock->get_fs()->write_buf_to_file(*dentry, buf, length);
 }
@@ -433,7 +429,7 @@ void* VFS::load_file(const char* path, uint offset, uint length)
 	                                                             length ? length : dentry->inode->size);
 }
 
-bool VFS::resize(const Dentry& dentry, size_t new_size)
+bool VFS::resize(Dentry& dentry, size_t new_size)
 {
 	return dentry.inode->superblock->get_fs()->resize(dentry, new_size);
 }

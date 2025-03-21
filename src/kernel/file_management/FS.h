@@ -34,11 +34,11 @@ public:
 
 	virtual void* load_file_to_buf(const char* file_name, Dentry* parent_dentry, uint offset, uint length) = 0;
 
-	virtual bool write_buf_to_file(const Dentry& dentry, const void* buf, uint length) = 0;
+	virtual bool write_buf_to_file(Dentry& dentry, const void* buf, uint length) = 0;
 
 	virtual bool cat(const Dentry& dentry, cat_printer printer) = 0;
 
-	virtual bool resize(const Dentry& dentry, uint new_size) = 0;
+	virtual bool resize(Dentry& dentry, uint new_size) = 0;
 
 	[[nodiscard]] virtual Inode* get_root_node() = 0;
 };

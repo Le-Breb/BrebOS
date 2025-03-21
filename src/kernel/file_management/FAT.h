@@ -189,7 +189,7 @@ class FAT_drive : public FS
 
 	static FAT_drive* from_drive(unsigned char drive);
 
-	uint get_child_dir_entry_id(Dentry& parent_dentry, const char* name);
+	uint get_child_dir_entry_id(const Dentry& parent_dentry, const char* name, ctx& ctx);
 
 	Dentry* get_child_dentry(Dentry& parent_dentry, const char* name) override;
 
@@ -214,11 +214,11 @@ public:
 
 	Inode* get_root_node() override;
 
-	bool write_buf_to_file(const Dentry& dentry, const void* buf, uint length) override;
+	bool write_buf_to_file(Dentry& dentry, const void* buf, uint length) override;
 
 	bool cat(const Dentry& dentry, cat_printer printer) override;
 
-	bool resize(const Dentry& dentry, uint new_size) override;
+	bool resize(Dentry& dentry, uint new_size) override;
 };
 
 

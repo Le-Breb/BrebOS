@@ -108,7 +108,7 @@ public:
 	 * @param new_size new size of the file
 	 * @return boolean indicating success of the operation
 	 */
-	static bool resize(const Dentry& dentry, size_t new_size);
+	static bool resize(Dentry& dentry, size_t new_size);
 };
 
 
