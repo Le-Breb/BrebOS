@@ -181,10 +181,11 @@ class FAT_drive : public FS
 	 *
 	 * @param new_active_cluster cluster we want to explore. Updates provided environment variables.
 	 * @param ctx
+	 * @param buffer
 	 * @return boolean indicating whether the operation succeeded
 	 */
 	bool
-	change_active_cluster(uint new_active_cluster, ctx& ctx);
+	change_active_cluster(uint new_active_cluster, ctx& ctx, void* buffer = nullptr);
 
 	static FAT_drive* from_drive(unsigned char drive);
 

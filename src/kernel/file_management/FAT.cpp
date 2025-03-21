@@ -213,20 +213,18 @@ FAT_drive::~FAT_drive()
     fs_list->remove(this);
 }
 
-bool FAT_drive::change_active_cluster(uint new_active_cluster, ctx& ctx)
+bool FAT_drive::change_active_cluster(uint new_active_cluster, ctx& ctx, void* buffer)
 {
     ctx.active_cluster = new_active_cluster;
     ctx.active_sector = FIRST_SECTOR_OF_CLUSTER(ctx.active_cluster, bs.sectors_per_cluster, first_data_sector);
 
     // Read data from drive
-    if (ATA::read_sectors(id, 1, ctx.active_sector, 0x10, (uint)buf))
+    if (ATA::read_sectors(id, 1, ctx.active_sector, 0x10, (uint)(!buffer ? buf : buffer)))
     {
         printf_error("Drive read error");
         return false;
     }
 
-    // Todo: restructure code so that FAT sector is not necessarily read within this function
-    // Todo: add optional buffer parameter where data should be loaded to
     uint FAT_offset = ctx.active_cluster * sizeof(uint32_t);
     ctx.FAT_sector = first_fat_sector + (FAT_offset / ATA_SECTOR_SIZE);
     ctx.FAT_entry_offset = FAT_offset % ATA_SECTOR_SIZE;
@@ -281,15 +279,18 @@ void* FAT_drive::load_file_to_buf(const char* file_name, Dentry* parent_dentry, 
     ctx ctx{};
     while (wrote_bytes < length && next_cluster != CLUSTER_EOC)
     {
-        if (!change_active_cluster(next_cluster, ctx))
+        // Load data into buffer. If there is more than ATA_SECTOR_SIZE data left to load, copy directly to b, otherwise
+        // copy an entire sector to buf and copy the meaningful data to b
+        uint rem = length - wrote_bytes;
+        void* load_buf = rem < ATA_SECTOR_SIZE ? this->buf : b + wrote_bytes;
+        if (!change_active_cluster(next_cluster, ctx, load_buf))
         {
             delete[] b;
             return nullptr;
         }
-        uint rem = length - wrote_bytes;
-        uint num = rem < ATA_SECTOR_SIZE ? rem : ATA_SECTOR_SIZE;
-        memcpy(b + wrote_bytes, buf, num);
-        wrote_bytes += num;
+        if (rem < ATA_SECTOR_SIZE) // Entire sector has been loaded to buf, copy meaningful data to b
+            memcpy(b + wrote_bytes, buf, rem);
+        wrote_bytes += rem > ATA_SECTOR_SIZE ? ATA_SECTOR_SIZE : rem;
         next_cluster = ctx.table_value;
     }
 
