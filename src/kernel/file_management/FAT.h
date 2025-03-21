@@ -138,6 +138,11 @@ struct directory
 	uint32_t num_entries;
 };
 
+struct ctx
+{
+	uint active_cluster, active_sector, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
+};
+
 /* FAT32 ATA drive handler */
 class FAT_drive : public FS
 {
@@ -175,12 +180,11 @@ class FAT_drive : public FS
 	/**Set environment to target a certain cluster
 	 *
 	 * @param new_active_cluster cluster we want to explore. Updates provided environment variables.
+	 * @param ctx
 	 * @return boolean indicating whether the operation succeeded
 	 */
 	bool
-	change_active_cluster(uint new_active_cluster, uint& active_cluster, uint& active_sector,
-	                      uint& FAT_entry_offset, uint& FAT_sector, uint& table_value,
-	                      uint& dir_entry_id);
+	change_active_cluster(uint new_active_cluster, ctx& ctx);
 
 	static FAT_drive* from_drive(unsigned char drive);
 
