@@ -176,22 +176,26 @@ uint* FAT_drive::get_free_clusters(size_t n) const
 {
     auto free_cluster_list = new uint[n];
     size_t free_clusters_found = 0;
+    size_t num_fat_entries_per_sector = ATA_SECTOR_SIZE / sizeof(uint32_t);
     for (uint sector = first_fat_sector; sector < total_sectors; ++sector)
     {
-        uint32_t fat_buf[ATA_SECTOR_SIZE / sizeof(uint32_t)];
+        // Get FAT sector
+        uint32_t fat_buf[num_fat_entries_per_sector];
         if (ATA::read_sectors(id, 1, sector, 0x10, (uint)fat_buf))
         {
             printf_error("Drive read error");
             return 0;
         }
-        for (uint j = 0; j < ATA_SECTOR_SIZE / sizeof(uint32_t); j++)
-            if (!fat_buf[j])
+        // Read FAT entries
+        for (uint j = 0; j < num_fat_entries_per_sector; j++)
+            if (!fat_buf[j]) // Found a free entry
             {
                 if (sector == first_data_sector && j < 2)
                     continue; // Reserved entries
-                uint cluster_number = (sector - first_fat_sector) * (ATA_SECTOR_SIZE / sizeof(uint32_t)) + j + 2;
+                uint cluster_number = (sector - first_fat_sector) * num_fat_entries_per_sector + j + 2;
                 free_cluster_list[free_clusters_found++] = cluster_number;
 
+                // Enough clusters found
                 if (free_clusters_found == n)
                     return free_cluster_list;
             }
@@ -210,7 +214,7 @@ FAT_drive::~FAT_drive()
 }
 
 bool FAT_drive::change_active_cluster(uint new_active_cluster, uint& active_cluster, uint& active_sector,
-                                      uint& FAT_entry_offset, uint& FAT_offset, uint& FAT_sector, uint& table_value,
+                                      uint& FAT_entry_offset, uint& FAT_sector, uint& table_value,
                                       uint& dir_entry_id)
 {
     active_cluster = new_active_cluster;
@@ -224,7 +228,8 @@ bool FAT_drive::change_active_cluster(uint new_active_cluster, uint& active_clus
     }
 
     // Todo: restructure code so that FAT sector is not necessarily read within this function
-    FAT_offset = active_cluster * sizeof(uint32_t);
+    // Todo: add optional buffer parameter where data should be loaded to
+    uint FAT_offset = active_cluster * sizeof(uint32_t);
     FAT_sector = first_fat_sector + (FAT_offset / ATA_SECTOR_SIZE);
     FAT_entry_offset = FAT_offset % ATA_SECTOR_SIZE;
     if (ATA::read_sectors(id, 1, FAT_sector, 0x10, (uint)FAT))
@@ -239,98 +244,6 @@ bool FAT_drive::change_active_cluster(uint new_active_cluster, uint& active_clus
     dir_entry_id = 0;
 
     return true;
-}
-
-bool FAT_drive::browse_to_folder_parent(const char** path, uint num_tokens, uint& active_cluster, uint& active_sector,
-                                        uint& FAT_entry_offset, uint& FAT_offset, uint& FAT_sector, uint& table_value,
-                                        uint& dir_entry_id)
-{
-    uint token_id = 0;
-
-    if (!change_active_cluster(extBS_32.root_cluster, active_cluster, active_sector,
-                               FAT_entry_offset, FAT_offset, FAT_sector, table_value, dir_entry_id))
-        return false;
-
-    if (!num_tokens)
-        return true;
-
-    // Browse file tree to find working directory
-    bool prev_is_lfn = false, found_in_lfn = false, found = false;
-    while (!entries[dir_entry_id].is_free())
-    {
-        if (!(unsigned char)entries[dir_entry_id].is_unused()) // Skip unused entry
-        {
-            // Long directory entry
-            if (entries[dir_entry_id].is_LFN())
-            {
-                LongDirEntry* l_entry = (LongDirEntry*)&entries[dir_entry_id]; // Cast entry
-                // Ensure the long entries chain only contains one element
-                if (!(l_entry->is_EOF()))
-                {
-                    printf_error("chained long entries not supported");
-                    return false;
-                }
-
-                // Concatenate name1,2,3 from UTF16 to UTF8
-                char* full_name = l_entry->get_uglily_converted_utf8_name();
-
-                // Does the name match ?
-                found_in_lfn = !strcmp(full_name, path[token_id]);
-                prev_is_lfn = true;
-
-                delete full_name;
-            }
-            else // Regular 8.3 entry
-            {
-                found = found_in_lfn;
-                // No LFN is linked with this entry, then we compare its name with the expected token
-                if (!found && !prev_is_lfn)
-                {
-                    char* name = entries[dir_entry_id].get_name();
-                    found = !strcmp(name, path[token_id]);
-                    delete name;
-                }
-                // Token has been found either in linked LFN or in this 8.3 entry
-                if (found)
-                {
-                    token_id++; // Current token has been found, proceed to next one
-                    if (token_id == num_tokens)
-                        break; // We are at the right working directory, stop browsing file tree
-
-                    if (!(entries[dir_entry_id].is_directory()))
-                        return false; // Token is not a directory, abort
-
-                    // We need to explore subdirectories. To do so, read directory entry from drive
-                    if (!change_active_cluster(entries[dir_entry_id].first_cluster_addr(),
-                                               active_sector, active_sector, FAT_entry_offset, FAT_offset,
-                                               FAT_sector, table_value, dir_entry_id))
-                        return false;
-                }
-                prev_is_lfn = found = found_in_lfn = false;
-            }
-        }
-        dir_entry_id++; // Current entry did not match token, proceed to next one
-
-        // Reached end of sector, follow cluster chain
-        if (dir_entry_id * sizeof(uint32_t) == ATA_SECTOR_SIZE)
-        {
-            if (table_value == BAD_SECTOR)
-            {
-                printf_error("Bad sector");
-                return false;
-            }
-            // Did we reach the end of the chain ?
-            if (table_value >= CLUSTER_MIN_EOC)
-                break; // Yes, stop reading entries
-
-            // Now update variables
-            if (!change_active_cluster(table_value, active_cluster, active_sector,
-                                       FAT_entry_offset, FAT_offset, FAT_sector, table_value, dir_entry_id))
-                return false;
-        }
-    }
-
-    return found;
 }
 
 void FAT_drive::init()
@@ -356,34 +269,22 @@ void FAT_drive::shutdown()
 
 void* FAT_drive::load_file_to_buf(const char* file_name, Dentry* parent_dentry, uint offset, uint length)
 {
-    uint parent_sector = parent_dentry->inode->lba;
-    uint parent_cluster = parent_sector * bs.sectors_per_cluster;
-    uint active_cluster, active_sector, FAT_offset, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
-    // ~= cd wd
-    if (!change_active_cluster(parent_cluster, active_cluster, active_sector, FAT_entry_offset,
-                               FAT_offset, FAT_sector, table_value, dir_entry_id))
-        return nullptr;
-
-    // Skip used dir entries, aka files/folders inside wd
-    while (dir_entry_id * sizeof(DirEntry) < FAT_Buf_size && !entries[dir_entry_id].is_free() &&
-        strcmp(entries[dir_entry_id].get_name(), file_name) != 0)
-        dir_entry_id++;
-
-    if (dir_entry_id * sizeof(DirEntry) >= FAT_Buf_size || entries[dir_entry_id].is_free())
-        return nullptr;
-
     // Be careful, this pointer losses its meaning when changing active_cluster
-    DirEntry* file_entry = &entries[dir_entry_id];
+    uint file_entry_id;
+    if ((file_entry_id = get_child_dir_entry_id(*parent_dentry, file_name)) == ENTRY_NOT_FOUND)
+        return nullptr;
+    DirEntry* file_entry = &entries[file_entry_id];
     uint next_cluster = file_entry->first_cluster_addr();
     if (offset + length > file_entry->file_size)
         return nullptr;
 
     uint wrote_bytes = 0;
     char* b = new char[length];
+    uint active_cluster, active_sector, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
     while (wrote_bytes < length && next_cluster != CLUSTER_EOC)
     {
         if (!change_active_cluster(next_cluster, active_cluster, active_sector, FAT_entry_offset,
-                                   FAT_offset, FAT_sector, table_value, dir_entry_id))
+                                   FAT_sector, table_value, dir_entry_id))
         {
             delete[] b;
             return nullptr;
@@ -402,20 +303,19 @@ void* FAT_drive::load_file_to_buf(const char* file_name, Dentry* parent_dentry, 
     return nullptr;
 }
 
-
-Dentry* FAT_drive::get_child_entry(Dentry& parent_dentry, const char* name)
+uint FAT_drive::get_child_dir_entry_id(Dentry& parent_dentry, const char* name)
 {
     // Make sure path makes sense
     if (!name || name[0] == '/')
-        return nullptr;
+        return ENTRY_NOT_FOUND;
 
     uint parent_sector = parent_dentry.inode->lba;
     uint parent_cluster = parent_sector * bs.sectors_per_cluster;
-    uint active_cluster, active_sector, FAT_offset, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
+    uint active_cluster, active_sector, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
     // ~= cd wd
     if (!change_active_cluster(parent_cluster, active_cluster, active_sector, FAT_entry_offset,
-                               FAT_offset, FAT_sector, table_value, dir_entry_id))
-        return nullptr;
+                               FAT_sector, table_value, dir_entry_id))
+        return ENTRY_NOT_FOUND;
 
     // Skip used dir entries, aka files/folders inside wd
     bool found_in_lfn = false;
@@ -441,9 +341,17 @@ Dentry* FAT_drive::get_child_entry(Dentry& parent_dentry, const char* name)
     }
 
     if (dir_entry_id * sizeof(DirEntry) >= FAT_Buf_size || entries[dir_entry_id].is_free())
-        return nullptr;
+        return ENTRY_NOT_FOUND;
 
-    return dir_entry_to_dentry(entries[dir_entry_id], &parent_dentry, name);
+    return dir_entry_id;
+}
+
+Dentry* FAT_drive::get_child_dentry(Dentry& parent_dentry, const char* name)
+{
+    uint entry_id;
+    if ((entry_id = get_child_dir_entry_id(parent_dentry, name)) == ENTRY_NOT_FOUND)
+        return nullptr;
+    return dir_entry_to_dentry(entries[entry_id], &parent_dentry, name);
 }
 
 Dentry* FAT_drive::dir_entry_to_dentry(const DirEntry& dir_entry, Dentry* parent_dentry, const char* name) const
@@ -462,10 +370,10 @@ Dentry* FAT_drive::touch(Dentry& parent_dentry, const char* entry_name)
 
     uint parent_sector = parent_dentry.inode->lba;
     uint parent_cluster = parent_sector * bs.sectors_per_cluster;
-    uint active_cluster, active_sector, FAT_offset, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
+    uint active_cluster, active_sector, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
     // ~= cd wd
     if (!change_active_cluster(parent_cluster, active_cluster, active_sector, FAT_entry_offset,
-                               FAT_offset, FAT_sector, table_value, dir_entry_id))
+                               FAT_sector, table_value, dir_entry_id))
         return nullptr;
 
     // Skip used dir entries, aka files/folders inside wd
@@ -501,7 +409,7 @@ Dentry* FAT_drive::touch(Dentry& parent_dentry, const char* entry_name)
 
     // ~= cd inside file
     if (!change_active_cluster(file_content_cluster, active_cluster, active_sector, FAT_entry_offset,
-                               FAT_offset, FAT_sector, table_value, dir_entry_id))
+                               FAT_sector, table_value, dir_entry_id))
         return nullptr;
 
     // Indicate that dir content cluster is the end of the cluster chain it belongs to
@@ -516,7 +424,6 @@ Dentry* FAT_drive::touch(Dentry& parent_dentry, const char* entry_name)
 }
 
 Dentry* FAT_drive::mkdir(Dentry& parent_dentry, const char* entry_name)
-
 {
     uint l = strlen(entry_name);
     if (l >= 12 - 3)
@@ -527,10 +434,10 @@ Dentry* FAT_drive::mkdir(Dentry& parent_dentry, const char* entry_name)
 
     uint parent_sector = parent_dentry.inode->lba;
     uint parent_cluster = parent_sector * bs.sectors_per_cluster;
-    uint active_cluster, active_sector, FAT_offset, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
+    uint active_cluster, active_sector, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
     // ~= cd wd
     if (!change_active_cluster(parent_cluster, active_cluster, active_sector, FAT_entry_offset,
-                               FAT_offset, FAT_sector, table_value, dir_entry_id))
+                               FAT_sector, table_value, dir_entry_id))
         return nullptr;
 
     // Skip used dir entries, aka files/folders inside wd
@@ -564,7 +471,7 @@ Dentry* FAT_drive::mkdir(Dentry& parent_dentry, const char* entry_name)
 
     // ~= cd new directory
     if (!change_active_cluster(dir_content_cluster, active_cluster, active_sector, FAT_entry_offset,
-                               FAT_offset, FAT_sector, table_value, dir_entry_id))
+                               FAT_sector, table_value, dir_entry_id))
         return nullptr;
 
     uint dir_content_sector = active_sector;
@@ -604,10 +511,10 @@ bool FAT_drive::ls(const Dentry& dentry, ls_printer printer)
 {
     uint parent_sector = dentry.inode->lba;
     uint parent_cluster = parent_sector * bs.sectors_per_cluster;
-    uint active_cluster, active_sector, FAT_offset, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
+    uint active_cluster, active_sector, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
     // ~= cd wd
     if (!change_active_cluster(parent_cluster, active_cluster, active_sector, FAT_entry_offset,
-                               FAT_offset, FAT_sector, table_value, dir_entry_id))
+                               FAT_sector, table_value, dir_entry_id))
         return false;
 
     // Skip used dir entries, aka files/folders inside wd
@@ -650,44 +557,14 @@ bool FAT_drive::write_buf_to_file(const Dentry& dentry, const void* buf, uint le
         return false;
     }
 
-    uint parent_sector = dentry.parent->inode->lba;
-    uint parent_cluster = parent_sector * bs.sectors_per_cluster;
-    uint active_cluster, active_sector, FAT_offset, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
-
-    // ~cd parent directory
-    if (!change_active_cluster(parent_cluster, active_cluster, active_sector, FAT_entry_offset,
-                               FAT_offset, FAT_sector, table_value, dir_entry_id))
-        return false;
-
-    // Find file entry
-    DirEntry* file_entry = nullptr;
-    bool prev_is_lfn = false;
-    while (dir_entry_id * sizeof(DirEntry) < FAT_Buf_size && !entries[dir_entry_id].is_free())
-    {
-        auto entry = entries + dir_entry_id;
-        bool is_lfn = entry->is_LFN();
-        if (!prev_is_lfn)
-        {
-            char* entry_name = is_lfn ? ((LongDirEntry*)entry)->get_uglily_converted_utf8_name() : entry->get_name();
-            bool file_found = !strcmp(entry_name, dentry.name);
-            delete[] entry_name;
-            if (file_found)
-            {
-                file_entry = is_lfn ? entries + dir_entry_id + 1 : entries + dir_entry_id;
-                break;
-            }
-        }
-
-        dir_entry_id++;
-        prev_is_lfn = is_lfn;
-    }
-
     // Entry not found
-    if (file_entry == nullptr)
+    uint entry_id;
+    if ((entry_id = get_child_dir_entry_id(*dentry.parent, dentry.name)) == ENTRY_NOT_FOUND)
     {
         printf_error("couldn't find file");
         return false;
     }
+    DirEntry* file_entry = &entries[entry_id];
 
     // Resize file if necessary
     if (file_entry->file_size != length)
@@ -696,12 +573,13 @@ bool FAT_drive::write_buf_to_file(const Dentry& dentry, const void* buf, uint le
 
     uint next_cluster = file_entry->first_cluster_addr();
     size_t wrote_bytes = 0;
+    uint active_cluster, active_sector, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
 
     // Write file content cluster by cluster
     while (wrote_bytes < length && next_cluster != CLUSTER_EOC)
     {
         if (!change_active_cluster(next_cluster, active_cluster, active_sector, FAT_entry_offset,
-                                   FAT_offset, FAT_sector, table_value, dir_entry_id))
+                                   FAT_sector, table_value, dir_entry_id))
             return false;
 
         // If there is more than ATA_SECTOR_SIZE bytes to write, use provided buffer, otherwise copy remaining data to buf
@@ -725,7 +603,7 @@ bool FAT_drive::write_buf_to_file(const Dentry& dentry, const void* buf, uint le
 
     return true;
 }
-
+// Todo: add function to do something on file content with function pointer and direntry pointer ?
 bool FAT_drive::cat(const Dentry& dentry, cat_printer printer)
 {
     if (dentry.inode->type != Inode::File)
@@ -734,45 +612,16 @@ bool FAT_drive::cat(const Dentry& dentry, cat_printer printer)
         return false;
     }
 
-    uint parent_sector = dentry.parent->inode->lba;
-    uint parent_cluster = parent_sector * bs.sectors_per_cluster;
-    uint active_cluster, active_sector, FAT_offset, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
-
-    // ~cd parent directory
-    if (!change_active_cluster(parent_cluster, active_cluster, active_sector, FAT_entry_offset,
-                               FAT_offset, FAT_sector, table_value, dir_entry_id))
-        return false;
-
     // Find file entry
-    DirEntry* file_entry = nullptr;
-    bool prev_is_lfn = false;
-    while (dir_entry_id * sizeof(DirEntry) < FAT_Buf_size && !entries[dir_entry_id].is_free())
-    {
-        auto entry = entries + dir_entry_id;
-        bool is_lfn = entry->is_LFN();
-        if (!prev_is_lfn)
-        {
-            char* entry_name = is_lfn ? ((LongDirEntry*)entry)->get_uglily_converted_utf8_name() : entry->get_name();
-            bool file_found = !strcmp(entry_name, dentry.name);
-            delete[] entry_name;
-            if (file_found)
-            {
-                file_entry = is_lfn ? entries + dir_entry_id + 1 : entries + dir_entry_id;
-                break;
-            }
-        }
-
-        dir_entry_id++;
-        prev_is_lfn = is_lfn;
-    }
-
-    // Entry not found
-    if (file_entry == nullptr)
+    uint entry_id;
+    if ((entry_id = get_child_dir_entry_id(*dentry.parent, dentry.name)) == ENTRY_NOT_FOUND)
     {
         printf_error("couldn't find file %s", dentry.name);
         return false;
     }
+    DirEntry* file_entry = &entries[entry_id];
 
+    uint active_cluster, active_sector, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
     char* extension = file_entry->get_extension();
     auto file_size = file_entry->file_size;
     uint next_cluster = file_entry->first_cluster_addr();
@@ -782,7 +631,7 @@ bool FAT_drive::cat(const Dentry& dentry, cat_printer printer)
     while (printed_size < file_size && next_cluster != CLUSTER_EOC)
     {
         if (!change_active_cluster(next_cluster, active_cluster, active_sector, FAT_entry_offset,
-                                   FAT_offset, FAT_sector, table_value, dir_entry_id))
+                                   FAT_sector, table_value, dir_entry_id))
             return false;
 
         uint rem = file_size - printed_size;
@@ -799,48 +648,18 @@ bool FAT_drive::cat(const Dentry& dentry, cat_printer printer)
 
 bool FAT_drive::resize(const Dentry& dentry, uint new_size)
 {
+    uint active_cluster, active_sector, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
     uint parent_sector = dentry.parent->inode->lba;
     uint parent_cluster = parent_sector * bs.sectors_per_cluster;
-    uint active_cluster, active_sector, FAT_offset, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
 
-    // ~cd parent directory
-    if (!change_active_cluster(parent_cluster, active_cluster, active_sector, FAT_entry_offset,
-                               FAT_offset, FAT_sector, table_value, dir_entry_id))
-        return false;
-
-    // Find file entry
-    DirEntry* file_entry = nullptr;
-    bool prev_is_lfn = false;
-    while (dir_entry_id * sizeof(DirEntry) < FAT_Buf_size && !entries[dir_entry_id].is_free())
-    {
-        auto entry = entries + dir_entry_id;
-        bool is_lfn = entry->is_LFN();
-        if (!prev_is_lfn)
-        {
-            char* entry_name = is_lfn ? ((LongDirEntry*)entry)->get_uglily_converted_utf8_name() : entry->get_name();
-            bool file_found = !strcmp(entry_name, dentry.name);
-            delete[] entry_name;
-            if (file_found)
-            {
-                file_entry = is_lfn ? entries + dir_entry_id + 1 : entries + dir_entry_id;
-                break;
-            }
-        }
-
-        dir_entry_id++;
-        prev_is_lfn = is_lfn;
-    }
-
-    if (file_entry == nullptr)
+    uint entry_id;
+    if ((entry_id = get_child_dir_entry_id(*dentry.parent, dentry.name)) == ENTRY_NOT_FOUND)
     {
         printf_error("couldn't find file %s", dentry.name);
         return false;
     }
 
-    auto entry_id = dir_entry_id;
-
     // multiple sectors per cluster absolutely not accounted for
-    // Todo: factorize FAT code
     uint num_data_sectors = (new_size + ATA_SECTOR_SIZE - 1) / ATA_SECTOR_SIZE;
     auto free_cluster_list = get_free_clusters(num_data_sectors);
     if (free_cluster_list == nullptr)
@@ -851,7 +670,7 @@ bool FAT_drive::resize(const Dentry& dentry, uint new_size)
     for (uint i = 0; i < num_data_sectors - 1; i++)
     {
         if (!change_active_cluster(free_cluster_list[i], active_cluster, active_sector, FAT_entry_offset,
-                                   FAT_offset, FAT_sector, table_value, dir_entry_id))
+                                   FAT_sector, table_value, dir_entry_id))
         {
             printf_error("drive read error");
             return false;
@@ -865,7 +684,7 @@ bool FAT_drive::resize(const Dentry& dentry, uint new_size)
         }
     }
     if (!change_active_cluster(free_cluster_list[num_data_sectors - 1], active_cluster, active_sector,
-                               FAT_entry_offset, FAT_offset, FAT_sector, table_value, dir_entry_id))
+                               FAT_entry_offset, FAT_sector, table_value, dir_entry_id))
     {
         printf_error("drive read error");
         return false;
@@ -879,7 +698,7 @@ bool FAT_drive::resize(const Dentry& dentry, uint new_size)
 
     // Update file
     if (!change_active_cluster(parent_cluster, active_cluster, active_sector, FAT_entry_offset,
-                               FAT_offset, FAT_sector, table_value, dir_entry_id))
+                               FAT_sector, table_value, dir_entry_id))
         return false;
 
     // Update file entry
@@ -914,7 +733,8 @@ char* DirEntry::get_extension() const
     auto file_name_len = strlen(file_name);
     while (dot_pos < file_name_len && file_name[dot_pos] != '.')
         dot_pos++;
-    memcpy(extension, file_name + dot_pos + 1, file_name_len - dot_pos - 1);
+    if (file_name_len != dot_pos) // If file has an extension
+        memcpy(extension, file_name + dot_pos + 1, file_name_len - dot_pos - 1);
     delete[] file_name;
 
     return extension;
@@ -951,6 +771,8 @@ DirEntry::DirEntry(const char* name, uint8_t attrs, uint32_t first_cluster_addr,
                                                              file_size(fileSize)
 {
     memset(this->name, NAME_PADDING_BYTE, 10);
+    if (!name) // Dummy constructor with no arguments call this constructor with nullptr as name
+        return;
     if (attrs & DIRECTORY)
         memcpy(this->name, name, strlen(name) + 1);
     else

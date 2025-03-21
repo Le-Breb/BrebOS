@@ -24,7 +24,7 @@ public:
 
 	static list<FS*>* fs_list;
 
-	virtual Dentry* get_child_entry(Dentry& parent_dentry, const char* entry_name) = 0;
+	virtual Dentry* get_child_dentry(Dentry& parent_dentry, const char* entry_name) = 0;
 
 	virtual Dentry* touch(Dentry& parent_dentry, const char* entry_name) = 0;
 

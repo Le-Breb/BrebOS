@@ -27,6 +27,8 @@
 #define NAME_PADDING_BYTE 0x20
 #define DIR_ENTRY_NAME_LEN 11
 
+#define ENTRY_NOT_FOUND ((uint)-1)
+
 enum FAT_type
 {
 	ExFAT,
@@ -177,23 +179,14 @@ class FAT_drive : public FS
 	 */
 	bool
 	change_active_cluster(uint new_active_cluster, uint& active_cluster, uint& active_sector,
-	                      uint& FAT_entry_offset, uint& FAT_offset, uint& FAT_sector, uint& table_value,
+	                      uint& FAT_entry_offset, uint& FAT_sector, uint& table_value,
 	                      uint& dir_entry_id);
-
-	/** Browses file tree up to the directory containing the folder designed by path.
-	 * Updates provided environment variables.
-	 *
-	 * @param path list of directories
-	 * @param num_tokens number of directories
-	 * @return boolean indicating whether the dir was found
-	 */
-	bool browse_to_folder_parent(const char** path, uint num_tokens, uint& active_cluster, uint& active_sector,
-	                             uint& FAT_entry_offset, uint& FAT_offset, uint& FAT_sector, uint& table_value,
-	                             uint& dir_entry_id);
 
 	static FAT_drive* from_drive(unsigned char drive);
 
-	Dentry* get_child_entry(Dentry& parent_dentry, const char* name) override;
+	uint get_child_dir_entry_id(Dentry& parent_dentry, const char* name);
+
+	Dentry* get_child_dentry(Dentry& parent_dentry, const char* name) override;
 
 	Dentry* dir_entry_to_dentry(const DirEntry& dir_entry, Dentry* parent_dentry, const char* name) const;
 

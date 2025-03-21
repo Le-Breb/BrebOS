@@ -258,7 +258,7 @@ Dentry* VFS::browse_to(const char* path, Dentry* starting_point, bool print_erro
 			delete[] p;
 			return nullptr;
 		}
-		dentry = fs->get_child_entry(*dentry, token);
+		dentry = fs->get_child_dentry(*dentry, token);
 		if (!dentry)
 		{
 			if (print_errors)
