@@ -89,6 +89,13 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
         	wget(cmd + 5);
         else if (cmd[0] == 'c' && cmd[1] == 'a' && cmd[2] == 't' && cmd[3] == ' ')
         	cat(cmd + 4);
+        else if (cmd[0] == '4' && cmd[1] == '2' && cmd[2] == 's' && cmd[3] == 'h' && cmd[4] == ' ')
+		{
+          	int argc = 2;
+            cmd[5 + strlen(cmd + 5)] = '\0';
+            const char* argv[2] = { "-c", cmd + 5 };
+        	exec("42sh", argc, (const char**) argv);
+        }
 		else
 			printf("Unknown command\n");
 
