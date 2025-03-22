@@ -130,7 +130,6 @@ available:
 BrebOS can run C++ programs that *you* write, provided they respect the following conditions:
 
 - Your program cannot use `dynamic_cast`, nor exceptions. They require additional support which i did not setup.
-- Your program contains `.h` and `.cpp` files, all within the same directory.
 - You cannot make use of any library, even `libc`, as it is not ported on `BrebOS`. The only exception is my custom
   `libc`. The relevant headers are located under
   `src/libc`. For example, if you want to use `printf`, simply write `#include <kstdio.h>`. You are likely to be
@@ -139,7 +138,7 @@ BrebOS can run C++ programs that *you* write, provided they respect the followin
 
 To add your program, simply follow the following steps:
 
-- Copy all `.h` and `.cpp` files under `BrebOS/src/programs/your_awesome_program_name` <br>
+- Copy your source files under `BrebOS/src/programs/your_awesome_program_name` <br>
   That's all! Yep, you've read well, there's nothing else you have to do! The Makefile will handle the compilation of
   your program and will add it at `/bin` in BrebOS' disk. <br>
   You can now run your program using `p your_awesome_program_name` in BrebOS.
