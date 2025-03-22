@@ -125,6 +125,8 @@ void* Process::realloc(void* ptr, [[maybe_unused]] size_t size)
 
 void Process::free(void* ptr)
 {
+    if (!ptr)
+        return;
     if (!allocs.remove((uint)ptr))
         printf_error("Process dyn memory ptr not found in process allocs");
     user_free(ptr);
