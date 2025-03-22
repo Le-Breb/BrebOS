@@ -34,20 +34,18 @@ class Syscall
 	/**
 	 * Tries to allocate dynamic memory for a given process
 	 * @param p calling process
-	 * @param cpu_state process CPU state
 	 */
-	static void malloc(Process* p, cpu_state_t* cpu_state);
+	static void malloc(Process* p);
 
-	static void calloc(Process* p, cpu_state_t* cpu_state);
+	static void calloc(Process* p);
 
 	/**
 	 * Frees dynamic memory of a given process
 	 * @param p calling process
-	 * @param cpu_state process CPU state
 	 */
-	static void free(Process* p, const cpu_state_t* cpu_state);
+	static void free(Process* p);
 
-	static void realloc(Process* p, cpu_state_t* cpu_state);
+	static void realloc(Process* p);
 
 	static void get_key();
 
@@ -65,7 +63,7 @@ class Syscall
 
 	static void wget(const cpu_state_t* cpu_state);
 
-	static void getenv(Process* p, cpu_state_t* cpu_state);
+	static void getenv(Process* p);
 public:
 	/**
 	 * Handles a syscall

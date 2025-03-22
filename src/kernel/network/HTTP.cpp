@@ -295,11 +295,12 @@ void HTTP::on_connection_terminated(const char* error_message)
 
             // Build file path
             const char save_path[] = "/downloads/";
-            auto pathname_length = sizeof(save_path) + strlen(request->uri);
+            const char* file_name = "res.txt"; // request->uri;
+            auto pathname_length = sizeof(save_path) + strlen(file_name);
             char pathname[pathname_length + 1];
             pathname[pathname_length] = '\0';
             strcpy(pathname, save_path);
-            strcat(pathname, request->uri);
+            strcat(pathname, file_name);
 
             // Save file
             if (VFS::write_buf_to_file(pathname, buf, buf_size))

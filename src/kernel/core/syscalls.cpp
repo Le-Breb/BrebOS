@@ -38,24 +38,24 @@ void Syscall::get_pid()
     __builtin_unreachable();
 }
 
-void Syscall::malloc(Process* p, cpu_state_t* cpu_state)
+void Syscall::malloc(Process* p)
 {
-    cpu_state->eax = (uint)p->malloc(cpu_state->edi);
+    p->cpu_state.eax = (uint)p->malloc(p->cpu_state.edi);
 }
 
-void Syscall::calloc(Process* p, cpu_state_t* cpu_state)
+void Syscall::calloc(Process* p)
 {
-    cpu_state->eax = (uint)p->calloc(cpu_state->edi, cpu_state->esi);
+    p->cpu_state.eax = (uint)p->calloc(p->cpu_state.edi, p->cpu_state.esi);
 }
 
-void Syscall::free(Process* p, const cpu_state_t* cpu_state)
+void Syscall::free(Process* p)
 {
-    p->free((void*)cpu_state->edi);
+    p->free((void*)p->cpu_state.edi);
 }
 
-void Syscall::realloc(Process* p, cpu_state_t* cpu_state)
+void Syscall::realloc(Process* p)
 {
-    cpu_state->eax = (uint)p->realloc((void*)cpu_state->edi, (size_t)cpu_state->esi);
+    p->cpu_state.eax = (uint)p->realloc((void*)p->cpu_state.edi, (size_t)p->cpu_state.esi);
 }
 
 void Syscall::dynlk(const cpu_state_t* cpu_state)
@@ -166,13 +166,13 @@ void Syscall::get_key()
         case 6:
             System::shutdown();
         case 7:
-            dynlk(cpu_state);
+            dynlk(&p->cpu_state);
             break;
         case 8:
-            malloc(p, &p->cpu_state);
+            malloc(p);
             break;
         case 9:
-            free(p, &p->cpu_state);
+            free(p);
             break;
         case 10:
             mkdir(&p->cpu_state);
@@ -187,22 +187,22 @@ void Syscall::get_key()
             FB::clear_screen();
             break;
         case 14:
-            dns(cpu_state);
+            dns(&p->cpu_state);
             break;
         case 15:
-            wget(cpu_state);
+            wget(&p->cpu_state);
             break;
         case 16:
-            cat(cpu_state);
+            cat(&p->cpu_state);
             break;
         case 17:
-            calloc(p, cpu_state);
+            calloc(p);
             break;
         case 18:
-            realloc(p, cpu_state);
+            realloc(p);
             break;
         case 19:
-            getenv(p, cpu_state);
+            getenv(p);
             break;
         default:
             printf_error("Received unknown syscall id: %u", cpu_state->eax);
@@ -234,10 +234,10 @@ void Syscall::wget(const cpu_state_t* cpu_state)
         return;
     }
 
-    //uint8_t dest_ip[] = {92,122,166,178};
+    uint8_t dest_ip[] = {92,122,166,178};
     //uint8_t dest_ip[] = {192, 168, 1, 184};
-    //auto http = new HTTP{dest_ip, 80};
-    auto http = new HTTP{Network::gateway_ip, 8080};
+    auto http = new HTTP{dest_ip, 80};
+    //auto http = new HTTP{Network::gateway_ip, 8080};
     http->send_get(uri);
 }
 
@@ -262,21 +262,21 @@ void Syscall::ls(cpu_state_t* cpu_state)
     cpu_state->eax = (uint)VFS::ls(path);
 }
 
-void Syscall::getenv(Process* p, cpu_state_t* cpu_state)
+void Syscall::getenv(Process* p)
 {
-    char* env = Process::get_env((char*)cpu_state->edi);
+    char* env = Process::get_env((char*)p->cpu_state.edi);
     if (env)
     {
         auto len = strlen(env);
         auto user_env = (char*)p->malloc(len + 1);
         if (!user_env)
         {
-            cpu_state->eax = 0;
+            p->cpu_state.eax = 0;
             return;
         }
         strcpy(user_env, env);
-        cpu_state->eax = (uint)user_env;
+        p->cpu_state.eax = (uint)user_env;
     }
     else
-        cpu_state->eax = 0;
+        p->cpu_state.eax = 0;
 }
