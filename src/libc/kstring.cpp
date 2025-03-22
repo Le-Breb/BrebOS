@@ -145,27 +145,18 @@ void to_lower_in_place(char* str)
     }
 }
 
-size_t strspn(const char* s, const char* accept)
-{
+size_t strspn(const char* s, const char* accept) {
 	size_t res = 0;
 	while (*s)
-	{
+    {
 		const char* a = accept;
-		bool contained = false;
-		while (*a)
-		{
-			if (*a == *s)
-			{
-				contained = true;
-				break;
-			}
+		while (*a && *a != *s)
 			a++;
-		}
-		if (contained)
-			res++;
+		if (!*a)
+			return res;
+		res++;
 		s++;
 	}
-
 	return res;
 }
 
@@ -173,26 +164,17 @@ size_t strcspn(const char* s, const char* reject)
 {
 	size_t res = 0;
 	while (*s)
-	{
+    {
 		const char* a = reject;
-		bool contained = false;
-		while (*a)
-		{
-			if (*a == *s)
-			{
-				contained = true;
-				break;
-			}
+		while (*a && *a != *s)
 			a++;
-		}
-		if (!contained)
-			res++;
+		if (*a)
+			return res;
+		res++;
 		s++;
 	}
-
 	return res;
 }
-
 char* strdup(const char* s)
 {
 	auto len = strlen(s);
@@ -201,6 +183,7 @@ char* strdup(const char* s)
 	if (!dest)
 		return nullptr;
 
+	//dest[len] = '\0';
 	memcpy(dest, s, len + 1);
 	return dest;
 }
@@ -214,7 +197,8 @@ char* strndup(const char* s, size_t n)
 	if (!dest)
 		return nullptr;
 
-	memcpy(dest, s, len + 1);
+	dest[len] = '\0';
+	memcpy(dest, s, len);
 	return dest;
 }
 
