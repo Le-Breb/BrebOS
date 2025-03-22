@@ -13,7 +13,7 @@ ELF* ELF::is_valid(uint start_address, ELF_type expected_type)
     if (elf->global_hdr.e_ident[0] != 0x7F || elf->global_hdr.e_ident[1] != 'E' || elf->global_hdr.e_ident[2] != 'L' ||
         elf->global_hdr.e_ident[3] != 'F')
     {
-        printf_error("Not an ELF\n");
+        printf_error("Not an ELF");
         is_valid_exit_err
     }
 

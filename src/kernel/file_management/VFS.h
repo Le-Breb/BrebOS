@@ -69,6 +69,8 @@ public:
 
 	static bool cat(const char* pathname);
 
+	static char* get_absolute_path(const char* path);
+
 	/**
 	 * Writes a buffer to a file. If the file already exists, it is resized to length. If it doesn't exist, it is created.
 	 * @param pathname path of the file

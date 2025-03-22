@@ -135,6 +135,8 @@ private:
      */
     void finalize_process_setup(int argc, const char** argv, pid_t pid, pid_t ppid) const;
 
+    static const char** add_argv0_to_argv(const char** argv, const char* path, int& argc) ;
+
 public:
     /**
      * Create a process from an ELF loaded in memory

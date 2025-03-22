@@ -624,11 +624,23 @@ void ELFLoader::finalize_process_setup(int argc, const char** argv, pid_t pid, p
     memset(&proc->cpu_state, 0, sizeof(proc->cpu_state));
 }
 
+const char** ELFLoader::add_argv0_to_argv(const char** argv, const char* path, int& argc)
+{
+    argc++;
+    const char** new_argv = new const char*[argc];
+    memcpy(new_argv + 1, argv, (argc - 1) * sizeof(char*));
+    new_argv[0] = VFS::get_absolute_path(path);
+    return new_argv;
+}
+
 Process* ELFLoader::setup_elf_process(uint start_addr, pid_t pid, pid_t ppid, int argc, const char** argv,
                                       const char* path)
 {
     ELFLoader loader = ELFLoader();
-    Process* proc = loader.process_from_elf(start_addr, argc, argv, pid, ppid, path);
+    const char** full_argv = add_argv0_to_argv(argv, path, argc);
+    Process* proc = loader.process_from_elf(start_addr, argc, full_argv, pid, ppid, path);
+    delete full_argv[0]; // delete argv[0]
+    delete[] full_argv;
 
     return proc;
 }

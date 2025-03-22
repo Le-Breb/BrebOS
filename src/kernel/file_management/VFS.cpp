@@ -133,6 +133,19 @@ bool VFS::cat(const char* pathname)
 	return dentry->inode->superblock->get_fs()->cat(*dentry, file_printer);
 }
 
+char* VFS::get_absolute_path(const char* path)
+{
+	if (!path)
+		return nullptr;
+	Dentry* dentry = browse_to(path);
+	if (!dentry || dentry->inode->type != Inode::File)
+	{
+		printf_error("%s: no such file", path);
+		return nullptr;
+	}
+	return dentry->get_absolute_path();
+}
+
 bool VFS::write_buf_to_file(const char* pathname, const void* buf, uint length)
 {
 	Dentry* dentry = get_file_dentry(pathname, false);
