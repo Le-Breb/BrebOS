@@ -26,6 +26,10 @@ SECTIONS
         *(.rodata*)
     } :text
 
+    /* I don't get why, but the align of .data is not enough to guarantee that .data will be page aligned,
+     * . = ALIGN(0x1000); is needed to ensure proper alignment
+     */
+    . = ALIGN(0x1000);
     .data ALIGN(0x1000) :
     {
         *(.data)

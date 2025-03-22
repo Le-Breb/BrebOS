@@ -21,7 +21,15 @@ LDFLAGS += -g
 endif
 libgcc=$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
 BUILD_DIR=build
-CPPFLAGS=-I../../libc
+CPPFLAGS=-I../../libc -I./
+
+GCC_BUILD_DIR=../../gcc/build
+CRTI_OBJ=$(GCC_BUILD_DIR)/crti.o
+CRTBEGIN_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtbegin.o)
+CRTEND_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtend.o)
+CRTN_OBJ=$(GCC_BUILD_DIR)/crtn.o
+OBJ_LIST=$(CRTI_OBJ) $(CRTBEGIN_OBJ) $(OBJECTS) $(CRTEND_OBJ) $(CRTN_OBJ)
+INTERNAL_OBJS=$(CRTI_OBJ) $(OBJECTS) $(CRTN_OBJ)
 
 all: program
 
@@ -34,9 +42,10 @@ libc:
 	make -C ../../libc
 
 program: build_dir $(OBJECTS) libc
-	ld $(LDFLAGS) -o ../build/$(EXEC_NAME) ../start_program.o $(OBJECTS) $(libgcc)
+	ld $(LDFLAGS) -o ../build/$(EXEC_NAME) ../start_program.o $(OBJ_LIST) $(libgcc)
 
 $(BUILD_DIR)/%.o: %.cpp
+	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
 $(BUILD_DIR)/%.o: %.s
 	$(AS) $(ASFLAGS) $< -o $@
