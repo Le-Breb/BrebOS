@@ -31,7 +31,7 @@
 
 BrebOS is a hand made x86 32 bits OS made for learning and fun!
 It is designed to work under QEMU, but it can also be used on real computers ! (It properly boots, though driver errors
-are likely to occur because i did not add support for the specific hardware of the machine used).<br>
+are likely to occur because i did not add support for the specific hardware of the machine used, so do not try it).<br>
 BrebOS is written in C++ and ASM_x86.
 
 ### Creation process
@@ -82,48 +82,31 @@ RELEASE=1 make
 
 ### Run ▶️
 
-#### Using QEMU
 
 ```sh
-RELEASE = 1 make run # Will ask for password because it does network stuff
+RELEASE = 1 make run
 ```
 
 ℹ️ This will ask for elevated privileges, which are required for setting up NAT. ℹ️
-
-#### On a real computer (Read carefully before proceeding)
-
-In `BrebOS/`, run the following command. **⚠️ Replace /dev/sda with the USB stick you want to have BrebOS installed on.
-⚠️**
-
-```sh
-sudo dd if=os.iso of=/dev/sda bs=4M status=progress && sync
-```
-
-⚠️ Use this command carefully. It overwrites whatever is on the USB stick. Make sure to backup all your data before
-proceeding.
-After this command has been executed, the USB stick is no longer able to store files.
-It is your responsability to put back a file system if you want to use the USB stick as before afterwards. (This is a
-very simple task for anyone that knows how to use Google...) ⚠️
-
-To my knowledge, there is absolutely nothing which could harm your computer.
-The worse than can happen is a crash, or the computer simply not booting. Anyway, **I am not responsible in any way for
-any damage potentially caused.**
 
 ## What can I do with BrebOS ❓
 
 ### Commands
 
-Now that you have the kernel up and running, you can start executing commands. Here is the list of all commands
-available:
+Now that you have the kernel up and running, you can start executing commands. The kernel uses a shell made as a school project (42sh, made in groups of of 4 students), that I adapted to make it work in BrebOS. <br>
+The shell language is a subset of the linux one. You should be able to use every basic shell syntax that exists in linux, provided that (1) it does not require heavy kernel support that i did not add yet (redirections for example) and (2) that the keyboard driver lets you type the characters you need 😆. For example, to date, you cannot type '$' nor '(', so say bye bye to variables and subshells 😢 <br>
+Here is the list of the main commands (you can view the entire list by browsing at `BrebOS/src/programs`):
 
 | Command                                | Description                                                                                                                                                                                           |
 |----------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `p <program_path> [argv0] [argv1] ...` | Starts a program with provided argument list, default is empty. The kernel `$PATH` is filled with `/bin`, where all programs are. For example, to start `/bin/a_program`, simply write `p a_program`. |
 | `q`                                    | Quit (Shutdown).                                                                                                                                                                                      |
 | `ls <path>`                            | Lists files and directories at `path`.                                                                                                                                                                |
 | `mkdir <path/dir_name>`                | Creates the directory `dir_name` at `path`.                                                                                                                                                           |
 | `touch <dir_path/file_name>`               | Creates the file `file_name` at `dir_path`.                                                                                                                                                                |
-| `cat <path>`               | Prints the content of the file at `path`. Output if formatted according to the file extension.                                                                                                                                                                |
+| `cat <path>`               | Prints the content of the file at `path`. Output is formatted according to the file extension.                                                                                                                                                                |
+| `clearscreen`               | Clears the screen                                                                                                                                                                |
+
+As 42sh follows the linux shell syntax, you can start a program symply by typing `<program_path> [argv0] [argv1] ...`. The kernel `$PATH` is filled with `/bin`, where all programs are. Hence, to start `/bin/a_program`, simply write `a_program`.
 
 ### Running your own programs inside BrebOS (How cool is this !?)
 
@@ -132,8 +115,7 @@ BrebOS can run C++ programs that *you* write, provided they respect the followin
 - Your program cannot use `dynamic_cast`, nor exceptions. They require additional support which i did not setup.
 - You cannot make use of any library, even `libc`, as it is not ported on `BrebOS`. The only exception is my custom
   `libc`. The relevant headers are located under
-  `src/libc`. For example, if you want to use `printf`, simply write `#include <kstdio.h>`. You are likely to be
-  interested in `ksyscalls.h` and `kstdio.h`.
+  `src/libc`. For example, if you want to use `printf`, simply write `#include <kstdio.h>`. Generally speaking, most widely used headers of the linux libc have an equivalent which is the usual name preceded by 'k' (`stdio.h` <-> `kstdio.h`) - though, inevitably, i did not implement every function inside it.
 - Any other C++ feature (supposedly) works!
 
 To add your program, simply follow the following steps:
@@ -141,7 +123,7 @@ To add your program, simply follow the following steps:
 - Copy your source files under `BrebOS/src/programs/your_awesome_program_name` <br>
   That's all! Yep, you've read well, there's nothing else you have to do! The Makefile will handle the compilation of
   your program and will add it at `/bin` in BrebOS' disk. <br>
-  You can now run your program using `p your_awesome_program_name` in BrebOS.
+  You can now run your program using `your_awesome_program_name` in BrebOS.
 
 ### Network
 
@@ -183,6 +165,24 @@ running locally, which is automatically started when executing `make run`.
     - DHCP
     - TCP (weak for now)
     - HTTP GET
+- **42sh (Shell**)
+    - command lists/compound lists
+    - if/else
+    - single quotes
+    - comments
+    - while/until/for
+    - and or (&& ||)
+    - double quotes and escape character (though the keyboard driver does not handle '"'...)
+    - variables
+    - builtins
+      - true/false
+      - echo
+      - continue
+      - break
+    - the following features are implemented within 42sh but BrebOS lacks support for them to work:
+      - redirections
+      - pipeline
+      - subshells and command substitution
 
 ### Misc
 
