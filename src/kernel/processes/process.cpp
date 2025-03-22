@@ -75,7 +75,7 @@ Process::~Process()
 
     flags |= P_TERMINATED;
 
-    printf_info("Process %u exited with code %d", pid, ret_val);
+    //printf_info("Process %u exited with code %d", pid, ret_val);
 }
 
 Process::Process(uint num_pages, ELF* elf, Elf32_Addr runtime_load_address, const char* path) : quantum(0), priority(0),

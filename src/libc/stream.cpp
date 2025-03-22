@@ -1,6 +1,6 @@
 #include "stream.h"
 
-#include <ksyscalls.h>
+#include <kstdio.h>
 
 stream::stream(Policy policy) : size(0), capacity(STREAM_CAPACITY + 1),
                                                      policy(policy)

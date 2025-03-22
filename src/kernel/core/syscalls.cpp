@@ -219,10 +219,10 @@ void Syscall::dns(const cpu_state_t* cpu_state)
     DNS::send_query(domain);
 }
 
-void Syscall::cat(const cpu_state_t* cpu_state)
+void Syscall::cat(cpu_state_t* cpu_state)
 {
     const char* path = (const char*)cpu_state->edi;
-    VFS::cat(path);
+    cpu_state->eax = VFS::cat(path);
 }
 
 void Syscall::wget(const cpu_state_t* cpu_state)
@@ -245,14 +245,14 @@ void Syscall::mkdir(cpu_state_t* cpu_state)
 {
     const char* path = (const char*)cpu_state->edi;
 
-    cpu_state->eax = (uint)VFS::mkdir(path);
+    cpu_state->eax = (uint)(VFS::mkdir(path) ? 1 : 0);
 }
 
 void Syscall::touch(cpu_state_t* cpu_state)
 {
     const char* path = (const char*)cpu_state->edi;
 
-    cpu_state->eax = (uint)VFS::touch(path);
+    cpu_state->eax = (uint)(VFS::touch(path) ? 1 : 0);
 }
 
 void Syscall::ls(cpu_state_t* cpu_state)

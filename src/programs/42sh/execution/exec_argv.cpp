@@ -28,7 +28,7 @@ static int run_execvp(char **args)
     int argc = 0;
     while (args[argc] != NULL)
         argc++;
-    exec(args[0], argc, (const char**)args);
+    exec(args[0], --argc, (const char**)(args + 1));
     return 0;
 #pragma endregion
 }

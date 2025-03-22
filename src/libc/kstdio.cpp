@@ -593,14 +593,14 @@ __attribute__((format(printf, 2, 3))) int fprintf(int stream, const char* format
 {
 	if (stream != stdout && stream != stderr)
 	{
-		printf("libc error: fprintf does not support streams other that stdout and stderr");
+		fprintf(stderr, "libc error: fprintf does not support streams other that stdout and stderr");
 		return 0;
 	}
 
 	// Todo: add specific behaviour for stderr
 	va_list list;
 	va_start (list, format);
-	int i = printf(format, list);
+	int i = vprintf(format, displayCharacter, displayString, list);
 	va_end (list);
 	return i;
 }
@@ -609,4 +609,15 @@ __attribute__((format(printf, 2, 3))) int fprintf(int stream, const char* format
 void flush()
 {
 	s.flush();
+}
+
+void putchar(char c)
+{
+	const char b[] = { c, 0 };
+	puts(b);
+}
+
+void puts(const char* str)
+{
+	__asm__ volatile("int $0x80" : : "a"(2), "S"(str));
 }

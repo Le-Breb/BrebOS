@@ -1,6 +1,6 @@
 #include <kstdio.h>
-#include <ksyscalls.h>
 #include <kstdlib.h>
+#include <kunistd.h>
 
 extern "C" int main(int argc, char** argv)
 {

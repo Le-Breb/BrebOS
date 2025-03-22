@@ -31,6 +31,10 @@ __attribute__((format(printf, 2, 3))) int fprintf(int stream, const char* format
 
 void flush();
 
+void puts(const char* str);
+
+void putchar(char c);
+
 /*
 __attribute__ ((format (printf, 1, 2))) int printf_error(const char* format, ...);
 

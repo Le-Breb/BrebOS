@@ -280,7 +280,7 @@ void* FAT_drive::load_file_to_buf(const char* file_name, Dentry* parent_dentry, 
 
     uint wrote_bytes = 0;
     char* b = new char[length];
-    while (wrote_bytes < length && next_cluster != CLUSTER_EOC)
+    while (wrote_bytes < length && next_cluster < CLUSTER_MIN_EOC)
     {
         // Load data into buffer. If there is more than ATA_SECTOR_SIZE data left to load, copy directly to b, otherwise
         // copy an entire sector to buf and copy the meaningful data to b
@@ -475,27 +475,33 @@ bool FAT_drive::ls(const Dentry& dentry, ls_printer printer)
     uint parent_sector = dentry.inode->lba;
     uint parent_cluster = parent_sector * bs.sectors_per_cluster;
     ctx ctx{};
-    // ~= cd wd
-    if (!change_active_cluster(parent_cluster, ctx))
-        return false;
 
-    bool prev_is_lfn = false;
-    while (ctx.dir_entry_id * sizeof(DirEntry) < FAT_Buf_size && !entries[ctx.dir_entry_id].is_free())
+    uint curr_cluster = parent_cluster;
+    do
     {
-        auto entry = entries + ctx.dir_entry_id;
-        bool is_lfn = entry->is_LFN();
-        if (!prev_is_lfn)
-        {
-            char* entry_name = is_lfn ? ((LongDirEntry*)entry)->get_uglily_converted_utf8_name() : entry->get_name();
-            Dentry* dentry = dir_entry_to_dentry(is_lfn ? *(entry + 1) : *entry, nullptr, entry_name);
-            printer(*dentry);
-            delete dentry;
-            delete[] entry_name;
-        }
+        // ~= cd wd
+        if (!change_active_cluster(curr_cluster, ctx))
+            return false;
 
-        ctx.dir_entry_id++;
-        prev_is_lfn = is_lfn;
-    }
+        bool prev_is_lfn = false;
+        while (ctx.dir_entry_id * sizeof(DirEntry) < ATA_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free())
+        {
+            auto entry = entries + ctx.dir_entry_id;
+            bool is_lfn = entry->is_LFN();
+            if (!prev_is_lfn)
+            {
+                char* entry_name = is_lfn ? ((LongDirEntry*)entry)->get_uglily_converted_utf8_name() : entry->get_name();
+                Dentry* dentry = dir_entry_to_dentry(is_lfn ? *(entry + 1) : *entry, nullptr, entry_name);
+                printer(*dentry);
+                delete dentry;
+                delete[] entry_name;
+            }
+
+            ctx.dir_entry_id++;
+            prev_is_lfn = is_lfn;
+        }
+        curr_cluster = ctx.table_value;
+    } while (curr_cluster < CLUSTER_MIN_EOC);
 
     return true;
 }
@@ -529,7 +535,7 @@ bool FAT_drive::write_buf_to_file(Dentry& dentry, const void* buf, uint length)
     size_t wrote_bytes = 0;
 
     // Write file content cluster by cluster
-    while (wrote_bytes < length && next_cluster != CLUSTER_EOC)
+    while (wrote_bytes < length && next_cluster < CLUSTER_MIN_EOC)
     {
         if (!change_active_cluster(next_cluster, ctx))
             return false;
@@ -574,7 +580,7 @@ bool FAT_drive::cat(const Dentry& dentry, cat_printer printer)
     size_t printed_size = 0;
 
     // Print file content cluster by cluster
-    while (printed_size < file_size && next_cluster != CLUSTER_EOC)
+    while (printed_size < file_size && next_cluster < CLUSTER_MIN_EOC)
     {
         if (!change_active_cluster(next_cluster, ctx))
             return false;
