@@ -77,7 +77,7 @@ ELF* ELF::is_valid(uint start_address, ELF_type expected_type)
         case SHT_FINI_ARRAY:
             break;
         default:
-            printf("Section type not supported: %i. Aborting\n", h->sh_type);
+            printf_error("Section type not supported: %i. Aborting", h->sh_type);
             is_valid_exit_err
         }
     }
@@ -85,14 +85,14 @@ ELF* ELF::is_valid(uint start_address, ELF_type expected_type)
     for (size_t i = 0; i < elf->num_plt_relocs; i++)
         if (auto reloc_type = ELF32_R_TYPE(elf->plt_relocs[i].r_info); reloc_type != R_386_JMP_SLOT)
         {
-            printf_error("Unsupported PLT relocation type: %u. Aborting\n", reloc_type);
+            printf_error("Unsupported PLT relocation type: %u. Aborting", reloc_type);
             is_valid_exit_err
         }
     for (size_t i = 0; i < elf->num_dyn_relocs; i++)
         if (auto reloc_type = ELF32_R_TYPE(elf->dyn_relocs[i].r_info); reloc_type != R_386_RELATIVE && reloc_type !=
             R_386_GLOB_DAT && reloc_type != R_386_32 && reloc_type != R_386_PC32)
         {
-            printf_error("Unsupported dyn relocation type: %u. Aborting\n", reloc_type);
+            printf_error("Unsupported dyn relocation type: %u. Aborting", reloc_type);
             is_valid_exit_err
         }
 
