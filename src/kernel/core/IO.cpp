@@ -1,5 +1,6 @@
 #include "IO.h"
 
+__attribute__((optimize("O0"))) // Compiler optimizations may mess up with the logic here
 void IO::insl(uint port, void* buffer, uint quads)
 {
 	uint* buf = static_cast<uint*>(buffer);

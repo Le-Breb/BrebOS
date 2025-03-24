@@ -27,12 +27,16 @@ AS = nasm
 ASFLAGS = -f elf -F dwarf
 LDFLAGS = -T link.ld -melf_i386
 ifdef RELEASE
-CFLAGS += -O3
-ASFLAGS += -O3
+CFLAGS += -O3 -g
+ASFLAGS += -O3 -g
+LDFLAGS += -g
 else
 CFLAGS += -O0 -g
 ASFLAGS += -O0 -g
 LDFLAGS += -g
+endif
+ifdef PROFILING
+	CFLAGS += -finstrument-functions -DPROFILING
 endif
 
 libgcc=$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
@@ -91,7 +95,6 @@ $(KERNEL_BUILD_DIR)/%.o: $(SRC_DIR)/kernel/%.cpp
 $(KERNEL_BUILD_DIR)/%.o: $(SRC_DIR)/kernel/%.s
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) $< -o $@
-
 gcc:
 	make -C $(SRC_DIR)/gcc
 
@@ -146,13 +149,16 @@ $(OS_ISO): kernel.elf libdynlk programs
 run: $(OS_ISO)
 	@#	bochs -f bochsrc.txt -q
 	@echo "$(CYAN)Initializing NAT$(WHITE)"
-	@sudo ./network_utils/setup.sh
+	@sudo ./utils/setup.sh
 	qemu-system-i386 -device isa-debug-exit -cdrom $(OS_ISO) -drive file=disk_image.img,format=raw,if=ide,index=0 -boot d -netdev tap,id=net0,ifname=tap0,script=no,downscript=no  -device e1000,netdev=net0  -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap || true
 	@echo "$(CYAN)Restoring default network configuration...$(WHITE)"
-	@sudo ./network_utils/cleanup.sh
+	@sudo ./utils/cleanup.sh
 	@echo "$(CYAN)Done$(WHITE)"
 	@# -device isa-debug-exit -cdrom os.iso -gdb tcp::26000 -S -drive file=disk_image.img,format=raw,if=ide,index=0 -boot d -device e1000,netdev=net0 -netdev user,id=net0 -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap
 	@# -device isa-debug-exit -cdrom os.iso -gdb tcp::26000 -S -drive file=disk_image.img,format=raw,if=ide,index=0 -boot d -device e1000,netdev=net0 -netdev tap,id=net0,ifname=tap0,script=no,downscript=no -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap
+ifdef PROFILING
+	@bash ./utils/run_prof.sh
+endif
 
 clean:
 	rm -rf *.o $(OUT_BIN) $(OS_ISO) isodir $(BUILD_DIR) $(KERNEL_BUILD_DIR)

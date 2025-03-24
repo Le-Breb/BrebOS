@@ -9,6 +9,7 @@
 #include "IDT.h"
 #include "../file_management/VFS.h"
 #include "../network/Network.h"
+#include "../utils/profiling.h"
 
 extern "C" void _init(void); // NOLINT(*-reserved-identifier)
 
@@ -24,27 +25,31 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointe
 
     FB::init();
 
-    printf("Setting up GDT\n");
+    FB::write("Setting up GDT\n");
     GDT::init();
     FB::ok();
 
-    printf("Remapping PIC\n");
+    FB::write("Remapping PIC\n");
     PIC::init();
     FB::ok();
 
-    printf("Setting up IDT\n");
+    FB::write("Setting up IDT\n");
     IDT::init();
     FB::ok();
 
-    printf("Enabling interrupts\n");
+    FB::write("Enabling interrupts\n");
     Interrupts::enable_asm();
     FB::ok();
 
-    printf("Initialize memory\n");
+    FB::write("Initialize memory\n");
     Memory::init((multiboot_info_t*)(ebx + KERNEL_VIRTUAL_BASE));
     FB::ok();
 
-    printf("Initialize network card and stack\n");
+#ifdef PROFILING
+    Profiling::init();
+#endif
+
+    FB::write("Initialize network card and stack\n");
     Network::init();
     FB::ok();
 
@@ -52,11 +57,11 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointe
     // At this point, a kernel initialization process is created and will be preempted like any other process.
     // It will execute the remaining instructions until Scheduler::stop_kernel_init_process() is called.
     // Multiple processes can now run concurrently
-    printf("Activating preemptive scheduling\n");
+    FB::write("Activating preemptive scheduling\n");
     Scheduler::init();
     FB::ok();
 
-    printf("Initializing Virtual File System\n");
+    FB::write("Initializing Virtual File System\n");
     VFS::init();
     FB::ok();
 

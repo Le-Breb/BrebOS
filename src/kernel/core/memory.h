@@ -62,6 +62,15 @@ namespace Memory
 		uint start_addr, size;
 	} GRUB_module;
 
+	extern "C" void boot_page_directory();
+
+	extern "C" void boot_page_table1();
+
+	extern pdt_t* pdt;
+	extern page_table_t* asm_pt1;
+	extern page_table_t* page_tables;
+	extern GRUB_module* grub_modules;
+
 	/** Initialize memory, by referencing free pages, allocating pages to store 1024 pages tables
 	 *
 	 * @param minfo Multiboot info structure
@@ -112,15 +121,6 @@ namespace Memory
 
 	/** Get index of lowest free page entry id and update lowest_free_pe to next free page id */
 	uint get_free_pe();
-
-	/** Get pdt */
-	pdt_t* get_pdt();
-
-	/** Get page tables */
-	page_table_t* get_page_tables();
-
-	/** Get grub modules */
-	GRUB_module* get_grub_modules();
 
 	/** Get pointer to top of kernel stack */
 	uint* get_stack_top_ptr();

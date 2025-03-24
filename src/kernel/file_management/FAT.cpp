@@ -7,6 +7,7 @@
 #include "dentry.h"
 #include "../core/fb.h"
 #include "../core/memory.h"
+#include "../core/system.h"
 
 FAT_drive* FAT_drive::drives[] = {};
 
@@ -129,8 +130,7 @@ FAT_drive::FAT_drive(unsigned char id, fat_BS_t* bs) : bs(*bs),
                                                                (bs->table_count * fat_size) +
                                                                root_dir_sectors)),
                                                        total_clusters(data_sectors / bs->sectors_per_cluster),
-                                                       id(id),
-                                                       FAT_Buf_size(ATA_SECTOR_SIZE * extBS_32.table_size_32)
+                                                       id(id)
 {
     FAT = new unsigned char[ATA_SECTOR_SIZE];
     buf = new char[ATA_SECTOR_SIZE];
@@ -312,37 +312,40 @@ uint FAT_drive::get_child_dir_entry_id(const Dentry& parent_dentry, const char* 
 
     uint parent_sector = parent_dentry.inode->lba;
     uint parent_cluster = parent_sector * bs.sectors_per_cluster;
-    // ~= cd wd
-    if (!change_active_cluster(parent_cluster, ctx))
-        return ENTRY_NOT_FOUND;
+    uint curr_cluster = parent_cluster;
 
     // Skip used dir entries, aka files/folders inside wd
-    bool found_in_lfn = false;
-    while (ctx.dir_entry_id * sizeof(DirEntry) < FAT_Buf_size && !entries[ctx.dir_entry_id].is_free())
+    do
     {
-        if (found_in_lfn) // File name matched in previous entry which is a fln entry referring to the current entry
-            break;
-        bool lfn = entries[ctx.dir_entry_id].is_LFN();
-        char* entry_name = lfn
-                               ? ((LongDirEntry*)&entries[ctx.dir_entry_id])->get_uglily_converted_utf8_name()
-                               : entries[ctx.dir_entry_id].get_name();
+        // ~= cd wd
+        if (!change_active_cluster(curr_cluster, ctx))
+            return ENTRY_NOT_FOUND;
 
-        bool match = !strcmp(entry_name, name);
-        delete[] entry_name;
-        if (match)
+        bool found_in_lfn = false;
+        while (ctx.dir_entry_id * sizeof(DirEntry) < ATA_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free())
         {
-            found_in_lfn = lfn;
-            if (!lfn)
-                break;
+            if (found_in_lfn) // File name matched in previous entry which is a fln entry referring to the current entry
+                return ctx.dir_entry_id;
+            bool lfn = entries[ctx.dir_entry_id].is_LFN();
+            char* entry_name = lfn
+                                   ? ((LongDirEntry*)&entries[ctx.dir_entry_id])->get_uglily_converted_utf8_name()
+                                   : entries[ctx.dir_entry_id].get_name();
+
+            bool match = !strcmp(entry_name, name);
+            delete[] entry_name;
+            if (match)
+            {
+                found_in_lfn = lfn;
+                if (!lfn)
+                    return ctx.dir_entry_id;
+            }
+
+            ctx.dir_entry_id++;
         }
+        curr_cluster = ctx.table_value;
+    } while (curr_cluster < CLUSTER_MIN_EOC);
 
-        ctx.dir_entry_id++;
-    }
-
-    if (ctx.dir_entry_id * sizeof(DirEntry) >= FAT_Buf_size || entries[ctx.dir_entry_id].is_free())
-        return ENTRY_NOT_FOUND;
-
-    return ctx.dir_entry_id;
+    return ENTRY_NOT_FOUND;
 }
 
 Dentry* FAT_drive::get_child_dentry(Dentry& parent_dentry, const char* name)
@@ -370,19 +373,26 @@ Dentry* FAT_drive::touch(Dentry& parent_dentry, const char* entry_name)
 
     uint parent_sector = parent_dentry.inode->lba;
     uint parent_cluster = parent_sector * bs.sectors_per_cluster;
+    uint curr_cluster = parent_cluster;
     ctx ctx{};
-    // ~= cd wd
-    if (!change_active_cluster(parent_cluster, ctx))
-        return nullptr;
 
-    // Skip used dir entries, aka files/folders inside wd
-    while (ctx.dir_entry_id * sizeof(DirEntry) < FAT_Buf_size && !entries[ctx.dir_entry_id].is_free() &&
-        strcmp(entries[ctx.dir_entry_id].get_name(), entry_name) != 0)
-        ctx.dir_entry_id++;
+    do
+    {
+        // ~= cd wd
+        if (!change_active_cluster(curr_cluster, ctx))
+            return nullptr;
+
+        // Skip used dir entries, aka files/folders inside wd
+        while (ctx.dir_entry_id * sizeof(DirEntry) < ATA_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free() &&
+            strcmp(entries[ctx.dir_entry_id].get_name(), entry_name) != 0)
+            ctx.dir_entry_id++;
+
+        curr_cluster = ctx.table_value;
+    } while (curr_cluster < CLUSTER_MIN_EOC);
 
     // No free entry in wd cluster
     if (ctx.dir_entry_id * sizeof(DirEntry) == bs.bytes_per_sector * bs.sectors_per_cluster)
-        ERR_RET_NULL("Working directory cluster is full, chaining implementation is needed");
+        ERR_RET_NULL("Working directory cluster is full, cluster chain extension implementation is needed");
 
     // Get a free cluster for file content
     auto free_cluster_list = get_free_clusters(1);
@@ -417,18 +427,25 @@ Dentry* FAT_drive::mkdir(Dentry& parent_dentry, const char* entry_name)
 
     uint parent_sector = parent_dentry.inode->lba;
     uint parent_cluster = parent_sector * bs.sectors_per_cluster;
+    uint curr_cluster = parent_cluster;
     ctx ctx{};
-    // ~= cd wd
-    if (!change_active_cluster(parent_cluster, ctx))
-        return nullptr;
 
-    // Skip used dir entries, aka files/folders inside wd
-    while (ctx.dir_entry_id * sizeof(DirEntry) < FAT_Buf_size && !entries[ctx.dir_entry_id].is_free())
-        ctx.dir_entry_id++;
+    do
+    {
+        // ~= cd wd
+        if (!change_active_cluster(curr_cluster, ctx))
+            return nullptr;
+
+        // Skip used dir entries, aka files/folders inside wd
+        while (ctx.dir_entry_id * sizeof(DirEntry) < ATA_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free())
+            ctx.dir_entry_id++;
+
+        curr_cluster = ctx.table_value;
+    } while (curr_cluster < CLUSTER_MIN_EOC);
 
     // No free entry in wd cluster
     if (ctx.dir_entry_id * sizeof(DirEntry) == bs.bytes_per_sector * bs.sectors_per_cluster)
-        ERR_RET_NULL("Working directory cluster is full, chaining implementation is needed");
+        ERR_RET_NULL("Working directory cluster is full, cluster chain extension implementation is needed");
 
     auto free_clusters_list = get_free_clusters(1);
     if (free_clusters_list == nullptr)
@@ -483,22 +500,25 @@ bool FAT_drive::ls(const Dentry& dentry, ls_printer printer)
         if (!change_active_cluster(curr_cluster, ctx))
             return false;
 
-        bool prev_is_lfn = false;
+        // Acts like a boolean to know if the previous entry was a LFN entry, and if so, contains the lfn entry name
+        char* prev_is_lfn = nullptr;
         while (ctx.dir_entry_id * sizeof(DirEntry) < ATA_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free())
         {
             auto entry = entries + ctx.dir_entry_id;
             bool is_lfn = entry->is_LFN();
-            if (!prev_is_lfn)
+            if (is_lfn)
+                prev_is_lfn = ((LongDirEntry*)entry)->get_uglily_converted_utf8_name();
+            else
             {
-                char* entry_name = is_lfn ? ((LongDirEntry*)entry)->get_uglily_converted_utf8_name() : entry->get_name();
-                Dentry* dentry = dir_entry_to_dentry(is_lfn ? *(entry + 1) : *entry, nullptr, entry_name);
-                printer(*dentry);
-                delete dentry;
+                char* entry_name = prev_is_lfn ? prev_is_lfn : entry->get_name();
+                Dentry* dir_dentry = dir_entry_to_dentry(*entry, nullptr, entry_name);
+                printer(*dir_dentry);
+                delete dir_dentry;
                 delete[] entry_name;
+                prev_is_lfn = nullptr;
             }
 
             ctx.dir_entry_id++;
-            prev_is_lfn = is_lfn;
         }
         curr_cluster = ctx.table_value;
     } while (curr_cluster < CLUSTER_MIN_EOC);
@@ -558,7 +578,7 @@ bool FAT_drive::write_buf_to_file(Dentry& dentry, const void* buf, uint length)
 
     return true;
 }
-// Todo: add function to do something on file content with function pointer and direntry pointer ?
+
 bool FAT_drive::cat(const Dentry& dentry, cat_printer printer)
 {
     if (dentry.inode->type != Inode::File)
@@ -644,12 +664,12 @@ bool FAT_drive::resize(Dentry& dentry, uint new_size) // Todo: handle files larg
     return true;
 }
 
-bool DirEntry::is_directory() const
+inline bool DirEntry::is_directory() const
 {
     return attrs & DIRECTORY;
 }
 
-uint32_t DirEntry::first_cluster_addr() const
+inline uint32_t DirEntry::first_cluster_addr() const
 {
     return first_cluster_high << 16 | first_cluster_low;
 }
@@ -669,17 +689,17 @@ char* DirEntry::get_extension() const
     return extension;
 }
 
-bool DirEntry::is_free() const
+inline bool DirEntry::is_free() const
 {
     return !name[0];
 }
 
-bool DirEntry::is_unused() const
+inline bool DirEntry::is_unused() const
 {
     return (unsigned char)name[0] == 0xE5;
 }
 
-bool DirEntry::is_LFN() const
+inline bool DirEntry::is_LFN() const
 {
     return attrs & LFN;
 }
@@ -702,6 +722,11 @@ DirEntry::DirEntry(const char* name, uint8_t attrs, uint32_t first_cluster_addr,
     memset(this->name, NAME_PADDING_BYTE, 10);
     if (!name) // Dummy constructor with no arguments call this constructor with nullptr as name
         return;
+    if (strlen(name) > 8)
+    {
+        printf_error("%s: file name '%s' too long, requires LFN support. Max supported length is 8", __func__, name);
+        System::shutdown(); // Todo: replace that with some kind of irrecoverable error
+    }
     if (attrs & DIRECTORY)
         memcpy(this->name, name, strlen(name) + 1);
     else

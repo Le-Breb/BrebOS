@@ -116,17 +116,17 @@ public:
 	         int16_t creationTime = -1, int16_t creationDate = -1, int16_t lastAccessDate = -1,
 	         uint16_t writeTime = -1, uint16_t writeDate = -1);
 
-	[[nodiscard]] bool is_directory() const;
+	[[nodiscard]] inline bool is_directory() const;
 
-	[[nodiscard]] bool is_LFN() const;
+	[[nodiscard]] inline bool is_LFN() const;
 
-	[[nodiscard]] bool is_free() const;
+	[[nodiscard]] inline bool is_free() const;
 
-	[[nodiscard]] bool is_unused() const;
+	[[nodiscard]] inline bool is_unused() const;
 
 	[[nodiscard]] char* get_name() const;
 
-	[[nodiscard]] uint32_t first_cluster_addr() const;
+	[[nodiscard]] inline uint32_t first_cluster_addr() const;
 
 	[[nodiscard]] char* get_extension() const;
 };
@@ -163,7 +163,6 @@ class FAT_drive : public FS
 	DirEntry* entries; // Pointer to buf to read directories entries in it
 	unsigned char* FAT; // Buffer to store FAT
 	const unsigned char id; // Drive IDE ID
-	const uint FAT_Buf_size; // Size of buf
 
 	explicit FAT_drive(unsigned char id, fat_BS_t* bs);
 

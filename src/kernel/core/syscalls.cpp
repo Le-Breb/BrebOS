@@ -130,11 +130,12 @@ void Syscall::dynlk(const cpu_state_t* cpu_state)
     Scheduler::get_running_process()->cpu_state.eax = (uint)symbol_addr; // Return symbol address to userland dynlk
 }
 
+__attribute__((no_instrument_function)) // May not return, which would mess up profiling data
 void Syscall::get_key()
 {
     Scheduler::get_running_process()->set_flag(P_WAITING_KEY);
 
-    __asm__ volatile("int $0x20");
+    TRIGGER_TIMER_INTERRUPT
 }
 
 [[noreturn]] void Syscall::dispatcher(cpu_state_t* cpu_state, const stack_state_t* stack_state)

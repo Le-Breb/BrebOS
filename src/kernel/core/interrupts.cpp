@@ -58,7 +58,7 @@ void Interrupts::page_fault_handler(stack_state_t* stack_state)
 	printf("Shadow stack: %s\n", err & 64 ? "True" : "False");
 	printf("SGX: %s\n", err & 32768 ? "True" : "False");
 
-	Scheduler::get_running_process()->terminate(GPF_RET_VAL);
+	Scheduler::get_running_process()->terminate(SEGFAULT_RET_VAL);
 }
 
 void Interrupts::gpf_handler(stack_state* stack_state)
@@ -110,8 +110,9 @@ void Interrupts::gpf_handler(stack_state* stack_state)
 	Scheduler::schedule();
 }
 
-extern "C" void
-interrupt_handler(uint kesp, cpu_state_t cpu_state, uint interrupt, stack_state_t stack_state)
+extern "C"
+__attribute__((no_instrument_function))
+void interrupt_handler(uint kesp, cpu_state_t cpu_state, uint interrupt, stack_state_t stack_state)
 {
 	switch (interrupt)
 	{

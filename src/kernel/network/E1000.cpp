@@ -162,11 +162,11 @@ void E1000::rxinit()
         uint buf = ((uint)calloc(8192 + 16, 1) + 15) & ~0xF;
         rx_desc_virt_addresses[i] = (uint8_t*)buf;
         //printf("%x | %x\n", buf, PHYS_ADDR(get_page_tables(), buf));
-        rx_descs[i]->addr = PHYS_ADDR(Memory::get_page_tables(), buf);
+        rx_descs[i]->addr = PHYS_ADDR(Memory::page_tables, buf);
         rx_descs[i]->status = 0;
     }
 
-    uint32_t phys_ptr = PHYS_ADDR(Memory::get_page_tables(), (uint)ptr);
+    uint32_t phys_ptr = PHYS_ADDR(Memory::page_tables, (uint)ptr);
 
     writeCommand(REG_RXDESCLO, phys_ptr);
     writeCommand(REG_RXDESCHI, 0);
@@ -199,7 +199,7 @@ void E1000::txinit()
         memset(tx_descs[i], 0, sizeof(struct e1000_tx_desc));
     }
 
-    uint32_t phys_ptr = PHYS_ADDR(Memory::get_page_tables(), (uint)ptr);
+    uint32_t phys_ptr = PHYS_ADDR(Memory::page_tables, (uint)ptr);
     writeCommand(REG_TXDESCLO, phys_ptr);
     writeCommand(REG_TXDESCHI, 0);
 
@@ -361,7 +361,7 @@ void E1000::tx_free()
 int E1000::sendPacket(const Ethernet::packet_info* packet)
 {
     tx_desc_virt_addresses[tx_cur] = (uint8_t*)packet->packet;
-    tx_descs[tx_cur]->addr = PHYS_ADDR(Memory::get_page_tables(), (uint32_t)packet->packet);
+    tx_descs[tx_cur]->addr = PHYS_ADDR(Memory::page_tables, (uint32_t)packet->packet);
     tx_descs[tx_cur]->length = packet->size;
     tx_descs[tx_cur]->cmd = CMD_EOP | /*CMD_IFCS |*/ CMD_RS;
     // Todo: check if IFCS (for checksum) should be enabled back

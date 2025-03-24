@@ -437,21 +437,6 @@ namespace Memory
         free(base_addr);
     }
 
-    pdt_t* get_pdt()
-    {
-        return pdt;
-    }
-
-    page_table_t* get_page_tables()
-    {
-        return page_tables;
-    }
-
-    GRUB_module* get_grub_modules()
-    {
-        return grub_modules;
-    }
-
     uint* get_stack_top_ptr()
     {
         return stack_top_ptr;

@@ -12,7 +12,6 @@ short* const FB::fb = (short*)FB_ADDR;
 unsigned char FB::BG = FB_BLACK;
 unsigned char FB::FG = FB_WHITE;
 
-
 void FB::scroll()
 {
     // Offset lines

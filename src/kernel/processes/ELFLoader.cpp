@@ -468,7 +468,7 @@ void ELFLoader::register_elf_init_and_fini(ELF* elf, uint runtime_load_address)
 void ELFLoader::map_elf(ELF* load_elf, uint pte_offset) const
 {
     uint* elf_pte = proc->pte + pte_offset;
-    Memory::page_table_t* sys_page_tables = Memory::get_page_tables();
+    Memory::page_table_t* sys_page_tables = Memory::page_tables;
 
     for (int k = 0; k < load_elf->global_hdr.e_phnum; ++k)
     {
@@ -595,7 +595,7 @@ void ELFLoader::finalize_process_setup(int argc, const char** argv, pid_t pid, p
     // will not need to switch to kernel pdt to make changes in kernel memory as it is mapped the same way
     // in every process' PDT
     // Set process pdt entries to target process page tables
-    Memory::page_table_t* page_tables = Memory::get_page_tables();
+    Memory::page_table_t* page_tables = Memory::page_tables;
     for (int i = 0; i < 768; ++i)
         proc->pdt.entries[i] = PHYS_ADDR(page_tables, (uint) &proc->page_tables[i]) | PAGE_USER | PAGE_WRITE |
             PAGE_PRESENT;
