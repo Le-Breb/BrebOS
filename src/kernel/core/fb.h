@@ -130,6 +130,9 @@ __attribute__ ((format (printf, 1, 2))) int printf_error(const char* format, ...
 
 __attribute__ ((format (printf, 1, 2))) int printf_info(const char* format, ...);
 
+[[noreturn]]
+__attribute__ ((format (printf, 1, 2))) int irrecoverable_error(const char* format, ...);
+
 __attribute__ ((format (printf, 1, 2))) int printf_warn(const char* format, ...);
 
 #endif /* INCLUDE_FB_H */

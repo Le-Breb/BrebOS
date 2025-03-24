@@ -279,7 +279,7 @@ Dentry* VFS::browse_to(const char* path, Dentry* starting_point, bool print_erro
 		if (!cache_dentry(dentry))
 		{
 			if (print_errors)
-				printf_error("Too many inodes or dentries");
+				irrecoverable_error("Too many inodes or dentries");
 			delete[] p;
 			return nullptr;
 		}

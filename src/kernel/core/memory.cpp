@@ -116,7 +116,7 @@ namespace Memory
         printf_info("Kernel spans over %u pages", c);
 
         if (c == PT_ENTRIES)
-            printf_error("Kernel needs more space than available in 1 page table");
+            irrecoverable_error("Kernel needs more space than available in 1 page table");
 
         // Compute lowest_free_frame
         for (lowest_free_frame = 0; FRAME_USED(lowest_free_frame); lowest_free_frame++);
@@ -138,7 +138,7 @@ namespace Memory
         // Map it in entry 1022 of asm pt (1023 is taken by VGA buffer)
         if (asm_pt1->entries[1022])
         {
-            printf_error("Not enough space to initialize memory, kernel is too large");
+            irrecoverable_error("Not enough space to initialize memory, kernel is too large");
             __asm__ volatile("hlt");
         }
         asm_pt1->entries[1022] = new_page_phys_addr | PAGE_WRITE | PAGE_PRESENT;
@@ -508,7 +508,7 @@ void operator delete(void* p, [[maybe_unused]] long unsigned int size)
 
 void operator delete[]([[maybe_unused]] void* p, [[maybe_unused]] long unsigned int size)
 {
-    printf_error("this operator shouldn't be used");
+    irrecoverable_error("this operator shouldn't be used");
 }
 
 void operator delete([[maybe_unused]] void* p, [[maybe_unused]] unsigned int n)

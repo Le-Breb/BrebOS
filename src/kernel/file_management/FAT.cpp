@@ -723,10 +723,7 @@ DirEntry::DirEntry(const char* name, uint8_t attrs, uint32_t first_cluster_addr,
     if (!name) // Dummy constructor with no arguments call this constructor with nullptr as name
         return;
     if (strlen(name) > 8)
-    {
-        printf_error("%s: file name '%s' too long, requires LFN support. Max supported length is 8", __func__, name);
-        System::shutdown(); // Todo: replace that with some kind of irrecoverable error
-    }
+        irrecoverable_error("%s: file name '%s' too long, requires LFN support. Max supported length is 8", __func__, name);
     if (attrs & DIRECTORY)
         memcpy(this->name, name, strlen(name) + 1);
     else

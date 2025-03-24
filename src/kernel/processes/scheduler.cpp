@@ -245,7 +245,7 @@ void Scheduler::create_kernel_init_process()
 
     if (pid == MAX_PROCESSES)
     {
-        printf_error("No more PID available. Cannot finish kernel initialization.");
+        irrecoverable_error("No more PID available. Cannot finish kernel initialization.");
         System::shutdown();
     }
     processes[pid] = kernel;

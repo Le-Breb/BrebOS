@@ -139,7 +139,7 @@ void* Process::operator new(size_t size)
 
 void* Process::operator new[]([[maybe_unused]] size_t size)
 {
-    printf_error("Please do not use this operator");
+    irrecoverable_error("Please do not use this operator");
     return (void*)1;
 }
 
@@ -150,7 +150,7 @@ void Process::operator delete(void* p)
 
 void Process::operator delete[]([[maybe_unused]] void* p)
 {
-    printf_error("do not call this");
+    irrecoverable_error("do not call this");
 }
 
 pid_t Process::get_pid() const

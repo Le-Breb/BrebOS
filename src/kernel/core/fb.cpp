@@ -6,6 +6,7 @@
 #include <kstring.h>
 
 #include "IO.h"
+#include "system.h"
 
 uint FB::caret_pos = 0;
 short* const FB::fb = (short*)FB_ADDR;
@@ -768,4 +769,25 @@ __attribute__ ((format (printf, 1, 2))) int printf_info(const char* format, ...)
 int printf_warn(const char* format, ...)
 {
     MSG_PRINTF(warn, format)
+}
+
+[[noreturn]]
+__attribute__ ((format (printf, 1, 2))) int irrecoverable_error(const char* format, ...)
+{
+	auto fmt_len = strlen(format);
+	const char* prelude = "IRRECOVERABLE ERROR: ";
+	char*full_format = new char[fmt_len + strlen(prelude) + 1];
+	strcpy(full_format, prelude);
+	strcat(full_format, format);
+
+	FB::error_decorator();
+	FB::putchar(' ');
+	va_list list;
+	va_start(list, format);
+	kvprintf(full_format, output_funcs(kprintf_output), list);
+	va_end(list);
+	FB::putchar(' ');
+	FB::error();
+
+	System::shutdown();
 }
