@@ -141,6 +141,8 @@ struct directory
 struct ctx
 {
 	uint active_cluster, active_sector, FAT_sector, FAT_entry_offset, table_value, dir_entry_id;
+	bool buffer_updated = false; // Indicates whether cluster on disk at active_cluster is in FAT_drive->buf
+	// For FAT, FAT_drive->FAT is the only buffer used to modify the FAT table, so the in-memory buffer is always up to date
 };
 
 /* FAT32 ATA drive handler */
@@ -194,6 +196,9 @@ class FAT_drive : public FS
 
 	Dentry* dir_entry_to_dentry(const DirEntry& dir_entry, Dentry* parent_dentry, const char* name) const;
 
+	bool write_fat(ctx& ctx) const;
+
+	bool write_data_sectors(uint numsects, uint lba, const void* buffer, ctx& ctx) const;
 public:
 	Dentry* touch(Dentry& parent_dentry, const char* entry_name) override;
 

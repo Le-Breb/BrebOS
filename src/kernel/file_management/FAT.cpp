@@ -11,6 +11,8 @@
 
 FAT_drive* FAT_drive::drives[] = {};
 
+#define ES 0x10
+
 #define ERR_RET_FALSE(err_msg) \
     {                          \
         printf_error("%s: %s", __func__, err_msg); \
@@ -79,7 +81,7 @@ bool LongDirEntry::is_EOF() const
 FAT_drive* FAT_drive::from_drive(unsigned char drive)
 {
     unsigned char buf[ATA_SECTOR_SIZE];
-    if (ATA::read_sectors(drive, 1, 0, 0x10, (uint)buf))
+    if (ATA::read_sectors(drive, 1, 0, ES, (uint)buf))
         return nullptr;
     auto* fat_boot = new fat_BS_t;
     memcpy(fat_boot, buf, sizeof(*fat_boot));
@@ -193,7 +195,7 @@ uint* FAT_drive::get_free_clusters(size_t n) const
     {
         // Get FAT sector
         uint32_t fat_buf[num_fat_entries_per_sector];
-        if (ATA::read_sectors(id, 1, sector, 0x10, (uint)fat_buf))
+        if (ATA::read_sectors(id, 1, sector, ES, (uint)fat_buf))
             ERR_RET_NULL("Drive read error")
         // Read FAT entries
         for (uint j = 0; j < num_fat_entries_per_sector; j++)
@@ -224,19 +226,29 @@ FAT_drive::~FAT_drive()
 
 bool FAT_drive::change_active_cluster(uint new_active_cluster, ctx& ctx, void* buffer)
 {
-    ctx.active_cluster = new_active_cluster;
-    ctx.active_sector = FIRST_SECTOR_OF_CLUSTER(ctx.active_cluster, bs.sectors_per_cluster, first_data_sector);
+    // If active cluster changed or was updated on disk, read new cluster data
+    if (ctx.active_cluster != new_active_cluster || ctx.buffer_updated)
+    {
+        ctx.active_cluster = new_active_cluster;
+        ctx.active_sector = FIRST_SECTOR_OF_CLUSTER(ctx.active_cluster, bs.sectors_per_cluster, first_data_sector);
 
-    // Read data from drive
-    if (ATA::read_sectors(id, 1, ctx.active_sector, 0x10, (uint)(!buffer ? buf : buffer)))
-        ERR_RET_FALSE("Drive read error")
+        // Read data from drive
+        if (ATA::read_sectors(id, 1, ctx.active_sector, ES, (uint)(!buffer ? buf : buffer)))
+            ERR_RET_FALSE("Drive read error")
+
+        ctx.buffer_updated = false;
+    }
 
     // Read FAT sector
     uint FAT_offset = ctx.active_cluster * sizeof(uint32_t);
-    ctx.FAT_sector = first_fat_sector + (FAT_offset / ATA_SECTOR_SIZE);
+    uint new_FAT_sector = first_fat_sector + (FAT_offset / ATA_SECTOR_SIZE);
     ctx.FAT_entry_offset = FAT_offset % ATA_SECTOR_SIZE;
-    if (ATA::read_sectors(id, 1, ctx.FAT_sector, 0x10, (uint)FAT))
-        ERR_RET_FALSE("Drive read error")
+    if (new_FAT_sector != ctx.FAT_sector)
+    {
+        ctx.FAT_sector = new_FAT_sector;
+        if (ATA::read_sectors(id, 1, ctx.FAT_sector, ES, (uint)FAT))
+            ERR_RET_FALSE("Drive read error")
+    }
 
     ctx.table_value = *(uint*)&FAT[ctx.FAT_entry_offset];
     /*if (fat32) */
@@ -365,6 +377,27 @@ Dentry* FAT_drive::dir_entry_to_dentry(const DirEntry& dir_entry, Dentry* parent
     return new Dentry(inode, parent_dentry, name);
 }
 
+bool FAT_drive::write_fat(ctx& ctx) const
+{
+    if (ATA::write_sectors(id, 1, ctx.FAT_sector, ES, (uint)FAT)) // Write new FAT
+        return true;
+
+    return false;
+}
+
+bool FAT_drive::write_data_sectors(uint numsects, uint lba, const void* buffer, ctx& ctx) const
+{
+    if (ATA::write_sectors(id, numsects, lba, ES, (uint)buffer))
+        return true;
+
+    // If buffer is this->buf, then we already have the new data in memory. Otherwise, on a call to
+    // change_active_cluster with new_cluster being equal to ctx.current_cluster, we will read the new data from disk,
+    // which we indicate here
+    ctx.buffer_updated = buffer != this->buf;
+
+    return false;
+}
+
 Dentry* FAT_drive::touch(Dentry& parent_dentry, const char* entry_name)
 {
     // Make sure path makes sense
@@ -404,7 +437,7 @@ Dentry* FAT_drive::touch(Dentry& parent_dentry, const char* entry_name)
     // Write file entry
     DirEntry new_entry(entry_name, 0, file_content_cluster, 0);
     memcpy(&entries[ctx.dir_entry_id], &new_entry, sizeof(DirEntry));
-    if (ATA::write_sectors(id, 1, ctx.active_sector, 0x10, (uint)buf))
+    if (write_data_sectors(1, ctx.active_sector, buf, ctx))
         ERR_RET_NULL("Drive write error")
 
     // ~= cd inside file
@@ -413,7 +446,7 @@ Dentry* FAT_drive::touch(Dentry& parent_dentry, const char* entry_name)
 
     // Indicate that dir content cluster is the end of the cluster chain it belongs to
     *(uint*)&FAT[ctx.FAT_entry_offset] = CLUSTER_EOC;
-    if (ATA::write_sectors(id, 1, ctx.FAT_sector, 0x10, (uint)FAT)) // Write new FAT
+    if (write_fat(ctx)) // Write new FAT
         ERR_RET_NULL("Drive write error")
 
     return dir_entry_to_dentry(new_entry, &parent_dentry, entry_name);
@@ -456,7 +489,7 @@ Dentry* FAT_drive::mkdir(Dentry& parent_dentry, const char* entry_name)
     // Write new entry
     DirEntry new_entry(entry_name, DIRECTORY, dir_content_cluster, 0);
     memcpy(&entries[ctx.dir_entry_id], &new_entry, sizeof(DirEntry));
-    if (ATA::write_sectors(id, 1, ctx.active_sector, 0x10, (uint)buf))
+    if (write_data_sectors(1, ctx.active_sector, buf, ctx))
         ERR_RET_NULL("Drive write error")
 
     // ~= cd new directory
@@ -467,11 +500,11 @@ Dentry* FAT_drive::mkdir(Dentry& parent_dentry, const char* entry_name)
 
     // Indicate that dir content cluster is the end of the cluster chain it belongs to
     *(uint*)&FAT[ctx.FAT_entry_offset] = CLUSTER_EOC;
-    if (ATA::write_sectors(id, 1, ctx.FAT_sector, 0x10, (uint)FAT)) // Write new FAT
+    if (write_fat(ctx)) // Write new FAT
         ERR_RET_NULL("Drive write error")
 
     // Note: I guess this is unnecessary since dir content cluster is supposed to be empty
-    if (ATA::read_sectors(id, 1, dir_content_sector, 0x10, (uint)buf))
+    if (ATA::read_sectors(id, 1, dir_content_sector, ES, (uint)buf))
         ERR_RET_NULL("Drive read error")
 
     // Create dot and dot dot entries
@@ -481,7 +514,7 @@ Dentry* FAT_drive::mkdir(Dentry& parent_dentry, const char* entry_name)
     memcpy(&entries[1], &dot_dot_entry, sizeof(DirEntry));
 
     // Write them to disk
-    if (ATA::write_sectors(id, 1, dir_content_sector, 0x10, (uint)buf))
+    if (write_data_sectors(1, dir_content_cluster, buf, ctx))
         ERR_RET_NULL("Drive write error")
 
     return dir_entry_to_dentry(new_entry, &parent_dentry, entry_name);
@@ -568,7 +601,7 @@ bool FAT_drive::write_buf_to_file(Dentry& dentry, const void* buf, uint length)
             b = (char*)buf + wrote_bytes;
         else
             memcpy(b, (char*)buf + wrote_bytes, length - wrote_bytes);
-        if (ATA::write_sectors(id, 1, ctx.active_sector, 0x10, (uint)b))
+        if (write_data_sectors(1, ctx.active_sector, b, ctx))
             ERR_RET_FALSE("Drive write error")
 
         uint num = rem < ATA_SECTOR_SIZE ? rem : ATA_SECTOR_SIZE;
@@ -639,7 +672,7 @@ bool FAT_drive::resize(Dentry& dentry, uint new_size) // Todo: handle files larg
     entries[entry_id].file_size = new_size;
     entries[entry_id].first_cluster_high = free_cluster_list[0] >> 16;
     entries[entry_id].first_cluster_low = free_cluster_list[0] & 0xFFFF;
-    if (ATA::write_sectors(id, 1, ctx.active_sector, 0x10, (uint)this->buf))
+    if (write_data_sectors(1, ctx.active_sector, this->buf, ctx))
         ERR_RET_FALSE("Drive write error")
 
     // Update FAT
@@ -649,7 +682,7 @@ bool FAT_drive::resize(Dentry& dentry, uint new_size) // Todo: handle files larg
             ERR_RET_FALSE("drive read error")
 
         *(uint*)&FAT[ctx.FAT_entry_offset] = free_cluster_list[i + 1];
-        if (ATA::write_sectors(id, 1, ctx.FAT_sector, 0x10, (uint)FAT)) // Update FAT on disk
+        if (write_fat(ctx)) // Update FAT on disk
             ERR_RET_FALSE("drive write error")
     }
 
@@ -657,7 +690,7 @@ bool FAT_drive::resize(Dentry& dentry, uint new_size) // Todo: handle files larg
     if (!change_active_cluster(free_cluster_list[num_data_sectors - 1], ctx))
         ERR_RET_FALSE("drive read error")
     *(uint*)&FAT[ctx.FAT_entry_offset] = CLUSTER_EOC;
-    if (ATA::write_sectors(id, 1, ctx.FAT_sector, 0x10, (uint)FAT)) // Update FAT on disk
+    if (write_fat(ctx)) // Write new FAT // Update FAT on disk
         ERR_RET_FALSE("drive write error")
 
     delete[] free_cluster_list;
