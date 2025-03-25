@@ -16,10 +16,11 @@ AS = nasm
 ASFLAGS = -f elf -F dwarf
 BUILD_DIR=build
 
-all: directories $(OBJECTS)
+all: $(BUILD_DIR)/.dir_timestamp $(OBJECTS)
 
-directories:
-	mkdir -p $(BUILD_DIR)
+$(BUILD_DIR)/.dir_timestamp:
+	@mkdir -p $(BUILD_DIR)
+	@touch $(BUILD_DIR)/.dir_timestamp
 
 .PHONY: gcc
 

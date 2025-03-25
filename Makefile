@@ -76,8 +76,9 @@ $(CRTI_OBJ):
 $(CRTN_OBJ):
 	make -C src/gcc
 
-directories:
+$(BUILD_DIR)/.dir_timestamp:
 	@mkdir -p $(BUILD_DIR)
+	@touch $(BUILD_DIR)/.dir_timestamp
 	@mkdir -p $(KERNEL_BUILD_DIR)
 
 libdynlk:
@@ -98,7 +99,7 @@ $(KERNEL_BUILD_DIR)/%.o: $(SRC_DIR)/kernel/%.s
 gcc:
 	make -C $(SRC_DIR)/gcc
 
-kernel.elf: directories $(INTERNAL_OBJS) libc gcc
+kernel.elf: $(BUILD_DIR)/.dir_timestamp $(INTERNAL_OBJS) libc gcc
 	ld $(LDFLAGS) $(OBJ_LIST) $(CPPFLAGS) $(LIBC) -o $(BUILD_DIR)/kernel.elf $(libgcc)
 
 $(OS_ISO): kernel.elf libdynlk programs

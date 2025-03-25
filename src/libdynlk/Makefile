@@ -17,10 +17,11 @@ BUILD_DIR=build
 
 all: $(LIB)
 
-directories:
-	mkdir -p $(BUILD_DIR)
+$(BUILD_DIR)/.dir_timestamp:
+	@mkdir -p $(BUILD_DIR)
+	@touch $(BUILD_DIR)/.dir_timestamp
 
-$(LIB): directories $(OBJECTS)
+$(LIB): $(BUILD_DIR)/.dir_timestamp $(OBJECTS)
 	ld -m elf_i386 -shared -o $(LIB) $(OBJECTS)
 
 $(BUILD_DIR)/%.o: %.s

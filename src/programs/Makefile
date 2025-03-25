@@ -12,11 +12,12 @@ endif
 BUILD_DIR=build
 PROGRAMS=$(shell find . -maxdepth 1 -type d | grep -v $(BUILD_DIR) | grep -v '^\.$$')
 
-all: directories start_program.o $(PROGRAMS)
+all: $(BUILD_DIR)/.dir_timestamp start_program.o $(PROGRAMS)
 .PHONY: $(PROGRAMS)
 
-directories:
+$(BUILD_DIR)/.dir_timestamp:
 	@mkdir -p $(BUILD_DIR)
+	@touch $(BUILD_DIR)/.dir_timestamp
 
 start_program.o: start_program.s
 	$(AS) $(ASFLAGS) -o $@ $<

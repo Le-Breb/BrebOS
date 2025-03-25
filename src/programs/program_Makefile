@@ -31,17 +31,18 @@ CRTN_OBJ=$(GCC_BUILD_DIR)/crtn.o
 OBJ_LIST=$(CRTI_OBJ) $(CRTBEGIN_OBJ) $(OBJECTS) $(CRTEND_OBJ) $(CRTN_OBJ)
 INTERNAL_OBJS=$(CRTI_OBJ) $(OBJECTS) $(CRTN_OBJ)
 
-all: program
+LIBC_PATH := ../../libc/build/libc.so
 
-.PHONY: program
+all: ../build/$(EXEC_NAME)
 
-build_dir:
+$(BUILD_DIR)/.dir_timestamp: 
 	@mkdir -p $(BUILD_DIR)
+	@touch $(BUILD_DIR)/.dir_timestamp
 
-libc:
+$(LIBC_PATH):
 	make -C ../../libc
 
-program: build_dir $(OBJECTS) libc
+../build/$(EXEC_NAME): $(BUILD_DIR)/.dir_timestamp $(OBJECTS) $(LIBC_PATH)
 	ld $(LDFLAGS) -o ../build/$(EXEC_NAME) ../start_program.o $(OBJ_LIST) $(libgcc)
 
 $(BUILD_DIR)/%.o: %.cpp

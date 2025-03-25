@@ -30,18 +30,15 @@ all: gcc $(BUILD_DIR)/libc.so $(BUILD_DIR)/libc.a
 gcc:
 	make -C ../gcc
 
-.PHONY: $(BUILD_DIR)/libc.so $(BUILD_DIR)/libc.a
-
-directories:
-	@mkdir -p $(BUILD_DIR)
-
-$(BUILD_DIR)/libc.so: directories $(OBJECTS)
+$(BUILD_DIR)/libc.so: $(BUILD_DIR)/.dir_timestamp $(OBJECTS)
 	$(CC) $(CFLAGS) $(LIBFLAGS) -o $@ $(OBJ_LIST) $(libgcc)
 
-$(BUILD_DIR)/libc.a: directories $(OBJECTS)
+$(BUILD_DIR)/libc.a: $(BUILD_DIR)/.dir_timestamp $(OBJECTS)
 	ar rcs $@ $(OBJECTS) $(libgcc)
 
-.PHONY: libc
+$(BUILD_DIR)/.dir_timestamp: 
+	@mkdir -p $(BUILD_DIR)
+	@touch $(BUILD_DIR)/.dir_timestamp
 
 $(BUILD_DIR)/%.o: %.cpp
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
