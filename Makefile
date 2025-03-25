@@ -46,9 +46,15 @@ CRTEND_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtend.o)
 CRTN_OBJ=$(GCC_BUILD_DIR)/crtn.o
 OBJ_LIST=$(CRTI_OBJ) $(CRTBEGIN_OBJ) $(OBJECTS) $(CRTEND_OBJ) $(CRTN_OBJ)
 INTERNAL_OBJS=$(CRTI_OBJ) $(OBJECTS) $(CRTN_OBJ)
-
+programs=$(PROGRAMS_BUILD_DIR)
 CPPFLAGS=-I$(SRC_DIR)/libc
-LIBC=$(LIBC_BUILD_DIR)/libc.a
+libc=$(LIBC_BUILD_DIR)/libc.a
+libdynlk=$(LIBDYNLK_BUILD_DIR)/libdynlk.o
+
+programs_sources=$(shell find $(SRC_DIR)/programs -type f -name '*.cpp')
+libc_sources=$(shell find $(SRC_DIR)/libc -type f -name '*.cpp')
+libdynlk_sources=$(shell find $(SRC_DIR)/libdynlk -type f -name '*.cpp')
+
 LD=ld
 
 BUILD_DIR=build
@@ -56,6 +62,7 @@ LIBC_BUILD_DIR=$(SRC_DIR)/libc/build
 LIBDYNLK_BUILD_DIR=$(SRC_DIR)/libdynlk/build
 GCC_BUILD_DIR=$(SRC_DIR)/gcc/build
 KERNEL_BUILD_DIR=$(SRC_DIR)/kernel/build
+PROGRAMS_BUILD_DIR=$(SRC_DIR)/programs/build
 
 OUT_NAME=kernel
 OUT_BIN=$(OUT_NAME).elf
@@ -64,31 +71,34 @@ OS_ISO=$(OS_NAME).iso
 
 GRUB_TIMEOUT=0
 
-all: init $(OS_ISO)
+all: init $(OS_ISO) compilation_ended
 
 .PHONY: libc libdynlk programs
 
 init:
 	@echo "$(CYAN)Compiling$(WHITE)"
 
+compilation_ended:
+	@echo "$(CYAN)Compilation ended$(WHITE)"
+
 $(CRTI_OBJ):
-	make -C src/gcc
+	+make -C src/gcc
 $(CRTN_OBJ):
-	make -C src/gcc
+	+make -C src/gcc
 
 $(BUILD_DIR)/.dir_timestamp:
 	@mkdir -p $(BUILD_DIR)
 	@touch $(BUILD_DIR)/.dir_timestamp
 	@mkdir -p $(KERNEL_BUILD_DIR)
 
-libdynlk:
-	make -C $(SRC_DIR)/libdynlk
+$(libdynlk): $(libdynlk_sources)
+	+make -C $(SRC_DIR)/libdynlk
 
-libc:
-	make -C $(SRC_DIR)/libc
+$(libc): $(libc_sources)
+	+make -C $(SRC_DIR)/libc
 
-programs: libc libdynlk
-	make -C $(SRC_DIR)/programs
+$(programs): $(programs_sources) $(libc) $(libdynlk)
+	+make -C $(SRC_DIR)/programs
 
 $(KERNEL_BUILD_DIR)/%.o: $(SRC_DIR)/kernel/%.cpp
 	@mkdir -p $(dir $@)
@@ -97,12 +107,12 @@ $(KERNEL_BUILD_DIR)/%.o: $(SRC_DIR)/kernel/%.s
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) $< -o $@
 gcc:
-	make -C $(SRC_DIR)/gcc
+	+make -C $(SRC_DIR)/gcc
 
-kernel.elf: $(BUILD_DIR)/.dir_timestamp $(INTERNAL_OBJS) libc gcc
-	ld $(LDFLAGS) $(OBJ_LIST) $(CPPFLAGS) $(LIBC) -o $(BUILD_DIR)/kernel.elf $(libgcc)
+$(BUILD_DIR)/kernel.elf: $(BUILD_DIR)/.dir_timestamp $(INTERNAL_OBJS) $(libc) $(gcc)
+	ld $(LDFLAGS) $(OBJ_LIST) $(CPPFLAGS) $(libc) -o $(BUILD_DIR)/kernel.elf $(libgcc)
 
-$(OS_ISO): kernel.elf libdynlk programs
+$(OS_ISO): $(BUILD_DIR)/kernel.elf $(libdynlk) $(programs)
 	@#Create directories
 	@mkdir -p isodir
 	@mkdir -p isodir/boot

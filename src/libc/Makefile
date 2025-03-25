@@ -28,7 +28,7 @@ CPPFLAGS=-I../libc
 all: gcc $(BUILD_DIR)/libc.so $(BUILD_DIR)/libc.a
 
 gcc:
-	make -C ../gcc
+	+make -C ../gcc
 
 $(BUILD_DIR)/libc.so: $(BUILD_DIR)/.dir_timestamp $(OBJECTS)
 	$(CC) $(CFLAGS) $(LIBFLAGS) -o $@ $(OBJ_LIST) $(libgcc)
