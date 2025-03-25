@@ -41,6 +41,7 @@ static char sub_substitution(EXPAND_PROTOTYPE)
     UNUSED(final_argsp);
     UNUSED(fargs_ip);
     UNUSED(cur_argp);
+    errx(1, "Substitution execution not ported to BrebOS");
     return 0;
 #ifdef IMPLEMENTED
     //if (**cur_argp != '(')

@@ -28,7 +28,6 @@ __attribute__((format(printf, 2, 3))) int sprintf(char* str, const char *format,
 
 __attribute__((format(printf, 2, 3))) int fprintf(int stream, const char* format, ...);
 
-
 void flush();
 
 void puts(const char* str);

@@ -9,6 +9,7 @@
     va_start(list, fmt);
     printf(fmt, list);
     va_end (list);
+    flush();
 
     exit(eval);
 }
