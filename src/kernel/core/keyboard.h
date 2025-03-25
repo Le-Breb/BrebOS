@@ -6,6 +6,8 @@
 class Keyboard
 {
 	static char kbd_US[128];
+
+	static void handle_char(unsigned char c);
 public:
 	static void interrupt_handler();
 
