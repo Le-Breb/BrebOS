@@ -256,7 +256,10 @@ bool E1000::start()
 {
     detectEEProm();
     if (!readMACAddress()) return false;
-    printf_info("MAC Address: %x:%x:%x:%x:%x:%x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    FB::write("MAC Address: ");
+    FB::set_fg(FB_YELLOW);
+    printf("%x:%x:%x:%x:%x:%x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    FB::set_fg(FB_WHITE);
     //startLink();
 
     for (int i = 0; i < 0x80; i++)

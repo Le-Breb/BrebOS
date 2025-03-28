@@ -47,7 +47,7 @@ void ARP::handle_packet(const packet_t* packet, const Ethernet::packet_t* ethern
 
         // Store gateway MAC address if it's the gateway that replied
         if (memcmp(&packet->srcpr, Network::gateway_ip, IPV4_ADDR_LEN) == 0)
-            memcpy(Network::gateway_mac, packet->srchw, MAC_ADDR_LEN);
+            Network::on_gateway_mac_received((const uint8_t*)&packet->srchw);
 
         // Send packets that were waiting for this MAC address
         for (auto& packet_info : pending_queue)

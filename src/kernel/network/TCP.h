@@ -100,8 +100,6 @@ private:
 
     static void send_sync(const Socket* socket);
 
-    [[nodiscard]] static uint16_t random_ephemeral_port();
-
     [[nodiscard]] static bool packet_valid(const packet_info_t* packet_info);
 public:
     static uint16_t handle_packet(const packet_info_t* packet_info, const IPV4::packet_t* ipv4_packet, const Ethernet::packet_t* ethernet_packet);

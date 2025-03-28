@@ -22,7 +22,7 @@ public:
 
 private:
     friend class TCP;
-    uint16_t port = TCP::random_ephemeral_port();
+    uint16_t port = Network::random_ephemeral_port();
     uint16_t peer_port;
     uint8_t ip[IPV4_ADDR_LEN]{};
     uint8_t peer_ip[IPV4_ADDR_LEN]{};

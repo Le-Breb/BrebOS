@@ -18,6 +18,8 @@ extern "C" void _init(void); // NOLINT(*-reserved-identifier)
 //Todo: Implement process schedule_timeout to have sleeping processes out of the scheduler ready queue (usage: sleep)
 //Todo: Make allocate page user allocate below memory higher half, and above for kernel pages
 //Todo: Process R_386_PC32 relocations
+//Todo: Automatic website ip resolver with DNS
+//Todo: write proper wget program, try to download programs from repo and try executing them
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointer
 {
     _init(); // Execute constructors

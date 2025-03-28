@@ -41,6 +41,12 @@ public:
     [[nodiscard]] static uint32_t generate_random_id16();
 
     [[nodiscard]] static uint16_t checksum_add(uint16_t checksum1, uint16_t checksum2);
+
+    [[nodiscard]] static uint16_t random_ephemeral_port();
+
+    static void on_ip_received(const uint8_t ip[IPV4_ADDR_LEN], const uint8_t gateway_ip[IPV4_ADDR_LEN]);
+
+    static void on_gateway_mac_received(const uint8_t mac[MAC_ADDR_LEN]);
 };
 
 

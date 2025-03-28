@@ -4,7 +4,9 @@
 #include "DHCP.h"
 #include "Ethernet.h"
 #include "IPV4.h"
+#include "TP.h"
 #include "../core/PCI.h"
+#include "../core/fb.h"
 
 E1000* Network::nic = nullptr;
 uint8_t Network::ip[IPV4_ADDR_LEN] = {0, 0, 0, 0};
@@ -95,4 +97,32 @@ uint16_t Network::checksum_add(uint16_t checksum1, uint16_t checksum2)
     while (sum >> 16)
         sum = (sum & 0xFFFF) + (sum >> 16);
     return (uint16_t)sum;
+}
+
+uint16_t Network::random_ephemeral_port()
+{
+    return 49152 + (generate_random_id32() % (65535 - 49152 + 1));
+}
+
+void Network::on_ip_received(const uint8_t ip[4], const uint8_t gateway_ip[IPV4_ADDR_LEN])
+{
+    memcpy(Network::ip, ip, IPV4_ADDR_LEN);
+    memcpy(Network::gateway_ip, gateway_ip, IPV4_ADDR_LEN);
+
+    FB::write("Received IP: ");
+    FB::set_fg(FB_YELLOW);
+    printf("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+    FB::set_fg(FB_WHITE);
+    FB::write(" | Gateway is: ");
+    FB::set_fg(FB_YELLOW);
+    printf("%d.%d.%d.%d\n", gateway_ip[0], gateway_ip[1], gateway_ip[2], gateway_ip[3]);
+    FB::set_fg(FB_WHITE);
+
+    ARP::resolve_gateway_mac();
+}
+
+void Network::on_gateway_mac_received(const uint8_t mac[6])
+{
+    memcpy(Network::gateway_mac, mac, MAC_ADDR_LEN);
+    TP::send_request();
 }

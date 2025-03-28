@@ -49,8 +49,8 @@ public:
     static void handle_packet(const packet_info_t* packet_info, const IPV4::packet_t* ipv4_packet,
                               const Ethernet::packet_t* ethernet_packet);
 
-private:
     [[nodiscard]] static size_t get_header_size();
+private:
 
     static uint16_t write_header(uint8_t* buf, uint16_t src_port, uint16_t dst_port, uint16_t payload_size);
 

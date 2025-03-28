@@ -7,11 +7,6 @@
 #include "Socket.h"
 #include "../core/fb.h"
 
-uint16_t TCP::random_ephemeral_port()
-{
-    return 49152 + (Network::generate_random_id32() % (65535 - 49152 + 1));
-}
-
 void TCP::fill_pseudo_header(pseudo_header_t& pseudo_header, const header_t* header, uint32_t dest_ip,
                              uint16_t payload_size)
 {

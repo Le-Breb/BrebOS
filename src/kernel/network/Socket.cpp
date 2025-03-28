@@ -71,7 +71,7 @@ Socket::Socket(uint8_t peer_ip[IPV4_ADDR_LEN], uint16_t peer_port) : peer_port(p
     memcpy(this->peer_ip, peer_ip, IPV4_ADDR_LEN);
 
     while (port_used(port))
-        port = TCP::random_ephemeral_port();
+        port = Network::random_ephemeral_port();
 
     sockets.add(this);
 }

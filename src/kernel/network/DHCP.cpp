@@ -151,15 +151,14 @@ void DHCP::handle_offer(const packet_t* packet)
 
 void DHCP::handle_ack(const packet_t* packet)
 {
-    memcpy(Network::ip, &packet->yiaddr, IPV4_ADDR_LEN);
-
     auto* opt = (option_t*)packet->options;
+    const uint8_t* gateway_ip{};
     while (opt->code != DHCP_OPT_END)
     {
         switch (opt->code)
         {
             case DHCP_OPT_ROUTER:
-                memcpy(Network::gateway_ip, opt->data, IPV4_ADDR_LEN);
+                gateway_ip = opt->data;
                 break;
             case DHCP_OPT_SUBNET_MASK:
                 memcpy(Network::subnet_mast, opt->data, IPV4_ADDR_LEN);
@@ -170,11 +169,7 @@ void DHCP::handle_ack(const packet_t* packet)
         opt = (option_t*)((uint8_t*)opt + opt->len + sizeof(option_t));
     }
 
-
-    printf("Received IP: %d.%d.%d.%d\n", Network::ip[0], Network::ip[1], Network::ip[2], Network::ip[3]);
-    printf("Gateway is: %d.%d.%d.%d\n", Network::gateway_ip[0], Network::gateway_ip[1], Network::gateway_ip[2],
-           Network::gateway_ip[3]);
-    ARP::resolve_gateway_mac();
+    Network::on_ip_received((const uint8_t*)&packet->yiaddr, gateway_ip);
 }
 
 bool DHCP::is_dhcp_offer(const UDP::packet_t* packet)

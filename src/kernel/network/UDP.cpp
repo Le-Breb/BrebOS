@@ -4,6 +4,7 @@
 #include "DNS.h"
 #include "Endianness.h"
 #include "IPV4.h"
+#include "TP.h"
 #include "../core/fb.h"
 
 uint16_t UDP::write_header(uint8_t* buf, uint16_t src_port, uint16_t dst_port, uint16_t payload_size)
@@ -37,6 +38,8 @@ void UDP::handle_packet(const packet_info_t* packet_info, [[maybe_unused]] const
     if (DHCP::handle_packet(packet_info->packet))
         return;
     if (DNS::handle_packet(packet_info->packet))
+        return;
+    if (TP::handle_packet(packet_info->packet))
         return;
 
     // We received something which is not one of the protocols checked above, then we simply display payload content
