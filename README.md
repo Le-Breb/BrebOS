@@ -82,7 +82,6 @@ RELEASE=1 make
 
 ### Run ▶️
 
-
 ```sh
 RELEASE = 1 make run
 ```
@@ -93,20 +92,26 @@ RELEASE = 1 make run
 
 ### Commands
 
-Now that you have the kernel up and running, you can start executing commands. The kernel uses a shell made as a school project (42sh, made in groups of of 4 students), that I adapted to make it work in BrebOS. <br>
-The shell language is a subset of the linux one. You should be able to use every basic shell syntax that exists in linux, provided that (1) it does not require heavy kernel support that i did not add yet (redirections for example) and (2) that the keyboard driver lets you type the characters you need 😆. For example, to date, you cannot type '$' nor '(', so say bye bye to variables and subshells 😢 <br>
+Now that you have the kernel up and running, you can start executing commands. The kernel uses a shell made as a school
+project (42sh, made in groups of of 4 students), that I adapted to make it work in BrebOS. <br>
+The shell language is a subset of the linux one. You should be able to use every basic shell syntax that exists in
+linux, provided that (1) it does not require heavy kernel support that i did not add yet (redirections for example)
+and (2) that the keyboard driver lets you type the characters you need 😆. For example, to date, you cannot type '$'
+nor '(', so say bye bye to variables and subshells 😢 <br>
 Here is the list of the main commands (you can view the entire list by browsing at `BrebOS/src/programs`):
 
-| Command                                | Description                                                                                                                                                                                           |
-|----------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `q`                                    | Quit (Shutdown).                                                                                                                                                                                      |
-| `ls <path>`                            | Lists files and directories at `path`.                                                                                                                                                                |
-| `mkdir <path/dir_name>`                | Creates the directory `dir_name` at `path`.                                                                                                                                                           |
-| `touch <dir_path/file_name>`               | Creates the file `file_name` at `dir_path`.                                                                                                                                                                |
-| `cat <path>`               | Prints the content of the file at `path`. Output is formatted according to the file extension.                                                                                                                                                                |
-| `clearscreen`               | Clears the screen                                                                                                                                                                |
+| Command                      | Description                                                                                    |
+|------------------------------|------------------------------------------------------------------------------------------------|
+| `q`                          | Quit (Shutdown).                                                                               |
+| `ls <path>`                  | Lists files and directories at `path`.                                                         |
+| `mkdir <path/dir_name>`      | Creates the directory `dir_name` at `path`.                                                    |
+| `touch <dir_path/file_name>` | Creates the file `file_name` at `dir_path`.                                                    |
+| `cat <path>`                 | Prints the content of the file at `path`. Output is formatted according to the file extension. |
+| `clearscreen`                | Clears the screen                                                                              |
 
-As 42sh follows the linux shell syntax, you can start a program symply by typing `<program_path> [argv0] [argv1] ...`. The kernel `$PATH` is filled with `/bin`, where all programs are. Hence, to start `/bin/a_program`, simply write `a_program`.
+As 42sh follows the linux shell syntax, you can start a program symply by typing `<program_path> [argv0] [argv1] ...`.
+The kernel `$PATH` is filled with `/bin`, where all programs are. Hence, to start `/bin/a_program`, simply write
+`a_program`.
 
 ### Running your own programs inside BrebOS (How cool is this !?)
 
@@ -115,7 +120,9 @@ BrebOS can run C++ programs that *you* write, provided they respect the followin
 - Your program cannot use `dynamic_cast`, nor exceptions. They require additional support which i did not setup.
 - You cannot make use of any library, even `libc`, as it is not ported on `BrebOS`. The only exception is my custom
   `libc`. The relevant headers are located under
-  `src/libc`. For example, if you want to use `printf`, simply write `#include <kstdio.h>`. Generally speaking, most widely used headers of the linux libc have an equivalent which is the usual name preceded by 'k' (`stdio.h` <-> `kstdio.h`) - though, inevitably, i did not implement every function inside it.
+  `src/libc`. For example, if you want to use `printf`, simply write `#include <kstdio.h>`. Generally speaking, most
+  widely used headers of the linux libc have an equivalent which is the usual name preceded by 'k' (`stdio.h` <->
+  `kstdio.h`) - though, inevitably, i did not implement every function inside it.
 - Any other C++ feature (supposedly) works!
 
 To add your program, simply follow the following steps:
@@ -175,14 +182,14 @@ running locally, which is automatically started when executing `make run`.
     - double quotes and escape character (though the keyboard driver does not handle '"'...)
     - variables
     - builtins
-      - true/false
-      - echo
-      - continue
-      - break
+        - true/false
+        - echo
+        - continue
+        - break
     - the following features are implemented within 42sh but BrebOS lacks support for them to work:
-      - redirections
-      - pipeline
-      - subshells and command substitution
+        - redirections
+        - pipeline
+        - subshells and command substitution
 
 ### Misc
 
