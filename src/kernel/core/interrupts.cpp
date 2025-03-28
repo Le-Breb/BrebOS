@@ -116,6 +116,9 @@ void interrupt_handler(uint kesp, cpu_state_t cpu_state, uint interrupt, stack_s
 {
 	switch (interrupt)
 	{
+		case 0x01:
+			Interrupts::debug_handler(&cpu_state, &stack_state);
+			break;
 		case 0x20:
 			Interrupts::interrupt_timer(kesp, &cpu_state, &stack_state);
 		case 0x21:
@@ -157,6 +160,12 @@ void Interrupts::disable_asm()
 
 [[noreturn]] void Interrupts::resume_user_process_asm(const cpu_state_t* cpu_state, const stack_state_t* stack_state)
 {
+	// uint dr0 = stack_state->eip;
+	// uint dr7;
+	// __asm__ volatile("mov %%dr7, %0" : "=r"(dr7));
+	// dr7 |= 1 | (1 << 8); // Enable breakpoint 0 and automatically disables it when reached
+	// __asm__ volatile("mov %0, %%dr7" : : "r"(dr7));
+	// __asm__ volatile("mov %0, %%dr0" : : "r"(dr0));
 	resume_user_process_asm_(cpu_state, stack_state);
 }
 
@@ -186,5 +195,24 @@ void Interrupts::dynamic_interrupt_dispatcher(uint interrupt, cpu_state_t* cpu_s
 		handler->fire(cpu_state, stack_state);
 	else
 		printf_error("Received unknown interrupt: %u", interrupt);
+}
+
+void Interrupts::debug_handler([[maybe_unused]] const cpu_state_t* cpu_state, const stack_state_t* stack_state)
+{
+	// https://en.wikipedia.org/wiki/X86_debug_register
+	uint dr6; // Debug status register
+	__asm__ volatile("mov %%dr6, %0" : "=r"(dr6));
+
+	// Check which breakpoint was hit
+	uint bp = 0;
+	while (bp < 4 && !(dr6 & (1 << bp)))
+		bp++;
+	if (bp == 4)
+	{
+		printf_error("Debug breakpoint reached but no debug breakpoint set");
+		return;
+	}
+
+	printf_info("Breakpoint %u reached at 0x%x", bp, stack_state->eip);
 }
 
