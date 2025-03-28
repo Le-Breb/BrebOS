@@ -231,9 +231,9 @@ bool DNS::handle_packet(const UDP::packet_t* packet)
     if (header->id != last_query_id)
         return false;
 
-    display_response((header_t*)packet->payload);
+    display_response(header);
 
-    auto b = (uint8_t*)((header_t*)packet->payload + 1);
+    auto b = (uint8_t*)(header + 1);
 
     // Skip queries
     for (size_t i = 0; i < Endianness::switch16(header->quest_count); i++)
@@ -302,6 +302,9 @@ bool DNS::handle_packet(const UDP::packet_t* packet)
         pending_queue[pending_queue_idx].socket = nullptr;
         pending_queue[pending_queue_idx].hostname = nullptr;
     }
+
+    delete[] last_seen_alias;
+    delete[] resolved_hostname;
 
     return true;
 }
