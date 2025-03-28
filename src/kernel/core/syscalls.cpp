@@ -8,8 +8,6 @@
 #include "fb.h"
 #include "../network/DNS.h"
 #include "../network/HTTP.h"
-#include "../network/Network.h"
-#include "../network/Socket.h"
 
 void Syscall::start_process(cpu_state_t* cpu_state)
 {
@@ -187,9 +185,6 @@ void Syscall::get_key()
         case 13:
             FB::clear_screen();
             break;
-        case 14:
-            dns(&p->cpu_state);
-            break;
         case 15:
             wget(&p->cpu_state);
             break;
@@ -214,12 +209,6 @@ void Syscall::get_key()
     Interrupts::resume_user_process_asm(&p->cpu_state, &p->stack_state);
 }
 
-void Syscall::dns(const cpu_state_t* cpu_state)
-{
-    const char* domain = (const char*)cpu_state->edi;
-    DNS::send_query(domain);
-}
-
 void Syscall::cat(cpu_state_t* cpu_state)
 {
     const char* path = (const char*)cpu_state->edi;
@@ -235,11 +224,8 @@ void Syscall::wget(const cpu_state_t* cpu_state)
         return;
     }
 
-    uint8_t dest_ip[] = {92,122,166,178};
-    //uint8_t dest_ip[] = {192, 168, 1, 184};
-    auto http = new HTTP{dest_ip, 80};
-    //auto http = new HTTP{Network::gateway_ip, 8080};
-    http->send_get(uri);
+    auto http = new HTTP{uri, 80};
+    http->send_get("/");
 }
 
 void Syscall::mkdir(cpu_state_t* cpu_state)

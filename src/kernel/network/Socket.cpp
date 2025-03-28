@@ -2,6 +2,7 @@
 
 #include <kstdio.h>
 
+#include "DNS.h"
 #include "Endianness.h"
 #include "Network.h"
 #include "../core/fb.h"
@@ -15,22 +16,6 @@ void Socket::acknowledge(const TCP::packet_info_t* packet_info, uint8_t* respons
     if (packet_info->packet->flags & (TCP_FLAG_SYN | TCP_FLAG_FIN)) // SYN and FIN consume a sequence number
         ack_num++;
     TCP::write_ack_header(response_buf, this, fin);
-}
-
-void Socket::flush_waiting_queue() // Todo: take peer window size into account
-{
-    for (uint i = 0; i < waiting_queue_size; i++)
-    {
-        // Get packet
-        auto idx = (waiting_queue_start + i) % WAITING_QUEUE_CAPACITY;
-        auto packet = waiting_queue[idx];
-
-        // Send packet
-        send_data(packet->data, packet->size);
-
-        // Clear queue entry
-        waiting_queue[idx] = nullptr;
-    }
 }
 
 uint8_t* Socket::create_packet_response(uint16_t payload_size, const IPV4::packet_t* ipv4_packet,
@@ -65,7 +50,18 @@ uint16_t Socket::get_peer_port() const
     return peer_port;
 }
 
-Socket::Socket(uint8_t peer_ip[IPV4_ADDR_LEN], uint16_t peer_port) : peer_port(peer_port)
+const char* Socket::get_hostname() const
+{
+    return hostname;
+}
+
+void Socket::on_hostname_resolved(const uint8_t peer_ip[4])
+{
+    memcpy(this->peer_ip, peer_ip, IPV4_ADDR_LEN);
+    send_data(start_packet.data, start_packet.size);
+}
+
+Socket::Socket(uint8_t peer_ip[IPV4_ADDR_LEN], uint16_t peer_port) : hostname(nullptr), peer_port(peer_port)
 {
     memcpy(ip, Network::ip, IPV4_ADDR_LEN);
     memcpy(this->peer_ip, peer_ip, IPV4_ADDR_LEN);
@@ -74,6 +70,13 @@ Socket::Socket(uint8_t peer_ip[IPV4_ADDR_LEN], uint16_t peer_port) : peer_port(p
         port = Network::random_ephemeral_port();
 
     sockets.add(this);
+}
+
+Socket::Socket(const char* hostname, uint16_t peer_port) : Socket(Network::null_ip, peer_port)
+{
+    auto hostname_len = strlen(hostname);
+    this->hostname = new char[hostname_len + 1];
+    memcpy((char*)this->hostname, hostname, hostname_len + 1);
 }
 
 void Socket::set_listener(TCP_listener* listener)
@@ -118,8 +121,8 @@ void Socket::handle_packet(const TCP::packet_info_t* packet_info, const IPV4::pa
 
         Network::send_packet(&response_info);
 
-        // Now that connection is established, we can send any packet we've been asked to send so far
-        flush_waiting_queue();
+        // Now that connection is established, send the first packet
+        send_data(start_packet.data, start_packet.size);
         return;
     }
     if (flags == TCP_FLAG_ACK && state == TCP::State::CLOSE_WAIT)
@@ -235,13 +238,12 @@ void Socket::send_data(const void* data, uint16_t size)
     // Connection not ready, save enqueue packet and initialize
     if (state == TCP::State::CLOSED)
     {
-        if (waiting_queue_size == WAITING_QUEUE_CAPACITY)
-        {
-            printf_error("Socket waiting queue is full\n");
-            return;
-        }
-        waiting_queue[(waiting_queue_start + waiting_queue_size++) % WAITING_QUEUE_CAPACITY] = new packet_t{data, size};
-        initialize();
+        start_packet.data = data;
+        start_packet.size = size;
+        // Resolve hostname
+        if (!memcmp(Network::null_ip, peer_ip, IPV4_ADDR_LEN))
+            DNS::resolve_hostname(hostname, this);
+        else initialize(); // Initiate handshake
     }
     else // Send data
     {

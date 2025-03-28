@@ -14,14 +14,15 @@ class Socket
 public:
     struct packet
     {
-        const void* data;
-        uint16_t size;
+        const void* data = nullptr;
+        uint16_t size = 0;
     };
 
     typedef struct packet packet_t;
 
 private:
     friend class TCP;
+    const char* hostname;
     uint16_t port = Network::random_ephemeral_port();
     uint16_t peer_port;
     uint8_t ip[IPV4_ADDR_LEN]{};
@@ -31,15 +32,11 @@ private:
     uint32_t ack_num = 0;
     TCP_listener* listener = nullptr; // Listener to send callbacks to
 
+    packet_t start_packet; // Packet to send when handhsake is completed
+
     static list<Socket*> sockets; // List of all sockets
 
-    uint16_t waiting_queue_size = 0;
-    uint16_t waiting_queue_start = 0;
-    packet_t* waiting_queue[WAITING_QUEUE_CAPACITY]{};
-
     void acknowledge(const TCP::packet_info_t* packet_info, uint8_t* response_buf, bool fin = false);
-
-    void flush_waiting_queue();
 
     // Creates a buffer set up to respond to a received packet
     [[nodiscard]] static uint8_t* create_packet_response(uint16_t payload_size, const IPV4::packet_t* ipv4_packet,
@@ -47,6 +44,8 @@ private:
                                                          Ethernet::packet_info_t& response_info);
 public:
     Socket(uint8_t peer_ip[IPV4_ADDR_LEN], uint16_t peer_port);
+
+    Socket(const char* hostname, uint16_t peer_port);
 
     void set_listener(TCP_listener* listener);
 
@@ -71,6 +70,10 @@ public:
     [[nodiscard]] const uint8_t* get_peer_ip() const;
 
     [[nodiscard]] uint16_t get_peer_port() const;
+
+    [[nodiscard]] const char* get_hostname() const;
+
+    void on_hostname_resolved(const uint8_t peer_ip[IPV4_ADDR_LEN]);
 };
 
 

@@ -10,6 +10,8 @@ class Network
 public:
     static uint8_t ip[IPV4_ADDR_LEN];
 
+    static uint8_t null_ip[IPV4_ADDR_LEN];
+
     static const uint8_t broadcast_ip[IPV4_ADDR_LEN];
 
     static const uint8_t broadcast_mac[MAC_ADDR_LEN];

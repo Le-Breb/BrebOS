@@ -4,6 +4,7 @@
 #include <kstddef.h>
 
 #include "NetworkConsts.h"
+#include "Socket.h"
 #include "UDP.h"
 
 #define DNS_PORT 53
@@ -31,6 +32,8 @@
 #define DNS_IN 1 // Internet class
 #define DNS_CS 2 // CSNET class
 #define DNS_CH 3 // CHAOS class
+
+#define DNS_PENDING_QUEUE_SIZE 10
 
 class DNS
 {
@@ -85,6 +88,16 @@ public:
 private:
     static uint16_t last_query_id;
 
+    struct pending_queue_entry
+    {
+        Socket* socket = nullptr;
+        const char* hostname = nullptr;
+    };
+
+    // Queue of packets sockets waiting for their destination IP to be resolved
+    static pending_queue_entry pending_queue[DNS_PENDING_QUEUE_SIZE];
+    static size_t pending_queue_size;
+
     [[nodiscard]] static size_t get_header_size();
 
     [[nodiscard]] static size_t get_question_size(const char* resource_name);
@@ -116,7 +129,7 @@ private:
     static const uint8_t google_dns_ip[IPV4_ADDR_LEN];
 
 public:
-    static void send_query(const char* hostname);
+    static void resolve_hostname(const char* hostname, Socket* socket);
 
     static bool handle_packet(const UDP::packet_t* packet);
 };

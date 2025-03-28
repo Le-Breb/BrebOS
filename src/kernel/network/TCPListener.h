@@ -17,6 +17,8 @@ protected:
 public:
     TCP_listener(uint8_t peer_ip[IPV4_ADDR_LEN], uint16_t peer_port);
 
+    TCP_listener(const char* hostname, uint16_t peer_port);
+
     virtual ~TCP_listener();
 
     // Callback when a packet is received

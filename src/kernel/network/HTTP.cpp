@@ -33,7 +33,7 @@ HTTP::response::response(const void* packet, uint16_t packet_size) : method(null
     if (method_end == nullptr)
         return;
 
-    // Get methode
+    // Get method
     uint16_t method_len = method_end - cpacket;
     method = new char[method_len + 1];
     method[method_len] = '\0';
@@ -155,7 +155,7 @@ HTTP::header_t* HTTP::response::get_header(const char* name) const
     return nullptr;
 }
 
-HTTP::HTTP(uint8_t peer_ip[4], uint16_t peer_port): TCP_listener(peer_ip, peer_port)
+HTTP::HTTP(const char* hostname, uint16_t peer_port): TCP_listener(hostname, peer_port)
 {
     instances.add(this);
 }
@@ -179,8 +179,7 @@ void HTTP::send_get(const char* uri)
     request->num_headers = num_headers;
     header_t headers[num_headers]{};
     headers[0].name = (char*)"Host";
-    //headers[0].value = (char*)uri;
-    headers[0].value = (char*)"www.example.com";
+    headers[0].value = (char*)socket->get_hostname();
     headers[1].name = (char*)"User-Agent";
     headers[1].value = (char*)"BrebOS";
     headers[2].name = (char*)"Accept";
@@ -194,9 +193,7 @@ void HTTP::send_get(const char* uri)
 
     state = State::GET_SENT;
 
-    auto peer_ip = socket->get_peer_ip();
-    printf_info("Downloading %s from %u.%u.%u.%u:%u", uri, peer_ip[0], peer_ip[1], peer_ip[2], peer_ip[3],
-                socket->get_peer_port());
+    printf_info("Downloading %s from %s:%u", uri, socket->get_hostname(), socket->get_peer_port());
     socket->send_data(packet, packet_size);
 }
 
@@ -238,7 +235,14 @@ void HTTP::handle_response_descriptor(const void* packet, uint16_t packet_size)
     }
     if (!(state == State::GET_SENT && response->status == HTTP_OK))
     {
-        printf("Incoherent HTTP response or status is not OK\n");
+        if (response->status == HTTP_MOVED_PERMANENTLY)
+        {
+            auto location_header = response->get_header("Location");
+            printf_warn("Redirected to %s. This is likely to happen for websites that redirect HTTP to HTTPS",
+                location_header->value);
+        }
+        else
+            printf_warn("Incoherent HTTP response or status is not OK\n");
         socket->close();
         state = State::CLOSED;
         return;
@@ -356,7 +360,7 @@ uint16_t HTTP::count_headers(const char* header_beg, uint16_t len)
     return -1; // Double \r \n not found, error
 }
 
-uint8_t HTTP::parse_status_code(const char str[3])
+int HTTP::parse_status_code(const char str[3])
 {
     if (!DIGIT(str[0]) || !DIGIT(str[1]) || !DIGIT(str[2]))
         return 0;

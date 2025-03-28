@@ -67,6 +67,7 @@ bool TP::handle_packet(const UDP::packet_t* packet)
     uint32_t time_value = Endianness::switch32(*(uint32_t*)packet->payload);
     convert_to_local_time(time_value);
     time = time_value;
+    request_sent = false;
 
     return true;
 }

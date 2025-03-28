@@ -10,6 +10,7 @@
 
 E1000* Network::nic = nullptr;
 uint8_t Network::ip[IPV4_ADDR_LEN] = {0, 0, 0, 0};
+uint8_t Network::null_ip[IPV4_ADDR_LEN] = {};
 uint8_t Network::gateway_ip[IPV4_ADDR_LEN] = {0, 0, 0, 0};
 uint8_t Network::subnet_mast[IPV4_ADDR_LEN] = {0, 0, 0, 0};
 const uint8_t Network::broadcast_ip[IPV4_ADDR_LEN] = {0xff, 0xff, 0xff, 0xff};

@@ -41,7 +41,7 @@ private:
 
     typedef struct cache_entry cache_entry_t;
 
-    static Ethernet::packet_info_t pending_queue[ARP_PENDING_QUEUE_SIZE]; // Queue of packets waiting for desination MAC to be resolved
+    static Ethernet::packet_info_t pending_queue[ARP_PENDING_QUEUE_SIZE]; // Queue of packets waiting for destination MAC to be resolved
     static size_t pending_queue_head;
 
     static cache_entry_t cache[ARP_CACHE_SIZE]; // IP-MAC cache

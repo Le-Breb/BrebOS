@@ -9,10 +9,10 @@ int main(int argc, char* argv[])
 {
     if (argc > 2)
     {
-        puts("Usage: wget [uri]\n");
+        puts("Usage: wget [uri] (Default: www.example.com)\n");
         return 1;
     }
-    wget(argc == 1 ? "/" : argv[1]); // Todo: add support for proper options once kernel supports it
+    wget(argc == 1 ? "www.example.com" : argv[1]); // Todo: add support for proper options once kernel supports it
 
     return 0;
 }
