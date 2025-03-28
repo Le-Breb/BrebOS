@@ -273,7 +273,8 @@ bool DNS::handle_packet(const UDP::packet_t* packet)
             {
                 const char* alias_name = parse_name((const char*)rc->data, (uint8_t*)header);
                 // Follow alias chain
-                delete[] last_seen_alias;
+                if (last_seen_alias != resolved_hostname)
+                    delete[] last_seen_alias;
                 last_seen_alias = alias_name;
                 break;
             }
@@ -304,7 +305,8 @@ bool DNS::handle_packet(const UDP::packet_t* packet)
     }
 
     delete[] last_seen_alias;
-    delete[] resolved_hostname;
+    if (resolved_hostname != last_seen_alias)
+        delete[] resolved_hostname;
 
     return true;
 }
