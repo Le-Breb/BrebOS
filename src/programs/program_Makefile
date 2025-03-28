@@ -44,7 +44,7 @@ $(BUILD_DIR)/.dir_timestamp:
 $(LIBC_PATH):
 	+make -C ../../libc
 
-../build/$(EXEC_NAME): $(BUILD_DIR)/.dir_timestamp $(OBJECTS) $(LIBC_PATH)
+../build/$(EXEC_NAME): $(BUILD_DIR)/.dir_timestamp $(OBJECTS) $(LIBC_PATH) ../start_program.o
 	ld $(LDFLAGS) -o ../build/$(EXEC_NAME) ../start_program.o $(OBJ_LIST) $(libgcc)
 
 $(BUILD_DIR)/%.o: %.cpp

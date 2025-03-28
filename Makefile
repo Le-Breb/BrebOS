@@ -51,7 +51,7 @@ CPPFLAGS=-I$(SRC_DIR)/libc
 libc=$(LIBC_BUILD_DIR)/libc.a
 libdynlk=$(LIBDYNLK_BUILD_DIR)/libdynlk.o
 
-programs_sources=$(shell find $(SRC_DIR)/programs -type f -name '*.cpp')
+programs_sources=$(shell find $(SRC_DIR)/programs -type f -name '*.cpp') $(SRC_DIR)/programs/start_program.s
 libc_sources=$(shell find $(SRC_DIR)/libc -type f -name '*.cpp')
 libdynlk_sources=$(shell find $(SRC_DIR)/libdynlk -type f -name '*.cpp')
 
