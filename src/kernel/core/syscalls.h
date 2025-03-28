@@ -12,7 +12,7 @@ class Syscall
 	 * @param cpu_state CPU state
 	 * @param stack_state Stack state
 	 */
-	static void start_process(cpu_state_t* cpu_state);
+	static void start_process(const cpu_state_t* cpu_state);
 
 	/**
 	 * Returns current process' PID  */

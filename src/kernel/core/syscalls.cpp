@@ -9,10 +9,10 @@
 #include "../network/DNS.h"
 #include "../network/HTTP.h"
 
-void Syscall::start_process(cpu_state_t* cpu_state)
+void Syscall::start_process(const cpu_state_t* cpu_state)
 {
     // Load child process and set it ready
-    Scheduler::exec((char*)cpu_state->edi, Scheduler::get_running_process_pid(), cpu_state->esi,
+    Scheduler::exec((char*)cpu_state->edi, Scheduler::get_running_process_pid(), (int)cpu_state->esi,
                     (const char**)cpu_state->edx);
 }
 
@@ -86,7 +86,7 @@ void Syscall::dynlk(const cpu_state_t* cpu_state)
     }
 
     // Check required symbol's relocation
-    Elf32_Rel* rel = (Elf32_Rel*)((uint)reloc_table + cpu_state->edi);
+    auto* rel = (Elf32_Rel*)((uint)reloc_table + cpu_state->edi);
     uint symbol_id = ELF32_R_SYM(rel->r_info);
     uint type = ELF32_R_TYPE(rel->r_info);
     if (type != R_386_JMP_SLOT)
@@ -218,13 +218,7 @@ void Syscall::cat(cpu_state_t* cpu_state)
 void Syscall::wget(const cpu_state_t* cpu_state)
 {
     const char* uri = (const char*)cpu_state->edi;
-    if (!*uri)
-    {
-        printf_error("Please provide a URI to wget");
-        return;
-    }
-
-    auto http = new HTTP{uri, 80};
+    auto http = new HTTP{uri, 80};  // Todo: add a system to free this object
     http->send_get("/");
 }
 
