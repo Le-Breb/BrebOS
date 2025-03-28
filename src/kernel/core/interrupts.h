@@ -76,7 +76,7 @@ public:
 	* @param cpu_state process CPU state
 	* @param stack_state process stack state
 	*/
-	[[noreturn]] static void resume_user_process_asm(cpu_state_t cpu_state, struct stack_state stack_state);
+	[[noreturn]] static void resume_user_process_asm(const cpu_state_t* cpu_state, const struct stack_state* stack_state);
 
 	/**
 	 * Exits from an interrupt and a resume an interrupted syscall dispatcher

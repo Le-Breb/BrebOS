@@ -37,7 +37,7 @@ extern "C" void enable_interrupts_asm_(void);
 
 extern "C" void disable_interrupts_asm_(void);
 
-extern "C" [[noreturn]] void resume_user_process_asm_(cpu_state_t cpu_state, struct stack_state stack_state);
+extern "C" [[noreturn]] void resume_user_process_asm_(const cpu_state_t* cpu_state, const stack_state_t* stack_state);
 
 extern "C" [[noreturn]] void resume_syscall_handler_asm_(cpu_state_t cpu_state, uint iret_esp);
 
@@ -155,7 +155,7 @@ void Interrupts::disable_asm()
 	disable_interrupts_asm_();
 }
 
-[[noreturn]] void Interrupts::resume_user_process_asm(cpu_state_t cpu_state, struct stack_state stack_state)
+[[noreturn]] void Interrupts::resume_user_process_asm(const cpu_state_t* cpu_state, const stack_state_t* stack_state)
 {
 	resume_user_process_asm_(cpu_state, stack_state);
 }

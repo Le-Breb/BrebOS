@@ -211,7 +211,7 @@ void Syscall::get_key()
     }
 
     // Todo: Check if process ESP should be reset to process kernel stack top here
-    Interrupts::resume_user_process_asm(p->cpu_state, p->stack_state);
+    Interrupts::resume_user_process_asm(&p->cpu_state, &p->stack_state);
 }
 
 void Syscall::dns(const cpu_state_t* cpu_state)

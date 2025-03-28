@@ -108,7 +108,7 @@ void Scheduler::set_first_ready_process_asleep_waiting_key_press()
         Interrupts::resume_syscall_handler_asm(p->k_cpu_state, p->k_stack_state.esp - 12);
     }
     else
-        Interrupts::resume_user_process_asm(p->cpu_state, p->stack_state);
+        Interrupts::resume_user_process_asm(&p->cpu_state, &p->stack_state);
 }
 
 void Scheduler::start_module(uint module, pid_t ppid, int argc, const char** argv)

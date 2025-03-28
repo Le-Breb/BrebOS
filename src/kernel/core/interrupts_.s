@@ -2,36 +2,39 @@ extern interrupt_handler
 
 ; Exit from a syscall and resume user program
 ; [esp + 0] = call function ret addr
-; [esp + 4] = cpu_state_t
-; [esp + 4 + sizeof(cpu_state_t)] = struct stack_state
+; [esp + 4] = cpu_state_t*
+; [esp + 8] = stack_state_t*
 global resume_user_process_asm_
 resume_user_process_asm_:
-.restore_regs:
-    mov ebx, [esp + 08]
-    mov ecx, [esp + 12]
-    mov edx, [esp + 16]
-    mov esi, [esp + 20]
-    mov edi, [esp + 24]
-    mov ebp, [esp + 28]
-
 .prepare_jump:
-    ;push ss
-    mov eax, [esp + 52]
-    push eax
-	;push esp
-    mov eax, [esp + 52]
-    push eax
-	;push eflags
-	mov eax, [esp + 52]
-	push eax
-    ; push cs
-    mov eax, [esp + 52]
-    push eax
-    ; push eip
-    mov eax, [esp + 52]
-    push eax
+    mov eax, [esp + 08] ; get stack_state ptr
 
-    mov eax, [esp + 24] ; restore eax
+    ;push ss
+    mov ebx, [eax + 20]
+    push ebx
+	;push esp
+    mov ebx, [eax + 16]
+    push ebx
+	;push eflags
+	mov ebx, [eax + 12]
+	push ebx
+    ; push cs
+    mov ebx, [eax + 08]
+    push ebx
+    ; push eip
+    mov ebx, [eax + 04]
+    push ebx
+
+.restore_regs:
+    mov eax, [esp + 24] ; get cpu_state ptr
+
+    mov ebx, [eax + 04]
+    mov ecx, [eax + 08]
+    mov edx, [eax + 12]
+    mov esi, [eax + 16]
+    mov edi, [eax + 20]
+    mov ebp, [eax + 24]
+    mov eax, [eax + 00]
 
 .jump:
 	iret
