@@ -159,6 +159,7 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(libdynlk) $(programs)
 
 run: $(OS_ISO)
 	@#	bochs -f bochsrc.txt -q
+	@mdeltree -i disk_image.img ::/downloads/ # make sure downloads folder is cleanup up
 	@echo "$(CYAN)Initializing NAT$(WHITE)"
 	@sudo ./utils/setup.sh
 	qemu-system-i386 -device isa-debug-exit -cdrom $(OS_ISO) -drive file=disk_image.img,format=raw,if=ide,index=0 -boot d -netdev tap,id=net0,ifname=tap0,script=no,downscript=no  -device e1000,netdev=net0  -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap || true
