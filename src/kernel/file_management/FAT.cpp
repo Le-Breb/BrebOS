@@ -201,9 +201,9 @@ uint* FAT_drive::get_free_clusters(size_t n) const
         for (uint j = 0; j < num_fat_entries_per_sector; j++)
             if (!fat_buf[j]) // Found a free entry
             {
-                if (sector == first_data_sector && j < 2)
+                if (sector == first_fat_sector && j < 2)
                     continue; // Reserved entries
-                uint cluster_number = (sector - first_fat_sector) * num_fat_entries_per_sector + j + 2;
+                uint cluster_number = (sector - first_fat_sector) * num_fat_entries_per_sector + j;
                 free_cluster_list[free_clusters_found++] = cluster_number;
 
                 // Enough clusters found
@@ -313,7 +313,7 @@ void* FAT_drive::load_file_to_buf(const char* file_name, Dentry* parent_dentry, 
         return b;
 
     delete[] b;
-    return nullptr;
+    ERR_RET_NULL("Could not read all file")
 }
 
 uint FAT_drive::get_child_dir_entry_id(const Dentry& parent_dentry, const char* name, ctx& ctx)
