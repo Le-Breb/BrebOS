@@ -72,8 +72,11 @@ Socket::Socket(uint8_t peer_ip[IPV4_ADDR_LEN], uint16_t peer_port) : hostname(nu
     sockets.add(this);
 }
 
-Socket::Socket(const char* hostname, uint16_t peer_port) : Socket(Network::null_ip, peer_port)
+Socket::Socket(const char* hostname, uint16_t peer_port) : Socket(strcmp("host", hostname) ? Network::null_ip :
+    Network::gateway_ip, peer_port)
 {
+    if (!strcmp("host", hostname))
+        return;
     auto hostname_len = strlen(hostname);
     this->hostname = new char[hostname_len + 1];
     memcpy((char*)this->hostname, hostname, hostname_len + 1);

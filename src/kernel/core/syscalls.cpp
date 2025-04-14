@@ -218,8 +218,10 @@ void Syscall::cat(cpu_state_t* cpu_state)
 void Syscall::wget(const cpu_state_t* cpu_state)
 {
     const char* uri = (const char*)cpu_state->edi;
-    auto http = new HTTP{uri, 80};  // Todo: add a system to free this object
-    http->send_get("/");
+    const char* hostname = (const char*)cpu_state->esi;
+    const auto port = (uint16_t)cpu_state->edx;
+    auto http = new HTTP{hostname, port};  // Todo: add a system to free this object
+    http->send_get(uri);
 }
 
 void Syscall::mkdir(cpu_state_t* cpu_state)
