@@ -74,6 +74,10 @@ void Keyboard::handle_char(unsigned char c)
         // Select the correct character based on the shift key
         if (shift_hold)
         {
+            if (c >= 'a' && c <= 'z')
+                c -= 32; // Convert to uppercase
+            else if (c >= 'A' && c <= 'Z')
+                c += 32; // Convert to lowercase
             switch (c)
             {
                 case '1':
