@@ -54,7 +54,6 @@ int parse_args(int argc, char* argv[], wget_args& args)
 
     args.hostname = "www.example.com";
     args.port = 80;
-    args.uri = argv[argc - 1];
 
     if (!strcmp(argv[argc - 1], "-H"))
     {
@@ -82,19 +81,21 @@ int parse_args(int argc, char* argv[], wget_args& args)
                 args.port = (uint16_t)atoi(argv[cargc++]);
                 break;
             default:
-                if (strlen(opt) != 2 || opt[0] != '-')
-                {
-                    fprintf(stderr, "Invalid option: %s\n", opt);
-                    return PARSING_ERR;
-                }
+                fprintf(stderr, "Invalid option: %s\n", opt);
+                return PARSING_ERR;
         }
     }
 
     if (cargc != argc - 1)
     {
-        fprintf(stderr, "Invalid option: %s\n", argv[cargc]);
+        if (cargc == argc)
+            show_usage();
+        else
+          fprintf(stderr, "Invalid option: %s\n", argv[cargc]);
         return PARSING_ERR;
     }
+
+    args.uri = argv[argc - 1];
 
     return PARSING_OK;
 }
