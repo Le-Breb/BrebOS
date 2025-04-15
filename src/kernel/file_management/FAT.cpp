@@ -509,12 +509,12 @@ Dentry* FAT_drive::mkdir(Dentry& parent_dentry, const char* entry_name)
 
     // Create dot and dot dot entries
     DirEntry dot_entry(".", DIRECTORY, dir_content_cluster, 0);
-    DirEntry dot_dot_entry("..", DIRECTORY, parent_sector, 0);
+    DirEntry dot_dot_entry("..", DIRECTORY, parent_cluster, 0);
     memcpy(&entries[0], &dot_entry, sizeof(DirEntry));
     memcpy(&entries[1], &dot_dot_entry, sizeof(DirEntry));
 
     // Write them to disk
-    if (write_data_sectors(1, dir_content_cluster, buf, ctx))
+    if (write_data_sectors(1, dir_content_sector, buf, ctx))
         ERR_RET_NULL("Drive write error")
 
     return dir_entry_to_dentry(new_entry, &parent_dentry, entry_name);
