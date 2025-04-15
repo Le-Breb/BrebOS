@@ -228,8 +228,11 @@ Dentry* VFS::browse_to(const char* path, Dentry* starting_point, bool print_erro
 	// Browse cached dentries as much as possible
 	while (token)
 	{
-		Dentry* next_entry = get_cached_dentry(dentry, token);
-		if (!next_entry) //  Nothing ffound in cache
+		Dentry* next_entry = strcmp(".", token) ?
+			strcmp("..", token) ?
+				get_cached_dentry(dentry, token) : dentry->parent
+			: dentry;
+		if (!next_entry) //  Nothing found in cache
 			break;
 
 		dentry = next_entry;
@@ -267,7 +270,9 @@ Dentry* VFS::browse_to(const char* path, Dentry* starting_point, bool print_erro
 			delete[] p;
 			return nullptr;
 		}
-		dentry = fs->get_child_dentry(*dentry, token);
+		dentry = strcmp(".", token) ?
+			strcmp("..", token) ? fs->get_child_dentry(*dentry, token) : dentry->parent
+			: dentry;
 		if (!dentry)
 		{
 			if (print_errors)
