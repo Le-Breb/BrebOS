@@ -95,9 +95,7 @@ RELEASE = 1 make run
 Now that you have the kernel up and running, you can start executing commands. The kernel uses a shell made as a school
 project (42sh, made in groups of of 4 students), that I adapted to make it work in BrebOS. <br>
 The shell language is a subset of the linux one. You should be able to use every basic shell syntax that exists in
-linux, provided that (1) it does not require heavy kernel support that i did not add yet (redirections for example)
-and (2) that the keyboard driver lets you type the characters you need 😆. For example, to date, you cannot type '$'
-nor '(', so say bye bye to variables and subshells 😢 <br>
+linux, provided that it does not require heavy kernel support that i did not add yet (redirections for example)<br>
 Here is the list of the main commands (you can view the entire list by browsing at `BrebOS/src/programs`):
 
 | Command                      | Description                                                                                    |
