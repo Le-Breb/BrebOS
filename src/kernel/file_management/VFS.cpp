@@ -218,6 +218,13 @@ bool VFS::add_to_path(const char* path)
 
 Dentry* VFS::browse_to(const char* path, Dentry* starting_point, bool print_errors)
 {
+#define exit_free() delete[] p;
+#define err(...) {\
+	if (print_errors) \
+		printf_error(__VA_ARGS__); \
+	exit_free() \
+	return nullptr; \
+}
 	char* svptr; // Internal pointer for strok_r calls
 
 	char* p = new char[strlen(path) + 1];
@@ -243,49 +250,29 @@ Dentry* VFS::browse_to(const char* path, Dentry* starting_point, bool print_erro
 
 	// Pure virtual node, cannot do anything there
 	if (!dentry->inode->superblock)
-	{
-		if (print_errors)
-			printf_error("Path targets full virtual Inode");
-		delete[] p;
-		return nullptr;
-	}
+		err("%s targets full virtual Inode", path);
 
 	// We browsed up to a file's cached dentry but we haven't finished browsing (i.e., part of the path targets a file)
 	if (token && dentry->inode->type != Inode::Dir)
-	{
-		if (print_errors)
-			printf_error("%s no such directory", path);
-		delete[] p;
-		return nullptr;
-	}
+		err("%s no such directory", path);
 
 	// Full path cannot be fully browsed only using cached entries, now manually browse
 	FS* fs = dentry->inode->superblock->get_fs();
 	while (token)
 	{
 		if (dentry->inode->type != Inode::Dir)
-		{
-			if (print_errors)
-				printf_error("%s not a directory", path);
-			delete[] p;
-			return nullptr;
-		}
+			err("%s not a directory", path);
 		dentry = strcmp(".", token) ?
 			strcmp("..", token) ? fs->get_child_dentry(*dentry, token) : dentry->parent
 			: dentry;
 		if (!dentry)
-		{
-			if (print_errors)
-				printf_error("%s no such directory", path);
-			delete[] p;
-			return nullptr;
-		}
+			err("%s no such directory", path);
 
 		if (!cache_dentry(dentry))
 		{
 			if (print_errors)
 				irrecoverable_error("Too many inodes or dentries");
-			delete[] p;
+			exit_free()
 			return nullptr;
 		}
 
