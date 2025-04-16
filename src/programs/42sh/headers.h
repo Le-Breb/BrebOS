@@ -20,6 +20,7 @@
 #include <kstring.h>
 //#include <sys/stat.h>
 //#include <sys/wait.h>
+#include <kwait.h>
 #include <kunistd.h>
 
 #include "ast/ast.h"

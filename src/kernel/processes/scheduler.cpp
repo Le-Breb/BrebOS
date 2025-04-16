@@ -12,6 +12,7 @@ uint Scheduler::pid_pool = 0;
 pid_t Scheduler::running_process = MAX_PROCESSES;
 queue<pid_t, MAX_PROCESSES>* Scheduler::ready_queue{};
 queue<pid_t, MAX_PROCESSES>* Scheduler::waiting_queue{};
+list<pid_t> Scheduler::process_waiting_list[MAX_PROCESSES] = {};
 Process* Scheduler::processes[MAX_PROCESSES];
 
 Process* Scheduler::get_next_process()
@@ -34,6 +35,8 @@ Process* Scheduler::get_next_process()
             relinquish_first_ready_process();
         else if (proc->is_waiting_key())
             set_first_ready_process_asleep_waiting_key_press();
+        else if (proc->is_waiting_program())
+            set_first_ready_process_asleep_waiting_process();
         else
         {
             // Update queue
@@ -58,13 +61,31 @@ void Scheduler::relinquish_first_ready_process()
 {
     pid_t pid = running_process = ready_queue->dequeue();
     Process* proc = processes[pid];
-    free_terminated_process(*proc);
+
+    // If process has no parent, free it rith away
+    if (proc->ppid == proc->pid)
+    {
+        free_terminated_process(*proc);
+        return;
+    }
+
+    // Nobody is waiting for this process to terminate, thus it's a zombie
+    if (process_waiting_list[pid].size() == 0)
+        proc->set_flag(P_ZOMBIE);
+    else // Someone is waiting for this process to end, thus we can actually end it
+        free_terminated_process(*proc);
 }
 
 void Scheduler::set_first_ready_process_asleep_waiting_key_press()
 {
     pid_t pid = running_process = ready_queue->dequeue();
     waiting_queue->enqueue(pid);
+}
+
+void Scheduler::set_first_ready_process_asleep_waiting_process()
+{
+    running_process = ready_queue->dequeue();
+    // Nothing else to do, the rest has already been done in register_process_wait
 }
 
 [[noreturn]] void Scheduler::schedule()
@@ -93,6 +114,14 @@ void Scheduler::set_first_ready_process_asleep_waiting_key_press()
 
     // Use process' address space
     Interrupts::change_pdt_asm(PHYS_ADDR(Memory::page_tables, (uint) &p->pdt));
+
+    // Write some values in process' address space (likely syscall return values)
+    for (auto i = 0; i < p->values_to_write.size(); i++)
+    {
+        auto pair = *p->values_to_write.get(i);
+        *(int*)pair.address = pair.value;
+    }
+    p->values_to_write.clear();
 
     // Jump
     if (p->flags & P_SYSCALL_INTERRUPTED)
@@ -235,12 +264,11 @@ void Scheduler::create_kernel_init_process()
     kernel->pdt = *Memory::pdt;
     uint pid = get_free_pid();
     kernel->pid = pid;
+    kernel->ppid = pid; // No parent
 
     if (pid == MAX_PROCESSES)
-    {
         irrecoverable_error("No more PID available. Cannot finish kernel initialization.");
-        System::shutdown();
-    }
+
     processes[pid] = kernel;
     set_process_ready(kernel);
     running_process = pid;
@@ -248,6 +276,31 @@ void Scheduler::create_kernel_init_process()
 
 void Scheduler::free_terminated_process(Process& p)
 {
+    if (!(p.flags & P_TERMINATED) && !(p.flags & P_ZOMBIE))
+        irrecoverable_error("Trying to free a process which is not terminated. PID: %d, flags: %d", p.pid, p.flags);
+
+    // Resume all processes that were waiting for this process to terminate
+    pid_t pid = p.pid;
+    pid_t curr_pid = get_running_process_pid();
+    for (auto i = 0; i < process_waiting_list[pid].size(); i++)
+    {
+        auto waiting_process_pid = *process_waiting_list[pid].get(i);
+        auto waiting_process = processes[waiting_process_pid];
+
+        // Resume process, unless it's the current process, in which case it is already in the ready queue
+        if (waiting_process_pid != curr_pid)
+            ready_queue->enqueue(waiting_process_pid);
+        // waitpid return value
+        auto wstatus_addr = (int*)waiting_process->cpu_state.esi;
+        if (wstatus_addr)
+            waiting_process->values_to_write.add({wstatus_addr, processes[pid]->ret_val});
+        // Clear flag
+        waiting_process->flags &= ~P_WAITING_PROCESS;
+        // Remove child
+        waiting_process->children.remove(pid);
+    }
+    process_waiting_list[pid].clear();
+
     release_pid(p.pid);
     processes[p.pid] = nullptr;
     delete &p;
@@ -263,4 +316,20 @@ void Scheduler::stop_kernel_init_process()
     // Thus, we manually trigger the timer interrupt in order to call the scheduler,
     // which will free the process and select another one to be executed
     TRIGGER_TIMER_INTERRUPT
+}
+
+bool Scheduler::register_process_wait(pid_t waiting_process, pid_t waiting_for_process)
+{
+    if (!processes[waiting_for_process])
+        return false;
+
+    process_waiting_list[waiting_for_process].add(waiting_process);
+
+    // Waiting for a zombie, ie a process waiting for someone to wait for it -> free it
+    if (processes[waiting_for_process]->flags & P_ZOMBIE)
+        free_terminated_process(*processes[waiting_for_process]);
+    else
+        processes[waiting_process]->set_flag(P_WAITING_PROCESS);
+
+    return true;
 }

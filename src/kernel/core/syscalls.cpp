@@ -9,11 +9,16 @@
 #include "../network/DNS.h"
 #include "../network/HTTP.h"
 
-void Syscall::start_process(const cpu_state_t* cpu_state)
+void Syscall::start_process(Process* p)
 {
     // Load child process and set it ready
-    Scheduler::exec((char*)cpu_state->edi, Scheduler::get_running_process_pid(), (int)cpu_state->esi,
-                    (const char**)cpu_state->edx);
+    auto cpu = &p->cpu_state;
+    cpu->eax = Scheduler::exec((char*)cpu->edi, Scheduler::get_running_process_pid(), (int)cpu->esi,
+                    (const char**)cpu->edx);
+
+    // Register child on success
+    if (cpu->eax != (uint)-1)
+        p->children.add(cpu->eax);
 }
 
 void Syscall::get_pid()
@@ -153,7 +158,7 @@ void Syscall::get_key()
             break;
         case 3:
             PIC::disable_preemptive_scheduling(); // Is it necessary ? Isn't timer interrupt disabled when this runs ?
-            start_process(cpu_state);
+            start_process(p);
             PIC::enable_preemptive_scheduling();
             break;
         case 4:
@@ -184,6 +189,9 @@ void Syscall::get_key()
             break;
         case 13:
             FB::clear_screen();
+            break;
+        case 14:
+            wait_pid(p);
             break;
         case 15:
             wget(&p->cpu_state);
@@ -262,4 +270,11 @@ void Syscall::getenv(Process* p)
     }
     else
         p->cpu_state.eax = 0;
+}
+
+__attribute__((no_instrument_function)) // May not return, which would mess up profiling data
+void Syscall::wait_pid(Process* p)
+{
+    Scheduler::register_process_wait(p->get_pid(), p->cpu_state.edi);
+    TRIGGER_TIMER_INTERRUPT
 }

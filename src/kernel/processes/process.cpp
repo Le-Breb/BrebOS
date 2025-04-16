@@ -70,6 +70,8 @@ Process::~Process()
         Memory::free_page(pte[i] / PDT_ENTRIES, pte[i] % PDT_ENTRIES);
     }
 
+    children.clear();
+
     delete pte;
     delete elf_dependence_list;
 
@@ -171,6 +173,11 @@ bool Process::is_terminated() const
 bool Process::is_waiting_key() const
 {
     return flags & P_WAITING_KEY;
+}
+
+bool Process::is_waiting_program() const
+{
+    return flags & P_WAITING_PROCESS;
 }
 
 uint Process::get_symbol_runtime_address(const struct elf_dependence_list* dep, const char* symbol_name)

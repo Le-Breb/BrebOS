@@ -2,6 +2,7 @@
 #include <kstdio.h>
 #include <ksyscalls.h>
 #include <kunistd.h>
+#include <kwait.h>
 
 #define MAX_CMD_LEN 100
 
@@ -58,7 +59,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 
 		int argc = 2;
 		const char* argv[2] = { "-c", cmd };
-		exec("42sh", argc, (const char**) argv);
+		pid_t pid = exec("42sh", argc, (const char**) argv);
+        [[maybe_unused]] int wstatus = 0;
+        waitpid(pid, &wstatus);
 
 		clear_cmd();
 	}

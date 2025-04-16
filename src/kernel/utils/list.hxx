@@ -1,3 +1,5 @@
+#pragma once
+
 #include "list.h"
 
 #include <kstddef.h>
@@ -218,13 +220,12 @@ void list<E>::clear()
 {
     Node<E>* current = head;
 
-    do
+    while (current != nullptr)
     {
         Node<E>* tmp = current;
         current = current->next;
         delete tmp;
-    }
-    while (current != nullptr);
+    };
 
     head = nullptr;
 
@@ -315,16 +316,3 @@ bool list<E>::contains(E e)
     }
     return false;
 }
-
-// Compile the types of lists we will need here to other files can use them
-class Socket;
-class HTTP;
-class FS;
-class ELF;
-#include "../processes/process.h"
-template class list<FS*>;
-template class list<ELF*>;
-template class list<uint>;
-template class list<Socket*>;
-template class list<HTTP*>;
-template class list<Process::env_var*>;

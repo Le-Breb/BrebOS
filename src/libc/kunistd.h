@@ -12,6 +12,8 @@ pid_t getpid();
 /** Executes a program
  *
  * @param path program path
+ *
+ * @return the pid of the created program, -1 on failure
  */
-void exec(const char* path, int argc, const char** argv);
+pid_t exec(const char* path, int argc, const char** argv);
 #endif //KUNISTD_H

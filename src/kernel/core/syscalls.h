@@ -9,10 +9,10 @@ class Syscall
 {
 	/**
 	 * Starts a GRUB module as a child of current process
-	 * @param cpu_state CPU state
+	 * @param p CPU state
 	 * @param stack_state Stack state
 	 */
-	static void start_process(const cpu_state_t* cpu_state);
+	static void start_process(Process* p);
 
 	/**
 	 * Returns current process' PID  */
@@ -62,6 +62,8 @@ class Syscall
 	static void cat(cpu_state_t* cpu_state);
 
 	static void wget(const cpu_state_t* cpu_state);
+
+	static void wait_pid(Process* p);
 
 	static void getenv(Process* p);
 public:

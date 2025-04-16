@@ -28,8 +28,19 @@ static int run_execvp(char **args)
     int argc = 0;
     while (args[argc] != NULL)
         argc++;
-    exec(args[0], --argc, (const char**)(args + 1));
-    return 0;
+    pid_t pid = exec(args[0], --argc, (const char**)(args + 1));
+    if (pid == -1)
+    {
+      	fprintf(stderr, "42sh: exec error\n");
+        return 127;
+    }
+    int wstatus;
+    if (waitpid(pid, &wstatus) == -1)
+    {
+      	fprintf(stderr, "42sh: exec error\n");
+        return 127;
+    }
+    return wstatus;
 #pragma endregion
 }
 

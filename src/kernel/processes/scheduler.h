@@ -19,6 +19,7 @@ private:
 	static pid_t running_process;
 	static queue<pid_t, MAX_PROCESSES>* ready_queue;
 	static queue<pid_t, MAX_PROCESSES>* waiting_queue;
+	static list<pid_t> process_waiting_list[MAX_PROCESSES];
 	static Process* processes[MAX_PROCESSES];
 
 	/**
@@ -72,6 +73,8 @@ public:
 
 	static void set_first_ready_process_asleep_waiting_key_press();
 
+	static void set_first_ready_process_asleep_waiting_process();
+
 	static void relinquish_first_ready_process();
 
 	/**
@@ -79,6 +82,8 @@ public:
 	 * in the waiting queue
 	 */
 	static void stop_kernel_init_process();
+
+	static bool register_process_wait(pid_t waiting_process, pid_t waiting_for_process);
 };
 
 

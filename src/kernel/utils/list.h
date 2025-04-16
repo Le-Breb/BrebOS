@@ -121,4 +121,6 @@ public:
 	[[nodiscard]] E* get(int index) const;
 };
 
+#include "list.hxx"
+
 #endif /* !INCLUDE_LIST_H */

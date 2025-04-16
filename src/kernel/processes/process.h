@@ -17,6 +17,10 @@ typedef uint pid_t;
 #define P_SYSCALL_INTERRUPTED 2
 // Process is waiting for a key press
 #define P_WAITING_KEY 4
+// Process is waiting for another process to terminate
+#define P_WAITING_PROCESS 8
+// Process is terminated, but not freed for its parent to get info from it
+#define P_ZOMBIE 16
 
 #define SEGFAULT_RET_VAL 255
 #define GPF_RET_VAL 254
@@ -33,6 +37,12 @@ class Process
 	{
 		const char* name;
 		char* value;
+	};
+
+	struct address_val_pair
+	{
+		void* address;
+		int value;
 	};
 
 private:
@@ -62,6 +72,9 @@ public:
 	cpu_state_t k_cpu_state{}; // Syscall handler registers
 	stack_state_t stack_state{}; // Execution context
 	stack_state_t k_stack_state{}; // Syscall handler execution context
+
+	list<pid_t> children{};
+	list<address_val_pair> values_to_write{}; // list of values that need to be written in process address space
 
 private:
 	/** Page aligned allocator **/
@@ -127,6 +140,9 @@ public:
 
 	/** Checks whether the program is waiting for a key press */
 	[[nodiscard]] bool is_waiting_key() const;
+
+	/** Checks whether the program is waiting for another program to terminate */
+	[[nodiscard]] bool is_waiting_program() const;
 
 	/**
 	* Computes the runtime address of a symbol referenced by an ELF.
