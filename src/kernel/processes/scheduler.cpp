@@ -10,8 +10,8 @@
 
 uint Scheduler::pid_pool = 0;
 pid_t Scheduler::running_process = MAX_PROCESSES;
-ready_queue_t Scheduler::ready_queue;
-ready_queue_t Scheduler::waiting_queue;
+queue<pid_t, MAX_PROCESSES>* Scheduler::ready_queue{};
+queue<pid_t, MAX_PROCESSES>* Scheduler::waiting_queue{};
 Process* Scheduler::processes[MAX_PROCESSES];
 
 Process* Scheduler::get_next_process()
@@ -23,11 +23,11 @@ Process* Scheduler::get_next_process()
     while (p == nullptr)
     {
         // Nothing to run
-        if (ready_queue.count == 0)
+        if (ready_queue->empty())
             return nullptr;
 
         // Get process
-        pid_t pid = running_process = ready_queue.arr[ready_queue.start];
+        pid_t pid = running_process = ready_queue->getFirst();
         Process* proc = processes[pid];
 
         if (proc->is_terminated())
@@ -44,10 +44,9 @@ Process* Scheduler::get_next_process()
             }
             else
             {
-                ready_queue.arr[ready_queue.start] = MAX_PROCESSES;
-                ready_queue.arr[(ready_queue.start + ready_queue.count) % MAX_PROCESSES] = proc->get_pid();
+                ready_queue->dequeue();
+                ready_queue->enqueue(proc->get_pid());
                 RESET_QUANTUM(proc);
-                ready_queue.start = (ready_queue.start + 1) % MAX_PROCESSES;
             }
         }
     }
@@ -57,21 +56,15 @@ Process* Scheduler::get_next_process()
 
 void Scheduler::relinquish_first_ready_process()
 {
-    pid_t pid = running_process = ready_queue.arr[ready_queue.start];
+    pid_t pid = running_process = ready_queue->dequeue();
     Process* proc = processes[pid];
     free_terminated_process(*proc);
-    ready_queue.start = (ready_queue.start + 1) % MAX_PROCESSES;
-    ready_queue.count--;
 }
 
 void Scheduler::set_first_ready_process_asleep_waiting_key_press()
 {
-    pid_t pid = running_process = ready_queue.arr[ready_queue.start];
-    ready_queue.arr[ready_queue.start] = MAX_PROCESSES;
-    ready_queue.start = (ready_queue.start + 1) % MAX_PROCESSES;
-    ready_queue.count--;
-    waiting_queue.arr[(waiting_queue.start + waiting_queue.count) % MAX_PROCESSES] = pid;
-    waiting_queue.count++;
+    pid_t pid = running_process = ready_queue->dequeue();
+    waiting_queue->enqueue(pid);
 }
 
 [[noreturn]] void Scheduler::schedule()
@@ -80,7 +73,7 @@ void Scheduler::set_first_ready_process_asleep_waiting_key_press()
 
     if (p == nullptr)
     {
-        if (waiting_queue.count == 0)
+        if (waiting_queue->empty())
             System::shutdown();
         else
         {
@@ -113,7 +106,7 @@ void Scheduler::set_first_ready_process_asleep_waiting_key_press()
 
 void Scheduler::start_module(uint module, pid_t ppid, int argc, const char** argv)
 {
-    if (ready_queue.count == MAX_PROCESSES)
+    if (ready_queue->full())
     {
         printf_error("Max process are already running");
         return;
@@ -137,7 +130,7 @@ void Scheduler::start_module(uint module, pid_t ppid, int argc, const char** arg
 
 int Scheduler::exec(const char* path, pid_t ppid, int argc, const char** argv)
 {
-    if (ready_queue.count == MAX_PROCESSES)
+    if (ready_queue->full())
     {
         printf_error("Max process are already running");
         return -1;
@@ -183,18 +176,22 @@ void Scheduler::init()
 {
     PIT::init();
     Process::init();
-    for (uint i = 0; i < MAX_PROCESSES; ++i)
-    {
-        ready_queue.arr[i] = MAX_PROCESSES;
-        waiting_queue.arr[i] = MAX_PROCESSES;
-        processes[i] = nullptr;
-    }
-    ready_queue.start = ready_queue.count = 0;
+    memset(processes, 0, sizeof(processes));
+    // Those have to be pointers because they cannot be instantiated at program start since dynamic memory allocation
+    // is not available at this moment. However, it is ok to allocate them now.
+    ready_queue = new queue<pid_t, MAX_PROCESSES>();
+    waiting_queue = new queue<pid_t, MAX_PROCESSES>();
 
     // Create a process that represents the kernel itself
     // then continue kernel initialization with preemptive scheduling running
     create_kernel_init_process();
     PIC::enable_preemptive_scheduling();
+}
+
+void Scheduler::shutdown()
+{
+    delete ready_queue;
+    delete waiting_queue;
 }
 
 pid_t Scheduler::get_running_process_pid()
@@ -209,24 +206,20 @@ Process* Scheduler::get_running_process()
 
 void Scheduler::wake_up_key_waiting_processes(char key)
 {
-    for (uint i = 0; i < waiting_queue.count; ++i)
+    for (uint i = 0; i < waiting_queue->getCount(); ++i)
     {
         // Add process to ready queue and remove it from waiting queue
-        pid_t pid = waiting_queue.arr[(waiting_queue.start + waiting_queue.count - 1) % MAX_PROCESSES];
-        waiting_queue.arr[(waiting_queue.start + waiting_queue.count - 1) % MAX_PROCESSES] = MAX_PROCESSES;
-        ready_queue.arr[(ready_queue.start + ready_queue.count++) % MAX_PROCESSES] = pid;
+        pid_t pid = waiting_queue->dequeue();
+        ready_queue->enqueue(pid);
 
         processes[pid]->cpu_state.eax = (uint)key; // Return key
         processes[pid]->flags &= ~P_WAITING_KEY; // Clear flag
     }
-
-    // Clear waiting queue
-    waiting_queue.count = 0;
 }
 
 void Scheduler::set_process_ready(Process* p)
 {
-    ready_queue.arr[(ready_queue.start + ready_queue.count++) % MAX_PROCESSES] = p->pid;
+    ready_queue->enqueue(p->pid);
     RESET_QUANTUM(processes[p->pid]);
 }
 
@@ -256,7 +249,6 @@ void Scheduler::create_kernel_init_process()
 void Scheduler::free_terminated_process(Process& p)
 {
     release_pid(p.pid);
-    ready_queue.arr[ready_queue.start] = MAX_PROCESSES;
     processes[p.pid] = nullptr;
     delete &p;
 }

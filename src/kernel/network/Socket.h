@@ -7,8 +7,6 @@
 #include "TCP.h"
 #include "../utils/list.h"
 
-#define WAITING_QUEUE_CAPACITY 10
-
 class Socket
 {
 public:

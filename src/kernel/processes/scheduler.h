@@ -2,17 +2,12 @@
 #define CUSTOM_OS_SCHEDULER_H
 
 #include "process.h"
+#include "../utils/queue.h"
 
 // Maximum concurrent processes. Limit defined by size of pid_pool
 #define MAX_PROCESSES (sizeof(uint) * 8)
 
 #define RESET_QUANTUM(p) (p->quantum = p->priority * CLOCK_TICK_MS)
-
-typedef struct
-{
-	pid_t arr[MAX_PROCESSES];
-	uint start, count;
-} ready_queue_t;
 
 class Scheduler
 {
@@ -22,8 +17,8 @@ private:
 	static uint pid_pool;
 
 	static pid_t running_process;
-	static ready_queue_t ready_queue;
-	static ready_queue_t waiting_queue;
+	static queue<pid_t, MAX_PROCESSES>* ready_queue;
+	static queue<pid_t, MAX_PROCESSES>* waiting_queue;
 	static Process* processes[MAX_PROCESSES];
 
 	/**
@@ -62,6 +57,8 @@ public:
 	static int exec(const char* path, pid_t ppid, int argc, const char** argv);
 
 	static void init();
+
+	static void shutdown();
 
 	static pid_t get_running_process_pid();
 

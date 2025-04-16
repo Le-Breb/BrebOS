@@ -5,6 +5,7 @@
 #include <kstdio.h>
 #include "../file_management/FAT.h"
 #include "../network/Socket.h"
+#include "../processes/scheduler.h"
 #include "../utils/profiling.h"
 
 extern "C" uint is_running_in_qemu_asm();
@@ -16,6 +17,7 @@ extern "C" uint is_running_in_qemu_asm();
 #endif
 	FAT_drive::shutdown();
 	Socket::close_all_connections();
+	Scheduler::shutdown();
 	uint qemu = is_running_in_qemu_asm();
 
 	if (qemu)
