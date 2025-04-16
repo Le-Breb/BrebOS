@@ -31,5 +31,13 @@ void exec_switch(EXEC_PROTOTYPE)
     if (!ast || c->shall_exit || c->break_count)
         return;
 
+#pragma region k_adapted
+    if (ast->type == AST_SUBSHELL || ast->type == AST_REDIR || ast->type == AST_PIPE)
+    {
+        errx(1, "You just used a 42sh fonctionnality that is not yet ported to BrebOS, sorry");
+        return;
+    }
+#pragma endregion
+
     funs[ast->type](ast, c);
 }
