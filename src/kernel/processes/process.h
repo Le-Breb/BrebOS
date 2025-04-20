@@ -68,6 +68,7 @@ private:
 	static list<env_var*> env_list; // Todo: make env var process specific
 public:
 	uint lowest_free_pe;
+	uint free_bytes = 0;
 
 	struct elf_dependence_list* elf_dependence_list;
 	cpu_state_t cpu_state{}; // Registers

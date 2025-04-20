@@ -314,16 +314,18 @@ namespace Memory
         uint allocated_byte_size = num_pages_requested * PAGE_SIZE;
         h->s.size = allocated_byte_size / sizeof(memory_header);
 
-        uint free_bytes_save = free_bytes;
-        free_bytes = -allocated_byte_size; // Prevent free from freeing pages we just allocated
+        auto free_bytes_ptr = user_process ? &user_process->free_bytes : &free_bytes;
+        uint free_bytes_save = *free_bytes_ptr;
+        *free_bytes_ptr = -allocated_byte_size; // Prevent free from freeing pages we just allocated
         free((void*)(h + 1), user_process);
-        free_bytes = free_bytes_save + allocated_byte_size;
+        *free_bytes_ptr = free_bytes_save + allocated_byte_size;
 
         return user_process ? user_process->freep : freep;
     }
 
-    void free_release_pages(Process* user_process) // Todo: Add per process free_bytes
+    void free_release_pages(Process* user_process)
     {
+        auto free_bytes_ptr = user_process ? &user_process->free_bytes : &free_bytes;
         memory_header** beg = user_process ? &user_process->freep : &freep;
         memory_header* p = *beg;
         for (memory_header* c = (*beg)->s.ptr;; p = c, c = c->s.ptr)
@@ -392,7 +394,7 @@ namespace Memory
                 free_page(aligned_addr, user_process);
             }
 
-            free_bytes -= aligned_free_bytes; // Update free_bytes
+            *free_bytes_ptr -= aligned_free_bytes; // Update free_bytes
         }
 
         // printf("\n====\n");
@@ -553,6 +555,7 @@ void* malloc(uint n, Process* user_process)
     memory_header** free_list_beg = user_process ? &user_process->freep : &freep;
     memory_header* p = *free_list_beg;
     unsigned nunits = (n + sizeof(memory_header) - 1) / sizeof(memory_header) + 1;
+    auto free_bytes_ptr = user_process ? &user_process->free_bytes : &free_bytes;
 
     for (c = p->s.ptr;; p = c, c = c->s.ptr)
     {
@@ -566,7 +569,7 @@ void* malloc(uint n, Process* user_process)
                 c += c->s.size;
                 c->s.size = nunits;
             }
-            free_bytes -= nunits * sizeof(memory_header);
+            *free_bytes_ptr -= nunits * sizeof(memory_header);
             *free_list_beg = p;
             return (void*)(c + 1);
         }
@@ -611,7 +614,8 @@ void free(void* ptr, Process* user_process)
 
     memory_header* c = (memory_header*)ptr - 1;
     memory_header* p;
-    free_bytes += c->s.size * sizeof(memory_header);
+    auto free_bytes_ptr = user_process ? &user_process->free_bytes : &free_bytes;
+    *free_bytes_ptr += c->s.size * sizeof(memory_header);
     memory_header** free_list_beg = user_process ? &user_process->freep : &freep;
 
     // Loop until p < c < p->s.ptr
@@ -643,7 +647,7 @@ void free(void* ptr, Process* user_process)
     *free_list_beg = p;
 
     // Free pages
-    if (free_bytes >= FREE_THRESHOLD)
+    if (*free_bytes_ptr >= FREE_THRESHOLD)
         free_release_pages(user_process);
 }
 
