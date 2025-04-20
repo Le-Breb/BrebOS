@@ -84,6 +84,8 @@ public:
 	static void stop_kernel_init_process();
 
 	static bool register_process_wait(pid_t waiting_process, pid_t waiting_for_process);
+
+	static pid_t fork(Process* p);
 };
 
 

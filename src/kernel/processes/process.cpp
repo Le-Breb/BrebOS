@@ -67,7 +67,7 @@ Process::~Process()
     {
         if (!pte[i])
             continue;
-        Memory::free_page(pte[i] / PDT_ENTRIES, pte[i] % PDT_ENTRIES);
+        Memory::free_page(i * PAGE_SIZE, this);
     }
 
     children.clear();
@@ -81,8 +81,8 @@ Process::~Process()
 }
 
 Process::Process(uint num_pages, ELF* elf, Elf32_Addr runtime_load_address, const char* path) : quantum(0), priority(0),
-    num_pages(num_pages), pte((uint*)calloc(num_pages, sizeof(uint))),
-    pid(MAX_PROCESSES), ppid(MAX_PROCESSES), k_stack_top(-1), flags(P_READY),
+    num_pages(num_pages), pte((uint*)::calloc(num_pages, sizeof(uint))),
+    pid(MAX_PROCESSES), ppid(MAX_PROCESSES), k_stack_top(-1), flags(P_READY), lowest_free_pe(num_pages),
     elf_dependence_list(new struct elf_dependence_list(path, elf, runtime_load_address))
 {
 }
@@ -96,42 +96,22 @@ void Process::terminate(int ret_val)
 
 void* Process::malloc(uint n)
 {
-    void* mem = user_malloc(n);
-
-    if (mem)
-        allocs.addFirst((uint)mem);
-
-    return mem;
+    return ::malloc(n, this);
 }
 
 void* Process::calloc(size_t nmemb, size_t size)
 {
-    void* mem = user_calloc(nmemb, size);
-
-    if (mem)
-        allocs.addFirst((uint)mem);
-
-    return mem;
+    return ::calloc(nmemb, size, this);
 }
 
-void* Process::realloc(void* ptr, [[maybe_unused]] size_t size)
+void* Process::realloc(void* ptr, size_t size)
 {
-    if (!allocs.remove((uint)ptr))
-        printf_error("Process dyn memory ptr not found in process allocs");
-
-    void* mem = user_realloc(ptr, size);
-    if (mem)
-        allocs.addFirst((uint)mem);
-    return mem;
+    return ::realloc(ptr, size, this);
 }
 
 void Process::free(void* ptr)
 {
-    if (!ptr)
-        return;
-    if (!allocs.remove((uint)ptr))
-        printf_error("Process dyn memory ptr not found in process allocs");
-    user_free(ptr);
+    ::free(ptr, this);
 }
 
 void* Process::operator new(size_t size)
@@ -202,7 +182,7 @@ void Process::init()
 {
     // As the time I write this, strdup cannot be used as it uses malloc and malloc uses an interrupt in libc,
     // and firing interrupts while in kernel is not a great idea
-    // So instead we gotta use this wondergul syntax...
+    // So instead we gotta use this wonderful syntax...
     auto pwd = new env_var{};
     pwd->name = new char[4];
     memcpy((char*)pwd->name, "PWD", 4);
@@ -250,4 +230,20 @@ void Process::set_env(const char* name, const char* value)
     }
 
     env_list.add(new env_var{strdup(name), strdup(value)});
+}
+
+Process* Process::fork(pid_t child_pid)
+{
+    auto child = new Process(num_pages, elf_dependence_list->elf, 0, nullptr);
+    memcpy(child->page_tables, page_tables, sizeof(page_tables));
+    memcpy(child->pdt.entries, pdt.entries, sizeof(pdt.entries));
+    child->quantum = quantum;
+    child->priority = priority;
+    memcpy(child->pte, pte, sizeof(uint) * num_pages);
+    child->pid = child_pid;
+    child->ppid = pid;
+
+    child->flags = flags;
+
+    return child;
 }

@@ -37,7 +37,7 @@ static int run_execvp(char **args)
     int wstatus;
     if (waitpid(pid, &wstatus) == -1)
     {
-      	fprintf(stderr, "42sh: exec error\n");
+      	fprintf(stderr, "42sh: exec (waitpid) error\n");
         return 127;
     }
     return wstatus;

@@ -45,11 +45,13 @@ class Process
 		int value;
 	};
 
-private:
+public: // Those fields have to be first for alignment constraints
 	// Process page tables. Process can use all virtual addresses below the kernel virtual location at pde 768
 	Memory::page_table_t page_tables[768]{};
 	Memory::pdt_t pdt{}; // process page directory table
+	uint sys_page_tables_correspondence[768]{};
 
+private:
 	uint quantum, priority;
 
 	uint num_pages; // Num pages over which the process code spans, including unmapped pages
@@ -61,12 +63,12 @@ private:
 	uint k_stack_top; // Top of syscall handlers' stack
 	uint flags; // Process state
 
-	list<uint> allocs{}; // list of memory blocks allocated by the process
-
 	int ret_val{};
 
 	static list<env_var*> env_list; // Todo: make env var process specific
 public:
+	uint lowest_free_pe;
+
 	struct elf_dependence_list* elf_dependence_list;
 	cpu_state_t cpu_state{}; // Registers
 	cpu_state_t k_cpu_state{}; // Syscall handler registers
@@ -75,6 +77,9 @@ public:
 
 	list<pid_t> children{};
 	list<address_val_pair> values_to_write{}; // list of values that need to be written in process address space
+
+	Memory::memory_header mem_base{.s = {&mem_base, 0}};
+	Memory::memory_header* freep = &mem_base; // list of memory blocks allocated by the process
 
 private:
 	/** Page aligned allocator **/
@@ -159,6 +164,8 @@ public:
 	static char* get_env(const char* name);
 
 	static void set_env(const char* name, const char* value);
+
+	Process* fork(pid_t child_pid);
 };
 
 #endif //INCLUDE_PROCESS_H

@@ -6,6 +6,7 @@
 #include "ELF.h"
 #include "ELF_defines.h"
 #include "process.h"
+#include "scheduler.h"
 
 #define LIBDYNLK_PATH "/bin/libdynlk.so"
 #define LIBC_PATH "/bin/libc.so"
@@ -25,10 +26,11 @@ struct init_fini_info
 class ELFLoader
 {
 private:
+    Process* current_process;
     Process* proc;
     init_fini_info init_fini;
 
-    ELFLoader() : proc(nullptr)
+    ELFLoader() : current_process(Scheduler::get_running_process()), proc(nullptr)
     {
         init_fini = init_fini_info();
     }
@@ -61,7 +63,7 @@ private:
      * Allocate a process containing an ELF
      * @return process struct, NULL if an error occurred
      */
-    static Process* init_process(ELF* elf, const char* path);
+    Process* init_process(ELF* elf, const char* path) const;
 
     /**
      * Load part of an ELF segment into the process address space and maps it.
@@ -69,11 +71,11 @@ private:
      * @param bytes_ptr pointer to bytes to copy
      * @param n num bytes to copy
      * @param h PT_LOAD segment header
-     * @param pte_offset offset to consider when referring to process pte, ie index of ELF first PTE entry
+     * @param lib_runtime_load_address runtime load address of the library
      * @param copied_bytes counter of bytes processed in current segment
      */
     void
-    copy_elf_subsegment_to_address_space(void* bytes_ptr, uint n, Elf32_Phdr* h, uint& pte_offset,
+    copy_elf_subsegment_to_address_space(const void* bytes_ptr, uint n, Elf32_Phdr* h, uint lib_runtime_load_address,
                                          uint& copied_bytes) const;
 
     /**
@@ -102,9 +104,9 @@ private:
      * Maps the segments of an ELF into the process' virtual address space
      *
      * @param load_elf ELF to map
-     * @param pte_offset number of pages already occupied in process' virtual address space
+     * @param runtime_load_address runtime load address of the lib
      */
-    void map_elf(ELF* load_elf, uint pte_offset) const;
+    void map_elf(const ELF* load_elf, Elf32_Addr runtime_load_address) const;
 
     /**
      * Create a process to run an ELF executable
@@ -123,7 +125,7 @@ private:
      * @return ESP in process address space ready to be used
      */
     static size_t write_args_to_stack(size_t stack_top_v_addr, int argc, const char** argv, list<Elf32_Addr>
-                                      init_array, list<Elf32_Addr> fini_array);
+                                      init_array, list<Elf32_Addr> fini_array) ;
 
     /**
      * Process setup last phase: once the main ELF has been loaded, this function executes the remaining setup actions:
@@ -137,6 +139,18 @@ private:
 
     static const char** add_argv0_to_argv(const char** argv, const char* path, int& argc) ;
 
+    /**
+     * Converts an address in runtime address space to an address in current address space
+     * @param runtime_address address in runtime address space
+     * @return corresponding load address
+     */
+    [[nodiscard]] Elf32_Addr runtime_address_to_load_address(Elf32_Addr runtime_address) const;
+
+    /**
+     * Offsets the memory mapping of the loaded ELF by offset pages to the left
+     * @param offset mapping offset
+     */
+    void offset_memory_mapping(uint offset) const;
 public:
     /**
      * Create a process from an ELF loaded in memory

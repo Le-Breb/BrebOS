@@ -208,6 +208,9 @@ void Syscall::get_key()
         case 19:
             getenv(p);
             break;
+        case 20:
+            fork(p);
+            break;
         default:
             printf_error("Received unknown syscall id: %u", cpu_state->eax);
             break;
@@ -270,6 +273,11 @@ void Syscall::getenv(Process* p)
     }
     else
         p->cpu_state.eax = 0;
+}
+
+void Syscall::fork(Process* p)
+{
+    Scheduler::fork(p);
 }
 
 __attribute__((no_instrument_function)) // May not return, which would mess up profiling data

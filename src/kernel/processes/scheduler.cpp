@@ -121,6 +121,8 @@ void Scheduler::set_first_ready_process_asleep_waiting_process()
         auto pair = *p->values_to_write.get(i);
         *(int*)pair.address = pair.value;
     }
+    // Safe to clear even though we use process address space since this data belongs to the kernel, and thus is in
+    // higher half, which is shared by processes address spaces
     p->values_to_write.clear();
 
     // Jump
@@ -261,7 +263,15 @@ void Scheduler::create_kernel_init_process()
 {
     Process* kernel = new Process(0, nullptr, -1, "");
     kernel->priority = 2;
-    kernel->pdt = *Memory::pdt;
+
+    // Copy kernel lower half
+    memcpy(kernel->page_tables, Memory::page_tables, sizeof(Memory::page_table_t) * 768);
+    for (int i = 0; i < 768; ++i)
+        kernel->pdt.entries[i] = PHYS_ADDR(Memory::page_tables, (uint) &kernel->page_tables[i]) | PAGE_USER | PAGE_WRITE |
+            PAGE_PRESENT;
+    // Use kernel page tables for the rest
+    for (int i = 768; i < PDT_ENTRIES; ++i)
+        kernel->pdt.entries[i] = PHYS_ADDR(Memory::page_tables, (uint) &Memory::page_tables[i]) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
     uint pid = get_free_pid();
     kernel->pid = pid;
     kernel->ppid = pid; // No parent
@@ -332,4 +342,15 @@ bool Scheduler::register_process_wait(pid_t waiting_process, pid_t waiting_for_p
         processes[waiting_process]->set_flag(P_WAITING_PROCESS);
 
     return true;
+}
+
+pid_t Scheduler::fork([[maybe_unused]] Process* p)
+{
+    auto child_pid = get_free_pid();
+    if (child_pid == MAX_PROCESSES)
+        return -1;
+
+
+
+    return child_pid;
 }

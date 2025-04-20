@@ -19,18 +19,21 @@
 #define STACK_SIZE 4096
 #define KERNEL_VIRTUAL_BASE 0xC0000000
 
-#define FRAME_ID_ADDR(i) (i * PAGE_SIZE)
-#define VIRT_ADDR(pde, pte, offset) (pde << 22 | pte << 12 | offset)
-#define PTE_PHYS_ADDR(i) (FRAME_ID_ADDR((PDT_ENTRIES + i)))
-#define PTE_USED(i) (PTE(i) & PAGE_PRESENT)
-#define PTE(i) (page_tables[i / PDT_ENTRIES].entries[i % PDT_ENTRIES])
-#define FRAME_USED(i) frame_bitmap[i / 32] & (1 << (i % 32))
+#define INVALIDATE_PAGE(pde, pte) __asm__ volatile("invlpg (%0)" : : "r" (VIRT_ADDR(pde, pte, 0)));
+#define FRAME_ID_ADDR(i) ((i) * PAGE_SIZE)
+#define VIRT_ADDR(pde, pte, offset) ((pde) << 22 | (pte) << 12 | offset)
+#define PTE_PHYS_ADDR(i) (FRAME_ID_ADDR((PDT_ENTRIES + (i))))
+#define PTE_USED(page_tables, i) (PTE(page_tables, i) & PAGE_PRESENT)
+#define PTE(page_tables, i) (page_tables[(i) / PDT_ENTRIES].entries[(i) % PDT_ENTRIES])
+#define FRAME_USED(i) frame_to_page[i] != (uint)-1
 #define FRAME_FREE(i) !(FRAME_USED(i))
-#define MARK_FRAME_USED(i) frame_bitmap[i / 32] |= 1 << (i % 32)
-#define MARK_FRAME_FREE(i) frame_bitmap[i / 32] &= ~(1 << (i % 32))
-#define PHYS_ADDR(page_tables, virt_addr) ((page_tables[virt_addr >> 22].entries[(virt_addr >> 12) & 0x3FF] & ~0x3FF) | (virt_addr & 0xFFF))
+#define MARK_FRAME_USED(frame_id, page_id) frame_to_page[frame_id] = page_id
+#define MARK_FRAME_FREE(i) frame_to_page[i] = (uint)-1
+#define PHYS_ADDR(page_tables, virt_addr) ((page_tables[(virt_addr) >> 22].entries[((virt_addr) >> 12) & 0x3FF] & ~0x3FF) | ((virt_addr) & 0xFFF))
 
 //https://wiki.osdev.org/Paging
+
+class Process;
 
 namespace Memory
 {
@@ -111,16 +114,19 @@ namespace Memory
 
 	/**
 	 * Free a page
-	 * @param pde PDE
-	 * @param pte PTE
+	 * @param address address to free
+	 * @param user_process process to get the relevant address space to interpret the address
 	 */
-	void free_page(uint pde, uint pte);
+	void free_page(uint address, Process* user_process);
 
 	/** Get index of lowest free page id and update lowest_free_page to next free page id */
 	uint get_free_frame();
 
-	/** Get index of lowest free page entry id and update lowest_free_pe to next free page id */
+	/** Get index of lowest free page entry id in higher half and update lowest_free_pe to next free page id */
 	uint get_free_pe();
+
+	/** Get index of lowest free page entry id in lower half and update lowest_free_pe_user to next free page id */
+	uint get_free_pe_user();
 
 	/** Get pointer to top of kernel stack */
 	uint* get_stack_top_ptr();
@@ -131,6 +137,8 @@ namespace Memory
 	bool identity_map(uint addr, uint size);
 }
 
+class Process;
+
 /** Tries to allocate a contiguous block of memory
 	 *
 	 * @param n Size of the block in bytes
@@ -140,16 +148,15 @@ extern "C" void* malloc(uint n);
 
 extern "C" void* realloc(void* ptr, size_t size);
 
-void* user_realloc(void* ptr, size_t size);
-
 /** Tries to allocate a contiguous block of memory on pages marked with PAGE_USER
  *
  * @param n Size of the block in bytes
+ * @param user_process
  * @return Address of the beginning of allocated block if allocation was successful, NULL otherwise
  */
-void* user_malloc(uint n);
+void* malloc(uint n, Process* user_process);
 
-void* user_calloc(size_t nmemb, size_t size);
+void* calloc(size_t nmemb, size_t size, Process* user_process);
 
 extern "C" void* calloc(size_t nmemb, size_t size);
 
@@ -159,10 +166,13 @@ extern "C" void* calloc(size_t nmemb, size_t size);
  */
 extern "C" void free(void* ptr);
 
-/** Frees some memory allocated on pages with PAGE_USER
+/** Frees some process memory
  *
  * @param ptr Pointer to the memory block to free
+ * @param user_process
  */
-void user_free(void* ptr);
+void free(void* ptr, Process* user_process);
+
+void* realloc(void* ptr, size_t size, Process* user_process);
 
 #endif //INCLUDE_MEMORY_H

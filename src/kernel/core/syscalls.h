@@ -66,6 +66,8 @@ class Syscall
 	static void wait_pid(Process* p);
 
 	static void getenv(Process* p);
+
+	static void fork(Process *p);
 public:
 	/**
 	 * Handles a syscall
