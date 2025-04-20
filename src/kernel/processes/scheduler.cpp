@@ -113,7 +113,7 @@ void Scheduler::set_first_ready_process_asleep_waiting_process()
     GDT::set_tss_kernel_stack(p->k_stack_top);
 
     // Use process' address space
-    Interrupts::change_pdt_asm(PHYS_ADDR(Memory::page_tables, (uint) &p->pdt));
+    Interrupts::change_pdt_asm(PHYS_ADDR(Memory::page_tables, (uint) p->pdt));
 
     // Write some values in process' address space (likely syscall return values)
     for (auto i = 0; i < p->values_to_write.size(); i++)
@@ -261,17 +261,18 @@ void Scheduler::release_pid(pid_t pid)
 
 void Scheduler::create_kernel_init_process()
 {
-    Process* kernel = new Process(0, nullptr, -1, "");
-    kernel->priority = 2;
+    auto* kernel = new Process(0, nullptr, -1, "");
 
-    // Copy kernel lower half
-    memcpy(kernel->page_tables, Memory::page_tables, sizeof(Memory::page_table_t) * 768);
-    for (int i = 0; i < 768; ++i)
-        kernel->pdt.entries[i] = PHYS_ADDR(Memory::page_tables, (uint) &kernel->page_tables[i]) | PAGE_USER | PAGE_WRITE |
-            PAGE_PRESENT;
-    // Use kernel page tables for the rest
-    for (int i = 768; i < PDT_ENTRIES; ++i)
-        kernel->pdt.entries[i] = PHYS_ADDR(Memory::page_tables, (uint) &Memory::page_tables[i]) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
+    // Kernel process uses Memory::page_tables, Memory::pdt and has no need for sys_page_table_correspondence
+    Memory::freea(kernel->page_tables);
+    Memory::freea(kernel->pdt);
+    delete[] kernel->sys_page_tables_correspondence;
+    kernel->page_tables = Memory::page_tables;
+    kernel->pdt = Memory::pdt;
+    kernel->sys_page_tables_correspondence = nullptr;
+
+    kernel->priority = 10; // High priority, avoid useless dequeuing and enqueuing
+
     uint pid = get_free_pid();
     kernel->pid = pid;
     kernel->ppid = pid; // No parent
@@ -318,13 +319,19 @@ void Scheduler::free_terminated_process(Process& p)
 
 void Scheduler::stop_kernel_init_process()
 {
-    processes[0]->terminate(0);
+    // Prune kernel process from ready queue
+    for (size_t i = 0; i < ready_queue->getCount(); i++)
+    {
+        auto pid = ready_queue->dequeue();
+        if (pid != 0)
+            ready_queue->enqueue(pid);
+    }
 
     // We asked for termination of kernel init process.
     // It is this precise process running those instructions.
     // If we asked for its termination, then it shouldn't do anything more once marked terminated.
     // Thus, we manually trigger the timer interrupt in order to call the scheduler,
-    // which will free the process and select another one to be executed
+    // select another process to be executed
     TRIGGER_TIMER_INTERRUPT
 }
 

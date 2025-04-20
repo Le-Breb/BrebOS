@@ -75,6 +75,10 @@ Process::~Process()
     delete pte;
     delete elf_dependence_list;
 
+    Memory::freea(page_tables);
+    Memory::freea(pdt);
+    delete[] sys_page_tables_correspondence;
+
     flags |= P_TERMINATED;
 
     //printf_info("Process %u exited with code %d", pid, ret_val);
@@ -83,8 +87,14 @@ Process::~Process()
 Process::Process(uint num_pages, ELF* elf, Elf32_Addr runtime_load_address, const char* path) : quantum(0), priority(0),
     num_pages(num_pages), pte((uint*)::calloc(num_pages, sizeof(uint))),
     pid(MAX_PROCESSES), ppid(MAX_PROCESSES), k_stack_top(-1), flags(P_READY), lowest_free_pe(num_pages),
-    elf_dependence_list(new struct elf_dependence_list(path, elf, runtime_load_address))
+    elf_dependence_list(new struct elf_dependence_list(path, elf, runtime_load_address)),
+    page_tables((Memory::page_table_t*)Memory::malloca(768 * sizeof(Memory::page_table_t))),
+    pdt((Memory::pdt_t*)Memory::malloca(768 * sizeof(Memory::pdt_t))),
+    sys_page_tables_correspondence(new uint[768])
 {
+    memset(page_tables, 0, 768 * sizeof(Memory::page_table_t));
+    memset(pdt, 0, sizeof(Memory::pdt_t));
+    memset(sys_page_tables_correspondence, 0, 768 * sizeof(uint));
 }
 
 
@@ -112,27 +122,6 @@ void* Process::realloc(void* ptr, size_t size)
 void Process::free(void* ptr)
 {
     ::free(ptr, this);
-}
-
-void* Process::operator new(size_t size)
-{
-    return Memory::page_aligned_malloc(size);
-}
-
-void* Process::operator new[]([[maybe_unused]] size_t size)
-{
-    irrecoverable_error("Please do not use this operator");
-    return (void*)1;
-}
-
-void Process::operator delete(void* p)
-{
-    Memory::page_aligned_free(p);
-}
-
-void Process::operator delete[]([[maybe_unused]] void* p)
-{
-    irrecoverable_error("do not call this");
 }
 
 pid_t Process::get_pid() const
@@ -232,10 +221,10 @@ void Process::set_env(const char* name, const char* value)
     env_list.add(new env_var{strdup(name), strdup(value)});
 }
 
-Process* Process::fork(pid_t child_pid)
+Process* Process::fork([[maybe_unused]] pid_t child_pid)
 {
     auto child = new Process(num_pages, elf_dependence_list->elf, 0, nullptr);
-    memcpy(child->page_tables, page_tables, sizeof(page_tables));
+    /*memcpy(child->page_tables, page_tables, sizeof(page_tables));
     memcpy(child->pdt.entries, pdt.entries, sizeof(pdt.entries));
     child->quantum = quantum;
     child->priority = priority;
@@ -243,7 +232,7 @@ Process* Process::fork(pid_t child_pid)
     child->pid = child_pid;
     child->ppid = pid;
 
-    child->flags = flags;
+    child->flags = flags;*/
 
     return child;
 }

@@ -78,7 +78,7 @@ void Syscall::dynlk(const cpu_state_t* cpu_state)
     if (dep == nullptr)
     {
         printf_error("dynlk met unknown ELF");
-        return;
+        terminate_process(p, INIT_ERR_RET_VAL);
     }
     ELF* elf = dep->elf;
 

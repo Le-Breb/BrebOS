@@ -25,7 +25,7 @@
 #define PTE_PHYS_ADDR(i) (FRAME_ID_ADDR((PDT_ENTRIES + (i))))
 #define PTE_USED(page_tables, i) (PTE(page_tables, i) & PAGE_PRESENT)
 #define PTE(page_tables, i) (page_tables[(i) / PDT_ENTRIES].entries[(i) % PDT_ENTRIES])
-#define FRAME_USED(i) frame_to_page[i] != (uint)-1
+#define FRAME_USED(i) (frame_to_page[i] != (uint)-1)
 #define FRAME_FREE(i) !(FRAME_USED(i))
 #define MARK_FRAME_USED(frame_id, page_id) frame_to_page[frame_id] = page_id
 #define MARK_FRAME_FREE(i) frame_to_page[i] = (uint)-1
@@ -74,6 +74,8 @@ namespace Memory
 	extern page_table_t* page_tables;
 	extern GRUB_module* grub_modules;
 
+	void check();
+
 	/** Initialize memory, by referencing free pages, allocating pages to store 1024 pages tables
 	 *
 	 * @param minfo Multiboot info structure
@@ -89,14 +91,23 @@ namespace Memory
 	 *
 	 * @return Pointer to page-aligned memory
 	 */
-	void* page_aligned_malloc(uint size);
+	void* malloca(uint size);
+
+	/**
+	 * Allocates memory which is both virtually and physically contiguous.
+	 * Does not go through the classical malloc process, thus the resulting pointer cannot be given to free.
+	 * Memory acquired with this function has to be released by hand.
+	 * @param n Size of memory block to allocate
+	 * @return Pointer to beginning of memory block, nullptr on failure
+	 */
+	void* physically_aligned_malloc(uint n);
 
 	/**
 	 * Free page-aligned memory
 	 *
 	 * @param ptr Pointer to page-aligned memory to free
 	 */
-	void page_aligned_free(void* ptr);
+	void freea(void* ptr);
 
 	/** Allocate a page
 	 *
@@ -155,6 +166,8 @@ extern "C" void* realloc(void* ptr, size_t size);
  * @return Address of the beginning of allocated block if allocation was successful, NULL otherwise
  */
 void* malloc(uint n, Process* user_process);
+
+void* physically_aligned_malloc(uint n);
 
 void* calloc(size_t nmemb, size_t size, Process* user_process);
 

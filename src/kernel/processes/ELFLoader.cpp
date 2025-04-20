@@ -608,11 +608,11 @@ void ELFLoader::finalize_process_setup(int argc, const char** argv, pid_t pid, p
     // Set process pdt entries to target process page tables
     Memory::page_table_t* page_tables = Memory::page_tables;
     for (int i = 0; i < 768; ++i)
-        proc->pdt.entries[i] = PHYS_ADDR(page_tables, (uint) &proc->page_tables[i]) | PAGE_USER | PAGE_WRITE |
+        proc->pdt->entries[i] = PHYS_ADDR(page_tables, (uint) &proc->page_tables[i]) | PAGE_USER | PAGE_WRITE |
             PAGE_PRESENT;
     // Use kernel page tables for the rest
     for (int i = 768; i < PDT_ENTRIES; ++i)
-        proc->pdt.entries[i] = PHYS_ADDR(page_tables, (uint) &page_tables[i]) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
+        proc->pdt->entries[i] = PHYS_ADDR(page_tables, (uint) &page_tables[i]) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
     // Todo: remove PAGE_USER ? Seems impossible while allocate_page_user allocates above KERNEL_VIRTUAL_BASE
 
     // Map process stack at 0xBFFFFFFC = 0xCFFFFFFF - 4 at pde 767 and pte 1023, just below the kernel

@@ -151,7 +151,7 @@ void E1000::rxinit()
     // Allocate buffer for receive descriptors. For simplicity, in my case khmalloc returns a virtual address that is identical to it physical mapped address.
     // In your case you should handle virtual and physical addresses as the addresses passed to the NIC should be physical ones
 
-    ptr = (uint8_t*)malloc(sizeof(struct e1000_rx_desc) * E1000_NUM_RX_DESC + 16);
+    ptr = (uint8_t*)Memory::physically_aligned_malloc(sizeof(struct e1000_rx_desc) * E1000_NUM_RX_DESC + 16);
     memset(ptr, 0, E1000_NUM_RX_DESC * sizeof(struct e1000_rx_desc) + 16);
     ptr = (uint8_t*)(((uint)ptr + 15) & ~0xF); // 16 bits alignment, DMA requirement
 
@@ -159,9 +159,8 @@ void E1000::rxinit()
     for (int i = 0; i < E1000_NUM_RX_DESC; i++)
     {
         rx_descs[i] = (struct e1000_rx_desc*)((uint8_t*)descs + i * 16);
-        uint buf = ((uint)calloc(8192 + 16, 1) + 15) & ~0xF;
+        uint buf = ((uint)Memory::physically_aligned_malloc(8192 + 16) + 15) & ~0xF;
         rx_desc_virt_addresses[i] = (uint8_t*)buf;
-        //printf("%x | %x\n", buf, PHYS_ADDR(get_page_tables(), buf));
         rx_descs[i]->addr = PHYS_ADDR(Memory::page_tables, buf);
         rx_descs[i]->status = 0;
     }
@@ -189,7 +188,7 @@ void E1000::txinit()
     struct e1000_tx_desc* descs;
     // Allocate buffer for transmit descriptors. For simplicity, in my case khmalloc returns a virtual address that is identical to it physical mapped address.
     // In your case you should handle virtual and physical addresses as the addresses passed to the NIC should be physical ones
-    ptr = (uint8_t*)malloc(sizeof(struct e1000_tx_desc) * E1000_NUM_TX_DESC + 16);
+    ptr = (uint8_t*)Memory::physically_aligned_malloc(sizeof(struct e1000_tx_desc) * E1000_NUM_TX_DESC + 16);
     ptr = (uint8_t*)(((uint)ptr + 15) & ~0xF); // 16 bits alignment, DMA requirement
 
     descs = (struct e1000_tx_desc*)ptr;

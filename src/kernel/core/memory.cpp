@@ -404,6 +404,7 @@ namespace Memory
     {
         // Write PTE
         PTE(page_tables, page_id) = FRAME_ID_ADDR(frame_id) | PAGE_WRITE | PAGE_PRESENT;
+        __asm__ volatile("invlpg (%0)" : : "r" (frame_id * PAGE_SIZE));
         MARK_FRAME_USED(frame_id, page_id); // Internal allocation registration
     }
 
@@ -443,7 +444,7 @@ namespace Memory
         PTE(page_tables, page_id) |= PAGE_USER;
     }
 
-    void* page_aligned_malloc(uint size)
+    void* malloca(uint size)
     {
         uint total_size = size + sizeof(void*) + PAGE_SIZE;
         void* base_addr = malloc(total_size);
@@ -456,7 +457,7 @@ namespace Memory
         return (void*)aligned_addr;
     }
 
-    void page_aligned_free(void* ptr)
+    void freea(void* ptr)
     {
         void* base_addr = ((void**)ptr)[-1];
         free(base_addr);
@@ -501,6 +502,43 @@ namespace Memory
         }
 
         return true;
+    }
+
+    void* physically_aligned_malloc(uint n)
+    {
+        uint page_beg = (uint)-1;
+        uint frame_beg = (uint)-1;
+        uint num_pages = (n + PAGE_SIZE - 1) / PAGE_SIZE;
+        for (auto p = lowest_free_pe; p < PDT_ENTRIES * PT_ENTRIES; p++)
+        {
+            uint i;
+            for (i = 0; i < num_pages && !PTE_USED(page_tables, p + i); i++){};
+            if (i == num_pages)
+            {
+                page_beg = p;
+                break;
+            }
+        }
+        if (page_beg == (uint)-1)
+            return nullptr;
+
+        for (auto p = lowest_free_frame; p < PDT_ENTRIES * PT_ENTRIES; p++)
+        {
+            uint i;
+            for (i = 0; i < num_pages && !FRAME_USED(p + i); i++){};
+            if (i == num_pages)
+            {
+                frame_beg = p;
+                break;
+            }
+        }
+        if (frame_beg == (uint)-1)
+            return nullptr;
+
+        for (uint i = 0; i < num_pages; ++i)
+            allocate_page(frame_beg + i,  page_beg + i);
+
+        return (void*)(page_beg << 12);
     }
 }
 

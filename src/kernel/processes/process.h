@@ -45,12 +45,6 @@ class Process
 		int value;
 	};
 
-public: // Those fields have to be first for alignment constraints
-	// Process page tables. Process can use all virtual addresses below the kernel virtual location at pde 768
-	Memory::page_table_t page_tables[768]{};
-	Memory::pdt_t pdt{}; // process page directory table
-	uint sys_page_tables_correspondence[768]{};
-
 private:
 	uint quantum, priority;
 
@@ -82,19 +76,13 @@ public:
 	Memory::memory_header mem_base{.s = {&mem_base, 0}};
 	Memory::memory_header* freep = &mem_base; // list of memory blocks allocated by the process
 
+	// Those fields have to be first for alignment constraints
+	// Process page tables. Process can use all virtual addresses below the kernel virtual location at pde 768
+	Memory::page_table_t* page_tables;
+	Memory::pdt_t* pdt; // process page directory table
+	uint* sys_page_tables_correspondence;
+
 private:
-	/** Page aligned allocator **/
-	void* operator new(size_t size);
-
-	/** Page aligned allocator **/
-	void* operator new[](size_t size);
-
-	/** Page aligned free **/
-	void operator delete(void* p);
-
-	/** Page aligned free **/
-	void operator delete[](void* p);
-
 	/** Frees a terminated process */
 	~Process();
 
