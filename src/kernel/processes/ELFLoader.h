@@ -125,7 +125,7 @@ private:
      * @return ESP in process address space ready to be used
      */
     static size_t write_args_to_stack(size_t stack_top_v_addr, int argc, const char** argv, list<Elf32_Addr>
-                                      init_array, list<Elf32_Addr> fini_array) ;
+                                      init_array, list<Elf32_Addr> fini_array);
 
     /**
      * Process setup last phase: once the main ELF has been loaded, this function executes the remaining setup actions:
@@ -137,7 +137,7 @@ private:
      */
     void finalize_process_setup(int argc, const char** argv, pid_t pid, pid_t ppid) const;
 
-    static const char** add_argv0_to_argv(const char** argv, const char* path, int& argc) ;
+    static const char** add_argv0_to_argv(const char** argv, const char* path, int& argc);
 
     /**
      * Converts an address in runtime address space to an address in current address space
@@ -151,6 +151,7 @@ private:
      * @param offset mapping offset
      */
     void offset_memory_mapping(uint offset) const;
+
 public:
     /**
      * Create a process from an ELF loaded in memory

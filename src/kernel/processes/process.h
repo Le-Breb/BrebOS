@@ -115,7 +115,7 @@ public:
 
 	[[nodiscard]] void* calloc(size_t nmemb, size_t size);
 
-	[[nodiscard]] void* realloc(void * ptr, size_t size);
+	[[nodiscard]] void* realloc(void* ptr, size_t size);
 
 	/**
 	 * Contiguous heap memory free

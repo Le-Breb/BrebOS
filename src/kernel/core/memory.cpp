@@ -70,7 +70,7 @@ namespace Memory
      *
      * @param multibootInfo GRUB multiboot struct pointer
      */
-    void load_grub_modules(struct multiboot_info* multibootInfo);
+    void load_grub_modules(const struct multiboot_info* multibootInfo);
 
     /**
      * Free pages in large free memory blocks
@@ -121,7 +121,8 @@ namespace Memory
         }
         // Fill frame_to_page - page tables and frame_to_page
         for (size_t i = 0; i < PT_ENTRIES * 2; i++)
-            frame_to_page[PT_ENTRIES + i] = 769 * PDT_ENTRIES + i;    }
+            frame_to_page[PT_ENTRIES + i] = 769 * PDT_ENTRIES + i;
+    }
 
     void allocate_page_tables()
     {
@@ -193,7 +194,7 @@ namespace Memory
         lowest_free_pe_user = 1; // 0 is reserved for page faulting
     }
 
-    void load_grub_modules(multiboot_info* multibootInfo)
+    void load_grub_modules(const multiboot_info* multibootInfo)
     {
         grub_modules = (GRUB_module*)malloc(multibootInfo->mods_count * sizeof(GRUB_module));
 
@@ -226,7 +227,7 @@ namespace Memory
         loaded_grub_modules = multibootInfo->mods_count;
     }
 
-    void init(struct multiboot_info* multibootInfo)
+    void init(const struct multiboot_info* multibootInfo)
     {
         allocate_page_tables();
         freep = &base;
@@ -512,7 +513,9 @@ namespace Memory
         for (auto p = lowest_free_pe; p < PDT_ENTRIES * PT_ENTRIES; p++)
         {
             uint i;
-            for (i = 0; i < num_pages && !PTE_USED(page_tables, p + i); i++){};
+            for (i = 0; i < num_pages && !PTE_USED(page_tables, p + i); i++)
+            {
+            };
             if (i == num_pages)
             {
                 page_beg = p;
@@ -525,7 +528,9 @@ namespace Memory
         for (auto p = lowest_free_frame; p < PDT_ENTRIES * PT_ENTRIES; p++)
         {
             uint i;
-            for (i = 0; i < num_pages && !FRAME_USED(p + i); i++){};
+            for (i = 0; i < num_pages && !FRAME_USED(p + i); i++)
+            {
+            };
             if (i == num_pages)
             {
                 frame_beg = p;
@@ -536,7 +541,7 @@ namespace Memory
             return nullptr;
 
         for (uint i = 0; i < num_pages; ++i)
-            allocate_page(frame_beg + i,  page_beg + i);
+            allocate_page(frame_beg + i, page_beg + i);
 
         return (void*)(page_beg << 12);
     }
@@ -717,13 +722,13 @@ void* realloc(void* ptr, size_t size, Process* user_process)
     // Loop until p < h < p->s.ptr
     for (p = *free_list_beg; !(h > p && h < p->s.ptr); p = p->s.ptr)
         //Break when arrived at the end of the list and c goes before beginning or after end
-            if (p >= p->s.ptr && (h < p->s.ptr || h > p))
-                break;
+        if (p >= p->s.ptr && (h < p->s.ptr || h > p))
+            break;
 
     memory_header* next = p->s.ptr;
     auto block_content_byte_size = (h->s.size - 1) * sizeof(memory_header);
     // Check if there is a contiguous free block whose combined size if large enough to contain 'size' bytes
-    if  (h + h->s.size == next && block_content_byte_size + next->s.size * sizeof(memory_header) >= size)
+    if (h + h->s.size == next && block_content_byte_size + next->s.size * sizeof(memory_header) >= size)
     {
         h->s.size += next->s.size; // Add size of contiguous free block in current block
 
@@ -735,7 +740,7 @@ void* realloc(void* ptr, size_t size, Process* user_process)
     }
 
     // We have no choice left but to copy data in a newly allocated buffer and free original data
-    void *new_mem = malloc(size, user_process);
+    void* new_mem = malloc(size, user_process);
 
     if (!new_mem)
         return ptr; // If realloc fails, the man page indicates it should return the unchanged original buffer
@@ -744,7 +749,6 @@ void* realloc(void* ptr, size_t size, Process* user_process)
     free(ptr, user_process);
 
     return new_mem;
-
 }
 
 

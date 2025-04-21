@@ -358,6 +358,5 @@ pid_t Scheduler::fork([[maybe_unused]] Process* p)
         return -1;
 
 
-
     return child_pid;
 }

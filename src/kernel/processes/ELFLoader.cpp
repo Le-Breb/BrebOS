@@ -393,7 +393,8 @@ Process* ELFLoader::init_process(ELF* elf, const char* path) const
 }
 
 void
-ELFLoader::copy_elf_subsegment_to_address_space(const void* bytes_ptr, uint n, Elf32_Phdr* h, uint lib_runtime_load_address,
+ELFLoader::copy_elf_subsegment_to_address_space(const void* bytes_ptr, uint n, Elf32_Phdr* h,
+                                                uint lib_runtime_load_address,
                                                 uint& copied_bytes) const
 {
     auto runtime_address = lib_runtime_load_address + (h->p_vaddr + copied_bytes);
@@ -669,7 +670,7 @@ Elf32_Addr ELFLoader::runtime_address_to_load_address(Elf32_Addr runtime_address
 void ELFLoader::offset_memory_mapping(uint offset) const
 {
     // Offset pages
-    for (size_t i = 0; i< proc->num_pages; i++)
+    for (size_t i = 0; i < proc->num_pages; i++)
     {
         uint page_id = 767 * PT_ENTRIES + PT_ENTRIES - 1 - proc->num_pages + i;
         uint new_page_id = page_id - offset;
