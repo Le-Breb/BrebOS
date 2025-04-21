@@ -30,7 +30,6 @@ private:
     Process* current_process;
     init_fini_info init_fini;
     list<elf_dependence_list>* elf_dep_list;
-    uint* pte = nullptr;
     uint num_pages = 0;
     Memory::page_table_t* page_tables;
     Memory::pdt_t* pdt;

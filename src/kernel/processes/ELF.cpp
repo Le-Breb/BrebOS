@@ -113,9 +113,10 @@ ELF* ELF::is_valid(uint start_address, ELF_type expected_type)
 
         bool segment_write = h->p_flags & PF_W;
 
-        for (size_t j = 0; j < (h->p_memsz + PAGE_SIZE - 1) / PAGE_SIZE; ++j)
+        uint n_pages = (h->p_memsz + PAGE_SIZE - 1) >> 12;
+        for (size_t j = 0; j < n_pages; ++j)
         {
-            uint page_id = h->p_vaddr / PAGE_SIZE + j;
+            uint page_id = (h->p_vaddr >> 12) + j;
             if (segment_write)
             {
                 if (ro_pages[page_id])
@@ -360,5 +361,5 @@ size_t ELF::base_address() const
 
 size_t ELF::num_pages() const
 {
-    return (get_highest_runtime_addr() + PAGE_SIZE - 1) / PAGE_SIZE;
+    return (get_highest_runtime_addr() + PAGE_SIZE - 1) >> 12;
 }

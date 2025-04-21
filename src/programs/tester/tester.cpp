@@ -14,13 +14,13 @@ extern "C" int main(int argc, char** argv)
 	printf("PID:%i - Lazy binding functional: %s\n", pid2, pid == pid2 ? "True" : "False");
 
 	const size_t N = 4096000;
-	char* a = (char*) malloc(N);
+	char* a = (char*) calloc(N, 1);
     a[0] = 'h'; // Make sure we have access to the memory returned by malloc
     a[1] = 'e';
     a[2] = 'y';
     a[3] = '\0';
-	for (size_t i = 0; i < N; i++)
-		a[i] = 'h';
+	//for (size_t i = 0; i < N; i++)
+		//a[i] = 'h';
 	printf("Userland malloc functional: %s\n", a ? "True" : "False");
 	free(a);
 

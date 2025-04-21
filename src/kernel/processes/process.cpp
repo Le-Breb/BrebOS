@@ -65,14 +65,12 @@ Process::~Process()
     // Free process code
     for (uint i = 0; i < num_pages; ++i)
     {
-        if (!pte[i])
-            continue;
-        Memory::free_page(i * PAGE_SIZE, this);
+        if (PTE(page_tables, i))
+            Memory::free_page(i * PAGE_SIZE, this);
     }
 
     children.clear();
 
-    delete pte;
     delete elf_dep_list;
 
     Memory::freea(page_tables);
@@ -84,11 +82,11 @@ Process::~Process()
     //printf_info("Process %u exited with code %d", pid, ret_val);
 }
 
-Process::Process(uint num_pages, uint* pte, list<elf_dependence_list>* elf_dep_list, Memory::page_table_t* page_tables,
+Process::Process(uint num_pages, list<elf_dependence_list>* elf_dep_list, Memory::page_table_t* page_tables,
     Memory::pdt_t* pdt, uint* sys_page_tables_correspondence, stack_state_t* stack_state, uint priority, pid_t pid,
     pid_t ppid, Elf32_Addr k_stack_top) :
     quantum(0), priority(priority),
-    num_pages(num_pages), pte(pte),
+    num_pages(num_pages),
     pid(pid), ppid(ppid), k_stack_top(k_stack_top), flags(P_READY), lowest_free_pe(num_pages),
     elf_dep_list(elf_dep_list),
     page_tables(page_tables),
@@ -231,4 +229,19 @@ Process* Process::fork([[maybe_unused]] pid_t child_pid)
     child->flags = flags;*/
 
     return nullptr;
+}
+
+void Process::update_pte(uint pte, uint val, bool update_cache) const
+{
+    PTE(page_tables, pte) = val;
+    uint pde = pte >> 10;
+    if (!pdt->entries[pde])
+    {
+        pdt->entries[pde] = PHYS_ADDR(Memory::page_tables, (uint) &page_tables[pde]) | PAGE_USER | PAGE_WRITE |
+            PAGE_PRESENT;
+        if (update_cache)
+            Memory::reload_cr3_asm();
+    }
+    else if (update_cache)
+        INVALIDATE_PAGE(pde, pte);
 }

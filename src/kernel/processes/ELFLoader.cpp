@@ -6,14 +6,11 @@
 #include "scheduler.h"
 
 ELFLoader::ELFLoader(): current_process(Scheduler::get_running_process()), elf_dep_list(new list<::elf_dependence_list>),
-page_tables((Memory::page_table_t*)Memory::malloca(768 * sizeof(Memory::page_table_t))),
+page_tables((Memory::page_table_t*)Memory::calloca(768, sizeof(Memory::page_table_t))),
 pdt((Memory::pdt_t*)Memory::malloca(768 * sizeof(Memory::pdt_t))),
-sys_page_tables_correspondence(new uint[768])
+sys_page_tables_correspondence((uint*)calloc(768, sizeof(uint)))
 {
     init_fini = init_fini_info();
-    memset(sys_page_tables_correspondence, 0, 768 * sizeof(uint));
-    memset(page_tables, 0, 768 * sizeof(Memory::page_table_t));
-    memset(pdt, 0, sizeof(Memory::pdt_t));
 }
 
 ELFLoader::~ELFLoader()
@@ -22,7 +19,6 @@ ELFLoader::~ELFLoader()
         return;
 
     delete elf_dep_list;
-    delete[] pte;
     Memory::freea(page_tables);
     Memory::freea(pdt);
     delete[] sys_page_tables_correspondence;
@@ -61,7 +57,10 @@ bool ELFLoader::dynamic_loading(ELF* elf)
     // Get needed lib name and check it is not missing
     char* lib_name = elf->lib_name;
     if (strcmp(lib_name, OS_LIB) != 0)
+    {
         printf_error("Missing library: %s\n", lib_name);
+        return false;
+    }
 
     // Ensure dynamic symbols are supported
     uint dynsym_num_entries = elf->dynsym_hdr->sh_size / elf->dynsym_hdr->sh_entsize;
@@ -221,23 +220,19 @@ bool ELFLoader::alloc_elf_memory(ELF& elf)
         if (h->p_type != PT_LOAD)
             continue;
 
-        uint num_segment_pages = (h->p_memsz + PAGE_SIZE - 1) / PAGE_SIZE;
+        uint num_segment_pages = (h->p_memsz + PAGE_SIZE - 1) >> 12;
         for (size_t j = 0; j < num_segment_pages; ++j)
         {
-            uint runtime_page_id = h->p_vaddr / PAGE_SIZE + j;
+            uint runtime_page_id = (h->p_vaddr >> 12) + j;
             uint pte_id = num_pages + runtime_page_id;
-            if (pte[pte_id])
+            if (PTE(page_tables, pte_id))
                 continue;
             uint pe = Memory::get_free_pe_user(); // Get PTE id
-            pte[pte_id] = pe; // Reference PTE
             Memory::allocate_page_user(Memory::get_free_frame(), pe); // Allocate page in kernel address space
 
             // Map page in current process' address space
             uint page_id = (767 * PT_ENTRIES + PT_ENTRIES - 1 - lib_num_code_pages + runtime_page_id);
-            uint pde = page_id / PT_ENTRIES;
-            uint pte = page_id % PT_ENTRIES;
-            current_process->page_tables[pde].entries[pte] = PTE(Memory::page_tables, pe);
-            INVALIDATE_PAGE(pde, pte);
+            current_process->update_pte(page_id, PTE(Memory::page_tables, pe), true);
         }
     }
     num_pages += lib_num_code_pages;
@@ -321,14 +316,14 @@ void ELFLoader::map_elf(const ELF* load_elf, Elf32_Addr runtime_load_address) co
         Elf32_Phdr* h = &load_elf->prog_hdrs[k];
         if (h->p_type != PT_LOAD)
             continue;
-        uint num_pages = (h->p_memsz + PAGE_SIZE - 1) / PAGE_SIZE;
+        uint num_pages = (h->p_memsz + PAGE_SIZE - 1) >> 12;
 
         // Map code
         for (uint i = 0; i < num_pages; i++)
         {
             Elf32_Addr runtime_address = runtime_load_address + h->p_vaddr + i * PAGE_SIZE;
-            uint runtime_page_id = runtime_address / PAGE_SIZE;
-            uint page_id = runtime_address_to_load_address(runtime_address) / PAGE_SIZE;
+            uint runtime_page_id = runtime_address >> 12;
+            uint page_id = runtime_address_to_load_address(runtime_address) >> 12;
             uint pde = runtime_page_id / PT_ENTRIES;
             uint pte = runtime_page_id % PT_ENTRIES;
             page_tables[pde].entries[pte] = PTE(current_process->page_tables, page_id);
@@ -439,7 +434,7 @@ Process* ELFLoader::build_process(int argc, const char** argv, pid_t pid, pid_t 
     auto k_stack_top = finalize_process_setup(argc, argv);
 
     used = true;
-    return new Process(num_pages, pte, elf_dep_list, page_tables, pdt, sys_page_tables_correspondence, &stack_state, priority, pid, ppid, k_stack_top);
+    return new Process(num_pages, elf_dep_list, page_tables, pdt, sys_page_tables_correspondence, &stack_state, priority, pid, ppid, k_stack_top);
 }
 
 Elf32_Addr ELFLoader::finalize_process_setup(int argc, const char** argv)
@@ -471,10 +466,11 @@ Elf32_Addr ELFLoader::finalize_process_setup(int argc, const char** argv)
     // Entries 768 to 1024 point to kernel page tables, so that kernel is mapped. Moreover, syscall handlers
     // will not need to switch to kernel pdt to make changes in kernel memory as it is mapped the same way
     // in every process' PDT
-    // Set process pdt entries to target process page tables
-    for (int i = 0; i < 768; ++i)
+    auto num_used_paged_tables = (num_pages + PT_ENTRIES - 1)  / PT_ENTRIES;
+    for (size_t i = 0; i < num_used_paged_tables; ++i)
         pdt->entries[i] = PHYS_ADDR(Memory::page_tables, (uint) &page_tables[i]) | PAGE_USER | PAGE_WRITE |
             PAGE_PRESENT;
+    memset(pdt->entries + num_used_paged_tables, 0, PDT_ENTRIES - num_used_paged_tables);
     // Use kernel page tables for the rest
     for (int i = 768; i < PDT_ENTRIES; ++i)
         pdt->entries[i] = PHYS_ADDR(Memory::page_tables, (uint) &Memory::page_tables[i]) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
@@ -484,6 +480,8 @@ Elf32_Addr ELFLoader::finalize_process_setup(int argc, const char** argv)
     if (page_tables[767].entries[1023] != 0)
         printf_error("Process kernel page entry is not empty");
     page_tables[767].entries[1023] = PTE(Memory::page_tables, p_stack_pe_id);
+    pdt->entries[767] = PHYS_ADDR(Memory::page_tables, (uint) &page_tables[767]) | PAGE_USER | PAGE_WRITE |
+            PAGE_PRESENT;
 
     // Setup PCB
     //proc->stack_state.eip = 0;
@@ -525,7 +523,7 @@ const char** ELFLoader::add_argv0_to_argv(const char** argv, const char* path, i
 
 Elf32_Addr ELFLoader::runtime_address_to_load_address(Elf32_Addr runtime_address) const
 {
-    uint page_sub = num_pages - runtime_address / PAGE_SIZE;
+    uint page_sub = num_pages - (runtime_address >> 12);
     uint pde = (767 - page_sub / PT_ENTRIES);
     uint pte = (PT_ENTRIES - 1) - page_sub % PT_ENTRIES;
     uint off = runtime_address % PAGE_SIZE;
@@ -535,33 +533,19 @@ Elf32_Addr ELFLoader::runtime_address_to_load_address(Elf32_Addr runtime_address
 
 void ELFLoader::offset_memory_mapping(uint offset)
 {
-    // Adjust pte
-    uint* new_pte = (uint*)calloc((num_pages + offset), sizeof(uint));
-    memcpy(new_pte, pte, num_pages * sizeof(uint));
-    delete pte;
-    pte = new_pte;
-
     // Offset pages
     for (size_t i = 0; i < num_pages; i++)
     {
         uint page_id = 767 * PT_ENTRIES + PT_ENTRIES - 1 - num_pages + i;
         uint new_page_id = page_id - offset;
 
-        PTE(current_process->page_tables, new_page_id) = PTE(current_process->page_tables, page_id);
+        current_process->update_pte(new_page_id, PTE(current_process->page_tables, page_id), true);
     }
     // Zero out 'offset' pages on the right
     for (size_t i = 0; i < offset; i++)
     {
         uint page_id = 767 * PT_ENTRIES + PT_ENTRIES - 1 - offset + i;
-        PTE(current_process->page_tables, page_id) = 0;
-    }
-    // Invalidate pages' cache
-    for (size_t i = 0; i < num_pages + offset; i++)
-    {
-        uint page_id = 767 * PT_ENTRIES + PT_ENTRIES - 1 - num_pages - offset + i;
-        uint pde = page_id / PT_ENTRIES;
-        uint pte = page_id % PT_ENTRIES;
-        INVALIDATE_PAGE(pde, pte);
+        current_process->update_pte(page_id, 0, true);
     }
 }
 

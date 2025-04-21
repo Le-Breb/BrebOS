@@ -46,6 +46,11 @@ void Interrupts::page_fault_handler(stack_state_t* stack_state)
 	uint addr; // Address of the fault
 	__asm__ volatile("mov %%cr2, %0" : "=r"(addr)); // Get addr from CR2
 
+	// If the fault is handled, then it's not an error, simpy return and resume execution.
+	if (Memory::page_fault_handler(Scheduler::get_running_process(), addr))
+		return;
+
+	// Fault is an error, display debug info and kill process
 	uint err = stack_state->error_code;
 
 	printf_error("Page fault at address 0x%x caused by instruction at 0x%x", addr, stack_state->eip);

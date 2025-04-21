@@ -49,7 +49,6 @@ private:
 	uint quantum, priority;
 
 	uint num_pages; // Num pages over which the process code spans, including unmapped pages
-	uint* pte; // Array of pte where the process code is loaded to
 
 	pid_t pid; // PID
 	pid_t ppid; // Parent PID
@@ -86,7 +85,7 @@ private:
 	/** Frees a terminated process */
 	~Process();
 
-	Process(uint num_pages, uint* pte, list<elf_dependence_list>* elf_dep_list, Memory::page_table_t* page_tables,
+	Process(uint num_pages, list<elf_dependence_list>* elf_dep_list, Memory::page_table_t* page_tables,
 		Memory::pdt_t* pdt, uint* sys_page_tables_correspondence, stack_state_t* stack_state, uint priority, pid_t pid,
 		pid_t ppid, Elf32_Addr k_stack_top);
 
@@ -157,6 +156,14 @@ public:
 	static void set_env(const char* name, const char* value);
 
 	Process* fork(pid_t child_pid);
+
+	/**
+	 * Updates a page table entry.
+	 * @param pte page id
+	 * @param val new page entry value
+	 * @param update_cache whether TLB cache should be updated after applying the update
+	 */
+	void update_pte(uint pte, uint val, bool update_cache) const;
 };
 
 #endif //INCLUDE_PROCESS_H
