@@ -25,45 +25,44 @@ struct init_fini_info
 
 class ELFLoader
 {
+    friend class Process;
 private:
     Process* current_process;
-    Process* proc;
     init_fini_info init_fini;
+    list<elf_dependence_list>* elf_dep_list;
+    uint* pte = nullptr;
+    uint num_pages = 0;
+    Memory::page_table_t* page_tables;
+    Memory::pdt_t* pdt;
+    uint* sys_page_tables_correspondence;
+    stack_state_t stack_state{};
+    bool used = false;
 
-    ELFLoader() : current_process(Scheduler::get_running_process()), proc(nullptr)
-    {
-        init_fini = init_fini_info();
-    }
+    ELFLoader();
+    ~ELFLoader();
 
     /**
     * Sets up a dynamically linked process
-    * @param start_address ELF start address
     * @param elf process' main ELF
     * @return process set up, NULL if an error occurred
     */
-    bool dynamic_loading(uint start_address, ELF* elf);
+    bool dynamic_loading(ELF* elf);
 
-    /**
+    /*/**
     * Load a lib in a process' address soace
     * @param path GRUB modules
     * @param lib_dynlk_runtime_entry_point
     * @param runtime_load_address address where lib is loaded in runtime address space
     * @return libdynlk runtime entry point address
-    */
-    ELF* load_lib(const char* path, void* lib_dynlk_runtime_entry_point, Elf32_Addr& runtime_load_address);
+    #1#
+    ELF* load_lib(const char* path, void* lib_dynlk_runtime_entry_point, Elf32_Addr& runtime_load_address);*/
 
     /**
      * Allocate space for libydnlk and add it to a process' address space
-     * @param lib_elf library elf
+     * @param elf library elf
      * @return boolean indicating success state
      */
-    bool alloc_and_add_lib_pages_to_process(ELF& lib_elf) const;
-
-    /**
-     * Allocate a process containing an ELF
-     * @return process struct, NULL if an error occurred
-     */
-    Process* init_process(ELF* elf, const char* path) const;
+    bool alloc_elf_memory(ELF& elf);
 
     /**
      * Load part of an ELF segment into the process address space and maps it.
@@ -88,10 +87,12 @@ private:
 
     /**
      * Load ELF file code and data into a process' address space and maps it
-     * @param load_elf ELF to load
-     * @param elf_start_address start address of ELF
+     * @param path ELF to load
+     * @param expected_type
+     * @param lib_dynlk_runtime_entry_point
+     * @return runtime load address of the ELF
      */
-    Elf32_Addr load_elf(ELF* load_elf, uint elf_start_address);
+    bool load_elf(const char* path, ELF_type expected_type, void* lib_dynlk_runtime_entry_point);
 
     /**
      * Process relocations of an ELF.
@@ -113,7 +114,7 @@ private:
      *
      * @return program's process
      */
-    Process* process_from_elf(uint start_address, int argc, const char** argv, pid_t pid, pid_t ppid, const char* path);
+    Process* build_process(int argc, const char** argv, pid_t pid, pid_t ppid, const char* path, uint);
 
     /**
      * Writes argc, argv array pointer, argv pointer array and argv contents to stack
@@ -132,10 +133,8 @@ private:
      * setup process PDT, page tables, pid, ppid, segment selectors, priority, registers and stack
      * @param argc num args
      * @param argv args
-     * @param pid process ID
-     * @param ppid parent process ID
      */
-    void finalize_process_setup(int argc, const char** argv, pid_t pid, pid_t ppid) const;
+    Elf32_Addr finalize_process_setup(int argc, const char** argv);
 
     static const char** add_argv0_to_argv(const char** argv, const char* path, int& argc);
 
@@ -150,20 +149,20 @@ private:
      * Offsets the memory mapping of the loaded ELF by offset pages to the left
      * @param offset mapping offset
      */
-    void offset_memory_mapping(uint offset) const;
-
+    void offset_memory_mapping(uint offset);
 public:
     /**
      * Create a process from an ELF loaded in memory
-     * @param start_addresss program's start address
      * @param pid process ID
      * @param ppid parent process ID
      * @param argc num args
      * @param argv args
+     * @param path process main ELF' path
+     * @param priority process priority
      * @return process, nullptr if an error occurred
      */
-    static Process* setup_elf_process(uint start_addresss, pid_t pid, pid_t ppid, int argc, const char** argv,
-                                      const char* path);
+    static Process* setup_elf_process(pid_t pid, pid_t ppid, int argc, const char** argv,
+                                      const char* path, uint priority);
 };
 
 

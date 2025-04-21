@@ -158,30 +158,6 @@ void* ELF::get_libdynlk_main_runtime_addr(uint proc_num_pages)
     return s == nullptr ? (void*)s : (void*)(proc_num_pages * PAGE_SIZE + s->st_value);
 }
 
-Elf32_Phdr* ELF::get_GOT_segment(const uint* file_got_addr, uint start_address) const
-{
-    Elf32_Phdr* got_segment_hdr = nullptr;
-    for (int k = 0; k < global_hdr.e_phnum; ++k)
-    {
-        Elf32_Phdr* h = &prog_hdrs[k];
-        if (h->p_type != PT_LOAD)
-            continue;
-        if (h->p_offset <= (uint)file_got_addr - start_address &&
-            h->p_offset + h->p_memsz >= (uint)file_got_addr - start_address)
-        {
-            got_segment_hdr = h;
-            break;
-        }
-    }
-    if (got_segment_hdr == nullptr)
-    {
-        printf_error("Unable to compute GOT runtime address");
-        return nullptr;
-    }
-
-    return got_segment_hdr;
-}
-
 Elf32_Sym* ELF::get_symbol(const char* symbol_name) const
 {
     uint lib_dynsym_num_entries = dynsym_hdr->sh_size / dynsym_hdr->sh_entsize;
@@ -311,6 +287,37 @@ ELF::ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr,
             symbols[i] = *lib_symbol_entry;
         }
     }
+
+    // In order to know whether base address should be retrieved from values, refer to Figure 2-10: Dynamic Array Tags
+    // in http://www.skyfree.org/linux/references/ELF_Format.pdf
+    uint lib_name_idx = (uint)-1; // lib name string table index
+    uint base_addr = base_address();
+    char* dyn_str_table = nullptr; // string table
+    for (Elf32_Dyn* d = dyn_table; d->d_tag != DT_NULL; d++)
+    {
+        switch (d->d_tag)
+        {
+            case DT_STRTAB:
+                dyn_str_table = (char*)(start_address + d->d_un.d_ptr - base_addr);
+                break;
+            case DT_NEEDED:
+                lib_name_idx = d->d_un.d_val;
+                break;
+            case DT_PLTGOT:
+                runtime_got_addr = d->d_un.d_val;
+                break;
+            default:
+                break;
+        }
+    }
+
+    if (lib_name_idx != (uint)-1)
+    {
+        lib_name = &dyn_str_table[lib_name_idx];
+        auto cpy = new char[strlen(lib_name) + 1];
+        strcpy(cpy, lib_name);
+        lib_name = cpy;
+    }
 }
 
 ELF::ELF(uint start_address)
@@ -331,6 +338,7 @@ ELF::~ELF()
     delete[] dyn_relocs;
     delete dynsym_hdr;
     delete[] symbols;
+    delete[] lib_name;
 }
 
 size_t ELF::base_address() const

@@ -135,9 +135,11 @@ void Scheduler::set_first_ready_process_asleep_waiting_process()
         Interrupts::resume_user_process_asm(&p->cpu_state, &p->stack_state);
 }
 
-void Scheduler::start_module(uint module, pid_t ppid, int argc, const char** argv)
+void Scheduler::start_module([[maybe_unused]] uint module, [[maybe_unused]] pid_t ppid, [[maybe_unused]] int argc, [[maybe_unused]] const char** argv)
 {
-    if (ready_queue->full())
+    printf_error("%s: not adapted to new ELF Loaded", __func__);
+    return;
+    /*if (ready_queue->full())
     {
         printf_error("Max process are already running");
         return;
@@ -151,12 +153,12 @@ void Scheduler::start_module(uint module, pid_t ppid, int argc, const char** arg
 
     char path[] = "GRUB_module_x";
     path[strlen(path) - 1] = '0' + module;
-    Process* proc = ELFLoader::setup_elf_process(Memory::grub_modules[module].start_addr, pid, ppid, argc, argv, path);
+    Process* proc = ELFLoader::setup_elf_process(pid, ppid, argc, argv, path);
     if (!proc)
         return;
 
     processes[pid] = proc;
-    set_process_ready(proc);
+    set_process_ready(proc);*/
 }
 
 int Scheduler::exec(const char* path, pid_t ppid, int argc, const char** argv)
@@ -173,12 +175,7 @@ int Scheduler::exec(const char* path, pid_t ppid, int argc, const char** argv)
         return -1;
     }
 
-    void* buf = VFS::load_file(path);
-    if (!buf)
-        return -1;
-
-    Process* proc = ELFLoader::setup_elf_process((uint)buf, pid, ppid, argc, argv, path);
-    delete[] (char*)buf;
+    Process* proc = ELFLoader::setup_elf_process(pid, ppid, argc, argv, path, 1);
     if (!proc)
         return -1;
 
@@ -261,24 +258,13 @@ void Scheduler::release_pid(pid_t pid)
 
 void Scheduler::create_kernel_init_process()
 {
-    auto* kernel = new Process(0, nullptr, -1, "");
-
-    // Kernel process uses Memory::page_tables, Memory::pdt and has no need for sys_page_table_correspondence
-    Memory::freea(kernel->page_tables);
-    Memory::freea(kernel->pdt);
-    delete[] kernel->sys_page_tables_correspondence;
-    kernel->page_tables = Memory::page_tables;
-    kernel->pdt = Memory::pdt;
-    kernel->sys_page_tables_correspondence = nullptr;
-
-    kernel->priority = 10; // High priority, avoid useless dequeuing and enqueuing
-
     uint pid = get_free_pid();
-    kernel->pid = pid;
-    kernel->ppid = pid; // No parent
-
     if (pid == MAX_PROCESSES)
         irrecoverable_error("No more PID available. Cannot finish kernel initialization.");
+
+    stack_state_t dummy_stack_state{};
+    auto* kernel = new Process(0, nullptr, nullptr, Memory::page_tables, Memory::pdt,
+        nullptr, &dummy_stack_state, 10, pid, pid, (uint)-1);
 
     processes[pid] = kernel;
     set_process_ready(kernel);
@@ -320,7 +306,8 @@ void Scheduler::free_terminated_process(Process& p)
 void Scheduler::stop_kernel_init_process()
 {
     // Prune kernel process from ready queue
-    for (size_t i = 0; i < ready_queue->getCount(); i++)
+    size_t n = ready_queue->getCount();
+    for (size_t i = 0; i < n; i++)
     {
         auto pid = ready_queue->dequeue();
         if (pid != 0)

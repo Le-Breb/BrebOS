@@ -64,7 +64,7 @@ public:
 	uint lowest_free_pe;
 	uint free_bytes = 0;
 
-	struct elf_dependence_list* elf_dependence_list;
+	list<elf_dependence_list>* elf_dep_list;
 	cpu_state_t cpu_state{}; // Registers
 	cpu_state_t k_cpu_state{}; // Syscall handler registers
 	stack_state_t stack_state{}; // Execution context
@@ -86,7 +86,9 @@ private:
 	/** Frees a terminated process */
 	~Process();
 
-	explicit Process(uint num_pages, ELF* elf, Elf32_Addr runtime_load_address, const char* path);
+	Process(uint num_pages, uint* pte, list<elf_dependence_list>* elf_dep_list, Memory::page_table_t* page_tables,
+		Memory::pdt_t* pdt, uint* sys_page_tables_correspondence, stack_state_t* stack_state, uint priority, pid_t pid,
+		pid_t ppid, Elf32_Addr k_stack_top);
 
 	/**
 	 * Loads a flat binary in memory
@@ -142,11 +144,11 @@ public:
 	* Computes the runtime address of a symbol referenced by an ELF.
 	* Works in conjunction with dynlk to resolve symbol addresses at runtime for lazy binding.
 	* Search the symbol in the list containing the ELF and its dependencies.
-	* @param dep ELF asking for the symbol address
+	* @param dep_id id of the elf in elf_dep_list
 	* @param symbol_name name of the symbol
 	* @return runtime address of the symbol, 0x00 if not found
 	*/
-	static uint get_symbol_runtime_address(const struct elf_dependence_list* dep, const char* symbol_name);
+	uint get_symbol_runtime_address(uint dep_id, const char* symbol_name) const;
 
 	static void init();
 

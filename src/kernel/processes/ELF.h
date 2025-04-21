@@ -33,6 +33,8 @@ public:
 	const char* dynsym_strtab;
 	size_t num_plt_relocs;
 	size_t num_dyn_relocs;
+	char* lib_name = nullptr;
+    Elf32_Addr runtime_got_addr = (Elf32_Addr)-1;
 
 	explicit ELF(uint start_address);
 
@@ -65,15 +67,6 @@ public:
 	 */
 	void* get_libdynlk_main_runtime_addr(uint proc_num_pages);
 
-
-	/**
-	 * Get segment in which the GOT lays
-	 * @param file_got_addr GOT address (in the ELF)
-	 * @param start_address
-	 * @return GOT segment header, NULL if an error occurred
-	 */
-	Elf32_Phdr* get_GOT_segment(const uint* file_got_addr, uint start_address) const;
-
 	[[nodiscard]] size_t base_address() const;
 
 	[[nodiscard]] size_t num_pages() const;
@@ -81,34 +74,8 @@ public:
 
 struct elf_dependence_list
 {
-	const char* path; // Path of the ELF, owned by this structure
 	ELF* elf;
-	elf_dependence_list* next;
 	Elf32_Addr runtime_load_address;
-
-	elf_dependence_list(const char* path, ELF* elf, Elf32_Addr runtime_load_address)
-		: path((char*)malloc(strlen(path) + 1)),
-		  elf(elf),
-		  next(nullptr),
-		  runtime_load_address(runtime_load_address)
-	{
-		strcpy((char*)this->path, path);
-	}
-
-	void add_dependence(const char* path, ELF* elf, Elf32_Addr runtime_load_address)
-	{
-		elf_dependence_list* curr = this;
-		while (curr->next)
-			curr = curr->next;
-		curr->next = new elf_dependence_list(path, elf, runtime_load_address);
-	}
-
-	~elf_dependence_list()
-	{
-		delete path;
-		delete next;
-		delete elf;
-	}
 };
 
 #endif //INCLUDE_ELF_H

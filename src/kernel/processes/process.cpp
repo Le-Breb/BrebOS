@@ -73,7 +73,7 @@ Process::~Process()
     children.clear();
 
     delete pte;
-    delete elf_dependence_list;
+    delete elf_dep_list;
 
     Memory::freea(page_tables);
     Memory::freea(pdt);
@@ -84,17 +84,18 @@ Process::~Process()
     //printf_info("Process %u exited with code %d", pid, ret_val);
 }
 
-Process::Process(uint num_pages, ELF* elf, Elf32_Addr runtime_load_address, const char* path) : quantum(0), priority(0),
-    num_pages(num_pages), pte((uint*)::calloc(num_pages, sizeof(uint))),
-    pid(MAX_PROCESSES), ppid(MAX_PROCESSES), k_stack_top(-1), flags(P_READY), lowest_free_pe(num_pages),
-    elf_dependence_list(new struct elf_dependence_list(path, elf, runtime_load_address)),
-    page_tables((Memory::page_table_t*)Memory::malloca(768 * sizeof(Memory::page_table_t))),
-    pdt((Memory::pdt_t*)Memory::malloca(768 * sizeof(Memory::pdt_t))),
-    sys_page_tables_correspondence(new uint[768])
+Process::Process(uint num_pages, uint* pte, list<elf_dependence_list>* elf_dep_list, Memory::page_table_t* page_tables,
+    Memory::pdt_t* pdt, uint* sys_page_tables_correspondence, stack_state_t* stack_state, uint priority, pid_t pid,
+    pid_t ppid, Elf32_Addr k_stack_top) :
+    quantum(0), priority(priority),
+    num_pages(num_pages), pte(pte),
+    pid(pid), ppid(ppid), k_stack_top(k_stack_top), flags(P_READY), lowest_free_pe(num_pages),
+    elf_dep_list(elf_dep_list),
+    page_tables(page_tables),
+    pdt(pdt),
+    sys_page_tables_correspondence(sys_page_tables_correspondence)
 {
-    memset(page_tables, 0, 768 * sizeof(Memory::page_table_t));
-    memset(pdt, 0, sizeof(Memory::pdt_t));
-    memset(sys_page_tables_correspondence, 0, 768 * sizeof(uint));
+    memcpy(&this->stack_state, stack_state, sizeof(stack_state_t));
 }
 
 
@@ -149,19 +150,14 @@ bool Process::is_waiting_program() const
     return flags & P_WAITING_PROCESS;
 }
 
-uint Process::get_symbol_runtime_address(const struct elf_dependence_list* dep, const char* symbol_name)
+uint Process::get_symbol_runtime_address(uint dep_id, const char* symbol_name) const
 {
-    const Elf32_Sym* s = dep->elf->get_symbol(symbol_name);
-    // Test whether the symbol exists, is defined in the ELF and has global visibility
-    if (s && s->st_shndx && ELF32_ST_BIND(s->st_info) == STB_GLOBAL)
-        return dep->runtime_load_address + s->st_value;
-
-    while (dep)
+    for (int i = dep_id; i < elf_dep_list->size(); i++)
     {
-        s = dep->elf->get_symbol(symbol_name);
+        auto dep = elf_dep_list->get(i);
+        auto s = dep->elf->get_symbol(symbol_name);
         if (s && s->st_shndx && ELF32_ST_BIND(s->st_info) == STB_GLOBAL)
             return dep->runtime_load_address + s->st_value;
-        dep = dep->next; // Symbol not found in current ELF, proceed to next dependency
     }
 
     return 0x00;
@@ -223,7 +219,7 @@ void Process::set_env(const char* name, const char* value)
 
 Process* Process::fork([[maybe_unused]] pid_t child_pid)
 {
-    auto child = new Process(num_pages, elf_dependence_list->elf, 0, nullptr);
+    //auto child = new Process(num_pages, elf_dep_list->elf, 0, nullptr);
     /*memcpy(child->page_tables, page_tables, sizeof(page_tables));
     memcpy(child->pdt.entries, pdt.entries, sizeof(pdt.entries));
     child->quantum = quantum;
@@ -234,5 +230,5 @@ Process* Process::fork([[maybe_unused]] pid_t child_pid)
 
     child->flags = flags;*/
 
-    return child;
+    return nullptr;
 }

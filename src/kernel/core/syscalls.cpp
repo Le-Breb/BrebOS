@@ -67,13 +67,13 @@ void Syscall::dynlk(const cpu_state_t* cpu_state)
     Process* p = Scheduler::get_running_process();
 
     // Find the ELF from which the call is from
-    struct elf_dependence_list* dep = p->elf_dependence_list;
-    while (dep)
+    int dep_id = 0;
+    elf_dependence_list* dep = nullptr;
+    for (dep_id = 0; dep_id < p->elf_dep_list->size(); dep_id++)
     {
+        dep = p->elf_dep_list->get(dep_id);
         if ((uint)dep->elf == cpu_state->esi)
             break;
-
-        dep = dep->next;
     }
     if (dep == nullptr)
     {
@@ -119,7 +119,7 @@ void Syscall::dynlk(const cpu_state_t* cpu_state)
     const char* symbol_name = &elf->dynsym_strtab[s->st_name];
 
     // Find symbol
-    void* symbol_addr = (void*)p->get_symbol_runtime_address(dep, symbol_name);
+    void* symbol_addr = (void*)p->get_symbol_runtime_address(dep_id, symbol_name);
     if (symbol_addr == nullptr)
     {
         printf_error("Symbol %s not found", symbol_name);
