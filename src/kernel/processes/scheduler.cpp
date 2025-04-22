@@ -263,8 +263,8 @@ void Scheduler::create_kernel_init_process()
         irrecoverable_error("No more PID available. Cannot finish kernel initialization.");
 
     stack_state_t dummy_stack_state{};
-    auto* kernel = new Process(0, nullptr, Memory::page_tables, Memory::pdt,
-        nullptr, &dummy_stack_state, 10, pid, pid, (uint)-1);
+    auto* kernel = new Process(0, nullptr, Memory::page_tables, Memory::pdt, &dummy_stack_state,
+        10, pid, pid, (uint)-1);
 
     processes[pid] = kernel;
     set_process_ready(kernel);

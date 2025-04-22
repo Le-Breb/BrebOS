@@ -24,7 +24,7 @@
 #define ADDR_PTE(addr) ((addr >> 12) & 0x3FF)
 #define ADDR_PAGE(addr) (addr >> 12)
 #define INVALIDATE_PAGE(pde, pte) __asm__ volatile("invlpg (%0)" : : "r" (VIRT_ADDR(pde, pte, 0)));
-#define FRAME_ID_ADDR(i) ((i) * PAGE_SIZE)
+#define FRAME_ID_ADDR(i) ((i) << 12)
 #define VIRT_ADDR(pde, pte, offset) ((pde) << 22 | (pte) << 12 | offset)
 #define PTE_PHYS_ADDR(i) (FRAME_ID_ADDR((PDT_ENTRIES + (i))))
 #define PTE_USED(page_tables, i) (PTE(page_tables, i) & (PAGE_PRESENT | PAGE_LAZY_ZERO))
@@ -121,19 +121,23 @@ namespace Memory
 
 	/** Allocate a page
 	 *
-	 * @param frame_id Physical page id
+	 * @param frame_id Frame id
 	 * @param page_id Page id
 	 * @param lazy_zero whether we want memory zeroed out (triggers lazy allocation)
 	 */
 	void allocate_page(uint frame_id, uint page_id, bool lazy_zero = false);
 
+	void allocate_page(uint page_id, bool lazy_zero = false);
+
 	/** Allocate a page with user permissions
 	 *
-	 * @param frame_id Physical page id
+	 * @param frame_id Frame id
 	 * @param page_id Page id
 	 * @param lazy_zero whether we want memory zeroed out (triggers lazy allocation)
 	 */
 	void allocate_page_user(uint frame_id, uint page_id, bool lazy_zero = false);
+
+	void allocate_page_user(uint page_id, bool lazy_zero = false);
 
 	/**
 	 * Free a page

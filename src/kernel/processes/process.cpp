@@ -75,7 +75,6 @@ Process::~Process()
 
     Memory::freea(page_tables);
     Memory::freea(pdt);
-    delete[] sys_page_tables_correspondence;
 
     flags |= P_TERMINATED;
 
@@ -83,15 +82,13 @@ Process::~Process()
 }
 
 Process::Process(uint num_pages, list<elf_dependence_list>* elf_dep_list, Memory::page_table_t* page_tables,
-    Memory::pdt_t* pdt, uint* sys_page_tables_correspondence, stack_state_t* stack_state, uint priority, pid_t pid,
-    pid_t ppid, Elf32_Addr k_stack_top) :
+    Memory::pdt_t* pdt, stack_state_t* stack_state, uint priority, pid_t pid, pid_t ppid, Elf32_Addr k_stack_top) :
     quantum(0), priority(priority),
     num_pages(num_pages),
     pid(pid), ppid(ppid), k_stack_top(k_stack_top), flags(P_READY), lowest_free_pe(num_pages),
     elf_dep_list(elf_dep_list),
     page_tables(page_tables),
-    pdt(pdt),
-    sys_page_tables_correspondence(sys_page_tables_correspondence)
+    pdt(pdt)
 {
     memcpy(&this->stack_state, stack_state, sizeof(stack_state_t));
 }

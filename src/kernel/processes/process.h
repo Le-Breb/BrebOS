@@ -79,14 +79,13 @@ public:
 	// Process page tables. Process can use all virtual addresses below the kernel virtual location at pde 768
 	Memory::page_table_t* page_tables;
 	Memory::pdt_t* pdt; // process page directory table
-	uint* sys_page_tables_correspondence;
 
 private:
 	/** Frees a terminated process */
 	~Process();
 
 	Process(uint num_pages, list<elf_dependence_list>* elf_dep_list, Memory::page_table_t* page_tables,
-		Memory::pdt_t* pdt, uint* sys_page_tables_correspondence, stack_state_t* stack_state, uint priority, pid_t pid,
+		Memory::pdt_t* pdt, stack_state_t* stack_state, uint priority, pid_t pid,
 		pid_t ppid, Elf32_Addr k_stack_top);
 
 	/**

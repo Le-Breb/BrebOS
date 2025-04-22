@@ -7,8 +7,7 @@
 
 ELFLoader::ELFLoader(): current_process(Scheduler::get_running_process()), elf_dep_list(new list<::elf_dependence_list>),
 page_tables((Memory::page_table_t*)Memory::calloca(768, sizeof(Memory::page_table_t))),
-pdt((Memory::pdt_t*)Memory::malloca(768 * sizeof(Memory::pdt_t))),
-sys_page_tables_correspondence((uint*)calloc(768, sizeof(uint)))
+pdt((Memory::pdt_t*)Memory::malloca(768 * sizeof(Memory::pdt_t)))
 {
     init_fini = init_fini_info();
 }
@@ -21,7 +20,6 @@ ELFLoader::~ELFLoader()
     delete elf_dep_list;
     Memory::freea(page_tables);
     Memory::freea(pdt);
-    delete[] sys_page_tables_correspondence;
 }
 
 bool ELFLoader::dynamic_loading(ELF* elf)
@@ -228,7 +226,7 @@ bool ELFLoader::alloc_elf_memory(ELF& elf)
             if (PTE(page_tables, pte_id))
                 continue;
             uint pe = Memory::get_free_pe_user(); // Get PTE id
-            Memory::allocate_page_user(Memory::get_free_frame(), pe); // Allocate page in kernel address space
+            Memory::allocate_page_user(pe); // Allocate page in kernel address space
 
             // Map page in current process' address space
             uint page_id = (767 * PT_ENTRIES + PT_ENTRIES - 1 - lib_num_code_pages + runtime_page_id);
@@ -434,7 +432,7 @@ Process* ELFLoader::build_process(int argc, const char** argv, pid_t pid, pid_t 
     auto k_stack_top = finalize_process_setup(argc, argv);
 
     used = true;
-    return new Process(num_pages, elf_dep_list, page_tables, pdt, sys_page_tables_correspondence, &stack_state, priority, pid, ppid, k_stack_top);
+    return new Process(num_pages, elf_dep_list, page_tables, pdt, &stack_state, priority, pid, ppid, k_stack_top);
 }
 
 Elf32_Addr ELFLoader::finalize_process_setup(int argc, const char** argv)
@@ -443,7 +441,7 @@ Elf32_Addr ELFLoader::finalize_process_setup(int argc, const char** argv)
         printf_error("Process kernel page entry is not empty");
     // Allocate process stack page
     uint p_stack_pe_id = Memory::get_free_pe_user();
-    Memory::allocate_page_user(Memory::get_free_frame(), p_stack_pe_id);
+    Memory::allocate_page_user(p_stack_pe_id);
 
     // Map it in current process' address space
     uint p_stack_page_id = 767 * PT_ENTRIES + PT_ENTRIES - 1 - num_pages - 1;
@@ -460,7 +458,7 @@ Elf32_Addr ELFLoader::finalize_process_setup(int argc, const char** argv)
     uint k_stack_pe = Memory::get_free_pe();
     uint k_stack_pde = k_stack_pe / PDT_ENTRIES;
     uint k_stack_pte = k_stack_pe % PDT_ENTRIES;
-    Memory::allocate_page(Memory::get_free_frame(), k_stack_pe);
+    Memory::allocate_page(k_stack_pe);
 
     // Set process PDT entries: entries 0 to 767 map the process address space using its own page tables
     // Entries 768 to 1024 point to kernel page tables, so that kernel is mapped. Moreover, syscall handlers
@@ -531,7 +529,7 @@ Elf32_Addr ELFLoader::runtime_address_to_load_address(Elf32_Addr runtime_address
     return VIRT_ADDR(pde, pte, off);
 }
 
-void ELFLoader::offset_memory_mapping(uint offset)
+void ELFLoader::offset_memory_mapping(uint offset) const
 {
     // Offset pages
     for (size_t i = 0; i < num_pages; i++)

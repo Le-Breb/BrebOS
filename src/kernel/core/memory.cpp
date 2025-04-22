@@ -289,15 +289,14 @@ namespace Memory
         if (!user_process)
         {
             for (uint i = b; i < e; ++i)
-                allocate_page(get_free_frame(), i, lazy_zero);
+                allocate_page(i, lazy_zero);
         }
         else
         {
             for (uint i = b; i < e; ++i)
             {
                 auto sys_pe = get_free_pe();
-                auto frame = get_free_frame();
-                allocate_page_user(frame, sys_pe, lazy_zero);
+                allocate_page_user(sys_pe, lazy_zero);
                 user_process->update_pte(i, PTE(page_tables, sys_pe), true);
             }
         }
@@ -416,8 +415,13 @@ namespace Memory
     {
         // Write PTE
         PTE(page_tables, page_id) = FRAME_ID_ADDR(frame_id) | (lazy_zero ? PAGE_LAZY_ZERO : PAGE_PRESENT) | PAGE_WRITE;
-        __asm__ volatile("invlpg (%0)" : : "r" (frame_id * PAGE_SIZE));
+        __asm__ volatile("invlpg (%0)" : : "r" (frame_id << 12));
         MARK_FRAME_USED(frame_id, page_id); // Internal allocation registration
+    }
+
+    void allocate_page(uint page_id, bool lazy_zero)
+    {
+        allocate_page(lazy_zero ? 0 : get_free_frame(), page_id, lazy_zero);
     }
 
     void free_page(uint address, const Process* user_process)
@@ -454,6 +458,11 @@ namespace Memory
     {
         allocate_page(frame_id, page_id, lazy_zero);
         PTE(page_tables, page_id) |= PAGE_USER;
+    }
+
+    void allocate_page_user(uint page_id, bool lazy_zero)
+    {
+        allocate_page_user(lazy_zero ? 0 : get_free_frame(), page_id, lazy_zero);
     }
 
     void* malloca(uint size)
@@ -567,9 +576,14 @@ namespace Memory
         if (frame_beg == (uint)-1)
             return nullptr;
 
-        void(*allocator)(uint, uint, bool) = user ? allocate_page_user : allocate_page;
-        for (uint i = 0; i < num_pages; ++i)
-            allocator(frame_beg + i, page_beg + i, lazy_zero);
+        // I don't understand the compile error that arises when using a function pointer for the allocator function in
+        // order to have only one loop, so here we are with those two uglily similar loops
+        if (user)
+            for (uint i = 0; i < num_pages; ++i)
+                allocate_page_user(frame_beg + i, page_beg + i, lazy_zero);
+        else
+            for (uint i = 0; i < num_pages; ++i)
+                allocate_page(frame_beg + i, page_beg + i, lazy_zero);
 
         return (void*)(page_beg << 12);
     }
@@ -586,21 +600,21 @@ namespace Memory
         if (!(pte && pte & PAGE_LAZY_ZERO))
             return false;
 
-        auto pte_ptr = &PTE(pt, page_id);
-        *pte_ptr |= PAGE_PRESENT; // Mark page present
-        *pte_ptr &= ~PAGE_LAZY_ZERO; // Unmark it as lazily allocated
-        INVALIDATE_PAGE(ADDR_PDE(fault_address), ADDR_PTE(fault_address) & 0x3FF); // Invalidate cache
+        auto pte_ptr = &PTE(pt, page_id); // Get pointer to pte
+        bool page_user = *pte_ptr & PAGE_USER; // Should page be user accessible ?wget
+        uint frame_id = get_free_frame(); // Get frame
+        *pte_ptr = FRAME_ID_ADDR(frame_id) | (page_user ? PAGE_USER : 0) | PAGE_WRITE | PAGE_PRESENT; // Update pte
+        INVALIDATE_PAGE(ADDR_PDE(fault_address), ADDR_PTE(fault_address)); // Invalidate cache
         memset((void*)(page_id << 12), 0, PAGE_SIZE); // Zero out page
+
+        // Register allocation of the frame
+        auto sys_page_id = higher_half ? page_id : ((uint)current_process->page_tables >> 12) + page_id;
+        MARK_FRAME_USED(frame_id, sys_page_id);
 
         // If process is not kernel process and address is in lower half, then changes have not been reflected in
         // Memory::page_tables, we have to do so
-        if (current_process->pdt != pdt &&!higher_half)
-        {
-            auto physical_address = PHYS_ADDR(current_process->page_tables, fault_address);
-            auto frame_id = physical_address >> 12;
-            auto sys_page_id = frame_to_page[frame_id];
+        if (current_process->pdt != pdt && !higher_half)
             PTE(Memory::page_tables, sys_page_id) = *pte_ptr;
-        }
 
         return true;
     }

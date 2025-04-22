@@ -33,7 +33,6 @@ private:
     uint num_pages = 0;
     Memory::page_table_t* page_tables;
     Memory::pdt_t* pdt;
-    uint* sys_page_tables_correspondence;
     stack_state_t stack_state{};
     bool used = false;
 
@@ -148,7 +147,7 @@ private:
      * Offsets the memory mapping of the loaded ELF by offset pages to the left
      * @param offset mapping offset
      */
-    void offset_memory_mapping(uint offset);
+    void offset_memory_mapping(uint offset) const;
 public:
     /**
      * Create a process from an ELF loaded in memory
