@@ -12,6 +12,7 @@
 
 #define HTTP_OK 200
 #define HTTP_MOVED_PERMANENTLY 301
+#define HTTP_SERVICE_UNAVAILABLE 503
 
 class HTTP : TCP_listener
 {

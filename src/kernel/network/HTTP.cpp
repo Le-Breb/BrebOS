@@ -241,6 +241,8 @@ void HTTP::handle_response_descriptor(const void* packet, uint16_t packet_size)
             printf_warn("Redirected to %s. This is likely to happen for websites that redirect HTTP to HTTPS",
                 location_header->value);
         }
+        else if (response->status == HTTP_SERVICE_UNAVAILABLE)
+            printf_warn("Service is unavailable");
         else
             printf_warn("Incoherent HTTP response or status is not OK\n");
         socket->close();
