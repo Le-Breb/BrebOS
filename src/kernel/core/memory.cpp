@@ -3,6 +3,7 @@
 #include "fb.h"
 #include <kstring.h>
 #include "../file_management/VFS.h"
+#include "../processes/scheduler.h"
 
 namespace Memory
 {
@@ -16,18 +17,13 @@ namespace Memory
 
     // Gives page id given frame id. -1 means that frame is not allocated
     uint* frame_to_page; // uint[PT_ENTRIES * PDT_ENTRIES];
-    uint lowest_free_pe;
     uint lowest_free_pe_user;
     uint lowest_free_frame = 0;
-
-    memory_header base = {.s = {&base, 0}};
-    memory_header user_base = {.s = {&user_base, 0}};
-    memory_header* freep; /* Lowest free block */
 
     [[maybe_unused]] uint loaded_grub_modules = 0;
     GRUB_module* grub_modules;
 
-    uint free_bytes = 0;
+    Process* kernel_process = nullptr;
 
     extern "C" void stack_top();
 
@@ -35,28 +31,28 @@ namespace Memory
 
     /** Tries to allocate a contiguous block of memory
      * @param num_pages_requested Size of the block in bytes
-     * @param user_process process to get the relevant address space from to correctly interpret the address, nullptr
+     * @param process process to get the relevant address space from to correctly interpret the address, nullptr
      * if kernel
      * @param lazy_zero whether we want memory zeroed out (triggers lazy allocation)
      *  @return A pointer to a contiguous block of n bytes or NULL if memory is full
      */
-    void* sbrk(uint num_pages_requested, Process* user_process, bool lazy_zero);
+    void* sbrk(uint num_pages_requested, Process* process, bool lazy_zero);
 
     void init_frame_to_page();
 
     /** Tries to allocate a contiguous block of (virtual) memory
      *
      * @param n Size to allocate. Unit: sizeof(mem_header)
-     * @param user_process process to get the relevant address space from to correctly interpret the address, nullptr
+     * @param process process to get the relevant address space from to correctly interpret the address, nullptr
      * if kernel
      * @param lazy_zero whether we want memory zeroed out (triggers lazy allocation)
      * @return Pointer to allocated memory if allocation was successful, NULL otherwise
      */
-    memory_header* more_kernel(uint n, Process* user_process, bool lazy_zero);
+    memory_header* more_kernel(uint n, Process* process, bool lazy_zero);
 
-    /** Allocate 1024 pages to store the 1024 page tables required to map all the memory. \n
+    /** Allocate 1024 pages to store the 1024 page tables required to map all the memory in PDT[769]. \n
      * 	The page table that maps kernel pages is moved into the newly allocated array of page tables and then freed. \n
-     * 	This function also set page_tables to point to the array of newly allocated page tables
+     * 	This function also allocates 1024 tables on PDT[770] for frame_to_page
      * 	@details
      *  Page tables will be written in frames 0 to 1023. \n
      *	Page tables are virtually located on pages 1024*769 to 1024*769+1023. \n
@@ -64,8 +60,9 @@ namespace Memory
      *	table, and will consequently never be returned by malloc if allocation is successful. \n
      *	NULL will then always be considered as an invalid address.
      *	@warning This function shall only be called once
+     *	@return lowest free pte
      */
-    void allocate_page_tables();
+    uint allocate_page_tables();
 
     /** Mark the pages where GRUB module is loaded as allocated
      *
@@ -76,7 +73,7 @@ namespace Memory
     /**
      * Free pages in large free memory blocks
      */
-    void free_release_pages(Process* user_process);
+    void free_release_pages(Process* process);
 
     /**
      * Zeroes out a memory region spanning over pages possibly lazily allocated.
@@ -84,9 +81,19 @@ namespace Memory
      * zeroed anyway if they are accessed, by the page fault handling process.
      * @param total_size total size of the memory region to zero out
      * @param mem pointer to memory region
-     * @param user_process process with relevant page tables
+     * @param process process with relevant page tables
      */
-    void zero_out_possibly_lazily_allocated_memory(uint total_size, void* mem, const Process* user_process);
+    void zero_out_possibly_lazily_allocated_memory(uint total_size, void* mem, const Process* process);
+
+    /**
+     * Creates the process that will store global kernel memory mapping.
+     * As malloc uses this process, new Process() cannot be called before such a process exists.
+     * Thus, this function manually allocates some memory, then constructs by hand a process inside it.
+     * Then, new Process() is called to properly construct the process (since new handles c++ initialization stuff
+     * that a simple memory allocation doesn't)
+     * @param lowest_free_pte lowest free page table entry
+     */
+    void create_kernel_process(uint lowest_free_pte);
 
     uint get_free_frame()
     {
@@ -98,10 +105,10 @@ namespace Memory
 
     uint get_free_pe()
     {
-        while (lowest_free_pe < PDT_ENTRIES * PT_ENTRIES && PTE_USED(page_tables, lowest_free_pe))
-            lowest_free_pe++;
+        while (kernel_process->lowest_free_pe < PDT_ENTRIES * PT_ENTRIES && PTE_USED(page_tables, kernel_process->lowest_free_pe))
+            kernel_process->lowest_free_pe++;
 
-        return lowest_free_pe;
+        return kernel_process->lowest_free_pe;
     }
 
     uint get_free_pe_user()
@@ -135,7 +142,7 @@ namespace Memory
             frame_to_page[PT_ENTRIES + i] = 769 * PDT_ENTRIES + i;
     }
 
-    void allocate_page_tables()
+    uint allocate_page_tables()
     {
         // Save for later use
         uint asm_pt1_page_table_entry = ADDR_PTE((uint)asm_pt1);
@@ -200,9 +207,10 @@ namespace Memory
 
         init_frame_to_page();
 
-        lowest_free_pe = 771 * PDT_ENTRIES; // Kernel is only allowed to allocate in higher half
         lowest_free_frame = PT_ENTRIES * 3;
         lowest_free_pe_user = 1; // 0 is reserved for page faulting
+
+        return 771 * PDT_ENTRIES; // Kernel is only allowed to allocate in higher half
     }
 
     void load_grub_modules(const multiboot_info* multibootInfo)
@@ -218,7 +226,7 @@ namespace Memory
             uint mod_size = module->mod_end - module->mod_start;
             uint required_pages = (mod_size + PAGE_SIZE - 1) >> 12;
 
-            uint pe_id = lowest_free_pe;
+            uint pe_id = kernel_process->lowest_free_pe;
 
             grub_modules[i].start_addr = ((pe_id / PDT_ENTRIES) << 22) | ((pe_id % PDT_ENTRIES) << 12);
             grub_modules[i].size = mod_size;
@@ -232,29 +240,60 @@ namespace Memory
                 pe_id++;
             }
 
-            lowest_free_pe = pe_id;
+            kernel_process->lowest_free_pe = pe_id;
         }
 
         loaded_grub_modules = multibootInfo->mods_count;
     }
 
+    void create_kernel_process(uint lowest_free_pte)
+    {
+        // How many pages are necessary to store a process
+        auto n_pages = (sizeof(Process) + PAGE_SIZE - 1) >> 12;
+
+        if (n_pages > 1)
+            irrecoverable_error("not handled because i'l lazy");
+
+        void* mem = (void*)(lowest_free_pte << 12);
+
+        // Allocate memory by hand to store the process
+        for (size_t i = 0; i < n_pages; i++)
+        {
+            uint fr = get_free_frame();
+            allocate_page(fr, lowest_free_pte);
+            while (PTE(page_tables, lowest_free_pte))
+                lowest_free_pte++;
+        }
+
+        Scheduler::create_kernel_init_process(mem, lowest_free_pte, &kernel_process);
+
+        // De-allocate memory
+        for (size_t i = 0; i < n_pages; i++)
+        {
+            auto pha = PHYS_ADDR(page_tables, (uint)mem + (i << 12));
+            auto pid = frame_to_page[pha >> 12];
+            PTE(page_tables, pid)  = 0;
+            __asm__ volatile("invlpg (%0)" : : "r" (pid << 12));
+            MARK_FRAME_FREE(pha >> 12);
+        }
+    }
+
     void init(const struct multiboot_info* multibootInfo)
     {
-        allocate_page_tables();
-        freep = &base;
-
+        uint lfpe = allocate_page_tables();
+        create_kernel_process(lfpe);
         load_grub_modules(multibootInfo);
     }
 
-    void* sbrk(uint num_pages_requested, Process* user_process, bool lazy_zero)
+    void* sbrk(uint num_pages_requested, Process* process, bool lazy_zero)
     {
         // Memory full
         if (lowest_free_frame == PT_ENTRIES * PDT_ENTRIES)
             return nullptr;
 
-        uint b = user_process ? user_process->lowest_free_pe : lowest_free_pe; /* block beginning page index */
+        uint b = process->lowest_free_pe; /* block beginning page index */
         uint e; /* block end page index + 1*/
-        auto pt = user_process ? user_process->page_tables : page_tables;
+        auto pt = process->page_tables;
 
         // Try to find contiguous free virtual block of memory
         while (1)
@@ -286,38 +325,44 @@ namespace Memory
         }
 
         // Allocate pages
-        if (!user_process)
+        if (process->pdt == pdt) // Kernel process
         {
             for (uint i = b; i < e; ++i)
                 allocate_page(i, lazy_zero);
         }
         else
         {
-            for (uint i = b; i < e; ++i)
+            if (!lazy_zero)
             {
-                auto sys_pe = get_free_pe();
-                allocate_page_user(sys_pe, lazy_zero);
-                user_process->update_pte(i, PTE(page_tables, sys_pe), true);
+                // Allocate both in process and kernel page tables
+                for (uint i = b; i < e; ++i)
+                {
+                    auto sys_pe = get_free_pe();
+                    allocate_page_user(sys_pe, lazy_zero);
+                    process->update_pte(i, PTE(page_tables, sys_pe), true);
+                }
             }
+            else // Lazy allocation, do not allocate in kernel page tables
+                for (uint i = b; i < e; ++i)
+                    process->update_pte(i, PAGE_LAZY_ZERO | PAGE_USER, true);
         }
 
-        auto pe = user_process ? &user_process->lowest_free_pe : &lowest_free_pe;
-        *pe = e;
+        auto pe = &process->lowest_free_pe;
         while (PTE_USED(pt, *pe))
             (*pe)++;
 
         // Allocated memory block virtually starts at page b. Return it.
-        return (void*)VIRT_ADDR(b / PDT_ENTRIES, b % PDT_ENTRIES, 0);
+        return (void*)(b << 12);
     }
 
-    memory_header* more_kernel(uint n, Process* user_process, bool lazy_zero)
+    memory_header* more_kernel(uint n, Process* process, bool lazy_zero)
     {
         if (n < N_ALLOC)
             n = N_ALLOC;
 
         uint requested_byte_size = n * sizeof(memory_header);
         auto num_pages_requested = (requested_byte_size + PAGE_SIZE - 1) >> 12;;
-        auto* h = (memory_header*)sbrk(num_pages_requested, user_process, lazy_zero);
+        auto* h = (memory_header*)sbrk(num_pages_requested, process, lazy_zero);
 
         if ((int*)h == nullptr)
             return nullptr;
@@ -325,21 +370,18 @@ namespace Memory
         uint allocated_byte_size = num_pages_requested * PAGE_SIZE;
         h->s.size = allocated_byte_size / sizeof(memory_header);
 
-        auto free_bytes_ptr = user_process ? &user_process->free_bytes : &free_bytes;
-        uint free_bytes_save = *free_bytes_ptr;
-        *free_bytes_ptr = -allocated_byte_size; // Prevent free from freeing pages we just allocated
-        free((void*)(h + 1), user_process);
-        *free_bytes_ptr = free_bytes_save + allocated_byte_size;
+        uint free_bytes_save = process->free_bytes;
+        process->free_bytes = -allocated_byte_size; // Prevent free from freeing pages we just allocated
+        free((void*)(h + 1), process);
+        process->free_bytes = free_bytes_save + allocated_byte_size;
 
-        return user_process ? user_process->freep : freep;
+        return process->freep;
     }
 
-    void free_release_pages(Process* user_process)
+    void free_release_pages(Process* process)
     {
-        auto free_bytes_ptr = user_process ? &user_process->free_bytes : &free_bytes;
-        memory_header** beg = user_process ? &user_process->freep : &freep;
-        memory_header* p = *beg;
-        for (memory_header* c = (*beg)->s.ptr;; p = c, c = c->s.ptr)
+        memory_header* p = process->freep;
+        for (memory_header* c = process->freep->s.ptr;; p = c, c = c->s.ptr)
         {
             // printf(" - %p", c);
             uint block_byte_size = c->s.size * sizeof(memory_header);
@@ -353,7 +395,7 @@ namespace Memory
             if (aligned_free_bytes < PAGE_SIZE)
             {
                 // Arrived at the end of the list
-                if (c == *beg)
+                if (c == process->freep)
                     break;
                 continue;
             }
@@ -396,16 +438,16 @@ namespace Memory
             // Rollback c to previous mem header cause the mem region c is in may be deallocated,
             // thus the for loop would segfault without this instruction. With it, the for loop
             // will gently iterate to the next mem header as we just updated previous' next
-            c = *beg = p;
+            c = process->freep = p;
 
             // Free pages
             for (uint i = 0; i < n_pages; ++i)
             {
                 uint aligned_addr = aligned_addr_base + (i << 12);
-                free_page(aligned_addr, user_process);
+                free_page(aligned_addr, process);
             }
 
-            *free_bytes_ptr -= aligned_free_bytes; // Update free_bytes
+            process->free_bytes -= aligned_free_bytes; // Update free_bytes
         }
 
         // printf("\n====\n");
@@ -416,7 +458,10 @@ namespace Memory
         // Write PTE
         PTE(page_tables, page_id) = FRAME_ID_ADDR(frame_id) | (lazy_zero ? PAGE_LAZY_ZERO : PAGE_PRESENT) | PAGE_WRITE;
         __asm__ volatile("invlpg (%0)" : : "r" (frame_id << 12));
-        MARK_FRAME_USED(frame_id, page_id); // Internal allocation registration
+
+        // Internal allocation registration
+        if (!lazy_zero)
+            MARK_FRAME_USED(frame_id, page_id);
     }
 
     void allocate_page(uint page_id, bool lazy_zero)
@@ -424,7 +469,7 @@ namespace Memory
         allocate_page(lazy_zero ? 0 : get_free_frame(), page_id, lazy_zero);
     }
 
-    void free_page(uint address, const Process* user_process)
+    void free_page(uint address, const Process* process)
     {
         // Cache is not updated, since this is not necessary on free. Pages may appear allocated (from the CPU's
         // perspective) even though they are not, but this is not an issue, as long as cache is updated upon allocation
@@ -432,25 +477,43 @@ namespace Memory
         uint pde = ADDR_PDE(address);
         uint pte = (address >> 12) & 0x3FF;
         uint sys_page_id, frame_id;
-        if (user_process)
+        if (process->pdt != pdt)
         {
             uint page_id = address >> 12;
-            auto physical_address = PHYS_ADDR(user_process->page_tables, address);
+
+            auto pte = PTE(process->page_tables, page_id);
+            if (pte & PAGE_LAZY_ZERO)
+            {
+                // We are freeing a page which has been lazily allocated and never accessed, thus there
+                // is no frame to free and no associated kernel page table entry.
+                // We can simply zero out the entry and exit.
+                process->update_pte(page_id, 0, false);
+                return;
+            }
+
+            // Compute sys_page_id using physical address and frame_to_page
+            auto physical_address = PHYS_ADDR(process->page_tables, address);
             frame_id = physical_address >> 12;
             sys_page_id = frame_to_page[frame_id];
-            user_process->update_pte(page_id, 0, false);
+            process->update_pte(page_id, 0, false); // Update process pte
         }
         else
         {
+            // Current process is kernel process, so index computation is straightforward
             sys_page_id = pde * PT_ENTRIES + pte;
             frame_id = PHYS_ADDR(page_tables, address) >> 12;
         }
 
-        // Write PTE
-        PTE(page_tables, sys_page_id) = 0;
+        // Write PTE in kernel global memory mapping
+        auto pte_ptr = &PTE(page_tables, sys_page_id);
+        bool lazy = *pte_ptr & PAGE_LAZY_ZERO;
+        if (!lazy && frame_id == 0)
+                irrecoverable_error("wut");
+        *pte_ptr = 0;
         MARK_FRAME_FREE(frame_id); // Internal deallocation registration
 
-        if (frame_id < lowest_free_frame)
+
+        if (!lazy && frame_id < lowest_free_frame)
             lowest_free_frame = frame_id;
     }
 
@@ -463,6 +526,7 @@ namespace Memory
     void allocate_page_user(uint page_id, bool lazy_zero)
     {
         allocate_page_user(lazy_zero ? 0 : get_free_frame(), page_id, lazy_zero);
+        // Todo: invalidate cache correctly
     }
 
     void* malloca(uint size)
@@ -478,7 +542,7 @@ namespace Memory
         return (void*)aligned_addr;
     }
 
-    void* calloca(size_t nmemb, size_t size, Process* user_process)
+    void* calloca(size_t nmemb, size_t size)
     {
         uint base_size = size;
         if (__builtin_mul_overflow(nmemb, size, &base_size))
@@ -488,7 +552,7 @@ namespace Memory
         if (__builtin_add_overflow(base_size, additional_size, &total_size))
             return nullptr;
 
-        void* base_addr = calloc(1, total_size, user_process);
+        void* base_addr = calloc(1, total_size, kernel_process);
         if (base_addr == nullptr)
             return nullptr;
 
@@ -541,12 +605,12 @@ namespace Memory
         return true;
     }
 
-    void* physically_aligned_malloc(uint n, bool user, bool lazy_zero)
+    void* physically_aligned_malloc(uint n)
     {
         uint page_beg = (uint)-1;
         uint frame_beg = (uint)-1;
         uint num_pages = (n + PAGE_SIZE - 1) >> 12;
-        for (auto p = lowest_free_pe; p < PDT_ENTRIES * PT_ENTRIES; p++)
+        for (auto p = kernel_process->lowest_free_pe; p < PDT_ENTRIES * PT_ENTRIES; p++)
         {
             uint i;
             for (i = 0; i < num_pages && !PTE_USED(page_tables, p + i); i++)
@@ -576,14 +640,9 @@ namespace Memory
         if (frame_beg == (uint)-1)
             return nullptr;
 
-        // I don't understand the compile error that arises when using a function pointer for the allocator function in
-        // order to have only one loop, so here we are with those two uglily similar loops
-        if (user)
-            for (uint i = 0; i < num_pages; ++i)
-                allocate_page_user(frame_beg + i, page_beg + i, lazy_zero);
-        else
-            for (uint i = 0; i < num_pages; ++i)
-                allocate_page(frame_beg + i, page_beg + i, lazy_zero);
+
+        for (uint i = 0; i < num_pages; ++i)
+            allocate_page(frame_beg + i, page_beg + i);
 
         return (void*)(page_beg << 12);
     }
@@ -600,29 +659,34 @@ namespace Memory
         if (!(pte && pte & PAGE_LAZY_ZERO))
             return false;
 
+        // Allocate frame and update memory mapping
         auto pte_ptr = &PTE(pt, page_id); // Get pointer to pte
-        bool page_user = *pte_ptr & PAGE_USER; // Should page be user accessible ?wget
-        uint frame_id = get_free_frame(); // Get frame
+        bool page_user = *pte_ptr & PAGE_USER; // Should page be user accessible ?
+        uint frame_id = get_free_frame(); // Get frame // Todo: check for user allocation here
         *pte_ptr = FRAME_ID_ADDR(frame_id) | (page_user ? PAGE_USER : 0) | PAGE_WRITE | PAGE_PRESENT; // Update pte
         INVALIDATE_PAGE(ADDR_PDE(fault_address), ADDR_PTE(fault_address)); // Invalidate cache
         memset((void*)(page_id << 12), 0, PAGE_SIZE); // Zero out page
 
-        // Register allocation of the frame
-        auto sys_page_id = higher_half ? page_id : ((uint)current_process->page_tables >> 12) + page_id;
-        MARK_FRAME_USED(frame_id, sys_page_id);
+        // If process is kernel process or address is in higher half, kernel global page tables have already
+        // been updated, we just need to register the allocated frame
+        if (current_process->pdt == pdt || higher_half)
+        {
+            MARK_FRAME_USED(frame_id, page_id);
+            return true;
+        }
 
-        // If process is not kernel process and address is in lower half, then changes have not been reflected in
-        // Memory::page_tables, we have to do so
-        if (current_process->pdt != pdt && !higher_half)
-            PTE(Memory::page_tables, sys_page_id) = *pte_ptr;
+        // Register allocation of the frame
+        uint sys_page_id = get_free_pe();
+        PTE(page_tables, sys_page_id) = *pte_ptr;
+        MARK_FRAME_USED(frame_id, sys_page_id);
 
         return true;
     }
 
-    void zero_out_possibly_lazily_allocated_memory(uint total_size, void* mem, const Process* user_process)
+    void zero_out_possibly_lazily_allocated_memory(uint total_size, void* mem, const Process* process)
     {
         auto n_pages = (total_size + PAGE_SIZE - 1) >> 12; // Number of pages allocation spans over
-        auto pt = user_process ? user_process->page_tables : page_tables; // Page tables to use
+        auto pt = process->page_tables; // Page tables to use
         uint base_page_id = ADDR_PAGE((uint)mem); // Page id of first page
         uint bytes_onf_first_page = PAGE_SIZE - ((uint)mem & (PAGE_SIZE - 1)); // How many bytes are on the first page
         bytes_onf_first_page = bytes_onf_first_page > total_size ? total_size : bytes_onf_first_page; // Cap to total_size
@@ -650,27 +714,27 @@ using namespace Memory;
 
 void* operator new(size_t size)
 {
-    return malloc(size);
+    return malloc(size, kernel_process);
 }
 
 void* operator new[](size_t size)
 {
-    return malloc(size);
+    return malloc(size, kernel_process);
 }
 
 void operator delete(void* p)
 {
-    free(p);
+    free(p, kernel_process);
 }
 
 void operator delete[](void* p)
 {
-    free(p);
+    free(p, kernel_process);
 }
 
 void operator delete(void* p, [[maybe_unused]] long unsigned int size)
 {
-    free(p);
+    free(p, kernel_process);
 }
 
 void operator delete[]([[maybe_unused]] void* p, [[maybe_unused]] long unsigned int size)
@@ -678,26 +742,24 @@ void operator delete[]([[maybe_unused]] void* p, [[maybe_unused]] long unsigned 
     irrecoverable_error("this operator shouldn't be used");
 }
 
-void operator delete([[maybe_unused]] void* p, [[maybe_unused]] unsigned int n)
+void operator delete(void* p, [[maybe_unused]] unsigned int n)
 {
-    free(p);
+    free(p, kernel_process);
 }
 
-void operator delete []([[maybe_unused]] void* p, [[maybe_unused]] unsigned int n)
+void operator delete [](void* p, [[maybe_unused]] unsigned int n)
 {
-    free(p);
+    free(p, kernel_process);
 }
 
-void* malloc(uint n, Process* user_process, bool lazy_zero)
+void* malloc(uint n, Process* process, bool lazy_zero)
 {
     if (!n)
         return nullptr;
 
     memory_header* c;
-    memory_header** free_list_beg = user_process ? &user_process->freep : &freep;
-    memory_header* p = *free_list_beg;
+    memory_header* p = process->freep;
     unsigned nunits = (n + sizeof(memory_header) - 1) / sizeof(memory_header) + 1;
-    auto free_bytes_ptr = user_process ? &user_process->free_bytes : &free_bytes;
 
     for (c = p->s.ptr;; p = c, c = c->s.ptr)
     {
@@ -711,13 +773,13 @@ void* malloc(uint n, Process* user_process, bool lazy_zero)
                 c += c->s.size;
                 c->s.size = nunits;
             }
-            *free_bytes_ptr -= nunits * sizeof(memory_header);
-            *free_list_beg = p;
+            process->free_bytes -= nunits * sizeof(memory_header);
+            process->freep = p;
             return (void*)(c + 1);
         }
-        if (c == *free_list_beg) /* wrapped around free list */
+        if (c == process->freep) /* wrapped around free list */
         {
-            if ((c = more_kernel(nunits, user_process, lazy_zero)) == nullptr)
+            if ((c = more_kernel(nunits, process, lazy_zero)) == nullptr)
                 return nullptr; /* none left */
         }
     }
@@ -725,14 +787,14 @@ void* malloc(uint n, Process* user_process, bool lazy_zero)
 
 extern "C" void* malloc(uint n)
 {
-    return malloc(n, nullptr);
+    return malloc(n, kernel_process);
 }
 
-void* calloc(size_t nmemb, size_t size, Process* user_process)
+void* calloc(size_t nmemb, size_t size, Process* process)
 {
     // Check edge cases according to man page
     if (!nmemb || !size)
-        return malloc(1, user_process);
+        return malloc(1, process);
 
     // Check for overflow
     size_t total_size;
@@ -740,34 +802,32 @@ void* calloc(size_t nmemb, size_t size, Process* user_process)
         return nullptr;
 
     // Get memory
-    void* mem = malloc(total_size, user_process, true);
+    void* mem = malloc(total_size, process, true);
     if (!mem)
         return nullptr;
 
     // Zero out memory which isn't in lazily allocated pages
-    zero_out_possibly_lazily_allocated_memory(total_size, mem, user_process);
+    zero_out_possibly_lazily_allocated_memory(total_size, mem, process);
 
     return mem;
 }
 
 extern "C" void* calloc(size_t nmemb, size_t size)
 {
-    return calloc(nmemb, size, nullptr);
+    return calloc(nmemb, size, kernel_process);
 }
 
-void free(void* ptr, Process* user_process)
+void free(void* ptr, Process* process)
 {
     if (ptr == nullptr)
         return;
 
     memory_header* c = (memory_header*)ptr - 1;
     memory_header* p;
-    auto free_bytes_ptr = user_process ? &user_process->free_bytes : &free_bytes;
-    *free_bytes_ptr += c->s.size * sizeof(memory_header);
-    memory_header** free_list_beg = user_process ? &user_process->freep : &freep;
+    process->free_bytes += c->s.size * sizeof(memory_header);
 
     // Loop until p < c < p->s.ptr
-    for (p = *free_list_beg; !(c > p && c < p->s.ptr); p = p->s.ptr)
+    for (p = process->freep; !(c > p && c < p->s.ptr); p = p->s.ptr)
         //Break when arrived at the end of the list and c goes before beginning or after end
 
         if (p >= p->s.ptr && (c < p->s.ptr || c > p))
@@ -792,25 +852,25 @@ void free(void* ptr, Process* user_process)
         p->s.ptr = c;
 
     // Set new freep
-    *free_list_beg = p;
+    process->freep = p;
 
     // Free pages
-    if (*free_bytes_ptr >= FREE_THRESHOLD)
-        free_release_pages(user_process);
+    if (process->free_bytes >= FREE_THRESHOLD)
+        free_release_pages(process);
 }
 
 extern "C" void free(void* ptr)
 {
-    free(ptr, nullptr);
+    free(ptr, kernel_process);
 }
 
-void* realloc(void* ptr, size_t size, Process* user_process)
+void* realloc(void* ptr, size_t size, Process* process)
 {
     if (!ptr) // realloc on null = malloc
-        return malloc(size, user_process);
+        return malloc(size, process);
     if (!size) // realloc with size 0 = free
     {
-        free(ptr, user_process);
+        free(ptr, process);
         return nullptr;
     }
 
@@ -822,10 +882,9 @@ void* realloc(void* ptr, size_t size, Process* user_process)
         return ptr;
 
     memory_header* p; // previous header
-    memory_header** free_list_beg = user_process ? &user_process->freep : &freep;
 
     // Loop until p < h < p->s.ptr
-    for (p = *free_list_beg; !(h > p && h < p->s.ptr); p = p->s.ptr)
+    for (p = process->freep; !(h > p && h < p->s.ptr); p = p->s.ptr)
         //Break when arrived at the end of the list and c goes before beginning or after end
         if (p >= p->s.ptr && (h < p->s.ptr || h > p))
             break;
@@ -839,19 +898,19 @@ void* realloc(void* ptr, size_t size, Process* user_process)
 
         // Update free block chain
         p->s.ptr = next->s.ptr;
-        *free_list_beg = p;
+        process->freep = p;
 
         return ptr;
     }
 
     // We have no choice left but to copy data in a newly allocated buffer and free original data
-    void* new_mem = malloc(size, user_process);
+    void* new_mem = malloc(size, process);
 
     if (!new_mem)
         return ptr; // If realloc fails, the man page indicates it should return the unchanged original buffer
 
     memcpy(new_mem, ptr, block_content_byte_size);
-    free(ptr, user_process);
+    free(ptr, process);
 
     return new_mem;
 }
@@ -859,5 +918,5 @@ void* realloc(void* ptr, size_t size, Process* user_process)
 
 void* realloc(void* ptr, size_t size)
 {
-    return realloc(ptr, size, nullptr);
+    return realloc(ptr, size, kernel_process);
 }

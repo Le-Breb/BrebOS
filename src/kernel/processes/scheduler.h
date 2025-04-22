@@ -32,14 +32,18 @@ private:
 
 	static void release_pid(pid_t pid);
 
-	/**
-	 * Create and st ready a process that will perform kernel initialization
-	 * This process is used to execute parts of the initialization that rely on
-	 * PIT::tick
-	 */
-	static void create_kernel_init_process();
-
 public:
+	/**
+	 * Create the process that will be used for global kernel memory mappings, and which will handle the end of kernel
+	 * initialization, when PIT is needed (likely for parts that need to call sleep).
+	 *
+	 * @note See Memory::create_kernel_process for additional information
+	 * @param process_host_mem memory region large enough the store a process
+	 * @param lowest_free_pe lowest free page entry
+	 * @param kernel_process where to write the constructed process
+	 */
+	static void create_kernel_init_process(void* process_host_mem, uint lowest_free_pe, Process** kernel_process);
+
 	/**
 	 * Executes next process in the ready queue
 	 */

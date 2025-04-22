@@ -50,7 +50,7 @@ public:
 	 * @param cpu_state CPU state
 	 * @param stack_state Stack state
 	 * */
-	static void gpf_handler(struct stack_state* stack_state);
+	static void gpf_handler(const struct stack_state* stack_state);
 
 	/**
 	 * Handler for preemption timer

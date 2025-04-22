@@ -13,7 +13,7 @@ pid_t Scheduler::running_process = MAX_PROCESSES;
 queue<pid_t, MAX_PROCESSES>* Scheduler::ready_queue{};
 queue<pid_t, MAX_PROCESSES>* Scheduler::waiting_queue{};
 list<pid_t> Scheduler::process_waiting_list[MAX_PROCESSES] = {};
-Process* Scheduler::processes[MAX_PROCESSES];
+Process* Scheduler::processes[MAX_PROCESSES] {};
 
 Process* Scheduler::get_next_process()
 {
@@ -204,15 +204,16 @@ void Scheduler::init()
 {
     PIT::init();
     Process::init();
-    memset(processes, 0, sizeof(processes));
+
     // Those have to be pointers because they cannot be instantiated at program start since dynamic memory allocation
     // is not available at this moment. However, it is ok to allocate them now.
     ready_queue = new queue<pid_t, MAX_PROCESSES>();
     waiting_queue = new queue<pid_t, MAX_PROCESSES>();
 
+    set_process_ready(Memory::kernel_process);
+
     // Create a process that represents the kernel itself
     // then continue kernel initialization with preemptive scheduling running
-    create_kernel_init_process();
     PIC::enable_preemptive_scheduling();
 }
 
@@ -256,19 +257,45 @@ void Scheduler::release_pid(pid_t pid)
     pid_pool &= ~(1 << pid);
 }
 
-void Scheduler::create_kernel_init_process()
+void Scheduler::create_kernel_init_process(void* process_host_mem, const uint lowest_free_pe, Process** kernel_process)
 {
     uint pid = get_free_pid();
     if (pid == MAX_PROCESSES)
         irrecoverable_error("No more PID available. Cannot finish kernel initialization.");
 
-    stack_state_t dummy_stack_state{};
-    auto* kernel = new Process(0, nullptr, Memory::page_tables, Memory::pdt, &dummy_stack_state,
-        10, pid, pid, (uint)-1);
+    // Manually construct a process for new Process() to work
+    auto* kernel = (Process*)process_host_mem;
+    kernel->page_tables = Memory::page_tables;
+    kernel->pdt = Memory::pdt;
+    kernel->mem_base = {.s = {&kernel->mem_base, 0}};
+    kernel->freep = &kernel->mem_base;
+    kernel->pid = pid;
+    kernel->lowest_free_pe = lowest_free_pe;
 
-    processes[pid] = kernel;
-    set_process_ready(kernel);
+    // Setup ourselves as if this was the actual kernel process
     running_process = pid;
+    processes[pid] = kernel;
+    *kernel_process = kernel;
+
+    // Now we can properly construct the process
+    stack_state_t dummy_stack_state{};
+    auto k = new Process(0, nullptr, Memory::page_tables, Memory::pdt, &dummy_stack_state,
+                         10, pid, pid, (uint)-1);
+
+    // Transfer allocation information from dummy process to actual process
+    k->lowest_free_pe = kernel->lowest_free_pe;
+    k->mem_base = kernel->mem_base;
+    Memory::memory_header* h;
+    for (h = k->freep; h->s.ptr != &kernel->mem_base; h = h->s.ptr){}
+    h->s.ptr = &k->mem_base; // Make free block list circular by removing the reference to the dummy process' mem_base
+    k->free_bytes = k->free_bytes;
+
+    // Register newly created process
+    running_process = k->pid;
+    processes[pid] = k;
+
+    // Write result
+    *kernel_process = k;
 }
 
 void Scheduler::free_terminated_process(Process& p)

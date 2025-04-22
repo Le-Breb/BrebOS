@@ -28,7 +28,7 @@
 #define VIRT_ADDR(pde, pte, offset) ((pde) << 22 | (pte) << 12 | offset)
 #define PTE_PHYS_ADDR(i) (FRAME_ID_ADDR((PDT_ENTRIES + (i))))
 #define PTE_USED(page_tables, i) (PTE(page_tables, i) & (PAGE_PRESENT | PAGE_LAZY_ZERO))
-#define PTE(page_tables, i) (page_tables[(i) / PDT_ENTRIES].entries[(i) % PDT_ENTRIES])
+#define PTE(page_tables, i) (page_tables[(i) >> 10].entries[(i) & 0x3FF])
 #define FRAME_USED(i) (frame_to_page[i] != (uint)-1)
 #define FRAME_FREE(i) !(FRAME_USED(i))
 #define MARK_FRAME_USED(frame_id, page_id) frame_to_page[frame_id] = page_id
@@ -78,6 +78,7 @@ namespace Memory
 	extern page_table_t* page_tables;
 	extern GRUB_module* grub_modules;
 	extern uint* frame_to_page;
+	extern Process* kernel_process;
 
 	/** Reload cr3 which will acknowledge every pte change and invalidate TLB */
 	extern "C" void reload_cr3_asm();
@@ -99,18 +100,16 @@ namespace Memory
 	 */
 	void* malloca(uint size);
 
-	void* calloca(size_t nmemb, size_t size, Process* user_process = nullptr);
+	void* calloca(size_t nmemb, size_t size);
 
 	/**
 	 * Allocates memory which is both virtually and physically contiguous.
 	 * Does not go through the classical malloc process, thus the resulting pointer cannot be given to free.
 	 * Memory acquired with this function has to be released by hand.
 	 * @param n Size of memory block to allocate
-	 * @param user should memory be accessible in ring 3 ?
-	 * @param lazy_zero whether we want memory zeroed out (triggers lazy allocation)
 	 * @return Pointer to beginning of memory block, nullptr on failure
 	 */
-	void* physically_aligned_malloc(uint n, bool user = false, bool lazy_zero = false);
+	void* physically_aligned_malloc(uint n);
 
 	/**
 	 * Free page-aligned memory
@@ -142,10 +141,10 @@ namespace Memory
 	/**
 	 * Free a page
 	 * @param address address to free
-	 * @param user_process process to get the relevant address space from to correctly interpret the address, nullptr
+	 * @param process process to get the relevant address space from to correctly interpret the address, nullptr
 	 * if kernel
 	 */
-	void free_page(uint address, const Process* user_process);
+	void free_page(uint address, const Process* process);
 
 	/** Get index of lowest free page id and update lowest_free_page to next free page id */
 	uint get_free_frame();
@@ -188,14 +187,14 @@ extern "C" void* realloc(void* ptr, size_t size);
 /** Tries to allocate a contiguous block of memory on pages marked with PAGE_USER
  *
  * @param n Size of the block in bytes
- * @param user_process process to get the relevant address space from to correctly interpret the address, nullptr
+ * @param process process to get the relevant address space from to correctly interpret the address, nullptr
  * if kernel
  * @param lazy_zero whether we want memory zeroed out (triggers lazy allocation)
  * @return Address of the beginning of allocated block if allocation was successful, NULL otherwise
  */
-void* malloc(uint n, Process* user_process, bool lazy_zero = false);
+void* malloc(uint n, Process* process, bool lazy_zero = false);
 
-void* calloc(size_t nmemb, size_t size, Process* user_process);
+void* calloc(size_t nmemb, size_t size, Process* process);
 
 extern "C" void* calloc(size_t nmemb, size_t size);
 
@@ -208,11 +207,11 @@ extern "C" void free(void* ptr);
 /** Frees some process memory
  *
  * @param ptr Pointer to the memory block to free
- * @param user_process process to get the relevant address space from to correctly interpret the address, nullptr
+ * @param process process to get the relevant address space from to correctly interpret the address, nullptr
  * if kernel
  */
-void free(void* ptr, Process* user_process);
+void free(void* ptr, Process* process);
 
-void* realloc(void* ptr, size_t size, Process* user_process);
+void* realloc(void* ptr, size_t size, Process* process);
 
 #endif //INCLUDE_MEMORY_H

@@ -7,7 +7,7 @@
 
 ELFLoader::ELFLoader(): current_process(Scheduler::get_running_process()), elf_dep_list(new list<::elf_dependence_list>),
 page_tables((Memory::page_table_t*)Memory::calloca(768, sizeof(Memory::page_table_t))),
-pdt((Memory::pdt_t*)Memory::malloca(768 * sizeof(Memory::pdt_t)))
+pdt((Memory::pdt_t*)Memory::malloca(sizeof(Memory::pdt_t)))
 {
     init_fini = init_fini_info();
 }
@@ -341,7 +341,7 @@ bool ELFLoader::load_elf(const char* path, ELF_type expected_type, void* lib_dyn
     ELF* elf;
     if (!((elf = ELF::is_valid((uint)buf, expected_type))))
     {
-        free(buf);
+        delete[] (char*)buf;
         return false;
     }
 
@@ -395,7 +395,7 @@ bool ELFLoader::load_elf(const char* path, ELF_type expected_type, void* lib_dyn
 
     if (!apply_relocations(elf, runtime_load_addr))
     {
-        free(buf);
+        delete[] (char*)buf;
         return false;
     }
 
@@ -414,7 +414,7 @@ bool ELFLoader::load_elf(const char* path, ELF_type expected_type, void* lib_dyn
     }
 
     elf_dep_list->add({elf, runtime_load_addr});
-    free(buf);
+    delete[] (char*)buf;
 
     return true;
 }
@@ -468,7 +468,8 @@ Elf32_Addr ELFLoader::finalize_process_setup(int argc, const char** argv)
     for (size_t i = 0; i < num_used_paged_tables; ++i)
         pdt->entries[i] = PHYS_ADDR(Memory::page_tables, (uint) &page_tables[i]) | PAGE_USER | PAGE_WRITE |
             PAGE_PRESENT;
-    memset(pdt->entries + num_used_paged_tables, 0, PDT_ENTRIES - num_used_paged_tables);
+    for (size_t i = num_used_paged_tables; i < 768; i++)
+        pdt->entries[i] = 0;
     // Use kernel page tables for the rest
     for (int i = 768; i < PDT_ENTRIES; ++i)
         pdt->entries[i] = PHYS_ADDR(Memory::page_tables, (uint) &Memory::page_tables[i]) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
