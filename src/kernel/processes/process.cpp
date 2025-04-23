@@ -102,7 +102,7 @@ void Process::terminate(int ret_val)
 
 void* Process::malloc(uint n)
 {
-    return ::malloc(n, this);
+    return ::malloc<false>(n, this);
 }
 
 void* Process::calloc(size_t nmemb, size_t size)

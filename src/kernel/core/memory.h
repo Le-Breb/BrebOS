@@ -122,21 +122,23 @@ namespace Memory
 	 *
 	 * @param frame_id Frame id
 	 * @param page_id Page id
-	 * @param lazy_zero whether we want memory zeroed out (triggers lazy allocation)
 	 */
-	void allocate_page(uint frame_id, uint page_id, bool lazy_zero = false);
+	template<bool lazy_zero>
+	void allocate_page(uint frame_id, uint page_id);
 
-	void allocate_page(uint page_id, bool lazy_zero = false);
+	template<bool lazy_zero>
+	void allocate_page(uint page_id);
 
 	/** Allocate a page with user permissions
 	 *
 	 * @param frame_id Frame id
 	 * @param page_id Page id
-	 * @param lazy_zero whether we want memory zeroed out (triggers lazy allocation)
 	 */
-	void allocate_page_user(uint frame_id, uint page_id, bool lazy_zero = false);
+	template<bool lazy_zero>
+	void allocate_page_user(uint frame_id, uint page_id);
 
-	void allocate_page_user(uint page_id, bool lazy_zero = false);
+	template<bool lazy_zero>
+	void allocate_page_user(uint page_id);
 
 	/**
 	 * Free a page
@@ -189,10 +191,10 @@ extern "C" void* realloc(void* ptr, size_t size);
  * @param n Size of the block in bytes
  * @param process process to get the relevant address space from to correctly interpret the address, nullptr
  * if kernel
- * @param lazy_zero whether we want memory zeroed out (triggers lazy allocation)
  * @return Address of the beginning of allocated block if allocation was successful, NULL otherwise
  */
-void* malloc(uint n, Process* process, bool lazy_zero = false);
+template <bool lazy_zero>
+void* malloc(uint n, Process* process);
 
 void* calloc(size_t nmemb, size_t size, Process* process);
 

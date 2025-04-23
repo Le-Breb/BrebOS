@@ -54,14 +54,14 @@ void Interrupts::page_fault_handler(stack_state_t* stack_state)
 	uint err = stack_state->error_code;
 
 	printf_error("Page fault at address 0x%x caused by instruction at 0x%x", addr, stack_state->eip);
-	printf("Present: %s\n", (err & 1 ? "True" : "False"));
-	printf("Write: %s\n", err & 2 ? "True" : "False");
-	printf("User mode: %s\n", err & 4 ? "True" : "False");
-	printf("Reserved: %s\n", err & 8 ? "True" : "False");
-	printf("Instruction fetch: %s\n", err & 16 ? "True" : "False");
-	printf("Protection key violation: %s\n", err & 32 ? "True" : "False");
-	printf("Shadow stack: %s\n", err & 64 ? "True" : "False");
-	printf("SGX: %s\n", err & 32768 ? "True" : "False");
+	printf(err & 1 ? "Page is present but page protection was violated\n" : "Page is not present\n");
+	printf("Fault was caused by a %s access\n", err & 2 ? "write" : "read");
+	printf("Fault occurred in %s\n", err & 4 ? "userland" : "kernel land");
+	//printf("Reserved: %s\n", err & 8 ? "True" : "False");
+	//printf("Instruction fetch: %s\n", err & 16 ? "True" : "False");
+	//printf("Protection key violation: %s\n", err & 32 ? "True" : "False");
+	//printf("Shadow stack: %s\n", err & 64 ? "True" : "False");
+	//printf("SGX: %s\n", err & 32768 ? "True" : "False");
 
 	Scheduler::get_running_process()->terminate(SEGFAULT_RET_VAL);
 }
