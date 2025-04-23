@@ -155,7 +155,7 @@ HTTP::header_t* HTTP::response::get_header(const char* name) const
     return nullptr;
 }
 
-HTTP::HTTP(const char* hostname, uint16_t peer_port): TCP_listener(hostname, peer_port)
+HTTP::HTTP(const char* hostname, uint16_t peer_port): TCP_listener(hostname, peer_port), Progress_bar_user()
 {
     instances.add(this);
 }
@@ -205,6 +205,7 @@ void HTTP::on_data_received(void* packet, uint16_t packet_size)
             handle_response_descriptor(packet, packet_size);
             break;
         case State::RECEIVING_RESPONSE: // Get response body
+        {
             if (buf_size + packet_size > buf_capacity)
             {
                 socket->close();
@@ -213,8 +214,10 @@ void HTTP::on_data_received(void* packet, uint16_t packet_size)
             }
             memcpy(buf + buf_size, packet, packet_size);
             buf_size += packet_size;
-            printf("Received %u/%u bytes\n", buf_size, buf_capacity);
+            update_progress(buf_size, buf_capacity);
+            //printf("Received %u/%u bytes\n", buf_size, buf_capacity);
             break;
+        }
         default:
             printf("HTTP packet received while on state %d\n", (int)state);
             socket->close();
@@ -285,7 +288,8 @@ void HTTP::handle_response_descriptor(const void* packet, uint16_t packet_size)
     buf_size = data_size;
 
     if (buf_size)
-        printf("Received %u/%u bytes\n", buf_size, buf_capacity);
+        update_progress(buf_size, buf_capacity);
+    //printf("Received %u/%u bytes\n", buf_size, buf_capacity);
 }
 
 void HTTP::on_connection_terminated(const char* error_message)

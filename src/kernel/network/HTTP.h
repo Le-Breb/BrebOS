@@ -2,11 +2,11 @@
 #define HTTP_H
 
 #include <kstdint.h>
-#include <kstddef.h>
 
 #include "NetworkConsts.h"
 #include "TCPListener.h"
 #include "../utils/list.h"
+#include "../utils/progress_bar_user.h"
 
 #define DIGIT(c) (c >= '0' && c <= '9')
 
@@ -14,7 +14,7 @@
 #define HTTP_MOVED_PERMANENTLY 301
 #define HTTP_SERVICE_UNAVAILABLE 503
 
-class HTTP : TCP_listener
+class HTTP : TCP_listener, Progress_bar_user
 {
 public:
     enum class State

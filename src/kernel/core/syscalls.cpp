@@ -231,7 +231,7 @@ void Syscall::wget(const cpu_state_t* cpu_state)
     const char* uri = (const char*)cpu_state->edi;
     const char* hostname = (const char*)cpu_state->esi;
     const auto port = (uint16_t)cpu_state->edx;
-    auto http = new HTTP{hostname, port};  // Todo: add a system to free this object
+    auto http = new HTTP{hostname, port};
     http->send_get(uri);
 }
 

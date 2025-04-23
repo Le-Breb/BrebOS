@@ -170,12 +170,12 @@ void DNS::display_response(const header_t* header)
             case DNS_REQUEST_CNAME:
             {
                 const char* alias_name = parse_name((const char*)rc->data, (uint8_t*)header);
-                printf("%s is an alias for %s\n", name, alias_name);
+                //printf("%s is an alias for %s\n", name, alias_name);
                 delete alias_name;
                 break;
             }
             case DNS_REQUEST_A:
-                printf("%s has address %d.%d.%d.%d\n", name, rc->data[0], rc->data[1], rc->data[2], rc->data[3]);
+                //printf("%s has address %d.%d.%d.%d\n", name, rc->data[0], rc->data[1], rc->data[2], rc->data[3]);
                 break;
             default:
                 break;

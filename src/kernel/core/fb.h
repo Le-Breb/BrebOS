@@ -111,6 +111,28 @@ public:
 
     /** Delete a character */
     static void delchar();
+
+    /**
+     * Updates the percentage displayed by the progress bar
+     * @param new_percentage new percentage to display
+     * @param id unique identifier
+     */
+    static void update_progress_bar(char new_percentage, const void* id);
+
+    /**
+     * Try to obtain ownership over the progress bar. If the bar is used, does nothing. Otherwise, the bar owner is
+     * set to id. This id will be needed for any further interaction with the bar.
+     * @param id unique identifier
+     * @return whether bar was successfully acquired
+     */
+    static bool try_acquire_progress_bar(const void* id);
+
+    /**
+     * Indicate that we do not need the progress bar anymore.
+     * @param id unique identifier used to acquire the bar
+     * @note This function can be called even if try_acquire_progress_bar failed
+     */
+    static void release_progres_bar(const void* id);
 };
 
 /**
