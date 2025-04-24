@@ -17,19 +17,31 @@ char progress_bar_percentage = 0;
 short progress_bar_overwrite[FB_WIDTH]; // Save of whatever is displayed at the location of the progress bar
 constexpr char progress_char = (char)219;
 
+// Copy of framebuffer for double buffering. Whenever we want to read some pixel, we use this buffer instead of fb.
+// That way, we gain a lot ot time :D
+short fb_shadow[FB_WIDTH * FB_HEIGHT]{};
+
 void FB::scroll()
 {
 	// Offset lines
 	for (int i = 0; i < FB_WIDTH * (FB_HEIGHT - 1); ++i)
-	    fb[i] = fb[i + FB_WIDTH];
+	{
+		fb[i] = fb_shadow[i + FB_WIDTH];
+		fb_shadow[i] = fb_shadow[i + FB_WIDTH];
+	}
 	// Clear last line
 	for (int i = 0; i < FB_WIDTH; i++)
-	    fb[FB_WIDTH * (FB_HEIGHT - 1) + i] = ((((BG & 0x0F) << 4) | (FG & 0x0F)) << 8 | ' ');
+	{
+		short val = ((((BG & 0x0F) << 4) | (FG & 0x0F)) << 8 | ' ');
+		auto idx = FB_WIDTH * (FB_HEIGHT - 1) + i;
+		fb[idx] = val;
+		fb_shadow[idx] = val;
+	}
 
 	// If progress bar is being used, redraw it
 	if (progress_bar_owner)
 	{
-		memcpy(progress_bar_overwrite, fb, sizeof(progress_bar_overwrite)); // Save first line
+		memcpy(progress_bar_overwrite, fb_shadow, sizeof(progress_bar_overwrite)); // Save first line
 		update_progress_bar(progress_bar_percentage, progress_bar_owner); // Update bar
 	}
 }
@@ -52,10 +64,18 @@ void FB::update_progress_bar(char new_percentage, const void* id)
 	// Draw bar
 	uint n_full = (uint)((float)new_percentage * (float)FB_WIDTH / 100.f);
 	for (uint i = 0; i < n_full; i++)
-		fb[i] = ((((BG & 0x0F) << 4) | (FG & 0x0F)) << 8 | progress_char);
+	{
+		short val = ((((BG & 0x0F) << 4) | (FG & 0x0F)) << 8 | progress_char);
+		fb[i] = val;
+		fb_shadow[i] = val;
+	}
 	// Clear the rest ot the line
 	for (uint i = n_full; i < FB_WIDTH; i++)
-		fb[i] = ((((BG & 0x0F) << 4) | (FG & 0x0F)) << 8 | ' ');
+	{
+		short val = ((((BG & 0x0F) << 4) | (FG & 0x0F)) << 8 | ' ');
+		fb[i] = val;
+		fb_shadow[i] = val;
+	}
 
 	progress_bar_percentage = new_percentage;
 }
@@ -65,7 +85,7 @@ bool FB::try_acquire_progress_bar(const void* id)
 	if (progress_bar_owner)
 		return false;
 
-	memcpy(progress_bar_overwrite, fb, sizeof(progress_bar_overwrite));
+	memcpy(progress_bar_overwrite, fb_shadow, sizeof(progress_bar_overwrite));
 	progress_bar_owner = id;
 	return true;
 }
@@ -79,6 +99,7 @@ void FB::release_progres_bar(const void* id)
 
 	// Restore content that was hidden by the bar
 	memcpy(fb, progress_bar_overwrite, sizeof(progress_bar_overwrite));
+	memcpy(fb_shadow, progress_bar_overwrite, sizeof(progress_bar_overwrite));
 }
 
 void FB::putchar(char c)
@@ -105,7 +126,10 @@ void FB::putchar(char c)
 
     // Write to fb
     move_cursor(caret_pos + 1);
-    fb[caret_pos++] = (short)((((BG & 0x0F) << 4) | (FG & 0x0F)) << 8 | c);
+	auto val = (short)((((BG & 0x0F) << 4) | (FG & 0x0F)) << 8 | c);
+    fb[caret_pos] = val;
+	fb_shadow[caret_pos] = val;
+	caret_pos++;
 }
 
 void FB::move_cursor(unsigned short pos)
@@ -125,7 +149,7 @@ void FB::clear_screen()
         putchar(' ');
     caret_pos = 0;
 
-	memcpy(progress_bar_overwrite, fb, sizeof(progress_bar_overwrite));
+	memcpy(progress_bar_overwrite, fb_shadow, sizeof(progress_bar_overwrite));
 }
 
 void FB::write(const char* buf)
