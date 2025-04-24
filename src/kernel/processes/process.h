@@ -63,7 +63,7 @@ public:
 	uint lowest_free_pe;
 	uint free_bytes = 0;
 
-	list<elf_dependence_list>* elf_dep_list;
+	list<elf_dependence>* elf_dep_list;
 	cpu_state_t cpu_state{}; // Registers
 	cpu_state_t k_cpu_state{}; // Syscall handler registers
 	stack_state_t stack_state{}; // Execution context
@@ -84,7 +84,7 @@ private:
 	/** Frees a terminated process */
 	~Process();
 
-	Process(uint num_pages, list<elf_dependence_list>* elf_dep_list, Memory::page_table_t* page_tables,
+	Process(uint num_pages, list<elf_dependence>* elf_dep_list, Memory::page_table_t* page_tables,
 		Memory::pdt_t* pdt, stack_state_t* stack_state, uint priority, pid_t pid,
 		pid_t ppid, Elf32_Addr k_stack_top);
 
@@ -145,8 +145,10 @@ public:
 	* @param dep_id id of the elf in elf_dep_list
 	* @param symbol_name name of the symbol
 	* @return runtime address of the symbol, 0x00 if not found
+	* @warning As its name suggests, this function should only be called during runtime of the ELF represented by this
+	* process (because of the usage of the ELF runtime load address)
 	*/
-	uint get_symbol_runtime_address(uint dep_id, const char* symbol_name) const;
+	uint get_symbol_runtime_address_at_runtime(uint dep_id, const char* symbol_name) const;
 
 	static void init();
 

@@ -30,13 +30,13 @@ class ELFLoader
 private:
     Process* current_process;
     init_fini_info init_fini;
-    list<elf_dependence_list>* elf_dep_list;
+    list<elf_dependence>* elf_dep_list;
     uint num_pages = 0;
     Memory::page_table_t* page_tables;
     Memory::pdt_t* pdt;
     stack_state_t stack_state{};
     bool used = false;
-    Elf32_Addr libdynlk_runtime_entry_point = -1;
+    Elf32_Addr libdynlk_runtime_entry_point = ELF32_ADDR_ERR;
 
     ELFLoader();
     ~ELFLoader();

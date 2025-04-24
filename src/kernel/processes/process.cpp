@@ -81,7 +81,7 @@ Process::~Process()
     //printf_info("Process %u exited with code %d", pid, ret_val);
 }
 
-Process::Process(uint num_pages, list<elf_dependence_list>* elf_dep_list, Memory::page_table_t* page_tables,
+Process::Process(uint num_pages, list<elf_dependence>* elf_dep_list, Memory::page_table_t* page_tables,
     Memory::pdt_t* pdt, stack_state_t* stack_state, uint priority, pid_t pid, pid_t ppid, Elf32_Addr k_stack_top) :
     quantum(0), priority(priority),
     num_pages(num_pages),
@@ -145,12 +145,12 @@ bool Process::is_waiting_program() const
     return flags & P_WAITING_PROCESS;
 }
 
-uint Process::get_symbol_runtime_address(uint dep_id, const char* symbol_name) const
+uint Process::get_symbol_runtime_address_at_runtime(uint dep_id, const char* symbol_name) const
 {
     for (int i = dep_id; i < elf_dep_list->size(); i++)
     {
         auto dep = elf_dep_list->get(i);
-        auto s = dep->elf->get_symbol(symbol_name);
+        auto s = dep->elf->get_symbol(symbol_name, dep->runtime_load_address);
         if (s && s->st_shndx && ELF32_ST_BIND(s->st_info) == STB_GLOBAL)
             return dep->runtime_load_address + s->st_value;
     }

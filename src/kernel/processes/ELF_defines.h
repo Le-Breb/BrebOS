@@ -497,4 +497,7 @@ typedef struct
 #define R_386_RELATIVE 8
 #define R_386_GOTOFF 9
 #define R_386_GOTPC 100
+
+#define STN_UNDEF 0
+#define ELF32_ADDR_ERR ((Elf32_Addr)-1)
 #endif //CUSTOM_OS_ELF_DEFINES_H

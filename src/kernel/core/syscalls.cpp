@@ -68,7 +68,7 @@ void Syscall::dynlk(const cpu_state_t* cpu_state)
 
     // Find the ELF from which the call is from
     int dep_id = 0;
-    elf_dependence_list* dep = nullptr;
+    elf_dependence* dep = nullptr;
     for (dep_id = 0; dep_id < p->elf_dep_list->size(); dep_id++)
     {
         dep = p->elf_dep_list->get(dep_id);
@@ -119,7 +119,7 @@ void Syscall::dynlk(const cpu_state_t* cpu_state)
     const char* symbol_name = &elf->dynsym_strtab[s->st_name];
 
     // Find symbol
-    void* symbol_addr = (void*)p->get_symbol_runtime_address(dep_id, symbol_name);
+    void* symbol_addr = (void*)p->get_symbol_runtime_address_at_runtime(dep_id, symbol_name);
     if (symbol_addr == nullptr)
     {
         printf_error("Symbol %s not found", symbol_name);

@@ -5,7 +5,7 @@
 #include <kstring.h>
 #include "scheduler.h"
 
-ELFLoader::ELFLoader(): current_process(Scheduler::get_running_process()), elf_dep_list(new list<::elf_dependence_list>),
+ELFLoader::ELFLoader(): current_process(Scheduler::get_running_process()), elf_dep_list(new list<elf_dependence>),
 page_tables((Memory::page_table_t*)Memory::calloca(768, sizeof(Memory::page_table_t))),
 pdt((Memory::pdt_t*)Memory::malloca(sizeof(Memory::pdt_t)))
 {
@@ -321,7 +321,7 @@ void ELFLoader::load_elf_code(const ELF* elf, uint load_address, uint runtime_lo
 
 void ELFLoader::setup_elf_got(const ELF* elf, uint elf_runtime_load_address) const
 {
-    if (libdynlk_runtime_entry_point == (Elf32_Addr)-1)
+    if (libdynlk_runtime_entry_point == ELF32_ADDR_ERR)
         return;
 
     auto got_runtime_addr = elf_runtime_load_address + elf->runtime_got_addr;
@@ -336,8 +336,7 @@ void ELFLoader::setup_elf_got(const ELF* elf, uint elf_runtime_load_address) con
 
 Elf32_Addr ELFLoader::get_libdynlk_runtime_address()
 {
-    // Todo: do this better
-    if (libdynlk_runtime_entry_point != (Elf32_Addr)-1)
+    if (libdynlk_runtime_entry_point != ELF32_ADDR_ERR)
         return libdynlk_runtime_entry_point;
 
     uint proc_num_pages = num_pages;
@@ -345,7 +344,11 @@ Elf32_Addr ELFLoader::get_libdynlk_runtime_address()
     if (!((libdynlk_elf = load_libdynlk())))
         return -1;
 
-    return libdynlk_runtime_entry_point = (Elf32_Addr)libdynlk_elf->get_libdynlk_main_runtime_addr(proc_num_pages);
+    // Find and return libdynlk runtime entry point
+    uint libdynlk_load_address = runtime_address_to_load_address(proc_num_pages << 12);
+    Elf32_Sym* s = libdynlk_elf->get_symbol("lib_main", libdynlk_load_address);
+    return libdynlk_runtime_entry_point =
+        s == nullptr ? ELF32_ADDR_ERR : proc_num_pages * PAGE_SIZE + s->st_value;
 }
 
 void ELFLoader::setup_stacks(Elf32_Addr& k_stack_top, Elf32_Addr& p_stack_top_v_addr) const

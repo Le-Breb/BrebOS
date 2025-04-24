@@ -171,7 +171,7 @@ ELF* ELF::is_valid(uint start_address, ELF_type expected_type)
         is_valid_exit_err
     }
 
-    if (elf->runtime_got_addr == (Elf32_Addr)-1)
+    if (elf->runtime_got_addr == ELF32_ADDR_ERR)
     {
         printf_error("No GOT");
         is_valid_exit_err
@@ -219,22 +219,31 @@ uint ELF::get_highest_runtime_addr() const
     return highest_addr;
 }
 
-void* ELF::get_libdynlk_main_runtime_addr(uint proc_num_pages) const
+Elf32_Sym* ELF::get_symbol(const char* symbol_name, Elf32_Addr load_address) const
 {
-    // Find and return main's address
-    Elf32_Sym* s = get_symbol("lib_main");
-
-    return s == nullptr ? (void*)s : (void*)(proc_num_pages * PAGE_SIZE + s->st_value);
-}
-
-Elf32_Sym* ELF::get_symbol(const char* symbol_name) const
-{
-    uint lib_dynsym_num_entries = dynsym_hdr->sh_size / dynsym_hdr->sh_entsize;
-
-    for (uint i = 1; i < lib_dynsym_num_entries; i++)
+    // If there is not hash table available, linearly search for the symbol
+    if (hash_table_runtime_address == ELF32_ADDR_ERR)
     {
-        if (strcmp(&dynsym_strtab[symbols[i].st_name], symbol_name) == 0)
-            return &symbols[i];
+        uint lib_dynsym_num_entries = dynsym_hdr->sh_size / dynsym_hdr->sh_entsize;
+        for (uint i = 1; i < lib_dynsym_num_entries; i++)
+        {
+            if (strcmp(&dynsym_strtab[symbols[i].st_name], symbol_name) == 0)
+                return &symbols[i];
+        }
+    }
+    else // Otherwise, make fast lookup during the hash table
+    {
+        auto h = hash((const unsigned char*)symbol_name);
+        uint* hash_table = (uint*)(load_address + hash_table_runtime_address);
+        uint nbucket = *hash_table;
+        uint* buckets = hash_table + 2;
+        uint* chain = buckets + nbucket;
+        uint y = buckets[h % nbucket];
+
+        while (y != STN_UNDEF && strcmp(&dynsym_strtab[symbols[y].st_name], symbol_name) != 0)
+            y = chain[y];
+
+        return y == STN_UNDEF ? nullptr : &symbols[y];
     }
 
     return nullptr;
@@ -335,8 +344,7 @@ ELF::ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr,
 
         if (h->sh_type != SHT_DYNSYM)
             continue;
-        dynsym_hdr = new Elf32_Shdr;
-        memcpy(dynsym_hdr, h, sizeof(Elf32_Shdr));
+        dynsym_hdr = new Elf32_Shdr(*h);
         Elf32_Shdr* dyn_strtab_h = &section_hdrs[h->sh_link];
         dynsym_strtab = new char[dyn_strtab_h->sh_size];
         memcpy((char*)dynsym_strtab, (char*)start_address + dyn_strtab_h->sh_offset, dyn_strtab_h->sh_size);
@@ -375,6 +383,11 @@ ELF::ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr,
             case DT_PLTGOT:
                 runtime_got_addr = d->d_un.d_val;
                 break;
+            case DT_HASH:
+            {
+                hash_table_runtime_address = d->d_un.d_val;
+                break;
+            }
             default:
                 break;
         }
@@ -387,6 +400,20 @@ ELF::ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr,
         strcpy(cpy, lib_name);
         lib_name = cpy;
     }
+}
+
+unsigned long ELF::hash(const unsigned char* name)
+{
+    unsigned long h = 0, g;
+    while (*name)
+    {
+        h = (h << 4) + *name++;
+        if ((g = (h & 0xf0000000)))
+            h ^= g >> 24 ;
+        h &= ~g ;
+    }
+
+    return h ;
 }
 
 ELF::ELF(uint start_address)
