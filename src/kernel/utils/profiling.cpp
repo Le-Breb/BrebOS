@@ -44,13 +44,21 @@ namespace Profiling
 {
     void init()
     {
-        ncycles = (uint64_t*)calloc(N, sizeof(uint64_t));
-        start_cycle = (uint64_t*)calloc(N, sizeof(uint64_t));
+        // Calloc cannot be used here since it lazily allocates the pages. When this function returns,
+        // func_exit is called, and will try to access the arrays. This will cause a page fault. The handler will
+        // then call some other functions, which will call func_enter. func_enter will then try to access the array,
+        // and now we enter an endless loop func_enter <-> page_fault handler
+        auto size = N * sizeof(uint64_t);
+        ncycles = (uint64_t*)malloc(size);
+        memset(ncycles, 0, size);
+        start_cycle = (uint64_t*)malloc(size);
+        memset(start_cycle, 0, size);
         initialized = true;
     }
 
     void save_data()
     {
+        initialized = false;
         // Count number of functions
         uint num_functions = 0;
         for (long unsigned int i = 0; i < N; i++)
@@ -60,25 +68,25 @@ namespace Profiling
             num_functions++;
         }
 
-        // Todo: understand whats going on, because this functions crashes without the +100
         // Write data to file. format is "function_address (8 bytes) cycles (16 bytes)\n"
-        auto buf_len = (8 + 18) * (num_functions + 100);
+        auto buf_len = (8 + 18) * num_functions;
         auto buf = new char[buf_len];
         auto buf_beg = buf;
-        uint fid = 0;
         for (long unsigned int i = 0; i < N; i++)
         {
             if (!ncycles[i])
                 continue;
+
             auto fun_addr = i + KERNEL_VIRTUAL_BASE;
             sprintf(buf, "%lx", fun_addr);
             buf += 8;
             sprintf(buf, " %016llu\n", ncycles[i]);
             buf += 18;
-            fid++;
         }
         if (!VFS::write_buf_to_file("/prof.txt", buf_beg, buf_len))
             printf_error("Failed to write profiling data to file");
+
+        initialized = true;
     }
 
     // Get current cycle count
