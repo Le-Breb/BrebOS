@@ -17,75 +17,31 @@ ELFLoader::~ELFLoader()
     if (used)
         return;
 
+    for (auto i = 0; i < elf_dep_list->size(); i++)
+        delete elf_dep_list->get(i)->elf;
+
     delete elf_dep_list;
     Memory::freea(page_tables);
     Memory::freea(pdt);
 }
 
-bool ELFLoader::dynamic_loading(ELF* elf)
+ELF* ELFLoader::load_libdynlk()
 {
-    const char* interpereter_name = elf->interpreter_name;
-    if (strcmp(interpereter_name, OS_INTERPR) != 0)
-    {
-        printf_error("Unsupported interpreter: %s", interpereter_name);
-        return false;
-    }
+    auto libdynlk_file = VFS::browse_to(LIBDYNLK_PATH);
+    ELF* libdynlk;
+    if (!((libdynlk = load_elf(libdynlk_file, SharedObject))))
+        return nullptr;
 
-    Elf32_Dyn* dyn_table = elf->dyn_table;
-    if (dyn_table == nullptr)
-        return false;
-    size_t base_addr = elf->base_address();
-    if (base_addr < PAGE_SIZE)
-    {
-        printf_error("Process base address (%zu) < PAGE_SIZE (%u). Aborting", base_addr, PAGE_SIZE);
-        return false;
-    }
-    if (base_addr == (size_t)-1)
-    {
-        printf_error("Cannot compute base address. Aborting");
-        return false;
-    }
+    return libdynlk;
+}
 
-    if (elf->runtime_got_addr == (Elf32_Addr)-1)
-    {
-        printf_error("No GOT");
-        return false;
-    }
-
-    // Get needed lib name and check it is not missing
-    char* lib_name = elf->lib_name;
-    if (strcmp(lib_name, OS_LIB) != 0)
-    {
-        printf_error("Missing library: %s\n", lib_name);
-        return false;
-    }
-
-    // Ensure dynamic symbols are supported
-    uint dynsym_num_entries = elf->dynsym_hdr->sh_size / elf->dynsym_hdr->sh_entsize;
-    for (uint i = 1; i < dynsym_num_entries; ++i) // First entry has to be null, we skip it
-    {
-        Elf32_Sym* dd = elf->symbols + i;
-        //printf("%s\n", &dyn_str_table[dd->st_name]);
-        uint type = ELF32_ST_TYPE(dd->st_info);
-        if (type != STT_FUNC && type != STT_NOTYPE) // _init and _fini have type STT_NOTYPE
-        {
-            printf_error("Unsupported symbol type: %u", type);
-            return false;
-        }
-    }
-
-    // Compute GOT runtime address and loaded GOT address
-    auto got_runtime_addr = elf->runtime_got_addr;
-
-    // Load libdynlk
-    uint proc_num_pages = num_pages;
-    if (!load_elf(LIBDYNLK_PATH, SharedObject, nullptr))
-        return false;
-    auto libdynlk_dep = *elf_dep_list->get(elf_dep_list->size() - 1);
-    ELF* libdynlk_elf = libdynlk_dep.elf;
+bool ELFLoader::dynamic_loading(const ELF* elf)
+{
+    if (elf->interpreter_name == nullptr)
+        return true;
 
     // Get libdynlk entry point
-    void* libdynlk_entry_point = libdynlk_elf->get_libdynlk_main_runtime_addr(proc_num_pages);
+    void* libdynlk_entry_point = (void*)get_libdynlk_runtime_address();
     if (libdynlk_entry_point == nullptr)
     {
         printf_error("Error while loading libdynlk");
@@ -93,21 +49,14 @@ bool ELFLoader::dynamic_loading(ELF* elf)
     }
 
     // Load libc
-    if (!load_elf(LIBC_PATH, SharedObject, libdynlk_entry_point))
+    auto libc = VFS::browse_to(LIBC_PATH);
+    if (!load_elf(libc, SharedObject))
         return false;
-
-    // GOT setup: GOT[0] unused, GOT[1] = addr of GRUB module (to identify the program), GOT[2] = dynamic linker address
-    auto* got_addr = (Elf32_Addr*)runtime_address_to_load_address(got_runtime_addr);
-    *(void**)(got_addr + 1) = (void*)elf;
-    *(void**)(got_addr + 2) = libdynlk_entry_point;
-
-    // Indicate entry point
-    stack_state.eip = elf->global_hdr.e_entry;
 
     return true;
 }
 
-bool ELFLoader::apply_relocations(ELF* elf, uint elf_runtime_load_address) const
+void ELFLoader::apply_relocations(ELF* elf, uint elf_runtime_load_address) const
 {
     // Cf. Relocation Types in http://www.skyfree.org/linux/references/ELF_Format.pdf
     uint& B = elf_runtime_load_address;
@@ -130,6 +79,7 @@ bool ELFLoader::apply_relocations(ELF* elf, uint elf_runtime_load_address) const
         // Update its value
         *(Elf32_Addr*)got_entry_curr_addr += elf_runtime_load_address;
     }
+
     // Dynamic relocations
     for (size_t i = 0; i < elf->num_dyn_relocs; i++)
     {
@@ -162,14 +112,8 @@ bool ELFLoader::apply_relocations(ELF* elf, uint elf_runtime_load_address) const
             }
             case R_386_PC32:
             {
-                uint symbol_id = ELF32_R_SYM(reloc->r_info);
-                Elf32_Sym* symbol = &elf->symbols[symbol_id];
-                // Weak symbols that are not yet defined are not an issue
-                if (ELF32_ST_BIND(symbol->st_info) != STB_WEAK || symbol->st_shndx != 0)
-                {
-                    printf_error("unsupported R_396_PC32 relocation");
-                    return false;
-                }
+                // Nothing to be done here, ELF::is_valid filters ELFs with unsupported R_386_PC32 relocations
+
                 /*Elf32_Addr symbol_address = symbol->st_value;
                 Elf32_Addr S = B + symbol_address;
                 [[maybe_unused]] const char* symbol_name = &elf->dynsym_strtab[symbol->st_name];
@@ -200,11 +144,9 @@ bool ELFLoader::apply_relocations(ELF* elf, uint elf_runtime_load_address) const
                 break;
         }
     }
-
-    return true;
 }
 
-bool ELFLoader::alloc_elf_memory(ELF& elf)
+bool ELFLoader::alloc_elf_memory(const ELF& elf)
 {
     // Num pages lib  code spans over
     uint lib_num_code_pages = elf.num_pages();
@@ -251,7 +193,7 @@ ELFLoader::copy_elf_subsegment_to_address_space(const void* bytes_ptr, uint n, E
     copied_bytes += n;
 }
 
-void ELFLoader::register_elf_init_and_fini(ELF* elf, uint runtime_load_address)
+void ELFLoader::register_elf_init_and_fini(const ELF* elf, uint runtime_load_address)
 {
     uint init_arr_byte_size = 0;
     uint fini_arr_byte_size = 0;
@@ -320,37 +262,20 @@ void ELFLoader::map_elf(const ELF* load_elf, Elf32_Addr runtime_load_address) co
         for (uint i = 0; i < num_pages; i++)
         {
             Elf32_Addr runtime_address = runtime_load_address + h->p_vaddr + i * PAGE_SIZE;
-            uint runtime_page_id = runtime_address >> 12;
             uint page_id = runtime_address_to_load_address(runtime_address) >> 12;
-            uint pde = runtime_page_id / PT_ENTRIES;
-            uint pte = runtime_page_id % PT_ENTRIES;
+            uint pde = ADDR_PDE(runtime_address);
+            uint pte = ADDR_PTE(runtime_address);
             page_tables[pde].entries[pte] = PTE(current_process->page_tables, page_id);
 
-            bool no_write = !(h->p_flags & PF_W); // Segment has no write permissions
-            if (no_write)
+            // Check if page should have write permissions, and remove the permission if it's not the case
+            if (!(h->p_flags & PF_W))
                 page_tables[pde].entries[pte] &= ~PAGE_WRITE;
         }
     }
 }
 
-bool ELFLoader::load_elf(const char* path, ELF_type expected_type, void* lib_dynlk_runtime_entry_point)
+void ELFLoader::load_elf_code(const ELF* elf, uint load_address, uint runtime_load_address) const
 {
-    auto buf = VFS::load_file(path);
-    if (!buf)
-        return false;
-    ELF* elf;
-    if (!((elf = ELF::is_valid((uint)buf, expected_type))))
-    {
-        delete[] (char*)buf;
-        return false;
-    }
-
-    uint load_address = (uint)buf;
-    uint runtime_load_addr = num_pages * PAGE_SIZE;
-
-    alloc_elf_memory(*elf);
-    map_elf(elf, runtime_load_addr);
-
     // Copy lib code in allocated space
     for (int k = 0; k < elf->global_hdr.e_phnum; ++k)
     {
@@ -366,14 +291,14 @@ bool ELFLoader::load_elf(const char* path, ELF_type expected_type, void* lib_dyn
         {
             uint rem = PAGE_SIZE - h->p_vaddr % PAGE_SIZE;
             uint num_first_bytes = rem > h->p_filesz ? h->p_filesz : rem;
-            copy_elf_subsegment_to_address_space(bytes_ptr, num_first_bytes, h, runtime_load_addr, copied_bytes);
+            copy_elf_subsegment_to_address_space(bytes_ptr, num_first_bytes, h, runtime_load_address, copied_bytes);
         }
 
         // Copy whole pages
         while (copied_bytes + PAGE_SIZE < h->p_filesz)
         {
             bytes_ptr = (void*)(load_address + h->p_offset + copied_bytes);
-            copy_elf_subsegment_to_address_space(bytes_ptr, PAGE_SIZE, h, runtime_load_addr, copied_bytes);
+            copy_elf_subsegment_to_address_space(bytes_ptr, PAGE_SIZE, h, runtime_load_address, copied_bytes);
         }
 
         // Handle data that does not fit a whole page. First copy the remaining bytes then fill the rest with 0
@@ -381,69 +306,55 @@ bool ELFLoader::load_elf(const char* path, ELF_type expected_type, void* lib_dyn
         if (num_final_bytes)
         {
             bytes_ptr = (void*)(load_address + h->p_offset + copied_bytes);
-            copy_elf_subsegment_to_address_space(bytes_ptr, num_final_bytes, h, runtime_load_addr, copied_bytes);
+            copy_elf_subsegment_to_address_space(bytes_ptr, num_final_bytes, h, runtime_load_address, copied_bytes);
         }
 
         // Fill the rest with 0. Very important, this is where bss is.
         if (h->p_memsz > h->p_filesz)
         {
-            auto runtime_address = runtime_load_addr + (h->p_vaddr + h->p_filesz);
+            auto runtime_address = runtime_load_address + (h->p_vaddr + h->p_filesz);
             auto dest_addr = runtime_address_to_load_address(runtime_address);
             memset((void*)dest_addr, 0, h->p_memsz - h->p_filesz);
         }
     }
-
-    if (!apply_relocations(elf, runtime_load_addr))
-    {
-        delete[] (char*)buf;
-        return false;
-    }
-
-    register_elf_init_and_fini(elf, runtime_load_addr);
-
-    if (expected_type == SharedObject && lib_dynlk_runtime_entry_point)
-    {
-        auto got_runtime_addr = runtime_load_addr + elf->runtime_got_addr;
-
-        //printf("%s GOT: 0x%x\n", path, got_runtime_addr);
-
-        // Write GOT entries 1 and 2 (unique ID and libdynlk runtime entry point)
-        auto got_load_addr = (Elf32_Addr*)runtime_address_to_load_address(got_runtime_addr);
-        *(void**)(got_load_addr + 1) = (void*)elf;
-        *(void**)(got_load_addr + 2) = lib_dynlk_runtime_entry_point;
-    }
-
-    elf_dep_list->add({elf, runtime_load_addr});
-    delete[] (char*)buf;
-
-    return true;
 }
 
-Process* ELFLoader::build_process(int argc, const char** argv, pid_t pid, pid_t ppid,
-                                  const char* path, uint priority)
+void ELFLoader::setup_elf_got(const ELF* elf, uint elf_runtime_load_address) const
 {
-    if (!load_elf(path, Executable, nullptr))
-        return nullptr;
+    if (libdynlk_runtime_entry_point == (Elf32_Addr)-1)
+        return;
 
-    ELF* main_elf = elf_dep_list->get(0)->elf;
-    if (main_elf->interpreter_name != nullptr && !dynamic_loading(main_elf))
-        return nullptr;
+    auto got_runtime_addr = elf_runtime_load_address + elf->runtime_got_addr;
 
-    auto k_stack_top = finalize_process_setup(argc, argv);
+    //printf("%s GOT: 0x%x\n", path, got_runtime_addr);
 
-    used = true;
-    return new Process(num_pages, elf_dep_list, page_tables, pdt, &stack_state, priority, pid, ppid, k_stack_top);
+    // Write GOT entries 1 and 2 (unique ID and libdynlk runtime entry point)
+    auto got_load_addr = (Elf32_Addr*)runtime_address_to_load_address(got_runtime_addr);
+    *(void**)(got_load_addr + 1) = (void*)elf;
+    *(void**)(got_load_addr + 2) = (void*)libdynlk_runtime_entry_point;
 }
 
-Elf32_Addr ELFLoader::finalize_process_setup(int argc, const char** argv)
+Elf32_Addr ELFLoader::get_libdynlk_runtime_address()
 {
-    if (page_tables[767].entries[1023] != 0)
-        printf_error("Process kernel page entry is not empty");
+    // Todo: do this better
+    if (libdynlk_runtime_entry_point != (Elf32_Addr)-1)
+        return libdynlk_runtime_entry_point;
+
+    uint proc_num_pages = num_pages;
+    ELF* libdynlk_elf;
+    if (!((libdynlk_elf = load_libdynlk())))
+        return -1;
+
+    return libdynlk_runtime_entry_point = (Elf32_Addr)libdynlk_elf->get_libdynlk_main_runtime_addr(proc_num_pages);
+}
+
+void ELFLoader::setup_stacks(Elf32_Addr& k_stack_top, Elf32_Addr& p_stack_top_v_addr) const
+{
     // Allocate process stack page
     uint p_stack_pe_id = Memory::get_free_pe_user();
     Memory::allocate_page_user<false>(p_stack_pe_id);
 
-    // Map it in current process' address space
+    // Map it in current process' address space below first code page
     uint p_stack_page_id = 767 * PT_ENTRIES + PT_ENTRIES - 1 - num_pages - 1;
     uint p_stack_pde = p_stack_page_id / PT_ENTRIES;
     uint p_stack_pte = p_stack_page_id % PT_ENTRIES;
@@ -452,7 +363,7 @@ Elf32_Addr ELFLoader::finalize_process_setup(int argc, const char** argv)
 
     // Compute stack top
     Elf32_Addr p_stack_bottom_v_addr = VIRT_ADDR(p_stack_pde, p_stack_pte, 0);
-    Elf32_Addr p_stack_top_v_addr = p_stack_bottom_v_addr + PAGE_SIZE;
+    p_stack_top_v_addr = p_stack_bottom_v_addr + PAGE_SIZE;
 
     // Allocate syscall handler stack page
     uint k_stack_pe = Memory::get_free_pe();
@@ -460,6 +371,41 @@ Elf32_Addr ELFLoader::finalize_process_setup(int argc, const char** argv)
     uint k_stack_pte = k_stack_pe % PDT_ENTRIES;
     Memory::allocate_page<false>(k_stack_pe);
 
+    k_stack_top = VIRT_ADDR(k_stack_pde, k_stack_pte, (PAGE_SIZE - sizeof(int)));
+
+    // Map process stack at 0xBFFFFFFC = 0xCFFFFFFF - 4 at pde 767 and pte 1023, just below the kernel
+    if (page_tables[767].entries[1023] != 0)
+        printf_error("Process kernel page entry is not empty");
+    page_tables[767].entries[1023] = PTE(Memory::page_tables, p_stack_pe_id);
+    pdt->entries[767] = PHYS_ADDR(Memory::page_tables, (uint) &page_tables[767]) | PAGE_USER | PAGE_WRITE |
+            PAGE_PRESENT;
+}
+
+void ELFLoader::setup_pcb(uint p_stack_top_v_addr, int argc, const char** argv)
+{
+    stack_state.eip = elf_dep_list->get(0)->elf->global_hdr.e_entry;
+    stack_state.ss = 0x20 | 0x03;
+    stack_state.cs = 0x18 | 0x03;
+    stack_state.esp = write_args_to_stack(p_stack_top_v_addr, argc, argv, init_fini.init_array,
+                                                init_fini.fini_array);
+    stack_state.eflags = 0x200;
+    stack_state.error_code = 0;
+}
+
+void ELFLoader::unmap_new_process_from_current_process() const
+{
+    for (size_t i = 0; i < num_pages + 1; i++) // +1 for stack
+    {
+        uint page_id = 767 * PT_ENTRIES + PT_ENTRIES - 2 - i;
+        uint pde = page_id / PT_ENTRIES;
+        uint pte = page_id % PT_ENTRIES;
+        current_process->page_tables[pde].entries[pte] = 0;
+        INVALIDATE_PAGE(pde, pte);
+    }
+}
+
+void ELFLoader::setup_pdt()
+{
     // Set process PDT entries: entries 0 to 767 map the process address space using its own page tables
     // Entries 768 to 1024 point to kernel page tables, so that kernel is mapped. Moreover, syscall handlers
     // will not need to switch to kernel pdt to make changes in kernel memory as it is mapped the same way
@@ -472,44 +418,77 @@ Elf32_Addr ELFLoader::finalize_process_setup(int argc, const char** argv)
         pdt->entries[i] = 0;
     // Use kernel page tables for the rest
     for (int i = 768; i < PDT_ENTRIES; ++i)
-        pdt->entries[i] = PHYS_ADDR(Memory::page_tables, (uint) &Memory::page_tables[i]) | PAGE_USER | PAGE_WRITE | PAGE_PRESENT;
-    // Todo: remove PAGE_USER ? Seems impossible while allocate_page_user allocates above KERNEL_VIRTUAL_BASE
-
-    // Map process stack at 0xBFFFFFFC = 0xCFFFFFFF - 4 at pde 767 and pte 1023, just below the kernel
-    if (page_tables[767].entries[1023] != 0)
-        printf_error("Process kernel page entry is not empty");
-    page_tables[767].entries[1023] = PTE(Memory::page_tables, p_stack_pe_id);
-    pdt->entries[767] = PHYS_ADDR(Memory::page_tables, (uint) &page_tables[767]) | PAGE_USER | PAGE_WRITE |
-            PAGE_PRESENT;
-
-    // Setup PCB
-    //proc->stack_state.eip = 0;
-    stack_state.ss = 0x20 | 0x03;
-    stack_state.cs = 0x18 | 0x03;
-    stack_state.esp = write_args_to_stack(p_stack_top_v_addr, argc, argv, init_fini.init_array,
-                                                init_fini.fini_array);
-    stack_state.eflags = 0x200;
-    stack_state.error_code = 0;
-
-    // Unmap new process from current process' address space
-    for (size_t i = 0; i < num_pages + 1; i++) // +1 for stack
-    {
-        uint page_id = 767 * PT_ENTRIES + PT_ENTRIES - 2 - i;
-        uint pde = page_id / PT_ENTRIES;
-        uint pte = page_id % PT_ENTRIES;
-        current_process->page_tables[pde].entries[pte] = 0;
-        INVALIDATE_PAGE(pde, pte);
-    }
-
-    return VIRT_ADDR(k_stack_pde, k_stack_pte, (PAGE_SIZE - sizeof(int)));
+        pdt->entries[i] = PHYS_ADDR(Memory::page_tables, (uint) &Memory::page_tables[i]) | PAGE_WRITE | PAGE_PRESENT;
 }
 
-const char** ELFLoader::add_argv0_to_argv(const char** argv, const char* path, int& argc)
+ELF* ELFLoader::load_elf(const Dentry* file, ELF_type expected_type)
+{
+    auto buf = VFS::load_file(file);
+    if (!buf)
+        return nullptr;
+
+    auto elf = load_elf(buf, expected_type);
+    delete[] (char*)buf;
+
+    return elf;
+}
+
+ELF* ELFLoader::load_elf(void* buf, ELF_type expected_type)
+{
+    ELF* elf;
+    if (!((elf = ELF::is_valid((uint)buf, expected_type))))
+        return nullptr;
+
+    uint load_address = (uint)buf;
+    uint runtime_load_addr = num_pages * PAGE_SIZE;
+    elf_dep_list->add({elf, runtime_load_addr});
+
+    alloc_elf_memory(*elf);
+    map_elf(elf, runtime_load_addr);
+    load_elf_code(elf, load_address, runtime_load_addr);
+    apply_relocations(elf, runtime_load_addr);
+    register_elf_init_and_fini(elf, runtime_load_addr);
+    if (!dynamic_loading(elf))
+        return nullptr;
+    setup_elf_got(elf, runtime_load_addr);
+
+    return elf;
+}
+
+Process* ELFLoader::build_process(int argc, const char** argv, pid_t pid, pid_t ppid,
+                                  const Dentry* file, uint priority)
+{
+    if (!load_elf(file, Executable))
+        return nullptr;
+
+    auto k_stack_top = finalize_process_setup(argc, argv);
+
+    used = true;
+    return new Process(num_pages, elf_dep_list, page_tables, pdt, &stack_state, priority, pid, ppid, k_stack_top);
+}
+
+Elf32_Addr ELFLoader::finalize_process_setup(int argc, const char** argv)
+{
+    if (page_tables[767].entries[1023] != 0)
+        printf_error("Process kernel page entry is not empty");
+
+
+    Elf32_Addr k_stack_top, p_stack_top_v_addr;
+
+    setup_pdt();
+    setup_stacks(k_stack_top, p_stack_top_v_addr);
+    setup_pcb(p_stack_top_v_addr, argc, argv);
+    unmap_new_process_from_current_process();
+
+    return k_stack_top;
+}
+
+const char** ELFLoader::add_argv0_to_argv(int& argc, const char** argv, const Dentry* file)
 {
     argc++;
     const char** new_argv = new const char*[argc];
     memcpy(new_argv + 1, argv, (argc - 1) * sizeof(char*));
-    const char* abs_path = VFS::get_absolute_path(path);
+    const char* abs_path = file->get_absolute_path();
     if (abs_path)
         new_argv[0] = abs_path;
     else
@@ -549,16 +528,16 @@ void ELFLoader::offset_memory_mapping(uint offset) const
 }
 
 Process* ELFLoader::setup_elf_process(pid_t pid, pid_t ppid, int argc, const char** argv,
-                                      const char* path, uint priority)
+                                      const Dentry* file, uint priority)
 {
     ELFLoader loader{};
 
     // Add argv0 to argv. This can fail if the resolution of the absolute path fails
     const char** full_argv;
-    if (!((full_argv = add_argv0_to_argv(argv, path, argc))))
+    if (!((full_argv = add_argv0_to_argv(argc, argv, file))))
         return nullptr;
 
-    Process* proc = loader.build_process(argc, full_argv, pid, ppid, path, priority);
+    Process* proc = loader.build_process(argc, full_argv, pid, ppid, file, priority);
 
     delete full_argv[0]; // delete argv[0]
     delete[] full_argv;

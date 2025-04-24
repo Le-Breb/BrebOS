@@ -7,6 +7,7 @@
 #include "ELF_defines.h"
 #include "process.h"
 #include "scheduler.h"
+#include "../file_management/dentry.h"
 
 #define LIBDYNLK_PATH "/bin/libdynlk.so"
 #define LIBC_PATH "/bin/libc.so"
@@ -35,6 +36,7 @@ private:
     Memory::pdt_t* pdt;
     stack_state_t stack_state{};
     bool used = false;
+    Elf32_Addr libdynlk_runtime_entry_point = -1;
 
     ELFLoader();
     ~ELFLoader();
@@ -44,7 +46,7 @@ private:
     * @param elf process' main ELF
     * @return process set up, NULL if an error occurred
     */
-    bool dynamic_loading(ELF* elf);
+    bool dynamic_loading(const ELF* elf);
 
     /*/**
     * Load a lib in a process' address soace
@@ -60,7 +62,7 @@ private:
      * @param elf library elf
      * @return boolean indicating success state
      */
-    bool alloc_elf_memory(ELF& elf);
+    bool alloc_elf_memory(const ELF& elf);
 
     /**
      * Load part of an ELF segment into the process address space and maps it.
@@ -81,23 +83,26 @@ private:
      * @param elf ELF to process
      * @param runtime_load_address load address of the ELF at runtime
      */
-    void register_elf_init_and_fini(ELF* elf, uint runtime_load_address);
+    void register_elf_init_and_fini(const ELF* elf, uint runtime_load_address);
 
     /**
      * Load ELF file code and data into a process' address space and maps it
-     * @param path ELF to load
+     * @param file ELF to load
      * @param expected_type
-     * @param lib_dynlk_runtime_entry_point
-     * @return runtime load address of the ELF
+     * @return Loaded ELF, nullptr on error
      */
-    bool load_elf(const char* path, ELF_type expected_type, void* lib_dynlk_runtime_entry_point);
+    ELF* load_elf(const Dentry* file, ELF_type expected_type);
+
+    ELF* load_elf(void* buf, ELF_type expected_type);
+
+    ELF* load_libdynlk();
 
     /**
      * Process relocations of an ELF.
      * @param elf elf with relocations to process
      * @param elf_runtime_load_address where the elf is loaded at runtime
      */
-    bool apply_relocations(ELF* elf, uint elf_runtime_load_address) const;
+    void apply_relocations(ELF* elf, uint elf_runtime_load_address) const;
 
     /**
      * Maps the segments of an ELF into the process' virtual address space
@@ -112,7 +117,7 @@ private:
      *
      * @return program's process
      */
-    Process* build_process(int argc, const char** argv, pid_t pid, pid_t ppid, const char* path, uint);
+    Process* build_process(int argc, const char** argv, pid_t pid, pid_t ppid, const Dentry* file, uint);
 
     /**
      * Writes argc, argv array pointer, argv pointer array and argv contents to stack
@@ -134,7 +139,7 @@ private:
      */
     Elf32_Addr finalize_process_setup(int argc, const char** argv);
 
-    static const char** add_argv0_to_argv(const char** argv, const char* path, int& argc);
+    static const char** add_argv0_to_argv(int& argc, const char** argv, const Dentry* file);
 
     /**
      * Converts an address in runtime address space to an address in current address space
@@ -148,6 +153,20 @@ private:
      * @param offset mapping offset
      */
     void offset_memory_mapping(uint offset) const;
+
+    void load_elf_code(const ELF* elf, uint load_address, uint runtime_load_address) const;
+
+    void setup_elf_got(const ELF* elf, uint elf_runtime_load_address) const;
+
+    Elf32_Addr get_libdynlk_runtime_address();
+
+    void setup_stacks(Elf32_Addr& k_stack_top, Elf32_Addr& p_stack_top_v_addr) const;
+
+    void setup_pcb(uint p_stack_top_v_addr, int argc, const char** argv);
+
+    void unmap_new_process_from_current_process() const;
+
+    void setup_pdt();
 public:
     /**
      * Create a process from an ELF loaded in memory
@@ -155,12 +174,12 @@ public:
      * @param ppid parent process ID
      * @param argc num args
      * @param argv args
-     * @param path process main ELF' path
+     * @param file process main ELF' path
      * @param priority process priority
      * @return process, nullptr if an error occurred
      */
     static Process* setup_elf_process(pid_t pid, pid_t ppid, int argc, const char** argv,
-                                      const char* path, uint priority);
+                                      const Dentry* file, uint priority);
 };
 
 

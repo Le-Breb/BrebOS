@@ -104,6 +104,8 @@ public:
 
 	static void* load_file(const char* path, uint offset = 0, uint length = 0);
 
+	static void* load_file(const Dentry* path, uint offset = 0, uint length = 0);
+
 	/**
 	 * Resizes a file
 	 * @param dentry dentry of the file to resize

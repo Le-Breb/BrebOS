@@ -90,8 +90,21 @@ ELF* ELF::is_valid(uint start_address, ELF_type expected_type)
         }
     for (size_t i = 0; i < elf->num_dyn_relocs; i++)
         if (auto reloc_type = ELF32_R_TYPE(elf->dyn_relocs[i].r_info); reloc_type != R_386_RELATIVE && reloc_type !=
-            R_386_GLOB_DAT && reloc_type != R_386_32 && reloc_type != R_386_PC32)
+            R_386_GLOB_DAT && reloc_type != R_386_32)
         {
+            if (reloc_type == R_386_PC32)
+            {
+                uint symbol_id = ELF32_R_SYM(elf->dyn_relocs[i].r_info);
+                Elf32_Sym* symbol = &elf->symbols[symbol_id];
+
+                // Weak symbols that are not yet defined are not an issue
+                if (ELF32_ST_BIND(symbol->st_info) != STB_WEAK || symbol->st_shndx != 0)
+                {
+                    printf_error("unsupported R_396_PC32 relocation");
+                    is_valid_exit_err
+                }
+                continue;
+            }
             printf_error("Unsupported dyn relocation type: %u. Aborting", reloc_type);
             is_valid_exit_err
         }
@@ -131,6 +144,61 @@ ELF* ELF::is_valid(uint start_address, ELF_type expected_type)
     }
     free(ro_pages);
 
+    size_t base_addr = elf->base_address();
+    /*if (base_addr < PAGE_SIZE)
+    {
+        printf_error("Base address (%zu) < PAGE_SIZE (%u). Aborting", base_addr, PAGE_SIZE);
+        is_valid_exit_err
+    }*/
+    if (base_addr == (size_t)-1)
+    {
+        printf_error("Cannot compute base address. Aborting");
+        is_valid_exit_err
+    }
+
+    if (!elf->interpreter_name)
+        return elf;
+
+    if (elf->dyn_table == nullptr)
+    {
+        printf_error("No dynamic symbol table");
+        is_valid_exit_err
+    }
+
+    if (strcmp(elf->interpreter_name, OS_INTERPR) != 0)
+    {
+        printf_error("Unsupported interpreter: %s", elf->interpreter_name);
+        is_valid_exit_err
+    }
+
+    if (elf->runtime_got_addr == (Elf32_Addr)-1)
+    {
+        printf_error("No GOT");
+        is_valid_exit_err
+    }
+
+    // Get needed lib name and check it is not missing
+    char* lib_name = elf->lib_name;
+    if (strcmp(lib_name, OS_LIB) != 0)
+    {
+        printf_error("Missing library: %s\n", lib_name);
+        is_valid_exit_err
+    }
+
+    // Ensure dynamic symbols are supported
+    uint dynsym_num_entries = elf->dynsym_hdr->sh_size / elf->dynsym_hdr->sh_entsize;
+    for (uint i = 1; i < dynsym_num_entries; ++i) // First entry has to be null, we skip it
+    {
+        Elf32_Sym* dd = elf->symbols + i;
+        //printf("%s\n", &dyn_str_table[dd->st_name]);
+        uint type = ELF32_ST_TYPE(dd->st_info);
+        if (type != STT_FUNC && type != STT_NOTYPE) // _init and _fini have type STT_NOTYPE
+        {
+            printf_error("Unsupported symbol type: %u", type);
+            is_valid_exit_err
+        }
+    }
+
     return elf;
 }
 
@@ -151,7 +219,7 @@ uint ELF::get_highest_runtime_addr() const
     return highest_addr;
 }
 
-void* ELF::get_libdynlk_main_runtime_addr(uint proc_num_pages)
+void* ELF::get_libdynlk_main_runtime_addr(uint proc_num_pages) const
 {
     // Find and return main's address
     Elf32_Sym* s = get_symbol("lib_main");

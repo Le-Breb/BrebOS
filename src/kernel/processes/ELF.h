@@ -65,7 +65,7 @@ public:
 	 * @param proc_num_pages number of pages the process (without libdynl) spans over
 	 * @return libdynlk runtime address, NULL if an error occured
 	 */
-	void* get_libdynlk_main_runtime_addr(uint proc_num_pages);
+	void* get_libdynlk_main_runtime_addr(uint proc_num_pages) const;
 
 	[[nodiscard]] size_t base_address() const;
 

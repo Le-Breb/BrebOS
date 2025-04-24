@@ -430,8 +430,16 @@ void* VFS::load_file(const char* path, uint offset, uint length)
 		return nullptr;
 	}
 
-	return dentry->inode->superblock->get_fs()->load_file_to_buf(dentry->name, dentry->parent, offset,
-	                                                             length ? length : dentry->inode->size);
+	return load_file(dentry, offset, length);
+}
+
+void* VFS::load_file(const Dentry* file, uint offset, uint length)
+{
+	if (!file)
+		return nullptr;
+
+	return file->inode->superblock->get_fs()->load_file_to_buf(file->name, file->parent, offset,
+																 length ? length : file->inode->size);
 }
 
 bool VFS::resize(Dentry& dentry, size_t new_size)

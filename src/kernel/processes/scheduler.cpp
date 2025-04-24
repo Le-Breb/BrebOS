@@ -175,7 +175,10 @@ int Scheduler::exec(const char* path, pid_t ppid, int argc, const char** argv)
         return -1;
     }
 
-    Process* proc = ELFLoader::setup_elf_process(pid, ppid, argc, argv, path, 1);
+    auto file = VFS::browse_to(path);
+    if (!file)
+        return -1;
+    Process* proc = ELFLoader::setup_elf_process(pid, ppid, argc, argv, file, 1);
     if (!proc)
         return -1;
 
