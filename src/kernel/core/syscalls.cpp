@@ -212,7 +212,7 @@ void Syscall::get_key()
             fork(p);
             break;
         default:
-            printf_error("Received unknown syscall id: %u", cpu_state->eax);
+            printf_error("Received unknown syscall id: 0x%x", cpu_state->eax);
             break;
     }
 

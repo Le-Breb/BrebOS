@@ -7,6 +7,7 @@
 #include "../processes/scheduler.h"
 #include "PIC.h"
 #include "IDT.h"
+#include "IntV86.h"
 #include "../file_management/VFS.h"
 #include "../network/Network.h"
 #include "../utils/profiling.h"
@@ -25,6 +26,8 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointe
     _init(); // Execute constructors
     Interrupts::disable_asm();
 
+    Memory::init((multiboot_info_t*)ebx);
+
     FB::init();
 
     FB::write("Setting up GDT\n");
@@ -41,10 +44,6 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointe
 
     FB::write("Enabling interrupts\n");
     Interrupts::enable_asm();
-    FB::ok();
-
-    FB::write("Initialize memory\n");
-    Memory::init((multiboot_info_t*)(ebx + KERNEL_VIRTUAL_BASE));
     FB::ok();
 
 #ifdef PROFILING
@@ -66,6 +65,10 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointe
     FB::write("Initializing Virtual File System\n");
     VFS::init();
     FB::ok();
+
+    /*auto regs = list<IntV86::reg_val>();
+    regs.add({IntV86::Reg16::AX, 0xCAFE});
+    IntV86::interrupt(0x10, regs);*/
 
     Network::run();
 

@@ -18,11 +18,33 @@ KERNEL_VIRTUAL_BASE equ 0xC0000000  ; the virtual address where the kernel is lo
 VGA_TEXT_BUFFER equ 0x000B8000      ; the physical address of the VGA text buffer
 
 ; Declare a multiboot header that marks the program as a kernel.
-section .multiboot
-align 4
-    dd MAGIC_NUMBER
-    dd FLAGS
-    dd CHECKSUM
+section .multiboot2
+align 8
+
+    ; === Multiboot2 magic header ===
+    dd 0xE85250D6              ; magic
+    dd 0                      ; architecture = i386
+    dd header_end - header_start
+    dd -(0xE85250D6 + 0 + (header_end - header_start))
+
+align 8
+header_start:
+
+;    ; === Framebuffer tag ===
+;    dw 5                      ; type = framebuffer
+;    dw 0                      ; flags
+;    dd 20                     ; size of this tag (must be 20 bytes)
+;    dd 1024                   ; width
+;    dd 768                    ; height
+;    dd 32                     ; depth (bits per pixel)
+
+    ; === End tag ===
+    dw 0                      ; type = end tag
+    dw 0                      ; flags
+    dd 8                      ; size of end tag (must be 8 bytes)
+
+header_end:
+
 
 ; Preallocate pages used for paging. Don't hard-code addresses and assume they
 ; are available, as the bootloader might have loaded its multiboot structures or

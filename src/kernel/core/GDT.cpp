@@ -71,8 +71,8 @@ void GDT::init()
 	setup_tss(5, 0x10, 0x00);
 
 	// Load the GDT
-	GDT::load_asm();
-	GDT::load_tss_asm();
+	load_asm();
+	load_tss_asm();
 }
 
 void GDT::load_asm()

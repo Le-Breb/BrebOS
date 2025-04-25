@@ -29,7 +29,7 @@
 #define PTE_PHYS_ADDR(i) (FRAME_ID_ADDR((PDT_ENTRIES + (i))))
 #define PTE_USED(page_tables, i) (PTE(page_tables, i) & (PAGE_PRESENT | PAGE_LAZY_ZERO))
 #define PTE(page_tables, i) (page_tables[(i) >> 10].entries[(i) & 0x3FF])
-#define FRAME_USED(i) (frame_to_page[i] != (uint)-1)
+#define FRAME_USED(i) (Memory::frame_to_page[i] != (uint)-1)
 #define FRAME_FREE(i) !(FRAME_USED(i))
 #define MARK_FRAME_USED(frame_id, page_id) frame_to_page[frame_id] = page_id
 #define MARK_FRAME_FREE(i) frame_to_page[i] = (uint)-1
@@ -88,6 +88,8 @@ namespace Memory
 	 * @param minfo Multiboot info structure
 	 */
 	void init(const multiboot_info_t* minfo);
+
+	void register_multiboot_info(const multiboot_info_t* minfo);
 
 	void* mmap(size_t length, [[maybe_unused]] int prot, char* path, [[maybe_unused]] uint offset);
 
@@ -173,6 +175,15 @@ namespace Memory
 	 * @return whether the fault has been handled or is an error
 	 */
 	bool page_fault_handler(Process* current_process, uint fault_address);
+
+	/**
+	 * Attempts to map some memory that has been written somewhere by some entity (BIOS, GRUB...) with a known physical
+	 * address into page tables, thus making the data accessible with paging enabled.
+	 * @param physical_address start physical address of memory block to register
+	 * @param size size of the block to register
+	 * @return virtual address of the mapped memory, nullptr on failure
+	 */
+	void* register_physical_data(uint physical_address, uint size);
 }
 
 class Process;

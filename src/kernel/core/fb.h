@@ -3,6 +3,7 @@
 
 /* The I/O ports */
 #include <kstddef.h>
+#include "../boot/multiboot.h"
 
 #define FB_COMMAND_PORT 0x3D4
 #define FB_DATA_PORT 0x3D5
@@ -29,9 +30,6 @@
 #define FB_YELLOW       0x0E
 #define FB_WHITE        0x0F
 
-#define FB_WIDTH 80
-#define FB_HEIGHT 25
-
 #define FB_ADDR 0xC03FF000
 
 #define CURSOR_END_LINE 0x0B
@@ -40,10 +38,14 @@
 class FB
 {
     static uint caret_pos; /* Framebuffer index */
-    static short* const fb;
-    static unsigned char BG;
-    static unsigned char FG;
-
+    static short* fb;
+    static uint fb_width, fb_height, fb_pitch;
+    static unsigned char FG, BG;
+    static const void* progress_bar_owner;
+    static char progress_bar_percentage;
+    static short* progress_bar_overwrite;
+    static short* fb_shadow;
+    static constexpr char progress_char = (char)129;
 public:
     static void init();
 

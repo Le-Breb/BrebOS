@@ -143,8 +143,9 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(libdynlk) $(programs)
 	@#echo "set debug=all" >> grub.cfg
 	@#echo "serial --unit=0 --speed=115200 --word=8 --parity=no --stop=1" >> grub.cfg
 	@#echo "terminal_output serial" >> grub.cfg
+	#@echo "set gfxmode=1024x768x32\nset gfxpayload=keep\ninsmod gfxterm\ninsmod vbe\nterminal_output gfxterm" >> grub.cfg
 	@echo menuentry \"$(OUT_NAME)\" { >> grub.cfg
-	@echo "	multiboot /boot/$(OUT_BIN)" >> grub.cfg
+	@echo "	multiboot2 /boot/$(OUT_BIN)" >> grub.cfg
 	@#echo "	module /modules/shell" >> grub.cfg
 	@#echo "	module /modules/program2" >> grub.cfg
 	@#echo "	module /modules/libdynlk.so" >> grub.cfg

@@ -2,6 +2,8 @@
 
 #include "fb.h"
 #include <kstring.h>
+
+#include "kstdint.h"
 #include "../file_management/VFS.h"
 #include "../processes/scheduler.h"
 
@@ -218,7 +220,7 @@ namespace Memory
         return 771 * PDT_ENTRIES; // Kernel is only allowed to allocate in higher half
     }
 
-    void load_grub_modules(const multiboot_info* multibootInfo)
+    /*void load_grub_modules(const multiboot_info* multibootInfo)
     {
         grub_modules = (GRUB_module*)malloc(multibootInfo->mods_count * sizeof(GRUB_module));
 
@@ -249,7 +251,7 @@ namespace Memory
         }
 
         loaded_grub_modules = multibootInfo->mods_count;
-    }
+    }*/
 
     void create_kernel_process(uint lowest_free_pte)
     {
@@ -283,11 +285,42 @@ namespace Memory
         }
     }
 
-    void init(const struct multiboot_info* multibootInfo)
+    void init(const multiboot_info* multiboot_info)
     {
         uint lfpe = allocate_page_tables();
         create_kernel_process(lfpe);
-        load_grub_modules(multibootInfo);
+        register_multiboot_info(multiboot_info);
+        //load_grub_modules(multibootInfo);
+    }
+
+    void register_multiboot_info(const multiboot_info* minfo)
+    {
+        uint uaddr = (uint)minfo;
+        uint base = (uint)minfo >> 12;
+        uint page_id = get_free_pe();
+
+        uint curr = frame_to_page[base];
+        if (curr != (uint)-1)
+            irrecoverable_error("Cannot map multiboot info");
+
+        // ...
+        if (PAGE_SIZE - (uaddr & (PAGE_SIZE - 1)) < sizeof(uint32_t))
+            irrecoverable_error("Are u kidding me ?");
+
+        // Allocate a page to get access to the multiboot struct size
+        Memory::allocate_page<false>(base, page_id);
+        uint page_addr = page_id << 12;
+        uint tmp_v_addr = page_addr + (uaddr & (PAGE_SIZE - 1));
+        auto total_size= ((multiboot_info_t*)tmp_v_addr)->total_size; // Get size
+        // Deallocate first page
+        free_page(page_addr, kernel_process);
+
+        // Map the whole structure.
+        multiboot_info_t* v_minfo;
+        if (!((v_minfo = (multiboot_info_t*)register_physical_data(uaddr, total_size))))
+            irrecoverable_error("Cannot map multiboot info");
+
+        Multiboot::init(v_minfo);
     }
 
     template<bool lazy_zero>
@@ -689,6 +722,63 @@ namespace Memory
         MARK_FRAME_USED(frame_id, sys_page_id);
 
         return true;
+    }
+
+    void* register_physical_data(uint physical_address, uint size)
+    {
+        auto n_pages = (size + PAGE_SIZE - 1) >> 12;
+        auto frame_base = physical_address >> 12;
+
+        bool all_frame_used = true;
+        bool no_frame_used = true;
+        for (uint i = 0; i < n_pages; i++)
+        {
+            bool used = FRAME_USED(frame_base + i);
+            all_frame_used &= used;
+            no_frame_used &= !used;
+        }
+
+        // No frame over the required block is referenced, so will then try to find enough contiguous page table entries
+        // to map the whole memoery block
+        if (no_frame_used)
+        {
+            uint b = kernel_process->lowest_free_pe; /* block beginning page index */
+
+            // Try to find contiguous free virtual block of memory
+            while (true)
+            {
+                // Maximum possibly free memory is too small to fulfill request
+                if (b + n_pages > PDT_ENTRIES * PT_ENTRIES)
+                    return nullptr;
+
+                uint pte = b;
+                uint target = b + n_pages;
+
+                // Explore contiguous free blocks while explored block size does not fulfill the request
+                for (; !(PTE_USED(kernel_process->page_tables, pte)) && pte != target; pte++)
+                {
+                }
+
+                // We have explored a free block that is big enough
+                if (pte == target)
+                    break;
+
+                // There is a free virtual memory block from b to pte - 1 that is too small. Page entry pte - 1 is present.
+                // Then next possibly free page entry is the (pte)th
+                b = pte + 1;
+            }
+
+            for (uint i = 0; i < n_pages; i++)
+                allocate_page<false>(frame_base + i, b + i);
+
+            return (void*)((b << 12) + (physical_address & (PAGE_SIZE - 1)));
+        }
+
+        // Everything is already mapped, simply return the corresponding virtual address
+        if (all_frame_used)
+            return (void*)((frame_to_page[physical_address >> 12] << 12) + (physical_address & (PAGE_SIZE - 1)));
+
+        return nullptr;
     }
 
     void zero_out_possibly_lazily_allocated_memory(uint total_size, void* mem, const Process* process)

@@ -1,10 +1,31 @@
 #include "multiboot.h"
 #include "../core/memory.h"
-#include <kstddef.h>
-#include <kstring.h>
-#include "../core/fb.h"
 
-void Multiboot::print_mmap(uint ebx)
+const multiboot_info_t* Multiboot::multiboot_info = nullptr;
+
+void Multiboot::init(const multiboot_info_t* multiboot_info)
+{
+	Multiboot::multiboot_info = (multiboot_info_t*)multiboot_info;
+}
+
+void* Multiboot::get_tag(uint32_t type)
+{
+	uint8_t* ptr = (uint8_t*)multiboot_info + 8; // skip total_size and reserved
+	while (1) {
+		auto* tag = (struct multiboot_tag*)ptr;
+		if (tag->type == 0)
+			return nullptr;
+
+		if (tag->type == type)
+			return tag;
+
+		ptr += (tag->size + 7) & ~7; // align to 8 bytes
+	}
+}
+
+// ===================================== MULTIBOOT1=================================
+
+/*void Multiboot::print_mmap(uint ebx)
 {
 	multiboot_info* mboot_header = (multiboot_info*) (ebx + KERNEL_VIRTUAL_BASE);
 	uint memory_slots = mboot_header->mmap_length / sizeof(multiboot_memory_map_t);
@@ -34,4 +55,4 @@ void Multiboot::print_mmap(uint ebx)
 		}
 		printf("\n");
 	}
-}
+}*/
