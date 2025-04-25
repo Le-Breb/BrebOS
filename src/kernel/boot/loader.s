@@ -5,13 +5,11 @@ extern _kernel_end
 
 KERNEL_STACK_SIZE equ 4096          ; size of stack in bytes
 
-MAGIC_NUMBER    equ 0x1BADB002      ; define the magic number constant
-ALIGN_MODULES   equ 0x00000001      ; tell GRUB to align modules
-MEMINFO         equ 0x00000002      ; provide memory map
-FLAGS           equ ALIGN_MODULES | MEMINFO ; set the flags
+MAGIC_NUMBER    equ 0xE85250D6      ; define the magic number constant
+I386            equ 0x00000000      ; i386 architecture
 
 ; calculate the checksum (all options + checksum should equal 0)
-CHECKSUM        equ -(MAGIC_NUMBER + FLAGS)
+CHECKSUM        equ -(MAGIC_NUMBER + 0 + (header_end - header_start))
 
 KERNEL_VIRTUAL_BASE equ 0xC0000000  ; the virtual address where the kernel is loaded
 
@@ -22,10 +20,10 @@ section .multiboot2
 align 8
 
     ; === Multiboot2 magic header ===
-    dd 0xE85250D6              ; magic
-    dd 0                      ; architecture = i386
+    dd MAGIC_NUMBER
+    dd I386
     dd header_end - header_start
-    dd -(0xE85250D6 + 0 + (header_end - header_start))
+    dd CHECKSUM
 
 align 8
 header_start:
@@ -37,6 +35,8 @@ header_start:
 ;    dd 1024                   ; width
 ;    dd 768                    ; height
 ;    dd 32                     ; depth (bits per pixel)
+
+align 8
 
     ; === End tag ===
     dw 0                      ; type = end tag
