@@ -289,14 +289,14 @@ namespace Memory
     {
         uint lfpe = allocate_page_tables();
         create_kernel_process(lfpe);
-        register_multiboot_info(multiboot_info);
         //load_grub_modules(multibootInfo);
+        Multiboot::init(register_multiboot_info(multiboot_info));
     }
 
-    void register_multiboot_info(const multiboot_info* minfo)
+    multiboot_info_t* register_multiboot_info(const multiboot_info* minfo)
     {
         uint uaddr = (uint)minfo;
-        uint base = (uint)minfo >> 12;
+        uint base = uaddr >> 12;
         uint page_id = get_free_pe();
 
         uint curr = frame_to_page[base];
@@ -320,7 +320,7 @@ namespace Memory
         if (!((v_minfo = (multiboot_info_t*)register_physical_data(uaddr, total_size))))
             irrecoverable_error("Cannot map multiboot info");
 
-        Multiboot::init(v_minfo);
+        return v_minfo;
     }
 
     template<bool lazy_zero>
@@ -726,7 +726,7 @@ namespace Memory
 
     void* register_physical_data(uint physical_address, uint size)
     {
-        auto n_pages = (size + PAGE_SIZE - 1) >> 12;
+        auto n_pages = (size + (physical_address & (PAGE_SIZE - 1)) + PAGE_SIZE - 1) >> 12;
         auto frame_base = physical_address >> 12;
 
         bool all_frame_used = true;

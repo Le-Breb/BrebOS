@@ -28,13 +28,13 @@ align 8
 align 8
 header_start:
 
-;    ; === Framebuffer tag ===
-;    dw 5                      ; type = framebuffer
-;    dw 0                      ; flags
-;    dd 20                     ; size of this tag (must be 20 bytes)
-;    dd 1024                   ; width
-;    dd 768                    ; height
-;    dd 32                     ; depth (bits per pixel)
+    ; === Framebuffer tag ===
+    dw 5                      ; type = framebuffer
+    dw 0                      ; flags
+    dd 20                     ; size of this tag (must be 20 bytes)
+    dd 1024                   ; width
+    dd 768                    ; height
+    dd 32                     ; depth (bits per pixel)
 
 align 8
 

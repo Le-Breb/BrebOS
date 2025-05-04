@@ -1,16 +1,16 @@
-#include "stream.h"
+#include "circular_stream.h"
 
 #include <kstdio.h>
 
-stream::stream(Policy policy) : size(0), capacity(STREAM_CAPACITY + 1),
+circular_stream::circular_stream(Policy policy) : size(0), capacity(STREAM_CAPACITY + 1),
                                                      policy(policy)
 {
 }
 
-stream::~stream()
+circular_stream::~circular_stream()
 = default;
 
-void stream::write(char c)
+void circular_stream::write(char c)
 {
     buffer[size++] = c;
 
@@ -22,7 +22,7 @@ void stream::write(char c)
 
     switch (policy)
     {
-    case STREAM_BUFFERED:
+    case STREAM_MANUAL:
         break;
     case STREAM_NEWLINE_FLUSHED:
         if (c == '\n')
@@ -34,7 +34,7 @@ void stream::write(char c)
     }
 }
 
-void stream::flush()
+void circular_stream::flush()
 {
     buffer[size] = '\0';
     puts(buffer);

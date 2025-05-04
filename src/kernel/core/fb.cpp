@@ -5,82 +5,82 @@
 #include <kwchar.h>
 #include <kstring.h>
 
-#include "IO.h"
 #include "memory.h"
 #include "system.h"
+
+extern char _binary_Lat15_VGA16_psf_start[];
 
 uint FB::fb_width = 0;
 uint FB::fb_height = 0;
 uint FB::fb_pitch = 0;
-uint FB::caret_pos = 0;
-short* FB::fb = nullptr;
-unsigned char FB::FG = FB_WHITE;
-unsigned char FB::BG = FB_BLACK;
+uint FB::caret_x = 0;
+uint FB::caret_y = 0;
+uint FB::characters_per_line = 0;
+uint FB::characters_per_col = 0;
+uint FB::dirty_start_y = 0;
+uint FB::dirty_start_x = 0;
+uint FB::dirty_end_y = 0;
+uint FB::dirty_end_x = 0;
+uint FB::shadow_start = 0;
+uint32_t* FB::fb = nullptr;
+uint32_t FB::FG = FB_WHITE;
+uint32_t FB::BG = FB_BLACK;
+bool FB::lock_flush = false;
 const void* FB::progress_bar_owner = nullptr;
 char FB::progress_bar_percentage = 0;
-short* FB::progress_bar_overwrite = nullptr; // Save of whatever is displayed at the location of the progress bar
+uint FB::n_row = 0;
+uint FB::progress_bar_height = 0;
+uint32_t* FB::r_font = nullptr;
+PSF1_font* FB::font = (PSF1_font*)_binary_Lat15_VGA16_psf_start;
+char* FB::glyphs = (char*)(font + 1);
+uint FB::shadow_lim = 0;
 
 // Copy of framebuffer for double buffering. Whenever we want to read some pixel, we use this buffer instead of fb.
 // That way, we gain a lot ot time :D
-short* FB::fb_shadow = nullptr;
+FB::cell* FB::fb_shadow = nullptr;
 
-void FB::scroll()
+void FB::scroll(uint n)
 {
-	// Offset lines
-	for (uint i = 0; i < fb_width * (fb_height - 1); ++i)
+	shadow_start = (shadow_start + n * fb_width) % shadow_lim;
+	if (shadow_start >= shadow_lim)
+		shadow_start = shadow_lim;
+
+	// Clear the last n lines
+	uint shadow_row_base_off = shadow_start + (fb_height - n) * fb_width;
+	for (uint y = 0; y < n; y++)
 	{
-		fb[i] = fb_shadow[i + fb_width];
-		fb_shadow[i] = fb_shadow[i + fb_width];
-	}
-	// Clear last line
-	for (uint i = 0; i < fb_width; i++)
-	{
-		short val = ((((BG & 0x0F) << 4) | (FG & 0x0F)) << 8 | ' ');
-		auto idx = fb_width * (fb_height - 1) + i;
-		fb[idx] = val;
-		fb_shadow[idx] = val;
+		auto shadow_off = shadow_row_base_off + y * fb_width;
+		if (shadow_off >= shadow_lim)
+			shadow_off -= shadow_lim;
+
+		cell* shadow_row = fb_shadow + shadow_off;
+		for (uint x = 0; x < fb_width; x++)
+			shadow_row[x].c = '\0';
 	}
 
-	// If progress bar is being used, redraw it
-	if (progress_bar_owner)
-	{
-		memcpy(progress_bar_overwrite, fb_shadow, sizeof(short) * fb_width); // Save first line
-		update_progress_bar(progress_bar_percentage, progress_bar_owner); // Update bar
-	}
+	caret_y -= n;
+	dirty_start_y = dirty_start_x = 0;
+	dirty_end_y = characters_per_col;
+	dirty_end_x = characters_per_line;
 }
 
 void FB::delchar()
 {
-    if (!caret_pos)
+    if (!caret_x && !caret_y)
         return;
-    caret_pos--;
+    caret_x--;
     putchar(' ');
-    caret_pos--;
-    move_cursor(caret_pos);
+	caret_x--;
+    update_cursor();
 }
 
 void FB::update_progress_bar(char new_percentage, const void* id)
 {
 	if (id != progress_bar_owner)
 		return;
-	
-	// Draw bar
-	uint n_full = (uint)((float)new_percentage * (float)fb_width / 100.f);
-	for (uint i = 0; i < n_full; i++)
-	{
-		short val = ((((BG & 0x0F) << 4) | (FG & 0x0F)) << 8 | progress_char);
-		fb[i] = val;
-		fb_shadow[i] = val;
-	}
-	// Clear the rest ot the line
-	for (uint i = n_full; i < fb_width; i++)
-	{
-		short val = ((((BG & 0x0F) << 4) | (FG & 0x0F)) << 8 | ' ');
-		fb[i] = val;
-		fb_shadow[i] = val;
-	}
-	
+
 	progress_bar_percentage = new_percentage;
+	flush();
 }
 
 bool FB::try_acquire_progress_bar(const void* id)
@@ -88,7 +88,6 @@ bool FB::try_acquire_progress_bar(const void* id)
 	if (progress_bar_owner)
 		return false;
 
-	memcpy(progress_bar_overwrite, fb_shadow, sizeof(short) * fb_width);
 	progress_bar_owner = id;
 	return true;
 }
@@ -99,66 +98,123 @@ void FB::release_progres_bar(const void* id)
 		return;
 
 	progress_bar_owner = nullptr;
-
-	// Restore content that was hidden by the bar
-	memcpy(fb, progress_bar_overwrite, sizeof(short) * fb_width);
-	memcpy(fb_shadow, progress_bar_overwrite, sizeof(short) * fb_width);
+	uint sy = dirty_start_y;
+	uint ey = dirty_end_y;
+	uint sx = dirty_start_x;
+	uint ex = dirty_end_x;
+	dirty_start_y = dirty_start_x = 0;
+	dirty_end_y = 1;
+	dirty_end_x = characters_per_line;
+	flush();
+	dirty_start_y = sy;
+	dirty_start_x = sx;
+	dirty_end_y = ey;
+	dirty_end_x = ex;
 }
 
-void FB::putchar(char c)
-{
-    if (c == '\b')
-    {
-        delchar();
-        return;
-    }
-    if (c == '\n')
-    {
-        caret_pos = (caret_pos / fb_width + 1) * fb_width;
-        move_cursor(caret_pos + 1);
- 
-        return;
-    }
-    // Scroll if buffer full
-    while (caret_pos >= fb_width * fb_height)
-    {
-        scroll();
-        caret_pos -= fb_width;
-        move_cursor(caret_pos);
-    }
- 
-    // Write to fb
-    move_cursor(caret_pos + 1);
-	auto val = (short)((((BG & 0x0F) << 4) | (FG & 0x0F)) << 8 | c);
-    fb[caret_pos] = val;
-	fb_shadow[caret_pos] = val;
-	caret_pos++;
+#define PUTCHAR_PIXEL(fb_dst, shadow_dst, col, px_x) \
+{\
+fb_dst[px_x] = col;\
+shadow_dst[px_x] = col;\
 }
 
-void FB::move_cursor(unsigned short pos)
+
+void FB::putchar(
+	/* note that this is int, not char as it's a unicode character */
+	unsigned short int c)
 {
-    if (pos >= fb_width * fb_height)
-        return;
-    outb(FB_COMMAND_PORT, FB_HIGH_BYTE_COMMAND); /* Send pos high bits command */
-    outb(FB_DATA_PORT, ((pos >> 8) & 0x00FF)); /* Send pos high bits */
-    outb(FB_COMMAND_PORT, FB_LOW_BYTE_COMMAND); /* Send pos low bits command */
-    outb(FB_DATA_PORT, pos & 0x00FF); /* Send pos low bits */
+	// Write default character is not ASCII
+	if (c >= 255)
+		c = 0xDB;
+
+	char cc = (char)(c & 0xFF);
+
+	// Scroll if buffer full
+	while (caret_y >= characters_per_col)
+	{
+		scroll(1);
+		update_cursor();
+	}
+
+	// Delete character
+	if (c == '\b')
+	{
+		delchar();
+		return;
+	}
+
+	// Handle line break
+	if (c == '\n')
+	{
+		caret_y++;
+		caret_x = 0;
+		flush();
+		update_cursor();
+
+		return;
+	}
+
+	// Update dirty rectangle
+	dirty_start_y = caret_y < dirty_start_y ? caret_y : dirty_start_y;
+	dirty_end_y = caret_y + 1 > dirty_end_y ? caret_y + 1 : dirty_end_y;
+	dirty_start_x = caret_x < dirty_start_x ? caret_x : dirty_start_x;
+	dirty_end_x = caret_x + 1 > dirty_end_x ? caret_x + 1 : dirty_end_x;
+
+	// Write character
+	auto shadow_off = shadow_start + caret_y * fb_width + caret_x;
+	if (shadow_off >= shadow_lim)
+		shadow_off -= shadow_lim;
+	fb_shadow[shadow_off] = {FG, BG, cc};
+
+	flush();
+
+	// Advance to next character
+	caret_x++;
+
+	// Go to next line if needed
+	if (caret_x == characters_per_line)
+	{
+		caret_y++;
+		caret_x = 0;
+	}
+}
+
+void FB::lock_flushing()
+{
+	lock_flush = true;
+}
+
+void FB::unlock_flushing()
+{
+	lock_flush = false;
+	flush();
+}
+
+void FB::update_cursor()
+{
+    // if (pos >= fb_width * fb_height)
+    //     return;
+    // outb(FB_COMMAND_PORT, FB_HIGH_BYTE_COMMAND); /* Send pos high bits command */
+    // outb(FB_DATA_PORT, ((pos >> 8) & 0x00FF)); /* Send pos high bits */
+    // outb(FB_COMMAND_PORT, FB_LOW_BYTE_COMMAND); /* Send pos low bits command */
+    // outb(FB_DATA_PORT, pos & 0x00FF); /* Send pos low bits */
 }
 
 void FB::clear_screen()
 {
-    caret_pos = 0;
-    for (uint i = 0; i < fb_height * fb_width; i++)
-        putchar(' ');
-    caret_pos = 0;
+    uint idx = 0;
+    for (uint y = 0; y < fb_height; y++)
+	    for (uint x = 0; x < fb_width; x++)
+		    fb_shadow[idx++] = {FG, BG, '\0'};
 
-	memcpy(progress_bar_overwrite, fb_shadow, sizeof(short) * fb_width);
+    caret_x = caret_y = 0;
 }
 
 void FB::write(const char* buf)
 {
-    for (uint i = 0; i < strlen(buf); i++)
-        putchar(buf[i]);
+	auto len = strlen(buf);
+	for (uint i = 0; i < len; i++)
+		putchar(buf[i]);
 }
 
 void FB::ok()
@@ -221,43 +277,160 @@ void FB::warn_decorator()
     putchar(']');
 }
 
-void FB::set_fg(unsigned char fg)
+void FB::set_fg(uint32_t fg)
 {
     FG = fg;
 }
 
-void FB::set_bg(unsigned char bg)
+void FB::set_bg(uint32_t bg)
 {
     BG = bg;
+}
+
+void FB::flush()
+{
+	if (lock_flush || dirty_start_y == (uint)-1)
+		return;
+
+	// Compute fb base offsets
+	auto fb_y_off = dirty_start_y * font->characterSize * n_row;
+	auto fb_x_off = dirty_start_x * 8;
+	auto fb_start = fb + fb_y_off + fb_x_off;
+
+	// Compute shadow base offsets
+	auto shadow_y_off = dirty_start_y * fb_width + shadow_start;
+	auto shadow_off = shadow_y_off + dirty_start_x;
+
+	// Compute dirty rectangle dimensions
+	auto n_y = dirty_end_y - dirty_start_y;
+	auto n_x = dirty_end_x - dirty_start_x;
+
+	for (uint y = 0; y < n_y; y++)
+	{
+		// Compute shadow row offset
+		auto shadow_y_off2 = shadow_off + y * fb_width;
+		if (shadow_y_off2 >= shadow_lim)
+			shadow_y_off2 -= shadow_lim;
+		// Compute fb row offset
+		auto by = y * font->characterSize;
+
+		for (uint x = 0; x < n_x; x++)
+		{
+			// Get cell info
+			auto cell = fb_shadow[shadow_y_off2 + x];
+			char c = cell.c;
+			auto fg = cell.fb;
+			auto bg = cell.bg;
+			auto glyph = &r_font[c * font->characterSize * 8];
+
+			// Compute column offset
+			auto x8 = x * 8;
+
+			// Draw character
+			for (uint px_y = 0; px_y < font->characterSize; px_y++)
+			{
+				auto bytes = glyph + px_y * 8; // Get glyph row
+				auto fb_dst = &fb_start[(by + px_y) * n_row + x8]; // Get fb row
+
+				// Write pixels
+				fb_dst[0] = bytes[0] ? fg : bg;
+				fb_dst[1] = bytes[1] ? fg : bg;
+				fb_dst[2] = bytes[2] ? fg : bg;
+				fb_dst[3] = bytes[3] ? fg : bg;
+				fb_dst[4] = bytes[4] ? fg : bg;
+				fb_dst[5] = bytes[5] ? fg : bg;
+				fb_dst[6] = bytes[6] ? fg : bg;
+				fb_dst[7] = bytes[7] ? fg : bg;
+			}
+		}
+	}
+
+	// Reset dirty rectangle dimensions
+	dirty_start_x = (uint)-1;
+	dirty_start_y = (uint)-1;
+	dirty_end_y = 0;
+	dirty_end_x = 0;
+
+	// Draw progress bar if needed
+	if (progress_bar_owner)
+	{
+		// Draw bar
+		uint n_full = (uint)((float)progress_bar_percentage * (float)fb_width / 100.f) * progress_bar_height;
+		for (uint i = 0; i < n_full; i++)
+			fb[i] = FG;
+		// Clear the rest ot the line
+		for (uint i = n_full; i < progress_bar_height * fb_width; i++)
+			fb[i] = BG;
+	}
 }
 
 void FB::init()
 {
 	auto fb_tag = (multiboot_tag_framebuffer*)Multiboot::get_tag(MULTIBOOT_FRAMEBUFFER_TAG);
+
 	if (!fb_tag)
 		irrecoverable_error("Cannot find framebuffer multiboot tag");
-	if (fb_tag->framebuffer_type != 2)
-		irrecoverable_error("Framebuffer is not in EGA text mode");
-	/*if (fb_tag->framebuffer_bpp != 32)
-		irrecoverable_error("Framebuffer has bpp != 32");*/
+	if (fb_tag->framebuffer_type != MULTIBOOT_FRAMEBUFFER_TYPE_RGB)
+		irrecoverable_error("Framebuffer is not in RGB mode");
+	/*if (fb_tag->framebuffer_type != MULTIBOOT_FRAMEBUFFER_TYPE_EGA_TEXT)
+		irrecoverable_error("Framebuffer is not in EGA text mode");*/
+	if (fb_tag->framebuffer_bpp != 32)
+		irrecoverable_error("Framebuffer has bpp != 32");
 
-	[[maybe_unused]] auto rgb_tag = (multiboot_tag_framebuffer_rgb*)(fb_tag + 1);
+	auto rgb_tag = (multiboot_tag_framebuffer_rgb*)(fb_tag + 1);
+
+	if (rgb_tag->framebuffer_red_field_position != 16 || rgb_tag->framebuffer_red_mask_size != 8 ||
+	    rgb_tag->framebuffer_green_field_position != 8 || rgb_tag->framebuffer_green_mask_size != 8 ||
+	    rgb_tag->framebuffer_blue_field_position != 0 || rgb_tag->framebuffer_blue_mask_size != 8)
+		irrecoverable_error("Unsupported RGB layout");
 
 	fb_width = fb_tag->framebuffer_width;
 	fb_height = fb_tag->framebuffer_height;
 	fb_pitch = fb_tag->framebuffer_pitch;
+	n_row = fb_pitch / sizeof(uint32_t);
 
-	auto fb_size = fb_width * fb_height * fb_pitch;
-	if (!((fb = (short*)Memory::register_physical_data(fb_tag->framebuffer_addr, fb_size))))
+	auto fb_size = fb_pitch * fb_height;
+	if (!((fb = (uint32_t*)Memory::register_physical_data(fb_tag->framebuffer_addr, fb_size))))
 		irrecoverable_error("Cannot map framebuffer");
-	fb_shadow = new short[fb_size];
-	progress_bar_overwrite = new short[fb_width];
 
-    outb(FB_COMMAND_PORT, CURSOR_END_LINE); // set the cursor end line to 15
+	fb_shadow = new cell[fb_width * fb_height];
+	progress_bar_height = font->characterSize / 2;
+	characters_per_line = fb_width / 8;
+	characters_per_col = fb_height / font->characterSize;
+	shadow_lim = fb_width * fb_height;
+
+	FG = WHITE;
+	BG = BLACK;
+
+	// Initialize rasterized font
+	r_font = new uint32_t[font->characterSize * 8 * 255];
+	for (uint i = 0; i < 255; i++)
+	{
+		auto glyph = &glyphs[i * font->characterSize];
+		auto i_off = i * font->characterSize * 8;
+		for (uint y = 0; y < font->characterSize; y++)
+		{
+			auto line = glyph[y];
+			auto dest = &r_font[i_off + y * 8];
+			dest[0] = line & 0x80 ? FG : BG;
+			dest[1] = line & 0x40 ? FG : BG;
+			dest[2] = line & 0x20 ? FG : BG;
+			dest[3] = line & 0x10 ? FG : BG;
+			dest[4] = line & 0x08 ? FG : BG;
+			dest[5] = line & 0x04 ? FG : BG;
+			dest[6] = line & 0x02 ? FG : BG;
+			dest[7] = line & 0x01 ? FG : BG;
+		}
+	}
+
+	// Make character 0 representation to be empty
+	memset(r_font, 0, font->characterSize * 8 * sizeof(uint32_t));
+
+    /*outb(FB_COMMAND_PORT, CURSOR_END_LINE); // set the cursor end line to 15
     outb(FB_DATA_PORT, 0x0F);
 
     outb(FB_COMMAND_PORT, CURSOR_BEGIN_LINE); // set the cursor start line to 14 and enable cursor visibility
-    outb(FB_DATA_PORT, 0x0E);
+    outb(FB_DATA_PORT, 0x0E);*/
     clear_screen();
 }
 

@@ -3,7 +3,9 @@
 
 /* The I/O ports */
 #include <kstddef.h>
-#include "../boot/multiboot.h"
+
+#include "kstdint.h"
+#include "../utils/PSF.h"
 
 #define FB_COMMAND_PORT 0x3D4
 #define FB_DATA_PORT 0x3D5
@@ -11,7 +13,7 @@
 /* The I/O port commands */
 #define FB_HIGH_BYTE_COMMAND 14
 #define FB_LOW_BYTE_COMMAND 15
-#define FB_BLACK        0x00
+/*#define FB_BLACK        0x00
 #define FB_BLUE         0x01
 #define FB_GREEN        0x02
 #define FB_CYAN         0x03
@@ -28,52 +30,104 @@
 #define FB_LIGHTRED     0x0C
 #define FB_LIGHTMAGENTA 0x0D
 #define FB_YELLOW       0x0E
-#define FB_WHITE        0x0F
+#define FB_WHITE        0x0F*/
+#define FB_BLACK        0x000000
+#define FB_BLUE         0x0000AA
+#define FB_GREEN        0x00AA00
+#define FB_CYAN         0x00AAAA
+#define FB_RED          0xAA0000
+#define FB_MAGENTA      0xAA00AA
+#define FB_BROWN        0xAA5500
+#define FB_LIGHTGREY    0xAAAAAA
+#define FB_LIGHTGRAY    0xAAAAAA
+#define FB_DARKGREY     0x555555
+#define FB_DARKGRAY     0x555555
+#define FB_LIGHTBLUE    0x5555FF
+#define FB_LIGHTGREEN   0x55FF55
+#define FB_LIGHTCYAN    0x55FFFF
+#define FB_LIGHTRED     0xFF5555
+#define FB_LIGHTMAGENTA 0xFF55FF
+#define FB_YELLOW       0xFFFF55
+#define FB_WHITE        0xFFFFFF
 
 #define FB_ADDR 0xC03FF000
 
 #define CURSOR_END_LINE 0x0B
 #define CURSOR_BEGIN_LINE 0x0A
 
+#define WHITE 0xFFFFFF
+#define BLACK 0
+
+#define FLUSH_LOCKED_ACTION(ret, action) {\
+FB::lock_flushing(); \
+(ret) = (action); \
+FB::unlock_flushing(); \
+}
+
+typedef unsigned char uchar;
+
 class FB
 {
-    static uint caret_pos; /* Framebuffer index */
-    static short* fb;
+    struct cell
+    {
+        uint32_t fb, bg;
+        char c;
+    };
+
+    static uint caret_x, caret_y;
+    static uint32_t* fb;
     static uint fb_width, fb_height, fb_pitch;
-    static unsigned char FG, BG;
+    static uint32_t FG, BG;
     static const void* progress_bar_owner;
     static char progress_bar_percentage;
-    static short* progress_bar_overwrite;
-    static short* fb_shadow;
+    static cell* fb_shadow;
     static constexpr char progress_char = (char)129;
+    static uint n_row;
+    static PSF1_font* font;
+    static uint progress_bar_height;
+    static char* glyphs;
+    static uint characters_per_line;
+    static uint characters_per_col;
+    static uint32_t* r_font;
+    static uint shadow_start;
+    static uint dirty_start_y, dirty_end_y;
+    static uint dirty_start_x, dirty_end_x;
+    static bool lock_flush;
+    static uint shadow_lim;
+
+    static void flush();
 public:
+    static void lock_flushing();
+
+    static void unlock_flushing();
+
     static void init();
 
     /**
      * Set foreground color
      * @param fg foreground code
      */
-    static void set_fg(unsigned char fg);
+    static void set_fg(uint32_t fg);
 
     /**
      * Set background color
      * @param bg foreground code
      */
-    static void set_bg(unsigned char bg);
+    static void set_bg(uint32_t bg);
+
 
     /**
      * Writes a character in the framebuffer at current cursor position. Scroll if needed.
     *
     * @param c The character
     */
-    static void putchar(char c);
-
+    static void putchar(unsigned short int c);
 
     /** Moves the cursor of the framebuffer to the given position
     *
     * @param pos The new position of the cursor
     */
-    static void move_cursor(unsigned short pos);
+    static void update_cursor();
 
     /** Clear the screen */
     static void clear_screen();
@@ -109,7 +163,7 @@ public:
     static void warn();
 
     /** Scroll one line up  */
-    static void scroll();
+    static void scroll(uint n);
 
     /** Delete a character */
     static void delchar();

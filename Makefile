@@ -71,6 +71,9 @@ OS_ISO=$(OS_NAME).iso
 
 GRUB_TIMEOUT=0
 
+FONT_FILE=Lat15-VGA16.psf
+FONT_OBJ= $(BUILD_DIR)/$(FONT_FILE:%.psf=%.o)
+
 all: init $(OS_ISO) compilation_ended
 
 .PHONY: libc libdynlk programs
@@ -109,8 +112,11 @@ $(KERNEL_BUILD_DIR)/%.o: $(SRC_DIR)/kernel/%.s
 gcc:
 	+make -C $(SRC_DIR)/gcc
 
-$(BUILD_DIR)/kernel.elf: $(BUILD_DIR)/.dir_timestamp $(INTERNAL_OBJS) $(libc) $(gcc)
-	ld $(LDFLAGS) $(OBJ_LIST) $(CPPFLAGS) $(libc) -o $(BUILD_DIR)/kernel.elf $(libgcc)
+$(FONT_OBJ): $(FONT_FILE)
+	objcopy -I binary -O elf32-i386 -B i386 $(FONT_FILE) $(FONT_OBJ)
+
+$(BUILD_DIR)/kernel.elf: $(BUILD_DIR)/.dir_timestamp $(FONT_OBJ) $(INTERNAL_OBJS) $(libc) $(gcc)
+	ld $(LDFLAGS) $(OBJ_LIST) $(CPPFLAGS) $(libc) $(FONT_OBJ) -o $(BUILD_DIR)/kernel.elf $(libgcc)
 
 $(OS_ISO): $(BUILD_DIR)/kernel.elf $(libdynlk) $(programs)
 	@#Create directories

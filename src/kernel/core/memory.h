@@ -89,7 +89,7 @@ namespace Memory
 	 */
 	void init(const multiboot_info_t* minfo);
 
-	void register_multiboot_info(const multiboot_info_t* minfo);
+	multiboot_info_t* register_multiboot_info(const multiboot_info_t* minfo);
 
 	void* mmap(size_t length, [[maybe_unused]] int prot, char* path, [[maybe_unused]] uint offset);
 

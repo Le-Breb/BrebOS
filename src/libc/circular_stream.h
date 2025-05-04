@@ -4,16 +4,16 @@
 
 #define STREAM_CAPACITY 4096
 
-class stream {
+class circular_stream {
 public:
     enum Policy
     {
-        STREAM_BUFFERED,
+        STREAM_MANUAL,
         STREAM_NEWLINE_FLUSHED,
         STREAM_NOBUFFER
     };
-    explicit stream(Policy policy = STREAM_NEWLINE_FLUSHED);
-    ~stream();
+    explicit circular_stream(Policy policy = STREAM_NEWLINE_FLUSHED);
+    ~circular_stream();
     void write(char c);
     void flush();
 private:

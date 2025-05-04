@@ -1,4 +1,6 @@
 #include "multiboot.h"
+
+#include "../core/fb.h"
 #include "../core/memory.h"
 
 const multiboot_info_t* Multiboot::multiboot_info = nullptr;
@@ -10,8 +12,8 @@ void Multiboot::init(const multiboot_info_t* multiboot_info)
 
 void* Multiboot::get_tag(uint32_t type)
 {
-	uint8_t* ptr = (uint8_t*)multiboot_info + 8; // skip total_size and reserved
-	while (1) {
+	auto* ptr = (uint8_t*)multiboot_info->tags; // skip total_size and reserved
+	while ((uint32_t)(ptr - (uint8_t*)multiboot_info) < multiboot_info->total_size) {
 		auto* tag = (struct multiboot_tag*)ptr;
 		if (tag->type == 0)
 			return nullptr;
@@ -21,6 +23,8 @@ void* Multiboot::get_tag(uint32_t type)
 
 		ptr += (tag->size + 7) & ~7; // align to 8 bytes
 	}
+
+	return nullptr;
 }
 
 // ===================================== MULTIBOOT1=================================

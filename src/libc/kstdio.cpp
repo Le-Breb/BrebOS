@@ -6,9 +6,9 @@
 #include "kctype.h"
 #include "kstdint.h"
 #include "ksyscalls.h"
-#include "stream.h"
+#include "circular_stream.h"
 
-static stream s = stream(stream::Policy::STREAM_NEWLINE_FLUSHED);
+static circular_stream s = circular_stream(circular_stream::Policy::STREAM_NEWLINE_FLUSHED);
 
 char* __int_str(intmax_t i, char b[], int base, uint plusSignIfNeeded, uint spaceSignIfNeeded,
 				int paddingNo, uint justify, uint zeroPad)

@@ -12,7 +12,6 @@ File* VFS::fds[MAX_OPEN_FILES] = {nullptr};
 uint VFS::num_path = 0;
 Dentry* VFS::path[PATH_CAPACITY] = {};
 
-
 void VFS::init()
 {
 	FS::init();
@@ -161,8 +160,7 @@ void VFS::file_printer(const void* buf, size_t len, const char* extension)
 	if (!strcmp(extension, "txt"))
 	{
 		auto cbuf = (char*)buf;
-		for (uint i = 0; i < len; i++)
-			FB::putchar(cbuf[i]);
+		FB::write(cbuf);
 	}
 	else
 	{

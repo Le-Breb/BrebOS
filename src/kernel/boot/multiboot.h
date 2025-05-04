@@ -5,6 +5,10 @@
 
 #define MULTIBOOT_FRAMEBUFFER_TAG 8
 
+#define MULTIBOOT_FRAMEBUFFER_TYPE_INDEXED 0
+#define MULTIBOOT_FRAMEBUFFER_TYPE_RGB     1
+#define MULTIBOOT_FRAMEBUFFER_TYPE_EGA_TEXT     2
+
 struct multiboot_tag
 {
     uint32_t type;
@@ -25,8 +29,6 @@ struct multiboot_tag_framebuffer
 };
 
 struct multiboot_tag_framebuffer_rgb {
-    uint32_t type;
-    uint32_t size;
     uint8_t framebuffer_red_field_position;
     uint8_t framebuffer_red_mask_size;
     uint8_t framebuffer_green_field_position;
