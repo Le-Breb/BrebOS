@@ -21,6 +21,8 @@ typedef uint pid_t;
 #define P_WAITING_PROCESS 8
 // Process is terminated, but not freed for its parent to get info from it
 #define P_ZOMBIE 16
+// Process is sleeping
+#define P_SLEEPING 32
 
 #define SEGFAULT_RET_VAL 255
 #define GPF_RET_VAL 254
@@ -137,6 +139,8 @@ public:
 
 	/** Checks whether the program is waiting for another program to terminate */
 	[[nodiscard]] bool is_waiting_program() const;
+
+	[[nodiscard]] bool is_sleeping() const;
 
 	/**
 	* Computes the runtime address of a symbol referenced by an ELF.

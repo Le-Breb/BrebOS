@@ -73,6 +73,8 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointe
     // Set terminal process ready
     Scheduler::exec("shell", 0, 0, nullptr);
 
+    FB::refresh_loop();
+
     // This makes the kernel initialization process end itself, thus ending kernel initialization
     Scheduler::stop_kernel_init_process();
 

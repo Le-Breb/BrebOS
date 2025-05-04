@@ -16,11 +16,23 @@ private:
 	// Thus, 32 = sizeof(uint) PIDs are available, allowing up to 32 processes to run concurrently
 	static uint pid_pool;
 
+	struct asleep_process
+	{
+		Process* process;
+		uint end_tick;
+
+		int operator==(const asleep_process& other) const
+		{
+			return process == other.process && end_tick == other.end_tick;
+		}
+	};
+
 	static pid_t running_process;
 	static queue<pid_t, MAX_PROCESSES>* ready_queue;
 	static queue<pid_t, MAX_PROCESSES>* waiting_queue;
 	static list<pid_t> process_waiting_list[MAX_PROCESSES];
 	static Process* processes[MAX_PROCESSES];
+	static list<asleep_process> sleeping_processes;
 
 	/**
 	 * Round-robin scheduler
@@ -31,6 +43,8 @@ private:
 	static pid_t get_free_pid();
 
 	static void release_pid(pid_t pid);
+
+	static void check_for_processes_to_wake_up();
 
 public:
 	/**
@@ -90,6 +104,10 @@ public:
 	static bool register_process_wait(pid_t waiting_process, pid_t waiting_for_process);
 
 	static pid_t fork(Process* p);
+
+	static void set_process_asleep(Process* p, uint duration);
+
+	static void wake_up_asleep_process(const Process* p);
 };
 
 

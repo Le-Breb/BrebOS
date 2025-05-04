@@ -94,9 +94,12 @@ class FB
     static uint dirty_start_x, dirty_end_x;
     static bool lock_flush;
     static uint shadow_lim;
+public:
+    [[noreturn]]
+    static void refresh_loop();
 
     static void flush();
-public:
+
     static void lock_flushing();
 
     static void unlock_flushing();

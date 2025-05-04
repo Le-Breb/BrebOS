@@ -14,6 +14,7 @@ queue<pid_t, MAX_PROCESSES>* Scheduler::ready_queue{};
 queue<pid_t, MAX_PROCESSES>* Scheduler::waiting_queue{};
 list<pid_t> Scheduler::process_waiting_list[MAX_PROCESSES] = {};
 Process* Scheduler::processes[MAX_PROCESSES] {};
+list<Scheduler::asleep_process> Scheduler::sleeping_processes{};
 
 Process* Scheduler::get_next_process()
 {
@@ -37,6 +38,8 @@ Process* Scheduler::get_next_process()
             set_first_ready_process_asleep_waiting_key_press();
         else if (proc->is_waiting_program())
             set_first_ready_process_asleep_waiting_process();
+        else if (proc->is_sleeping())
+            ready_queue->dequeue();
         else
         {
             // Update queue
@@ -90,6 +93,9 @@ void Scheduler::set_first_ready_process_asleep_waiting_process()
 
 [[noreturn]] void Scheduler::schedule()
 {
+    // Wake up processes that have been sleeping enough
+    check_for_processes_to_wake_up();
+
     Process* p = get_next_process();
 
     if (p == nullptr)
@@ -129,7 +135,7 @@ void Scheduler::set_first_ready_process_asleep_waiting_process()
     if (p->flags & P_SYSCALL_INTERRUPTED)
     {
         p->flags &= ~P_SYSCALL_INTERRUPTED;
-        Interrupts::resume_syscall_handler_asm(p->k_cpu_state, p->k_stack_state.esp - 12);
+        Interrupts::resume_syscall_handler_asm(&p->k_cpu_state, &p->k_stack_state);
     }
     else
         Interrupts::resume_user_process_asm(&p->cpu_state, &p->stack_state);
@@ -215,6 +221,22 @@ void Scheduler::init()
 
     set_process_ready(Memory::kernel_process);
 
+    //auto pid = get_free_pid();
+    //if (pid == MAX_PROCESSES)
+    //    irrecoverable_error("No more PID available. Cannot finish kernel initialization.");
+
+    // auto stack_top_page_id = Memory::get_free_pe();
+    // Memory::allocate_page<false>(stack_top_page_id);
+    // stack_state_t dummy_stack_state{};
+    // auto k = new Process(0, nullptr, Memory::page_tables, Memory::pdt, &dummy_stack_state,
+    //                      10, pid, pid, (stack_top_page_id << 12) + PAGE_SIZE - 4);
+    // k->lowest_free_pe = Memory::kernel_process->lowest_free_pe;
+    // k->mem_base = Memory::kernel_process->mem_base;
+    // processes[pid] = k;
+    // set_process_ready(k);
+    // k->stack_state.eip = (uint)&test;
+    // k->set_flag(P_SYSCALL_INTERRUPTED);
+
     // Create a process that represents the kernel itself
     // then continue kernel initialization with preemptive scheduling running
     PIC::enable_preemptive_scheduling();
@@ -260,6 +282,24 @@ void Scheduler::release_pid(pid_t pid)
     pid_pool &= ~(1 << pid);
 }
 
+void Scheduler::check_for_processes_to_wake_up()
+{
+    uint tick = PIT::get_tick();
+    for (auto i = 0; i < sleeping_processes.size(); i++)
+    {
+        auto sleeping_process = sleeping_processes.get(i);
+        if (sleeping_process->end_tick <= tick)
+        {
+            // Add process to ready queue and remove it from sleeping list
+            pid_t pid = sleeping_process->process->pid;
+            ready_queue->enqueue(pid);
+            processes[pid]->flags &= ~P_SLEEPING; // Clear flag
+            sleeping_processes.remove(*sleeping_process);
+            i--;
+        }
+    }
+}
+
 void Scheduler::create_kernel_init_process(void* process_host_mem, const uint lowest_free_pe, Process** kernel_process)
 {
     uint pid = get_free_pid();
@@ -283,7 +323,7 @@ void Scheduler::create_kernel_init_process(void* process_host_mem, const uint lo
     // Now we can properly construct the process
     stack_state_t dummy_stack_state{};
     auto k = new Process(0, nullptr, Memory::page_tables, Memory::pdt, &dummy_stack_state,
-                         10, pid, pid, (uint)-1);
+                         1, pid, pid, (uint)-1);
 
     // Transfer allocation information from dummy process to actual process
     k->lowest_free_pe = kernel->lowest_free_pe;
@@ -376,4 +416,32 @@ pid_t Scheduler::fork([[maybe_unused]] Process* p)
 
 
     return child_pid;
+}
+
+void Scheduler::set_process_asleep(Process* p, uint duration)
+{
+    // Todo: use a sorted list to only need to check the first process instead of the whole list
+    // when looking for processes to wake up
+    p->set_flag(P_SLEEPING);
+    uint num_ticks_to_wait = TICKS_PER_SEC * duration / 1000;
+    if (!num_ticks_to_wait)
+        num_ticks_to_wait = 1;
+    uint end_tick = PIT::get_tick() + num_ticks_to_wait;
+    sleeping_processes.add({p, end_tick});
+}
+
+void Scheduler::wake_up_asleep_process(const Process* p)
+{
+    // Todo: use a sorted list to avoid doing stuff like that...
+    for (auto i = 0; i < sleeping_processes.size(); i++)
+    {
+        auto sleeping_process = *sleeping_processes.get(i);
+        if (sleeping_process.process == p)
+        {
+            auto sp = sleeping_processes.get(i);
+            sp->process->flags &= ~P_SLEEPING; // Clear flag
+            sleeping_processes.remove(*sp);
+            break;
+        }
+    }
 }

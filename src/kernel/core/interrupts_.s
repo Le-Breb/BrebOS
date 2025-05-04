@@ -41,21 +41,35 @@ resume_user_process_asm_:
 
 ; Exit from an interrupt and resume a syscall handler
 ; [esp + 0] = call function ret addr
-; [esp + 4] = cpu_state_t
-; [esp + 4 + sizeof(cpu_state_t)] = new ESP value
+; [esp + 4] = cpu_state_t*
+; [esp + 8] = stack_state_t*
 global resume_syscall_handler_asm_
 resume_syscall_handler_asm_:
-.restore_regs:
-    mov eax, [esp + 04]
-    mov ebx, [esp + 08]
-    mov ecx, [esp + 12]
-    mov edx, [esp + 16]
-    mov esi, [esp + 20]
-    mov edi, [esp + 24]
-    mov ebp, [esp + 28]
+    mov eax, [esp + 08] ; get stack_state ptr
+    mov ecx, [esp + 04] ; get cpu_state ptr
 
 .set_new_stack:
-    mov esp, [esp + 32]
+    mov esp, [eax + 16]
+
+.prepare_jump:
+	;push eflags
+	mov ebx, [eax + 12]
+	push ebx
+    ; push cs
+    mov ebx, [eax + 08]
+    push ebx
+    ; push eip
+    mov ebx, [eax + 04]
+    push ebx
+
+.restore_regs:
+    mov eax, [ecx + 00]
+    mov ebx, [ecx + 04]
+    mov edx, [ecx + 12]
+    mov esi, [ecx + 16]
+    mov edi, [ecx + 20]
+    mov ebp, [ecx + 24]
+    mov ecx, [ecx + 08]
 
 .jump:
     iret

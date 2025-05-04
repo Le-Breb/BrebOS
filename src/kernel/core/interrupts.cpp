@@ -39,7 +39,7 @@ extern "C" void disable_interrupts_asm_(void);
 
 extern "C" [[noreturn]] void resume_user_process_asm_(const cpu_state_t* cpu_state, const stack_state_t* stack_state);
 
-extern "C" [[noreturn]] void resume_syscall_handler_asm_(cpu_state_t cpu_state, uint iret_esp);
+extern "C" [[noreturn]] void resume_syscall_handler_asm_(cpu_state_t* cpu_state, stack_state_t* stack_state);
 
 void Interrupts::page_fault_handler(stack_state_t* stack_state)
 {
@@ -174,9 +174,9 @@ void Interrupts::disable_asm()
 	resume_user_process_asm_(cpu_state, stack_state);
 }
 
-void Interrupts::resume_syscall_handler_asm(cpu_state_t cpu_state, uint iret_esp)
+void Interrupts::resume_syscall_handler_asm(cpu_state_t* cpu_state, stack_state_t* stack_state)
 {
-	resume_syscall_handler_asm_(cpu_state, iret_esp);
+	resume_syscall_handler_asm_(cpu_state, stack_state);
 }
 
 void Interrupts::change_pdt_asm(uint pdt_phys_addr)

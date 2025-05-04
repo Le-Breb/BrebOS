@@ -79,13 +79,11 @@ public:
 	[[noreturn]] static void resume_user_process_asm(const cpu_state_t* cpu_state, const struct stack_state* stack_state);
 
 	/**
-	 * Exits from an interrupt and a resume an interrupted syscall dispatcher
-	 * @param cpu_state syscall dispatcher CPU state
-	 * @param iret_esp Value to set ESP to before executing IRET.
-	 * IRET expects to find eip cs and eflags on the stack, which are pushed on the interrupted system dispatcher' stack.
-	 * iret_esp should then be whatever ESP was when the syscall dispatcher was interrupted minus 12 = 3 * sizeof(int)
+	 * Exits from an interrupt and a resume an interrupted syscall
+	 * @param cpu_state syscall CPU state
+	 * @param stack_state syscall stack state
 	 */
-	[[noreturn]] static void resume_syscall_handler_asm(cpu_state_t cpu_state, uint iret_esp);
+	[[noreturn]] static void resume_syscall_handler_asm(cpu_state_t* cpu_state, stack_state_t* stack_state);
 
 	static void change_pdt_asm(uint pdt_phys_addr);
 

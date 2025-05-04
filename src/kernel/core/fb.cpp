@@ -7,6 +7,7 @@
 
 #include "memory.h"
 #include "system.h"
+#include "../processes/scheduler.h"
 
 extern char _binary_Lat15_VGA16_psf_start[];
 
@@ -80,7 +81,6 @@ void FB::update_progress_bar(char new_percentage, const void* id)
 		return;
 
 	progress_bar_percentage = new_percentage;
-	flush();
 }
 
 bool FB::try_acquire_progress_bar(const void* id)
@@ -98,18 +98,6 @@ void FB::release_progres_bar(const void* id)
 		return;
 
 	progress_bar_owner = nullptr;
-	uint sy = dirty_start_y;
-	uint ey = dirty_end_y;
-	uint sx = dirty_start_x;
-	uint ex = dirty_end_x;
-	dirty_start_y = dirty_start_x = 0;
-	dirty_end_y = 1;
-	dirty_end_x = characters_per_line;
-	flush();
-	dirty_start_y = sy;
-	dirty_start_x = sx;
-	dirty_end_y = ey;
-	dirty_end_x = ex;
 }
 
 #define PUTCHAR_PIXEL(fb_dst, shadow_dst, col, px_x) \
@@ -148,7 +136,6 @@ void FB::putchar(
 	{
 		caret_y++;
 		caret_x = 0;
-		flush();
 		update_cursor();
 
 		return;
@@ -165,8 +152,6 @@ void FB::putchar(
 	if (shadow_off >= shadow_lim)
 		shadow_off -= shadow_lim;
 	fb_shadow[shadow_off] = {FG, BG, cc};
-
-	flush();
 
 	// Advance to next character
 	caret_x++;
@@ -208,6 +193,9 @@ void FB::clear_screen()
 		    fb_shadow[idx++] = {FG, BG, '\0'};
 
     caret_x = caret_y = 0;
+	dirty_start_x = dirty_start_y = 0;
+	dirty_end_x = characters_per_line;
+	dirty_end_y = characters_per_col;
 }
 
 void FB::write(const char* buf)
@@ -285,6 +273,17 @@ void FB::set_fg(uint32_t fg)
 void FB::set_bg(uint32_t bg)
 {
     BG = bg;
+}
+
+[[noreturn]] void FB::refresh_loop()
+{
+	static const uint frame_duration = 1000 / 30; // 30 FPS - Cannot set 60 fps because PIT is not precise enough
+	while (true)
+	{
+		Scheduler::set_process_asleep(Memory::kernel_process, frame_duration);
+		TRIGGER_TIMER_INTERRUPT
+		flush();
+	}
 }
 
 void FB::flush()

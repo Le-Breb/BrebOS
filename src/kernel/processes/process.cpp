@@ -145,6 +145,11 @@ bool Process::is_waiting_program() const
     return flags & P_WAITING_PROCESS;
 }
 
+bool Process::is_sleeping() const
+{
+    return flags & P_SLEEPING;
+}
+
 uint Process::get_symbol_runtime_address_at_runtime(uint dep_id, const char* symbol_name) const
 {
     for (int i = dep_id; i < elf_dep_list->size(); i++)
