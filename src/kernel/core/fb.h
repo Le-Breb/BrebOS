@@ -94,7 +94,11 @@ class FB
     static uint dirty_start_x, dirty_end_x;
     static bool lock_flush;
     static uint shadow_lim;
+    static uint fps;
 public:
+    /**
+     * Continuously refreshes the framebuffer (ie the display)
+     */
     [[noreturn]]
     static void refresh_loop();
 
@@ -104,7 +108,7 @@ public:
 
     static void unlock_flushing();
 
-    static void init();
+    static void init(uint fps);
 
     /**
      * Set foreground color

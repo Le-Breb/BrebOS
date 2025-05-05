@@ -23,6 +23,7 @@ uint FB::dirty_start_x = 0;
 uint FB::dirty_end_y = 0;
 uint FB::dirty_end_x = 0;
 uint FB::shadow_start = 0;
+uint FB::fps = 0;
 uint32_t* FB::fb = nullptr;
 uint32_t FB::FG = FB_WHITE;
 uint32_t FB::BG = FB_BLACK;
@@ -277,10 +278,10 @@ void FB::set_bg(uint32_t bg)
 
 [[noreturn]] void FB::refresh_loop()
 {
-	static const uint frame_duration = 1000 / 30; // 30 FPS - Cannot set 60 fps because PIT is not precise enough
+	static const uint frame_duration = 1000 / fps;
 	while (true)
 	{
-		Scheduler::set_process_asleep(Memory::kernel_process, frame_duration);
+		Scheduler::set_process_asleep(Scheduler::get_running_process(), frame_duration);
 		TRIGGER_TIMER_INTERRUPT
 		flush();
 	}
@@ -363,7 +364,7 @@ void FB::flush()
 	}
 }
 
-void FB::init()
+void FB::init(uint fps)
 {
 	auto fb_tag = (multiboot_tag_framebuffer*)Multiboot::get_tag(MULTIBOOT_FRAMEBUFFER_TAG);
 
@@ -397,6 +398,7 @@ void FB::init()
 	characters_per_line = fb_width / 8;
 	characters_per_col = fb_height / font->characterSize;
 	shadow_lim = fb_width * fb_height;
+	FB::fps = fps;
 
 	FG = WHITE;
 	BG = BLACK;

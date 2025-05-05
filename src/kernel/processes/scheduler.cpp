@@ -100,7 +100,7 @@ void Scheduler::set_first_ready_process_asleep_waiting_process()
 
     if (p == nullptr)
     {
-        if (waiting_queue->empty())
+        if (waiting_queue->empty() && sleeping_processes.size() == 0)
             System::shutdown();
         else
         {
@@ -209,6 +209,16 @@ pid_t Scheduler::get_free_pid()
     return MAX_PROCESSES; // No PID available
 }
 
+uint32_t get_eflags() {
+    uint32_t eflags;
+    asm volatile (
+        "pushf\n\t"      // Push EFLAGS to the stack
+        "pop %0"         // Pop into variable
+        : "=r" (eflags)
+    );
+    return eflags;
+}
+
 void Scheduler::init()
 {
     PIT::init();
@@ -220,22 +230,6 @@ void Scheduler::init()
     waiting_queue = new queue<pid_t, MAX_PROCESSES>();
 
     set_process_ready(Memory::kernel_process);
-
-    //auto pid = get_free_pid();
-    //if (pid == MAX_PROCESSES)
-    //    irrecoverable_error("No more PID available. Cannot finish kernel initialization.");
-
-    // auto stack_top_page_id = Memory::get_free_pe();
-    // Memory::allocate_page<false>(stack_top_page_id);
-    // stack_state_t dummy_stack_state{};
-    // auto k = new Process(0, nullptr, Memory::page_tables, Memory::pdt, &dummy_stack_state,
-    //                      10, pid, pid, (stack_top_page_id << 12) + PAGE_SIZE - 4);
-    // k->lowest_free_pe = Memory::kernel_process->lowest_free_pe;
-    // k->mem_base = Memory::kernel_process->mem_base;
-    // processes[pid] = k;
-    // set_process_ready(k);
-    // k->stack_state.eip = (uint)&test;
-    // k->set_flag(P_SYSCALL_INTERRUPTED);
 
     // Create a process that represents the kernel itself
     // then continue kernel initialization with preemptive scheduling running
@@ -376,6 +370,7 @@ void Scheduler::free_terminated_process(Process& p)
 void Scheduler::stop_kernel_init_process()
 {
     // Prune kernel process from ready queue
+    PIC::disable_preemptive_scheduling();
     size_t n = ready_queue->getCount();
     for (size_t i = 0; i < n; i++)
     {
@@ -383,6 +378,7 @@ void Scheduler::stop_kernel_init_process()
         if (pid != 0)
             ready_queue->enqueue(pid);
     }
+    PIC::enable_preemptive_scheduling();
 
     // We asked for termination of kernel init process.
     // It is this precise process running those instructions.
@@ -444,4 +440,39 @@ void Scheduler::wake_up_asleep_process(const Process* p)
             break;
         }
     }
+}
+
+void Scheduler::start_kernel_process(void* eip)
+{
+    auto pid = get_free_pid();
+    if (pid == MAX_PROCESSES)
+        irrecoverable_error("No more PID available. Cannot finish kernel initialization.");
+
+    // Allocate stack page
+    auto stack_top_page_id = Memory::get_free_pe();
+    uint k_stack_top = (stack_top_page_id << 12) + PAGE_SIZE - 4;
+    Memory::allocate_page<false>(stack_top_page_id);
+    stack_state_t stack_state{};
+
+    // Create process
+    auto p = new Process(0, nullptr, Memory::page_tables, Memory::pdt, &stack_state,
+                         10, pid, pid, k_stack_top);
+
+    // Setup process to mimic kernel_process
+    p->lowest_free_pe = Memory::kernel_process->lowest_free_pe;
+    p->mem_base = Memory::kernel_process->mem_base;
+
+    // Setup PCB
+    p->k_stack_state.eip = (uint)eip;
+    p->k_stack_state.esp = k_stack_top;
+    __asm__ volatile("mov %%ss, %0" : "=r"(p->k_stack_state.ss));
+    __asm__ volatile("mov %%cs, %0" : "=r"(p->k_stack_state.cs));
+    p->k_stack_state.eflags = get_eflags();
+
+    // For the process to be recognized as a kernel process
+    p->set_flag(P_SYSCALL_INTERRUPTED);
+
+    // Register process as ready
+    processes[pid] = p;
+    set_process_ready(p);
 }

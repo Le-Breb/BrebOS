@@ -10,15 +10,13 @@
 #include "../network/Network.h"
 #include "../utils/profiling.h"
 
+#define FPS 30 // Cannot go a lot higher since PIT is not precise enough
+
 extern "C" void _init(void); // NOLINT(*-reserved-identifier)
 
 //Todo: Add support for multiple dynamically linked libs (register dyn lib dependencies)
 //Todo: Advanced memory freeing (do something when free_pages do not manage to have free_bytes < FREE_THRESHOLD)
-//Todo: Implement process schedule_timeout to have sleeping processes out of the scheduler ready queue (usage: sleep)
-//Todo: Make allocate page user allocate below memory higher half, and above for kernel pages
 //Todo: Process R_386_PC32 relocations
-//Todo: Automatic website ip resolver with DNS
-//Todo: write proper wget program, try to download programs from repo and try executing them
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointer
 {
     _init(); // Execute constructors
@@ -26,7 +24,8 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointe
 
     Memory::init((multiboot_info_t*)ebx);
 
-    FB::init();
+    // Initialize framebuffer, so that we can use it and printf calls don't crash, which is preferable :D
+    FB::init(FPS);
 
     FB::write("Setting up GDT\n");
     GDT::init();
@@ -44,20 +43,23 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointe
     Interrupts::enable_asm();
     FB::ok();
 
-#ifdef PROFILING
-    Profiling::init();
-#endif
-
-    FB::write("Initialize network card and stack\n");
-    Network::init();
-    FB::ok();
-
     // Activates preemptive scheduling.
     // At this point, a kernel initialization process is created and will be preempted like any other process.
     // It will execute the remaining instructions until Scheduler::stop_kernel_init_process() is called.
     // Multiple processes can now run concurrently
     FB::write("Activating preemptive scheduling\n");
     Scheduler::init();
+    FB::ok();
+
+    // Start refreshing the display every frame
+    Scheduler::start_kernel_process((void*)FB::refresh_loop);
+
+#ifdef PROFILING
+    Profiling::init();
+#endif
+
+    FB::write("Initialize network card and stack\n");
+    Network::init();
     FB::ok();
 
     FB::write("Initializing Virtual File System\n");
@@ -72,8 +74,6 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointe
 
     // Set terminal process ready
     Scheduler::exec("shell", 0, 0, nullptr);
-
-    FB::refresh_loop();
 
     // This makes the kernel initialization process end itself, thus ending kernel initialization
     Scheduler::stop_kernel_init_process();

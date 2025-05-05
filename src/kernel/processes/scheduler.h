@@ -108,6 +108,12 @@ public:
 	static void set_process_asleep(Process* p, uint duration);
 
 	static void wake_up_asleep_process(const Process* p);
+
+	/**
+	 * Starts a kernel process
+	 * @param eip address of the function to call
+	 */
+	static void start_kernel_process(void* eip);
 };
 
 
