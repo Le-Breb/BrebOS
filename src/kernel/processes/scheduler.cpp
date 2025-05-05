@@ -122,11 +122,9 @@ void Scheduler::set_first_ready_process_asleep_waiting_process()
     Interrupts::change_pdt_asm(PHYS_ADDR(Memory::page_tables, (uint) p->pdt));
 
     // Write some values in process' address space (likely syscall return values)
-    for (auto i = 0; i < p->values_to_write.size(); i++)
-    {
-        auto pair = *p->values_to_write.get(i);
+    for (const auto& pair : p->values_to_write)
         *(int*)pair.address = pair.value;
-    }
+
     // Safe to clear even though we use process address space since this data belongs to the kernel, and thus is in
     // higher half, which is shared by processes address spaces
     p->values_to_write.clear();
@@ -343,9 +341,8 @@ void Scheduler::free_terminated_process(Process& p)
     // Resume all processes that were waiting for this process to terminate
     pid_t pid = p.pid;
     pid_t curr_pid = get_running_process_pid();
-    for (auto i = 0; i < process_waiting_list[pid].size(); i++)
+    for (const auto& waiting_process_pid : process_waiting_list[pid])
     {
-        auto waiting_process_pid = *process_waiting_list[pid].get(i);
         auto waiting_process = processes[waiting_process_pid];
 
         // Resume process, unless it's the current process, in which case it is already in the ready queue
@@ -429,14 +426,12 @@ void Scheduler::set_process_asleep(Process* p, uint duration)
 void Scheduler::wake_up_asleep_process(const Process* p)
 {
     // Todo: use a sorted list to avoid doing stuff like that...
-    for (auto i = 0; i < sleeping_processes.size(); i++)
+    for (auto& sleeping_process : sleeping_processes)
     {
-        auto sleeping_process = *sleeping_processes.get(i);
         if (sleeping_process.process == p)
         {
-            auto sp = sleeping_processes.get(i);
-            sp->process->flags &= ~P_SLEEPING; // Clear flag
-            sleeping_processes.remove(*sp);
+            sleeping_process.process->flags &= ~P_SLEEPING; // Clear flag
+            sleeping_processes.remove(sleeping_process);
             break;
         }
     }

@@ -24,8 +24,8 @@ extern "C" int main(int argc, char** argv)
 	printf("Userland malloc functional: %s\n", a ? "True" : "False");
 	free(a);
 
-	for (uint i = 0; i < 20000; i++)
-		printf("%u\n", i);
+	// for (uint i = 0; i < 20000; i++)
+	// 	printf("%u\n", i);
 
 	return 0;
 }

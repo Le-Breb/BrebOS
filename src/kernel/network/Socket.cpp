@@ -202,9 +202,8 @@ void Socket::handle_packet(const TCP::packet_info_t* packet_info, const IPV4::pa
 
 Socket* Socket::port_used(uint16_t port)
 {
-    for (int i = 0; i < sockets.size(); i++)
+    for (const auto socket : sockets)
     {
-        auto socket = *sockets.get(i);
         if (socket->port == port)
             return socket;
     }
@@ -218,9 +217,8 @@ void Socket::close_all_connections()
     while (connection_open)
     {
         connection_open = false;
-        for (int i = 0; i < sockets.size(); i++)
+        for (const auto& socket : sockets)
         {
-            auto socket = *sockets.get(i);
             connection_open = connection_open || (socket->state != TCP::State::CLOSED);
             if (socket->state != TCP::State::ESTABLISHED)
                 continue;

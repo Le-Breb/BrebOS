@@ -548,8 +548,8 @@ Process* ELFLoader::setup_elf_process(pid_t pid, pid_t ppid, int argc, const cha
     return proc;
 }
 
-size_t ELFLoader::write_args_to_stack(size_t stack_top_v_addr, int argc, const char** argv, list<Elf32_Addr>
-                                      init_array, list<Elf32_Addr> fini_array)
+size_t ELFLoader::write_args_to_stack(size_t stack_top_v_addr, int argc, const char** argv, const list<Elf32_Addr>&
+    init_array, const list<Elf32_Addr>& fini_array)
 {
     size_t args_len = 0; // Actual size of all args combined
     for (int i = 0; i < argc; ++i)
@@ -579,13 +579,11 @@ size_t ELFLoader::write_args_to_stack(size_t stack_top_v_addr, int argc, const c
 
     // Write init and fini arrays, null terminated
     Elf32_Addr* funcs_ptr = (Elf32_Addr*)(argv_ptr + 2);
-    size_t init_arr_size = init_array.size();
-    for (size_t i = 0; i < init_arr_size; ++i)
-        *funcs_ptr++ = *init_array.get(i);
+    for (const Elf32_Addr innit_func_addr : init_array)
+        *funcs_ptr++ = innit_func_addr;
     *funcs_ptr++ = 0;
-    size_t fini_arr_size = fini_array.size();
-    for (size_t i = 0; i < fini_arr_size; ++i)
-        *funcs_ptr++ = *fini_array.get(i);
+    for (const Elf32_Addr fini_func_addr : fini_array)
+        *funcs_ptr++ = fini_func_addr;
     *funcs_ptr++ = 0;
 
     size_t esp = KERNEL_VIRTUAL_BASE - ((char*)stack_top_v_addr - (char*)argv_ptr);

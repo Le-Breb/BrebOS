@@ -6,6 +6,17 @@
 
 #include "../processes/process.h"
 
+template<class T>
+list<T>::Node::Node() {
+    next = nullptr;
+}
+
+template<class T>
+list<T>::Node::Node(T val) {
+    value = val;
+    next = nullptr;
+}
+
 template <class E>
 list<E>::list()
 {
@@ -16,7 +27,7 @@ list<E>::list()
 template <class E>
 void list<E>::addFirst(E e)
 {
-    auto* newNode = new Node<E>(e);
+    auto* newNode = new Node(e);
     if (head == nullptr)
     {
         head = newNode;
@@ -33,7 +44,7 @@ void list<E>::addFirst(E e)
 template <class E>
 void list<E>::add(E e)
 {
-    auto* newNode = new Node<E>(e);
+    auto* newNode = new Node(e);
     if (head == nullptr)
     {
         head = newNode;
@@ -41,8 +52,8 @@ void list<E>::add(E e)
         return;
     }
 
-    Node<E>* current = head;
-    Node<E>* tmp;
+    Node* current = head;
+    Node* tmp;
 
     do
     {
@@ -60,8 +71,8 @@ void list<E>::add(E e)
 template <class E>
 bool list<E>::remove(E e)
 {
-    Node<E>* current = head;
-    Node<E>* prev = nullptr;
+    Node* current = head;
+    Node* prev = nullptr;
     bool found = false;
 
     if (current == nullptr)
@@ -115,7 +126,7 @@ bool list<E>::remove(E e)
 template <class E>
 bool list<E>::removeFirst()
 {
-    Node<E>* tmp = head;
+    Node* tmp = head;
 
     if (tmp == nullptr)
     {
@@ -133,8 +144,8 @@ bool list<E>::removeFirst()
 template <class E>
 bool list<E>::removeLast()
 {
-    Node<E>* current = head;
-    Node<E>* prev = nullptr;
+    Node* current = head;
+    Node* prev = nullptr;
 
     if (current == nullptr)
     {
@@ -158,9 +169,9 @@ bool list<E>::removeLast()
 template <class E>
 void list<E>::reverse()
 {
-    Node<E>* current = head;
-    Node<E>* newNext = nullptr;
-    Node<E>* tmp;
+    Node* current = head;
+    Node* newNext = nullptr;
+    Node* tmp;
 
     if (current == nullptr)
         return;
@@ -180,8 +191,8 @@ void list<E>::reverse()
 /*template<class E>
 void list<E>::sort(int order) {
 
-    Node<E> *tmpPtr = head;
-    Node<E> *tmpNxt = nullptr;
+    Node *tmpPtr = head;
+    Node *tmpNxt = nullptr;
 
     if (tmpPtr == nullptr)
         return;
@@ -218,11 +229,11 @@ void list<E>::sort(int order) {
 template <class E>
 void list<E>::clear()
 {
-    Node<E>* current = head;
+    Node* current = head;
 
     while (current != nullptr)
     {
-        Node<E>* tmp = current;
+        Node* tmp = current;
         current = current->next;
         delete tmp;
     };
@@ -238,7 +249,7 @@ E* list<E>::get(int index) const
     if (index < 0 || index >= s)
         return nullptr;
 
-    Node<E>* current = head;
+    Node* current = head;
 
     while (index--)
     {
@@ -279,8 +290,8 @@ bool list<E>::add(int index, E e)
         return true;
     }
 
-    Node<E>* current = head;
-    auto* newNode = new Node<E>(e);
+    Node* current = head;
+    auto* newNode = new Node(e);
 
     int i = 0;
     do
@@ -304,7 +315,7 @@ bool list<E>::add(int index, E e)
 template <class E>
 bool list<E>::contains(E e)
 {
-    Node<E>* current = head;
+    Node* current = head;
 
     while (current != nullptr)
     {
@@ -315,4 +326,16 @@ bool list<E>::contains(E e)
         current = current->next;
     }
     return false;
+}
+
+template <class E>
+typename list<E>::Iterator list<E>::begin() const
+{
+    return {head};
+}
+
+template <class E>
+typename list<E>::Iterator list<E>::end() const
+{
+    return {nullptr};
 }

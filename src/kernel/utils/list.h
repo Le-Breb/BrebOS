@@ -1,36 +1,40 @@
 #ifndef INCLUDE_LIST_H
 #define INCLUDE_LIST_H
 
-template<class T>
-class Node {
-public:
-	T value;
-	Node<T> *next;
-
-	Node();
-
-	explicit Node(T val);
-};
-
-template<class T>
-Node<T>::Node() {
-	next = nullptr;
-}
-
-template<class T>
-Node<T>::Node(T val) {
-	value = val;
-	next = nullptr;
-}
-
 template<class E>
 class list {
 
 private:
-    Node<E> *head;
+	class Node {
+	public:
+		E value;
+		Node *next;
+
+		Node();
+
+		explicit Node(E val);
+	};
+
+    Node *head;
     int s;
 
 public:
+
+	class Iterator
+	{
+		Node* n;
+	public:
+		// ReSharper disable once CppNonExplicitConvertingConstructor
+		Iterator(Node *n) : n(n){} // NOLINT(*-explicit-constructor)
+
+		E& operator*() const { return n->value; }
+
+		Iterator& operator++() { n = n->next; return *this; }
+
+		bool operator!=(const Iterator& other) const {
+			return n != other.n;
+		}
+	};
 
     const static int SORT_ASC = 0;
     const static int SORT_DESC = 1;
@@ -119,6 +123,12 @@ public:
     void clear();
 
 	[[nodiscard]] E* get(int index) const;
+
+	[[nodiscard]]
+	Iterator begin() const;
+
+	[[nodiscard]]
+	Iterator end() const;
 };
 
 #include "list.hxx"

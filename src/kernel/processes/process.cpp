@@ -191,9 +191,8 @@ void Process::init()
 
 char* Process::get_env(const char* name)
 {
-    for (auto i = 0; i < env_list.size(); i++)
+    for (const auto& e : env_list)
     {
-        auto e = *env_list.get(i);
         if (strcmp(name, e->name) == 0)
             return e->value;
     }
@@ -203,6 +202,7 @@ char* Process::get_env(const char* name)
 
 void Process::set_env(const char* name, const char* value)
 {
+    irrecoverable_error("This function (%s) must be reworked to no call strdup and use better list iterating", __func__);
     for (auto i = 0; i < env_list.size(); i++)
     {
         auto e = *env_list.get(i);

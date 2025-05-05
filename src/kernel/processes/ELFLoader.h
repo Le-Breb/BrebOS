@@ -128,8 +128,8 @@ private:
      * @param fini_array fini array. Shall contain _fini at index 0 if it exists
      * @return ESP in process address space ready to be used
      */
-    static size_t write_args_to_stack(size_t stack_top_v_addr, int argc, const char** argv, list<Elf32_Addr>
-                                      init_array, list<Elf32_Addr> fini_array);
+    static size_t write_args_to_stack(size_t stack_top_v_addr, int argc, const char** argv, const list<Elf32_Addr>
+                                      & init_array, const list<Elf32_Addr>& fini_array);
 
     /**
      * Process setup last phase: once the main ELF has been loaded, this function executes the remaining setup actions:
