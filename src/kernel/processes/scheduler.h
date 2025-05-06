@@ -2,6 +2,7 @@
 #define CUSTOM_OS_SCHEDULER_H
 
 #include "process.h"
+#include "../utils/min_heap.h"
 #include "../utils/queue.h"
 
 // Maximum concurrent processes. Limit defined by size of pid_pool
@@ -16,14 +17,19 @@ private:
 	// Thus, 32 = sizeof(uint) PIDs are available, allowing up to 32 processes to run concurrently
 	static uint pid_pool;
 
+	// Represents a sleeping process. Comparison is done using  end tick in order to sort them in a min heap,
+	// so that we only need to check the first process in the heap to know if there are processes to wake up
 	struct asleep_process
 	{
 		Process* process;
 		uint end_tick;
-
-		int operator==(const asleep_process& other) const
+		bool operator<(const asleep_process& other) const
 		{
-			return process == other.process && end_tick == other.end_tick;
+			return end_tick < other.end_tick;
+		}
+		bool operator>(const asleep_process& other) const
+		{
+			return end_tick > other.end_tick;
 		}
 	};
 
@@ -32,7 +38,7 @@ private:
 	static queue<pid_t, MAX_PROCESSES>* waiting_queue;
 	static list<pid_t> process_waiting_list[MAX_PROCESSES];
 	static Process* processes[MAX_PROCESSES];
-	static list<asleep_process> sleeping_processes;
+	static MinHeap<asleep_process>* sleeping_processes;
 
 	/**
 	 * Round-robin scheduler
@@ -106,8 +112,6 @@ public:
 	static pid_t fork(Process* p);
 
 	static void set_process_asleep(Process* p, uint duration);
-
-	static void wake_up_asleep_process(const Process* p);
 
 	/**
 	 * Starts a kernel process

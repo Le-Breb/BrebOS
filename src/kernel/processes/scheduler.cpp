@@ -14,7 +14,7 @@ queue<pid_t, MAX_PROCESSES>* Scheduler::ready_queue{};
 queue<pid_t, MAX_PROCESSES>* Scheduler::waiting_queue{};
 list<pid_t> Scheduler::process_waiting_list[MAX_PROCESSES] = {};
 Process* Scheduler::processes[MAX_PROCESSES] {};
-list<Scheduler::asleep_process> Scheduler::sleeping_processes{};
+MinHeap<Scheduler::asleep_process>* Scheduler::sleeping_processes{};
 
 Process* Scheduler::get_next_process()
 {
@@ -100,7 +100,7 @@ void Scheduler::set_first_ready_process_asleep_waiting_process()
 
     if (p == nullptr)
     {
-        if (waiting_queue->empty() && sleeping_processes.size() == 0)
+        if (waiting_queue->empty() && sleeping_processes->empty())
             System::shutdown();
         else
         {
@@ -226,6 +226,7 @@ void Scheduler::init()
     // is not available at this moment. However, it is ok to allocate them now.
     ready_queue = new queue<pid_t, MAX_PROCESSES>();
     waiting_queue = new queue<pid_t, MAX_PROCESSES>();
+    sleeping_processes = new MinHeap<asleep_process>(MAX_PROCESSES);
 
     set_process_ready(Memory::kernel_process);
 
@@ -277,18 +278,19 @@ void Scheduler::release_pid(pid_t pid)
 void Scheduler::check_for_processes_to_wake_up()
 {
     uint tick = PIT::get_tick();
-    for (auto i = 0; i < sleeping_processes.size(); i++)
+    while (!sleeping_processes->empty())
     {
-        auto sleeping_process = sleeping_processes.get(i);
-        if (sleeping_process->end_tick <= tick)
+        auto sleeping_process = sleeping_processes->min();
+        if (sleeping_process.end_tick <= tick)
         {
             // Add process to ready queue and remove it from sleeping list
-            pid_t pid = sleeping_process->process->pid;
+            pid_t pid = sleeping_process.process->pid;
             ready_queue->enqueue(pid);
             processes[pid]->flags &= ~P_SLEEPING; // Clear flag
-            sleeping_processes.remove(*sleeping_process);
-            i--;
+            sleeping_processes->delete_min();
         }
+        else
+            break;
     }
 }
 
@@ -413,28 +415,12 @@ pid_t Scheduler::fork([[maybe_unused]] Process* p)
 
 void Scheduler::set_process_asleep(Process* p, uint duration)
 {
-    // Todo: use a sorted list to only need to check the first process instead of the whole list
-    // when looking for processes to wake up
     p->set_flag(P_SLEEPING);
     uint num_ticks_to_wait = TICKS_PER_SEC * duration / 1000;
     if (!num_ticks_to_wait)
         num_ticks_to_wait = 1;
     uint end_tick = PIT::get_tick() + num_ticks_to_wait;
-    sleeping_processes.add({p, end_tick});
-}
-
-void Scheduler::wake_up_asleep_process(const Process* p)
-{
-    // Todo: use a sorted list to avoid doing stuff like that...
-    for (auto& sleeping_process : sleeping_processes)
-    {
-        if (sleeping_process.process == p)
-        {
-            sleeping_process.process->flags &= ~P_SLEEPING; // Clear flag
-            sleeping_processes.remove(sleeping_process);
-            break;
-        }
-    }
+    sleeping_processes->insert({p, end_tick});
 }
 
 void Scheduler::start_kernel_process(void* eip)
