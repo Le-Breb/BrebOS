@@ -7,30 +7,6 @@
 #include "kstdint.h"
 #include "../utils/PSF.h"
 
-#define FB_COMMAND_PORT 0x3D4
-#define FB_DATA_PORT 0x3D5
-
-/* The I/O port commands */
-#define FB_HIGH_BYTE_COMMAND 14
-#define FB_LOW_BYTE_COMMAND 15
-/*#define FB_BLACK        0x00
-#define FB_BLUE         0x01
-#define FB_GREEN        0x02
-#define FB_CYAN         0x03
-#define FB_RED          0x04
-#define FB_MAGENTA      0x05
-#define FB_BROWN        0x06
-#define FB_LIGHTGREY    0x07
-#define FB_LIGHTGRAY    0x07
-#define FB_DARKGREY     0x08
-#define FB_DARKGRAY     0x08
-#define FB_LIGHTBLUE    0x09
-#define FB_LIGHTGREEN   0x0A
-#define FB_LIGHTCYAN    0x0B
-#define FB_LIGHTRED     0x0C
-#define FB_LIGHTMAGENTA 0x0D
-#define FB_YELLOW       0x0E
-#define FB_WHITE        0x0F*/
 #define FB_BLACK        0x000000
 #define FB_BLUE         0x0000AA
 #define FB_GREEN        0x00AA00
@@ -74,32 +50,42 @@ class FB
         char c;
     };
 
-    static uint caret_x, caret_y;
     static uint32_t* fb;
-    static uint fb_width, fb_height, fb_pitch;
+
+    static uint caret_x, caret_y;
     static uint32_t FG, BG;
-    static const void* progress_bar_owner;
-    static char progress_bar_percentage;
-    static cell* fb_shadow;
-    static constexpr char progress_char = (char)129;
+
+    static uint fb_width, fb_height, fb_pitch;
     static uint n_row;
-    static PSF1_font* font;
-    static uint progress_bar_height;
-    static char* glyphs;
     static uint characters_per_line;
     static uint characters_per_col;
-    static uint32_t* r_font;
-    static uint shadow_start;
+
     static uint dirty_start_y, dirty_end_y;
     static uint dirty_start_x, dirty_end_x;
-    static bool lock_flush;
-    static uint shadow_lim;
+
     static uint fps;
+
+    static cell* fb_shadow;
+    static uint shadow_lim;
+    static uint shadow_start;
+
+    static bool lock_flush;
+    static bool show_cursor;
+
+    static PSF1_font* font;
+    static uint32_t* r_font;
+    static char* glyphs;
+
+    static uint progress_bar_height;
+    static char progress_bar_percentage;
+    static const void* progress_bar_owner;
+    static constexpr char progress_char = (char)129;
 
     static void update_dirty_rect();
 public:
     /**
      * Continuously refreshes the framebuffer (ie the display)
+     * @details Draws the cursor, the progress bar, and the dirty rectangle
      */
     [[noreturn]]
     static void refresh_loop();

@@ -9,37 +9,46 @@
 #include "PIT.h"
 #include "system.h"
 
-extern char _binary_Lat15_VGA16_psf_start[];
+extern char _binary_Lat15_VGA16_psf_start[]; // NOLINT(*-reserved-identifier)
+
+uint32_t* FB::fb = nullptr;
+
+uint FB::caret_x = 0;
+uint FB::caret_y = 0;
+uint32_t FB::FG = FB_WHITE;
+uint32_t FB::BG = FB_BLACK;
 
 uint FB::fb_width = 0;
 uint FB::fb_height = 0;
 uint FB::fb_pitch = 0;
-uint FB::caret_x = 0;
-uint FB::caret_y = 0;
+uint FB::n_row = 0;
 uint FB::characters_per_line = 0;
 uint FB::characters_per_col = 0;
+
 uint FB::dirty_start_y = 0;
 uint FB::dirty_start_x = 0;
 uint FB::dirty_end_y = 0;
 uint FB::dirty_end_x = 0;
-uint FB::shadow_start = 0;
+
 uint FB::fps = 0;
-uint32_t* FB::fb = nullptr;
-uint32_t FB::FG = FB_WHITE;
-uint32_t FB::BG = FB_BLACK;
-bool FB::lock_flush = false;
-const void* FB::progress_bar_owner = nullptr;
-char FB::progress_bar_percentage = 0;
-uint FB::n_row = 0;
-uint FB::progress_bar_height = 0;
-uint32_t* FB::r_font = nullptr;
-PSF1_font* FB::font = (PSF1_font*)_binary_Lat15_VGA16_psf_start;
-char* FB::glyphs = (char*)(font + 1);
-uint FB::shadow_lim = 0;
 
 // Copy of framebuffer for double buffering. Whenever we want to read some pixel, we use this buffer instead of fb.
 // That way, we gain a lot ot time :D
 FB::cell* FB::fb_shadow = nullptr;
+uint FB::shadow_lim = 0;
+uint FB::shadow_start = 0;
+
+bool FB::lock_flush = false;
+bool FB::show_cursor = false;
+
+PSF1_font* FB::font = (PSF1_font*)_binary_Lat15_VGA16_psf_start;
+uint32_t* FB::r_font = nullptr;
+char* FB::glyphs = (char*)(font + 1);
+
+uint FB::progress_bar_height = 0;
+char FB::progress_bar_percentage = 0;
+const void* FB::progress_bar_owner = nullptr;
+
 
 void FB::scroll(uint n)
 {
@@ -97,6 +106,10 @@ void FB::release_progres_bar(const void* id)
 	if (progress_bar_owner != id)
 		return;
 
+	dirty_start_y = 0;
+	dirty_end_y = dirty_end_y > 1 ? dirty_end_y : 1;
+	dirty_start_x = 0;
+	dirty_end_x = characters_per_line;
 	progress_bar_owner = nullptr;
 }
 
@@ -274,19 +287,28 @@ void FB::update_dirty_rect()
 	dirty_end_x = caret_x + 1 > dirty_end_x ? caret_x + 1 : dirty_end_x;
 }
 
-[[noreturn]] void FB::refresh_loop()
+[[noreturn]]
+void FB::refresh_loop()
 {
+	// Cursor is shown during on second, hiddent the second one, and then ticks are reset
 	static const uint frame_duration = 1000 / fps;
+	static uint tick = 0;
+
 	while (true)
 	{
+		show_cursor = tick <= fps;
 		PIT::sleep(frame_duration);
 		flush();
+
+		tick++;
+		if (tick == 2 * fps) // % 2 * FPs
+			tick = 0;
 	}
 }
 
 void FB::flush()
 {
-	if (lock_flush || dirty_start_y == (uint)-1)
+	if (lock_flush)
 		return;
 
 	auto cursor_shadow_off = shadow_start + caret_y * fb_width + caret_x;
@@ -294,7 +316,8 @@ void FB::flush()
 		cursor_shadow_off -= shadow_lim;
 
 	// Draw cursor
-	fb_shadow[cursor_shadow_off] = {FG, BG, '_'};
+	if (show_cursor)
+		fb_shadow[cursor_shadow_off] = {FG, BG, '_'};
 
 	// Compute fb base offsets
 	auto fb_y_off = dirty_start_y * font->characterSize * n_row;
@@ -353,10 +376,15 @@ void FB::flush()
 	fb_shadow[cursor_shadow_off] = {FG, BG, '\0'};
 
 	// Reset dirty rectangle dimensions
-	dirty_start_x = (uint)-1;
-	dirty_start_y = (uint)-1;
-	dirty_end_y = 0;
-	dirty_end_x = 0;
+	dirty_start_x = caret_x;
+	dirty_start_y = caret_y;
+	dirty_end_y = caret_y + 1;
+	dirty_end_x = caret_x + 1;
+	if (dirty_end_x == characters_per_line)
+	{
+		dirty_start_x = 0;
+		dirty_end_x = 1;
+	}
 
 	// Draw progress bar if needed
 	if (progress_bar_owner)
