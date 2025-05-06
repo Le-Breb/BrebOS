@@ -61,13 +61,7 @@ the instructionns on sections 2 and 3. <br>
 The build takes several minutes, don't forget to enable parallelization: whenever you execute the `make` command, add
 `-j $(lscpu | grep 'Core(s) per socket' | grep -o '[0-9]+')` at the end of the command.
 
-For QEMU, you need a few more setup:
 
-```sh
-sudo mkdir -p /etc/qemu # Create config directory
-echo "allow br0" | sudo tee /etc/qemu/bridge.conf # Write the config
-sudo setcap cap_net_admin+ep /usr/lib/qemu/qemu-bridge-helper # Give necessary permissions to QEMU bridge helper
-```
 
 ### Build
 
@@ -83,7 +77,7 @@ RELEASE=1 make
 ### Run ▶️
 
 ```sh
-RELEASE = 1 make run
+RELEASE=1 make run
 ```
 
 ℹ️ This will ask for elevated privileges, which are required for setting up NAT. ℹ️
@@ -104,14 +98,15 @@ Here is the list of the main commands (you can view the entire list by browsing 
 | `ls <path>`                  | Lists files and directories at `path`.                                                         |
 | `mkdir <path/dir_name>`      | Creates the directory `dir_name` at `path`.                                                    |
 | `touch <dir_path/file_name>` | Creates the file `file_name` at `dir_path`.                                                    |
+| `wget [OPTIONS] <endpoint>`                 | Downloads stuff with `HTTP GET` |
 | `cat <path>`                 | Prints the content of the file at `path`. Output is formatted according to the file extension. |
-| `clearscreen`                | Clears the screen                                                                              |
+| `cls`                | Clears the screen.                                                                              |
 
 As 42sh follows the linux shell syntax, you can start a program symply by typing `<program_path> [argv0] [argv1] ...`.
 The kernel `$PATH` is filled with `/bin`, where all programs are. Hence, to start `/bin/a_program`, simply write
 `a_program`.
 
-### Running your own programs inside BrebOS (How cool is this !?)
+### Running your own programs inside BrebOS (How cool is this !? ◝(ᵔᗜᵔ)◜)
 
 BrebOS can run C++ programs that *you* write, provided they respect the following conditions:
 
@@ -138,29 +133,17 @@ running locally, which is automatically started when executing `make run`.
 
 ## Features ⚙️
 
-### Core
+### Core ♥️
 
-- **Segmentation** (GDT setup)
-- **Paging** (PDT, page tables)
-- **Interrupts** (IDT)
-- **Dynamic memory allocation** (malloc, free)
-
-### Processes
-
-- **Userland** (processes run in ring 3, kernel in ring 0)
-- **Preemptive scheduling**
-- **Syscalls**
-- **ELF support**
-    - ELF loading and execution (ELf processing, address space setup, global/local static variables handling)
-    - Dynamic libraries support (relocations)
-    - Lazy binding support (addresses of functions within dynamic libraries are resolved at runtime by `dynlk`, the OS'
-      dynamic linker)
-    - Custom libc (basic functions such as `strlen` and syscalls wrappers)
-- **File System**
+- **VBE Framebuffer 🖥️**
+    - Manual pixel plotting
+    - Double buffering
+    - Font rendering
+- **File System 📁**
     - ATA driver (taken from osdev.com, not implemented by me)
     - FAT32 support
     - VFS which abstracts hardware/file_system specific details and provide a unified interface within the kernel.
-- **Network stack**
+- **Network stack 🖧**
     - E1000 ethernet card driver (mainly taken from [here](https://wiki.osdev.org/Intel_Ethernet_i217))
     - Ethernet
     - IPV4
@@ -170,14 +153,34 @@ running locally, which is automatically started when executing `make run`.
     - DHCP
     - TCP (weak for now)
     - HTTP GET
-- **42sh (Shell**)
+- **Interrupts 🔔** (IDT)
+
+### Memory 🧠
+- **Segmentation ✂️** (GDT setup)
+- **Paging 🔀** (PDT, page tables)
+- **Dynamic memory allocation 📦** (malloc, free)
+- **Lazy memory allocation 🥱** (actually allocate memory only when processes try to access it)
+
+### Processes </>
+
+- **Userland 🙍🏻‍♂️** (processes run in ring 3, kernel in ring 0)
+- **Preemptive scheduling ✋**
+- **Syscalls 📞**
+- **ELF support </>**
+    - ELF loading and execution (ELf processing, address space setup, global/local static variables handling)
+    - Dynamic loader (relocations)
+    - Dynamic libraries support
+    - Lazy binding support (addresses of functions within dynamic libraries are resolved at runtime by `dynlk`, the OS'
+      dynamic linker)
+    - Custom libc (basic functions such as `strlen` and syscalls wrappers)
+- **42sh (Shell) 👨🏻‍💻**
     - command lists/compound lists
     - if/else
     - single quotes
     - comments
     - while/until/for
     - and or (&& ||)
-    - double quotes and escape character (though the keyboard driver does not handle '"'...)
+    - double quotes and escape character
     - variables
     - builtins
         - true/false
@@ -189,9 +192,9 @@ running locally, which is automatically started when executing `make run`.
         - pipeline
         - subshells and command substitution
 
-### Misc
+### Misc ✚
 
-- PS2 Keyboard driver
+- PS2 Keyboard driver ⌨
 
 ### Roadmap 🛣️
 
