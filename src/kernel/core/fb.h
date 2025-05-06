@@ -95,6 +95,8 @@ class FB
     static bool lock_flush;
     static uint shadow_lim;
     static uint fps;
+
+    static void update_dirty_rect();
 public:
     /**
      * Continuously refreshes the framebuffer (ie the display)
@@ -129,12 +131,6 @@ public:
     * @param c The character
     */
     static void putchar(unsigned short int c);
-
-    /** Moves the cursor of the framebuffer to the given position
-    *
-    * @param pos The new position of the cursor
-    */
-    static void update_cursor();
 
     /** Clear the screen */
     static void clear_screen();

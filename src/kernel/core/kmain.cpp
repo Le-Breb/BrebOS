@@ -10,7 +10,7 @@
 #include "../network/Network.h"
 #include "../utils/profiling.h"
 
-#define FPS 30 // Cannot go a lot higher since PIT is not precise enough
+#define FPS 50
 
 extern "C" void _init(void); // NOLINT(*-reserved-identifier)
 

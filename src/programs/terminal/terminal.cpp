@@ -4,7 +4,7 @@
 #include <kunistd.h>
 #include <kwait.h>
 
-#define MAX_CMD_LEN 100
+#define MAX_CMD_LEN 200
 
 #define DIGIT(c) (c >= '0' && c <= '9')
 

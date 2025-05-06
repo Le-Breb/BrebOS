@@ -73,7 +73,6 @@ void FB::delchar()
     caret_x--;
     putchar(' ');
 	caret_x--;
-    update_cursor();
 }
 
 void FB::update_progress_bar(char new_percentage, const void* id)
@@ -118,13 +117,6 @@ void FB::putchar(
 
 	char cc = (char)(c & 0xFF);
 
-	// Scroll if buffer full
-	while (caret_y >= characters_per_col)
-	{
-		scroll(1);
-		update_cursor();
-	}
-
 	// Delete character
 	if (c == '\b')
 	{
@@ -135,18 +127,18 @@ void FB::putchar(
 	// Handle line break
 	if (c == '\n')
 	{
+		update_dirty_rect();
 		caret_y++;
 		caret_x = 0;
-		update_cursor();
+
+		// Scroll if buffer full
+		if (caret_y >= characters_per_col)
+			scroll(1);
 
 		return;
 	}
 
-	// Update dirty rectangle
-	dirty_start_y = caret_y < dirty_start_y ? caret_y : dirty_start_y;
-	dirty_end_y = caret_y + 1 > dirty_end_y ? caret_y + 1 : dirty_end_y;
-	dirty_start_x = caret_x < dirty_start_x ? caret_x : dirty_start_x;
-	dirty_end_x = caret_x + 1 > dirty_end_x ? caret_x + 1 : dirty_end_x;
+	update_dirty_rect();
 
 	// Write character
 	auto shadow_off = shadow_start + caret_y * fb_width + caret_x;
@@ -162,7 +154,15 @@ void FB::putchar(
 	{
 		caret_y++;
 		caret_x = 0;
+
+		// Scroll if buffer full
+		if (caret_y >= characters_per_col)
+			scroll(1);
+		else
+			update_dirty_rect();
 	}
+	else
+		update_dirty_rect();
 }
 
 void FB::lock_flushing()
@@ -174,16 +174,6 @@ void FB::unlock_flushing()
 {
 	lock_flush = false;
 	flush();
-}
-
-void FB::update_cursor()
-{
-    // if (pos >= fb_width * fb_height)
-    //     return;
-    // outb(FB_COMMAND_PORT, FB_HIGH_BYTE_COMMAND); /* Send pos high bits command */
-    // outb(FB_DATA_PORT, ((pos >> 8) & 0x00FF)); /* Send pos high bits */
-    // outb(FB_COMMAND_PORT, FB_LOW_BYTE_COMMAND); /* Send pos low bits command */
-    // outb(FB_DATA_PORT, pos & 0x00FF); /* Send pos low bits */
 }
 
 void FB::clear_screen()
@@ -276,12 +266,21 @@ void FB::set_bg(uint32_t bg)
     BG = bg;
 }
 
+void FB::update_dirty_rect()
+{
+	dirty_start_y = caret_y < dirty_start_y ? caret_y : dirty_start_y;
+	dirty_end_y = caret_y + 1 > dirty_end_y ? caret_y + 1 : dirty_end_y;
+	dirty_start_x = caret_x < dirty_start_x ? caret_x : dirty_start_x;
+	dirty_end_x = caret_x + 1 > dirty_end_x ? caret_x + 1 : dirty_end_x;
+}
+
 [[noreturn]] void FB::refresh_loop()
 {
 	static const uint frame_duration = 1000 / fps;
 	while (true)
 	{
 		PIT::sleep(frame_duration);
+		update_cursor();
 		flush();
 	}
 }
@@ -290,6 +289,13 @@ void FB::flush()
 {
 	if (lock_flush || dirty_start_y == (uint)-1)
 		return;
+
+	auto cursor_shadow_off = shadow_start + caret_y * fb_width + caret_x;
+	if (cursor_shadow_off >= shadow_lim)
+		cursor_shadow_off -= shadow_lim;
+
+	// Draw cursor
+	fb_shadow[cursor_shadow_off] = {FG, BG, '_'};
 
 	// Compute fb base offsets
 	auto fb_y_off = dirty_start_y * font->characterSize * n_row;
@@ -343,6 +349,9 @@ void FB::flush()
 			}
 		}
 	}
+
+	 // Erase cursor from shadow as it is temporary
+	fb_shadow[cursor_shadow_off] = {FG, BG, '\0'};
 
 	// Reset dirty rectangle dimensions
 	dirty_start_x = (uint)-1;
