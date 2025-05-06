@@ -1,5 +1,6 @@
 #include "PIT.h"
 #include "IO.h"
+#include "../processes/scheduler.h"
 
 uint PIT::get_tick()
 {
@@ -18,15 +19,8 @@ void PIT::init()
 
 void PIT::sleep(uint ms)
 {
-	uint tick = ticks;
-	uint num_ticks_to_wait = TICKS_PER_SEC * ms / 1000;
-	// If wait duration is less than 1 tick, wait 1 tick anyway // Todo: use high precision timers to handle it
-	if (!num_ticks_to_wait)
-		num_ticks_to_wait = 1;
-	// ReSharper disable CppDFALoopConditionNotUpdated
-	while (ticks - tick < num_ticks_to_wait)
-		// ReSharper restore CppDFALoopConditionNotUpdated
-		__asm__ __volatile__("hlt"); // Todo: Use something smarter, like schedule_timeout when it will be implemented
+	Scheduler::set_process_asleep(Scheduler::get_running_process(), ms);
+	TRIGGER_TIMER_INTERRUPT
 }
 
 uint PIT::ms_to_pit_divider(uint ms)

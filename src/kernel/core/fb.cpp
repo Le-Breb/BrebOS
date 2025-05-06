@@ -6,8 +6,8 @@
 #include <kstring.h>
 
 #include "memory.h"
+#include "PIT.h"
 #include "system.h"
-#include "../processes/scheduler.h"
 
 extern char _binary_Lat15_VGA16_psf_start[];
 
@@ -281,8 +281,7 @@ void FB::set_bg(uint32_t bg)
 	static const uint frame_duration = 1000 / fps;
 	while (true)
 	{
-		Scheduler::set_process_asleep(Scheduler::get_running_process(), frame_duration);
-		TRIGGER_TIMER_INTERRUPT
+		PIT::sleep(frame_duration);
 		flush();
 	}
 }
