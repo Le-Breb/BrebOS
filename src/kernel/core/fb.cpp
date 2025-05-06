@@ -280,7 +280,6 @@ void FB::update_dirty_rect()
 	while (true)
 	{
 		PIT::sleep(frame_duration);
-		update_cursor();
 		flush();
 	}
 }
