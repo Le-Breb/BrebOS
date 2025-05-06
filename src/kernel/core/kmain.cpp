@@ -66,14 +66,10 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointe
     VFS::init();
     FB::ok();
 
-    /*auto regs = list<IntV86::reg_val>();
-    regs.add({IntV86::Reg16::AX, 0xCAFE});
-    IntV86::interrupt(0x10, regs);*/
-
     Network::run();
 
     // Set terminal process ready
-    Scheduler::exec("shell", 0, 0, nullptr);
+    Scheduler::exec("terminal", 0, 0, nullptr);
 
     // This makes the kernel initialization process end itself, thus ending kernel initialization
     Scheduler::stop_kernel_init_process();
