@@ -17,6 +17,7 @@ void PIT::init()
 	outb(0x40, (divider >> 8) & 0xFF); // Send high byte of divider
 }
 
+__attribute__((no_instrument_function))
 void PIT::sleep(uint ms)
 {
 	Scheduler::set_process_asleep(Scheduler::get_running_process(), ms);

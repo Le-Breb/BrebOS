@@ -25,6 +25,7 @@ public:
 	 */
 	static void init();
 
+	__attribute__((no_instrument_function))
 	static void sleep(uint ms);
 };
 
