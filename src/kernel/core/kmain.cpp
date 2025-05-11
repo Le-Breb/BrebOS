@@ -12,11 +12,17 @@
 
 #define FPS 50
 
+// Write message, flush framebuffer, execute operation, write ok
+#define FLUSHED_FB_OK_OP(msg, op) { FB::write(msg); FB::flush(); (op); FB::ok(); }
+// Write message, execute operation, write ok
+#define FB_OK_OP(msg, op) { FB::write(msg); (op); FB::ok(); }
+
 extern "C" void _init(void); // NOLINT(*-reserved-identifier)
 
 //Todo: Add support for multiple dynamically linked libs (register dyn lib dependencies)
 //Todo: Advanced memory freeing (do something when free_pages do not manage to have free_bytes < FREE_THRESHOLD)
 //Todo: Process R_386_PC32 relocations
+//Todo: task bar displaying time and the progress bar
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointer
 {
     _init(); // Execute constructors
@@ -27,29 +33,19 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointe
     // Initialize framebuffer, so that we can use it and printf calls don't crash, which is preferable :D
     FB::init(FPS);
 
-    FB::write("Setting up GDT\n");
-    GDT::init();
-    FB::ok();
+    FLUSHED_FB_OK_OP("Setting up GDT\n", GDT::init());
 
-    FB::write("Remapping PIC\n");
-    PIC::init();
-    FB::ok();
+    FLUSHED_FB_OK_OP("Remapping PIC\n", PIC::init())
 
-    FB::write("Setting up IDT\n");
-    IDT::init();
-    FB::ok();
+    FLUSHED_FB_OK_OP("Setting up IDT\n", IDT::init());
 
-    FB::write("Enabling interrupts\n");
-    Interrupts::enable_asm();
-    FB::ok();
+    FLUSHED_FB_OK_OP("Enabling interrupts\n", Interrupts::enable_asm())
 
     // Activates preemptive scheduling.
     // At this point, a kernel initialization process is created and will be preempted like any other process.
     // It will execute the remaining instructions until Scheduler::stop_kernel_init_process() is called.
     // Multiple processes can now run concurrently
-    FB::write("Activating preemptive scheduling\n");
-    Scheduler::init();
-    FB::ok();
+    FLUSHED_FB_OK_OP("Activating preemptive scheduling\n", Scheduler::init());
 
     // Start refreshing the display every frame
     Scheduler::start_kernel_process((void*)FB::refresh_loop);
@@ -58,13 +54,9 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointe
     Profiling::init();
 #endif
 
-    FB::write("Initialize network card and stack\n");
-    Network::init();
-    FB::ok();
+    FB_OK_OP("Initialize network card and stack\n", Network::init());
 
-    FB::write("Initializing Virtual File System\n");
-    VFS::init();
-    FB::ok();
+    FB_OK_OP("Initializing Virtual File System\n", VFS::init());
 
     Network::run();
 
