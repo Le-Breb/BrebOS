@@ -437,11 +437,10 @@ void Scheduler::start_kernel_process(void* eip)
 
     // Create process
     auto p = new Process(0, nullptr, Memory::page_tables, Memory::pdt, &stack_state,
-                         10, pid, pid, k_stack_top);
+                         2, pid, pid, k_stack_top);
 
     // Setup process to mimic kernel_process
     p->lowest_free_pe = Memory::kernel_process->lowest_free_pe;
-    p->mem_base = Memory::kernel_process->mem_base;
 
     // Setup PCB
     p->k_stack_state.eip = (uint)eip;
