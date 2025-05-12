@@ -35,7 +35,7 @@ void Syscall::get_pid()
     // We definitely do not want to continue as next step is to resume the process we just terminated !
     // Instead, we manually raise a timer interrupt which will schedule another process
     // (The terminated one has its terminated flag set, so it won't be selected by the scheduler)
-    __asm__ volatile("int $0x20");
+    TRIGGER_TIMER_INTERRUPT
 
     // We will never resume the code here
     __builtin_unreachable();
@@ -211,6 +211,21 @@ void Syscall::get_key()
         case 20:
             fork(p);
             break;
+        case 21:
+            feh(p);
+            break;
+        case 22:
+            FB::lock_flushing();
+            break;
+        case 23:
+            FB::unlock_flushing();
+            break;
+        case 24:
+            get_screen_dimensions(p);
+            break;
+        case 25:
+            load_file(p);
+            break;
         default:
             printf_error("Received unknown syscall id: 0x%x", cpu_state->eax);
             break;
@@ -278,6 +293,57 @@ void Syscall::getenv(Process* p)
 void Syscall::fork(Process* p)
 {
     Scheduler::fork(p);
+}
+
+__attribute__((no_instrument_function))
+void Syscall::feh(Process* p)
+{
+    // Gather args
+    auto rgb = (unsigned char*)p->cpu_state.edi;
+    uint x = p->cpu_state.esi;
+    uint y = p->cpu_state.edx;
+
+    // Display image and set process asleep
+    FB::draw_rgb(rgb, x, y);
+    Scheduler::set_process_asleep(p, 4000); // Arbitrary sleep duration
+
+    // Trigger timer interrupt to schedule another process and actually sleep
+    TRIGGER_TIMER_INTERRUPT
+}
+
+extern "C" const uint32_t SCREEN_WIDTH;
+extern "C" const uint32_t SCREEN_HEIGHT;
+void Syscall::get_screen_dimensions(Process* p)
+{
+    p->cpu_state.eax = SCREEN_WIDTH;
+    p->cpu_state.edi = SCREEN_HEIGHT;
+}
+
+void Syscall::load_file(Process* p)
+{
+    // Get path
+    auto path = (const char*)p->cpu_state.edi;
+
+    // Get file
+    Dentry* dentry = VFS::browse_to(path);
+    if (!dentry)
+    {
+        p->cpu_state.eax = 0;
+        return;
+    }
+
+    uint size = dentry->inode->size;
+
+    // Load file in user space
+    auto f = VFS::load_file(dentry, 0, size);
+    auto buf = p->malloc(size);
+    memcpy(buf, f, size); // Todo: directly allocate in user space
+
+    // Write return values
+    p->cpu_state.eax = (uint)buf;
+    p->cpu_state.edi = dentry->inode->size;
+
+    delete[] (char*)f;
 }
 
 __attribute__((no_instrument_function)) // May not return, which would mess up profiling data

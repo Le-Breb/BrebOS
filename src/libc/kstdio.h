@@ -17,6 +17,9 @@
 // Define va_end macro (no-op in this case)
 #define va_end(ap) ((void)0)
 
+#define FILE int
+#define SEEK_CUR 1
+
 char* k__int_str(intmax_t i, char b[], int base, uint plusSignIfNeeded, uint spaceSignIfNeeded,
 				int paddingNo, uint justify, uint zeroPad);
 
@@ -33,6 +36,10 @@ void flush();
 void puts(const char* str);
 
 void putchar(char c);
+
+int fseek(FILE *stream, long offset, int whence);
+
+int fclose(FILE *stream);
 
 /*
 __attribute__ ((format (printf, 1, 2))) int printf_error(const char* format, ...);

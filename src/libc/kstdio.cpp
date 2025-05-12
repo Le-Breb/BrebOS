@@ -617,6 +617,16 @@ void putchar(char c)
 	puts(b);
 }
 
+int fseek([[maybe_unused]] FILE* stream, [[maybe_unused]] long offset, [[maybe_unused]] int whence)
+{
+	return -1;
+}
+
+int fclose([[maybe_unused]] FILE* stream)
+{
+	return -1;
+}
+
 void puts(const char* str)
 {
 	__asm__ volatile("int $0x80" : : "a"(2), "S"(str));

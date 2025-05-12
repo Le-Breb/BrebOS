@@ -63,3 +63,8 @@ char* getenv(const char* name)
     __asm__ volatile("int $0x80" : "=a"(env): "a"(19), "D"(name));
     return env;
 }
+
+int abs(int j)
+{
+    return j < 0 ? -j : j;
+}

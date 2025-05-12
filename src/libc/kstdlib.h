@@ -32,4 +32,6 @@ extern "C" [[noreturn]] void exit(int status);
 
 char *getenv(const char *name);
 
+int abs(int j);
+
 #endif //KSTDLIB_H

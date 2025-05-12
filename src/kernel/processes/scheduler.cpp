@@ -416,7 +416,7 @@ pid_t Scheduler::fork([[maybe_unused]] Process* p)
 void Scheduler::set_process_asleep(Process* p, uint duration)
 {
     p->set_flag(P_SLEEPING);
-    uint num_ticks_to_wait = TICKS_PER_SEC * duration / 1000;
+    uint num_ticks_to_wait = (uint)((float)TICKS_PER_SEC * (float)duration / 1000.f);
     if (!num_ticks_to_wait)
         num_ticks_to_wait = 1;
     uint end_tick = PIT::get_tick() + num_ticks_to_wait;

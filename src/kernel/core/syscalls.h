@@ -68,6 +68,31 @@ class Syscall
 	static void getenv(Process* p);
 
 	static void fork(Process *p);
+
+	/**
+	 * Displays an image and make the process sleep for a bit - This is ugly, and I am aware of it
+	 */
+	__attribute__((no_instrument_function))
+	static void feh(Process *p);
+
+	/**
+	 * Gets the screen dimensions
+	 *
+	 * Returns:
+	 * EAX = screen width
+	 * EDI = screen height
+	 */
+	static void get_screen_dimensions(Process* p);
+
+	/**
+	 * Loads a file into memory
+	 * EDI = path
+	 *
+	 * Returns:
+	 * EAX = pointer to file in memory, null if error
+	 * EDI = size of file
+	 */
+	static void load_file(Process* p);
 public:
 	/**
 	 * Handles a syscall

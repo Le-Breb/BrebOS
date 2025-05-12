@@ -287,10 +287,31 @@ void FB::update_dirty_rect()
 	dirty_end_x = caret_x + 1 > dirty_end_x ? caret_x + 1 : dirty_end_x;
 }
 
+void FB::draw_rgb(const unsigned char* rgb, uint w, uint h)
+{
+	uint i = 0;
+	for (uint y = 0; y < h; y++)
+	{
+		for (uint x = 0; x < w ; x++)
+		{
+			auto pixel_index = (y * w + x) * 3;
+			auto r = rgb[pixel_index + 0];
+			auto g = rgb[pixel_index + 1];
+			auto b = rgb[pixel_index + 2];
+			fb[i++] = 0xff000000 | (r << 16) | (g << 8) | b;
+
+			//i %= fb_width * fb_height;
+		}
+
+		i += fb_width - w;
+		//i %= fb_width * fb_height;
+	}
+}
+
 [[noreturn]]
 void FB::refresh_loop()
 {
-	// Cursor is shown during on second, hiddent the second one, and then ticks are reset
+	// Cursor is shown during one second, hidden the second one, and then ticks are reset
 	static const uint frame_duration = 1000 / fps;
 	static uint tick = 0;
 

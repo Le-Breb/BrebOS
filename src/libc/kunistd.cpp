@@ -14,3 +14,13 @@ pid_t exec(const char* path, int argc, const char** argv)
 
     return pid;
 }
+
+ssize_t read([[maybe_unused]] int fd, [[maybe_unused]] void* buf, [[maybe_unused]] size_t count)
+{
+    return -1;
+}
+
+ssize_t write([[maybe_unused]] int fd, [[maybe_unused]] const void* buf, [[maybe_unused]] size_t count)
+{
+    return -1;
+}

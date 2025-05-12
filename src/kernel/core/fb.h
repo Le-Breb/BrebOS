@@ -84,6 +84,14 @@ class FB
     static void update_dirty_rect();
 public:
     /**
+     * Draws a w*h rgb image on the framebuffer.
+     * @note This directly writes in fb, bypassing the shadow buffer. Thus, flushing may overwrite parts of the image.
+     * @param rgb rgb buffer
+     * @param w width
+     * @param h height
+     */
+    static void draw_rgb(const unsigned char* rgb, uint w, uint h);
+    /**
      * Continuously refreshes the framebuffer (ie the display)
      * @details Draws the cursor, the progress bar, and the dirty rectangle
      */

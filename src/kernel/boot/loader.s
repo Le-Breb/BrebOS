@@ -2,6 +2,9 @@ global loader                   ; the entry symbol for ELF
 extern kmain
 extern _kernel_start
 extern _kernel_end
+global SCREEN_WIDTH
+global SCREEN_HEIGHT
+global SCREEN_DEPTH
 
 KERNEL_STACK_SIZE equ 4096          ; size of stack in bytes
 
@@ -14,6 +17,19 @@ CHECKSUM        equ -(MAGIC_NUMBER + 0 + (header_end - header_start))
 KERNEL_VIRTUAL_BASE equ 0xC0000000  ; the virtual address where the kernel is loaded
 
 VGA_TEXT_BUFFER equ 0x000B8000      ; the physical address of the VGA text buffer
+
+%define SCREEN_WIDTH_VAL  1024
+%define SCREEN_HEIGHT_VAL 768
+%define SCREEN_DEPTH_VAL  32
+
+section .data
+    global SCREEN_WIDTH
+    global SCREEN_HEIGHT
+    global SCREEN_DEPTH
+
+SCREEN_WIDTH  dd SCREEN_WIDTH_VAL
+SCREEN_HEIGHT dd SCREEN_HEIGHT_VAL
+SCREEN_DEPTH  dd SCREEN_DEPTH_VAL
 
 ; Declare a multiboot header that marks the program as a kernel.
 section .multiboot2
@@ -32,9 +48,9 @@ header_start:
     dw 5                      ; type = framebuffer
     dw 0                      ; flags
     dd 20                     ; size of this tag (must be 20 bytes)
-    dd 1024                   ; width
-    dd 768                    ; height
-    dd 32                     ; depth (bits per pixel)
+    dd SCREEN_WIDTH_VAL       ; width
+    dd SCREEN_HEIGHT_VAL      ; height
+    dd SCREEN_DEPTH_VAL       ; depth (bits per pixel)
 
 align 8
 
