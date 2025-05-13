@@ -8,12 +8,20 @@
 #include <kstdio.h>
 #include <kunistd.h>
 #include <kstdlib.h>
+#include <kwait.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_RESIZE2_IMPLEMENTATION
 #include "stb_image.h"
 #include "stb_image_resize2.h"
-#include "../../libc/kwait.h"
+
+enum class ERROR_TYPE : int
+{
+    NO_ERROR,
+    FILE_LOAD,
+    FILE_FORMAT,
+    FILE_SANITY
+};
 
 /**
  * Make dimensions fit into the screen by keeping the aspect ratio
@@ -64,19 +72,19 @@ void size_screen_fit(int x, int y, int* new_x, int* new_y)
     }
 }
 
-bool parse_and_display_image(unsigned char* raw_img, uint size)
+ERROR_TYPE parse_and_display_image(unsigned char* raw_img, uint size)
 {
-    printf("Read image metada...\n");
+    printf("Read image metadata...\n");
     int x, y, n;
     if (!stbi_info_from_memory(raw_img, size, &x, &y, &n))
-        return false;
+        return ERROR_TYPE::FILE_FORMAT;
 
     printf("Decoding image...\n");
     auto data = stbi_load_from_memory(raw_img, size, &x, &y, &n, 0);
     if (!data)
     {
         fprintf(stderr, "%s", stbi_failure_reason());
-        return false;
+        return ERROR_TYPE::FILE_SANITY;
     }
 
     int new_x, new_y;
@@ -91,7 +99,7 @@ bool parse_and_display_image(unsigned char* raw_img, uint size)
         stbi_image_free(data);
         data = res;
         if (!res)
-            return false;
+            return ERROR_TYPE::FILE_SANITY;
     }
 
     __asm__ volatile("int $0x80" : : "a"(22)); // Lock framebuffer flush
@@ -104,7 +112,7 @@ bool parse_and_display_image(unsigned char* raw_img, uint size)
     waitpid(pid, &wstatus);
 
     free(data);
-    return true;
+    return ERROR_TYPE::NO_ERROR;
 }
 
 void show_usage()
@@ -126,12 +134,15 @@ int main(int argc, char* argv[])
     printf("Loading image...\n");
     __asm__ volatile("int $0x80" : "=a"(buf), "=D"(size) : "a"(25), "D"(argv[1]));
 
-    if (!buf || !parse_and_display_image((unsigned char*)buf, size))
+    if (!buf)
     {
         fprintf(stderr, "Failed to process image\n");
-        free(buf);
-        return 1;
+        return (int)ERROR_TYPE::FILE_LOAD;
     }
 
-    return 0;
+    ERROR_TYPE e = parse_and_display_image((unsigned char*)buf, size);
+    if (e == ERROR_TYPE::FILE_FORMAT || e == ERROR_TYPE::FILE_SANITY)
+        fprintf(stderr, "Failed to load image: %s\n", stbi_failure_reason());
+
+    return (int)e;
 }
