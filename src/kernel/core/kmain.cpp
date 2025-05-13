@@ -19,13 +19,17 @@
 
 extern "C" void _init(void); // NOLINT(*-reserved-identifier)
 
+extern "C" bool fpu_init_asm_();
+
 //Todo: Add support for multiple dynamically linked libs (register dyn lib dependencies)
 //Todo: Advanced memory freeing (do something when free_pages do not manage to have free_bytes < FREE_THRESHOLD)
 //Todo: Process R_386_PC32 relocations
 //Todo: task bar displaying time and the progress bar
+//Todo: Use higher precision timer
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointer
 {
     _init(); // Execute constructors
+
     Interrupts::disable_asm();
 
     Memory::init((multiboot_info_t*)ebx);
@@ -40,6 +44,9 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointe
     FLUSHED_FB_OK_OP("Setting up IDT\n", IDT::init());
 
     FLUSHED_FB_OK_OP("Enabling interrupts\n", Interrupts::enable_asm())
+
+    if (!fpu_init_asm_())
+        irrecoverable_error("FPU not available");
 
     // Activates preemptive scheduling.
     // At this point, a kernel initialization process is created and will be preempted like any other process.
