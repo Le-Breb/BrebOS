@@ -101,6 +101,7 @@ Here is the list of the main commands (you can view the entire list by browsing 
 | `wget [OPTIONS] <endpoint>`                 | Downloads stuff with `HTTP GET` |
 | `cat <path>`                 | Prints the content of the file at `path`. Output is formatted according to the file extension. |
 | `cls`                | Clears the screen.                                                                              |
+| `feh <path>`                | Displays an image on the screen, before clearing it.                                                                              |
 
 As 42sh follows the linux shell syntax, you can start a program symply by typing `<program_path> [argv0] [argv1] ...`.
 The kernel `$PATH` is filled with `/bin`, where all programs are. Hence, to start `/bin/a_program`, simply write
