@@ -7,17 +7,16 @@ SRC = $(shell find -name '*.cpp')
 OBJECTS= $(SRC:%.cpp=$(BUILD_DIR)/%.o)
 CC = i686-elf-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
--c -fno-exceptions -fno-rtti  -MMD -MP
+-c -fno-exceptions -fno-rtti  -MMD -MP -g
 AS = nasm
 ASFLAGS = -f elf -F dwarf
-LDFLAGS = -T ../link_program.ld -melf_i386 -L../../libc/build/ -lc -dynamic-linker /dynlk
+LDFLAGS = -T ../link_program.ld -melf_i386 -L../../libc/build/ -lc -dynamic-linker /dynlk -g
 ifdef RELEASE
 CFLAGS += -O3
 ASFLAGS += -O3
 else
-CFLAGS += -O0 -g
-ASFLAGS += -O0 -g
-LDFLAGS += -g
+CFLAGS += -O0
+ASFLAGS += -O0
 endif
 libgcc=$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
 BUILD_DIR=build
