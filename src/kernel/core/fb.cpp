@@ -1115,6 +1115,7 @@ __attribute__ ((format (printf, 1, 2))) int irrecoverable_error(const char* form
 	va_end(list);
 	FB::putchar(' ');
 	FB::error();
+	FB::flush();
 
 	System::shutdown();
 }
