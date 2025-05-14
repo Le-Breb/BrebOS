@@ -41,7 +41,7 @@ extern "C" [[noreturn]] void resume_user_process_asm_(const cpu_state_t* cpu_sta
 
 extern "C" [[noreturn]] void resume_syscall_handler_asm_(cpu_state_t* cpu_state, stack_state_t* stack_state);
 
-void Interrupts::page_fault_handler(stack_state_t* stack_state)
+void Interrupts::page_fault_handler(const stack_state_t* stack_state)
 {
 	uint addr; // Address of the fault
 	__asm__ volatile("mov %%cr2, %0" : "=r"(addr)); // Get addr from CR2

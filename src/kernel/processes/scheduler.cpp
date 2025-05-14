@@ -230,8 +230,6 @@ void Scheduler::init()
 
     set_process_ready(Memory::kernel_process);
 
-    // Create a process that represents the kernel itself
-    // then continue kernel initialization with preemptive scheduling running
     PIC::enable_preemptive_scheduling();
 }
 

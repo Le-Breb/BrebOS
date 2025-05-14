@@ -42,7 +42,7 @@ public:
 	 * @param cpu_state CPU state
 	 * @param stack_state Stack state
 	 */
-	static void page_fault_handler(struct stack_state* stack_state);
+	static void page_fault_handler(const struct stack_state* stack_state);
 
 	/**
 	 * Handles a GPF
