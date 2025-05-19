@@ -1,7 +1,7 @@
-#include <kstdio.h>
-#include <kstring.h>
-#include <kstdlib.h>
-#include <kstdint.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdint.h>
 
 struct wget_args
 {

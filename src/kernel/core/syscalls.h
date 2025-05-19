@@ -67,8 +67,6 @@ class Syscall
 
 	static void getenv(Process* p);
 
-	static void fork(Process *p);
-
 	/**
 	 * Displays an image and make the process sleep for a bit - This is ugly, and I am aware of it
 	 */
@@ -93,6 +91,8 @@ class Syscall
 	 * EDI = size of file
 	 */
 	static void load_file(Process* p);
+
+	static void write(Process* p);
 public:
 	/**
 	 * Handles a syscall
@@ -102,7 +102,7 @@ public:
 	 * */
 	[[noreturn]]
 
-	static void dispatcher(cpu_state_t* cpu_state, const stack_state_t* stack_state);
+	static void dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stack_state);
 };
 
 #endif //INCLUDE_SYSCALLS_H

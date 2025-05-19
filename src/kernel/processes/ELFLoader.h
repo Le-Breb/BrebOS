@@ -10,7 +10,7 @@
 #include "../file_management/dentry.h"
 
 #define LIBDYNLK_PATH "/bin/libdynlk.so"
-#define LIBC_PATH "/bin/libc.so"
+#define LIBK_PATH "/bin/libk.so"
 
 struct init_fini_info
 {
@@ -138,8 +138,6 @@ private:
      * @param argv args
      */
     Elf32_Addr finalize_process_setup(int argc, const char** argv);
-
-    static const char** add_argv0_to_argv(int& argc, const char** argv, const Dentry* file);
 
     /**
      * Converts an address in runtime address space to an address in current address space

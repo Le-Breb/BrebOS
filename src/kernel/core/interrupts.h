@@ -58,7 +58,8 @@ public:
 	 * @param cpu_state CPU state
 	 * @param stack_state stack state
 	 */
-	[[noreturn]] static void interrupt_timer(uint kesp, cpu_state_t* cpu_state, stack_state_t* stack_state);
+	[[noreturn]]
+	static void interrupt_timer(uint kesp, cpu_state_t* cpu_state, stack_state_t* stack_state);
 
 	/**
 	 * Enables interrupts
@@ -76,14 +77,16 @@ public:
 	* @param cpu_state process CPU state
 	* @param stack_state process stack state
 	*/
-	[[noreturn]] static void resume_user_process_asm(const cpu_state_t* cpu_state, const struct stack_state* stack_state);
+	[[noreturn]]
+	static void resume_user_process_asm(const cpu_state_t* cpu_state, const struct stack_state* stack_state);
 
 	/**
 	 * Exits from an interrupt and a resume an interrupted syscall
 	 * @param cpu_state syscall CPU state
 	 * @param stack_state syscall stack state
 	 */
-	[[noreturn]] static void resume_syscall_handler_asm(cpu_state_t* cpu_state, stack_state_t* stack_state);
+	[[noreturn]]
+	static void resume_syscall_handler_asm(cpu_state_t* cpu_state, stack_state_t* stack_state);
 
 	static void change_pdt_asm(uint pdt_phys_addr);
 

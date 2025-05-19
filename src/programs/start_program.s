@@ -1,19 +1,20 @@
 extern main
 extern exit
 extern __cxa_finalize
+extern libk_force_link
 section .text
 
 ; Expected stack layout. ESP shall be 0x10 bytes aligned (ABI requirement)
 ; [ESP + 00] - argc
 ; [ESP + 04] - argv
-; [ESP + 08] - _init address
-; [ESP + 12] - _fini address
-; [ESP + 16] - _init array (null terminated)
+; [ESP + 10] - _init address
+; [ESP + 14] - _fini address
+; [ESP + 18] - _init array (null terminated)
 ; [ESP + ??] - _fini array (null terminated)
 
 .Linit:
     mov ebx, esp
-    add ebx, 0x8 ; skip argc and argv
+    add ebx, 0x10 ; point to first init array entry
 .Linit_arr_loop:
     mov eax, [ebx] ; Get init function address
     test eax, eax
@@ -28,12 +29,12 @@ section .text
 
 .Lmain:
     call main ; execute code, store return value in eax
-    add esp, 0xC ; ABI alignment
+    sub esp, 0xC ; ABI alignment
     push eax ; save return value
 
 .Lfini:
     mov ebx, esp
-    add ebx, 0x8 ; set esp to first init array entry
+    add ebx, 0x20 ; point to first init array entry
 .Lskip_init_array_loop:
     mov eax, [ebx]
     add ebx, 0x4
@@ -55,3 +56,7 @@ section .text
     add esp, 0x10
 
     call exit
+
+    ; obviously, this will never be executed. It is only here to have a reference to a symbol inside libk so that the
+    ; the linker generates the GOT and other dynamic stuff
+    call libk_force_link

@@ -376,7 +376,7 @@ RECENT REVISION HISTORY:
 //    very big.
 
 #ifndef STBI_NO_STDIO
-#include <kstdio.h>
+#include <stdio.h>
 #endif // STBI_NO_STDIO
 
 #define STBI_VERSION 1
@@ -391,7 +391,7 @@ enum
    STBI_rgb_alpha  = 4
 };
 
-#include <kstdlib.h>
+#include <stdlib.h>
 typedef unsigned char stbi_uc;
 typedef unsigned short stbi_us;
 
@@ -592,11 +592,11 @@ STBIDEF int   stbi_zlib_decode_noheader_buffer(char *obuffer, int olen, const ch
 #endif
 
 
-#include <kstdarg.h>
-#include <kstddef.h> // ptrdiff_t on osx
-#include <kstdlib.h>
-#include <kstring.h>
-#include <klimits.h>
+#include <stdarg.h>
+#include <stddef.h> // ptrdiff_t on osx
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
 
 #if !defined(STBI_NO_LINEAR) || !defined(STBI_NO_HDR)
 #include <math.h>  // ldexp, pow
@@ -652,7 +652,7 @@ typedef   signed short stbi__int16;
 typedef unsigned int   stbi__uint32;
 typedef   signed int   stbi__int32;
 #else
-#include <kstdint.h>
+#include <stdint.h>
 typedef uint16_t stbi__uint16;
 typedef int16_t  stbi__int16;
 typedef uint32_t stbi__uint32;

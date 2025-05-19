@@ -1,10 +1,10 @@
-#include <kstring.h>
-#include <kstdio.h>
+#include <string.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/wait.h>
 #include <ksyscalls.h>
-#include <kunistd.h>
-#include <kwait.h>
 
-#define MAX_CMD_LEN 200
+#define MAX_CMD_LEN 100
 
 #define DIGIT(c) (c >= '0' && c <= '9')
 
@@ -29,7 +29,33 @@ void handlechar(char c)
 	else cmd[c_id++] = c;
 
 	printf("%c", c);
-	flush();
+	fflush(stdout);
+}
+
+void exec(const char** argv)
+{
+	pid_t child_pid = fork();
+	if (child_pid == -1)
+	{
+		fprintf(stderr, "Fork failed\n");
+		_exit(1);
+	}
+	if (child_pid == 0)
+	{
+		if (execve(argv[0], (char**)argv, 0) == -1)
+		{
+			fprintf(stderr, "Execve failed\n");
+			_exit(1);
+		}
+
+		__builtin_unreachable();
+	}
+	[[maybe_unused]] int wstatus;
+	if (waitpid(child_pid, &wstatus, 0) == -1)
+	{
+		fprintf(stderr, "Waitpid failed\n");
+		_exit(1);
+	}
 }
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
@@ -37,7 +63,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 	while (1)
 	{
 		printf(">>> ");
-        flush();
+        fflush(stdout);
 
 		while (1)
 		{
@@ -57,11 +83,11 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 			handlechar(c);
 		}
 
-		int argc = 2;
-		const char* argv[2] = { "-c", cmd };
-		pid_t pid = exec("42sh", argc, (const char**) argv);
-        [[maybe_unused]] int wstatus = 0;
-        waitpid(pid, &wstatus);
+		if (c_id != MAX_CMD_LEN)
+		{
+			const char* argv[4] = {"42sh", "-c", cmd, nullptr};
+			exec(argv);
+		}
 
 		clear_cmd();
 	}

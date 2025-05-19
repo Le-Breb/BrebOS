@@ -9,19 +9,19 @@
 #define THERE printf("THERE\n");
 #define THERE2 printf("THERE2\n");
 
-#include <ksyscalls.h>
-#include <kctype.h>
-#include <kerr.h>
+#pragma region not_in_newlib
+#include "err.h"
+#pragma endregion
+#include <ctype.h>
 //#include <fcntl.h>
 //#include <kstdbool.h>
-#include <kstddef.h>
-#include <kstdio.h>
-#include <kstdlib.h>
-#include <kstring.h>
-//#include <sys/stat.h>
-//#include <sys/wait.h>
-#include <kwait.h>
-#include <kunistd.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #include "ast/ast.h"
 #include "builtins/builtins.h"

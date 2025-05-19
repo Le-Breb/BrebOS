@@ -69,6 +69,10 @@ Process::~Process()
             Memory::free_page(i * PAGE_SIZE, this);
     }
 
+    // Clear memory leaks
+    // for (const auto alloc : allocations)
+    //     free(alloc);
+
     children.clear();
 
     delete elf_dep_list;
@@ -88,7 +92,8 @@ Process::Process(uint num_pages, list<elf_dependence>* elf_dep_list, Memory::pag
     pid(pid), ppid(ppid), k_stack_top(k_stack_top), flags(P_READY), lowest_free_pe(num_pages),
     elf_dep_list(elf_dep_list),
     page_tables(page_tables),
-    pdt(pdt)
+    pdt(pdt),
+    program_break(num_pages * PAGE_SIZE)
 {
     memcpy(&this->stack_state, stack_state, sizeof(stack_state_t));
 }
@@ -102,22 +107,39 @@ void Process::terminate(int ret_val)
 
 void* Process::malloc(uint n)
 {
-    return ::malloc<false>(n, this);
+    auto alloc = ::malloc<false>(n, this);
+    if (alloc)
+        allocations.add(alloc);
+
+    return alloc;
 }
 
 void* Process::calloc(size_t nmemb, size_t size)
 {
-    return ::calloc(nmemb, size, this);
+    auto alloc= ::calloc(nmemb, size, this);
+    if (alloc)
+        allocations.add(alloc);
+
+    return alloc;
 }
 
 void* Process::realloc(void* ptr, size_t size)
 {
-    return ::realloc(ptr, size, this);
+    auto alloc = ::realloc(ptr, size, this);
+    if (alloc == ptr)
+        return alloc;
+    if (alloc)
+        allocations.add(alloc);
+
+    return alloc;
 }
 
 void Process::free(void* ptr)
 {
     ::free(ptr, this);
+
+    if (ptr)
+        allocations.remove(ptr);
 }
 
 pid_t Process::get_pid() const
@@ -148,6 +170,11 @@ bool Process::is_waiting_program() const
 bool Process::is_sleeping() const
 {
     return flags & P_SLEEPING;
+}
+
+bool Process::exec_running() const
+{
+    return flags & P_EXEC;
 }
 
 uint Process::get_symbol_runtime_address_at_runtime(uint dep_id, const char* symbol_name) const
@@ -217,20 +244,87 @@ void Process::set_env(const char* name, const char* value)
     env_list.add(new env_var{strdup(name), strdup(value)});
 }
 
-Process* Process::fork([[maybe_unused]] pid_t child_pid)
+void Process::copy_page_to_other(const Process* other, uint page_id, uint mapping_page_id) const
 {
-    //auto child = new Process(num_pages, elf_dep_list->elf, 0, nullptr);
-    /*memcpy(child->page_tables, page_tables, sizeof(page_tables));
-    memcpy(child->pdt.entries, pdt.entries, sizeof(pdt.entries));
+    if (!PTE(page_tables, page_id))
+        return;
+
+    // Allocate a page in kernel address space
+    uint sys_pe = Memory::get_free_pe_user(); // Get sys PTE id
+    uint frame = Memory::get_free_frame();
+    Memory::allocate_page_user<false>(frame, sys_pe); // Allocate page in kernel address space
+
+    // Register page in child address space
+    auto pte_flags = PTE(page_tables, page_id) & 0x7FF;
+    auto frame_val = frame << 12;
+    other->update_pte(page_id , frame_val | pte_flags, false);
+
+    // Map the new page in current process address space to be able to access it
+    update_pte(mapping_page_id, PTE(Memory::page_tables, sys_pe), true);
+
+    // Copy page to child page
+    memcpy((void*)(mapping_page_id << 12), (void*)(page_id << 12), PAGE_SIZE);
+}
+
+pid_t Process::fork()
+{
+    auto child_pid = Scheduler::get_free_pid();
+    if (child_pid == -1)
+        return -1;
+
+    // Allocate PDT and page tables
+    auto child_page_tables = (Memory::page_table_t*)Memory::calloca(768, sizeof(Memory::page_table_t));
+    auto child_pdt = (Memory::pdt_t*)Memory::malloca(sizeof(Memory::pdt_t));
+
+    // Duplicate dependency list
+    auto dep_list = new list<elf_dependence>{};
+    for (const auto& dep : *elf_dep_list)
+        dep_list->add(dep);
+
+    // Creat child process
+    auto child = new Process(num_pages, dep_list, child_page_tables, child_pdt, &stack_state, priority, child_pid,
+        pid, k_stack_top);
+
+    // Copy PCB
+    child->cpu_state = cpu_state;
+    child->k_stack_state = k_stack_state;
+    child->k_cpu_state = k_cpu_state;
     child->quantum = quantum;
-    child->priority = priority;
-    memcpy(child->pte, pte, sizeof(uint) * num_pages);
-    child->pid = child_pid;
-    child->ppid = pid;
+    child->flags = flags & ~P_SYSCALL_INTERRUPTED;
 
-    child->flags = flags;*/
+    // Duplicate page table entries
+    uint used_pages = ADDR_PAGE(program_break + PAGE_SIZE);
+    uint mapping_page = used_pages; // Free page that will be used to map the child pages in the current address space
+    for (uint i = 0; i < used_pages; i++)
+        copy_page_to_other(child, i, mapping_page);
 
-    return nullptr;
+    // Duplicate stacks
+    copy_page_to_other(child, ADDR_PAGE(KERNEL_VIRTUAL_BASE - PAGE_SIZE), mapping_page);
+    copy_page_to_other(child, ADDR_PAGE(KERNEL_VIRTUAL_BASE - PAGE_SIZE * 2), mapping_page);
+
+    // Duplicate PDT entries - This MUST be done after copying the pages, because page tables are lazily allocated.
+    // If we do it before, the page tables would not be actually allocated yet, thus PHYS_ADDR would return 0
+    for (uint i = 0; i < 768; i++)
+    {
+        if (pdt->entries[i] == 0)
+        {
+            child->pdt->entries[i] = 0;
+            continue;
+        }
+
+        auto flags = pdt->entries[i] & 0x7FF;
+        auto frame_val = PHYS_ADDR(Memory::page_tables, (uint) &child->page_tables[i]);
+        child->pdt->entries[i] = frame_val | flags;
+    }
+    memcpy(child_pdt->entries + 768, pdt->entries + 768, sizeof(uint) * (PDT_ENTRIES - 768));
+
+    // Clear mapping page
+    update_pte(mapping_page, 0, true);
+
+    Scheduler::set_process_ready(child);
+
+    child->cpu_state.eax = 0; // Fork returns 0 in child process
+    return child->pid;
 }
 
 void Process::update_pte(uint pte, uint val, bool update_cache) const
@@ -246,4 +340,64 @@ void Process::update_pte(uint pte, uint val, bool update_cache) const
     }
     else if (update_cache)
         INVALIDATE_PAGE(pde, pte);
+}
+
+void* Process::sbrk(int increment)
+{
+    if (increment < 0 && ((uint)-increment > program_break || increment + program_break < PAGE_SIZE * num_pages))
+    {
+        printf_error("Trying to deallocate too much memory");
+        return nullptr;
+    }
+
+    if (program_break + increment > KERNEL_VIRTUAL_BASE - PAGE_SIZE)
+    {
+        printf_error("Trying to allocate too much memory");
+        return nullptr;
+    }
+
+    uint new_program_break = program_break + increment;
+    uint program_break_page_id = ADDR_PAGE(program_break);
+    uint new_program_break_page_id = ADDR_PAGE(new_program_break);
+
+    if (increment < 0)
+    {
+        // Free unused pages
+        for (uint i = new_program_break_page_id + 1; i < program_break_page_id; i++)
+            Memory::free_page(i << 12, this);
+    }
+    else
+    {
+        // Check if page on which current program break lays is allocated, allocates it if it's not the case
+        if (!PTE(page_tables, program_break_page_id))
+        {
+            uint frame = Memory::get_free_frame();
+            Memory::allocate_page_user<false>(frame, Memory::get_free_pe());
+            update_pte(program_break_page_id, FRAME_ID_ADDR(frame) | PAGE_PRESENT | PAGE_USER | PAGE_WRITE, true);
+        }
+        // Allocate necessary pages above current program break
+        for (uint i = program_break_page_id + 1; i <= new_program_break_page_id; i++)
+        {
+            uint frame = Memory::get_free_frame();
+            Memory::allocate_page_user<false>(frame, Memory::get_free_pe());
+            update_pte(i, FRAME_ID_ADDR(frame) | PAGE_PRESENT | PAGE_USER | PAGE_WRITE, true);
+        }
+    }
+
+    // Update program break
+    auto ret = program_break;
+    program_break = new_program_break;
+
+    return (void*)ret;
+}
+
+void Process::execve_transfer(Process* proc)
+{
+    proc->flags = flags & ~P_SYSCALL_INTERRUPTED;
+    for (const auto& child : children)
+        proc->children.add(child);
+    for (const auto& val : values_to_write)
+        proc->values_to_write.add(val);
+    proc->pid = pid;
+    exec_replacement = proc;
 }

@@ -48,9 +48,9 @@ bool ELFLoader::dynamic_loading(const ELF* elf)
         return false;
     }
 
-    // Load libc
-    auto libc = VFS::browse_to(LIBC_PATH);
-    if (!load_elf(libc, SharedObject))
+    // Load lib
+    auto lib = VFS::browse_to(LIBK_PATH);
+    if (!load_elf(lib, SharedObject))
         return false;
 
     return true;
@@ -171,7 +171,7 @@ bool ELFLoader::alloc_elf_memory(const ELF& elf)
             Memory::allocate_page_user<false>(pe); // Allocate page in kernel address space
 
             // Map page in current process' address space
-            uint page_id = (767 * PT_ENTRIES + PT_ENTRIES - 1 - lib_num_code_pages + runtime_page_id);
+            uint page_id = (767 * PT_ENTRIES + PT_ENTRIES - 2 - lib_num_code_pages + runtime_page_id);
             current_process->update_pte(page_id, PTE(Memory::page_tables, pe), true);
         }
     }
@@ -193,7 +193,7 @@ ELFLoader::copy_elf_subsegment_to_address_space(const void* bytes_ptr, uint n, E
     copied_bytes += n;
 }
 
-void ELFLoader::register_elf_init_and_fini(const ELF* elf, uint runtime_load_address)
+void ELFLoader::register_elf_init_and_fini(const ELF* elf, [[maybe_unused]] uint runtime_load_address)
 {
     uint init_arr_byte_size = 0;
     uint fini_arr_byte_size = 0;
@@ -203,36 +203,25 @@ void ELFLoader::register_elf_init_and_fini(const ELF* elf, uint runtime_load_add
     Elf32_Addr fini_runtime_address = 0;
 
     // Collect _init, _fini, init_array and fini_array pointer
-    for (Elf32_Dyn* d = elf->dyn_table; d->d_tag != DT_NULL; d++)
+    for (auto k = 1; k < elf->global_hdr.e_shnum; k++)
     {
-        switch (d->d_tag)
+        Elf32_Shdr& h = elf->section_hdrs[k];
+        const char* section_name = &elf->shstrtab[h.sh_name];
+        if (!strcmp(section_name, ".init"))
+            init_runtime_address = runtime_load_address + h.sh_addr;
+        else if (!strcmp(section_name, ".fini"))
+            fini_runtime_address = runtime_load_address + h.sh_addr;
+        else if (!strcmp(section_name, ".init_array"))
         {
-            case DT_INIT:
-                init_runtime_address = runtime_load_address + d->d_un.d_val;
-                break;
-            case DT_FINI:
-                fini_runtime_address = runtime_load_address + d->d_un.d_val;
-                break;
-            case DT_INIT_ARRAY:
-            {
-                Elf32_Addr runtime_address = runtime_load_address + d->d_un.d_val;
-                init_array = (Elf32_Addr*)runtime_address_to_load_address(runtime_address);
-                break;
-            }
-            case DT_FINI_ARRAY:
-            {
-                Elf32_Addr runtime_address = runtime_load_address + d->d_un.d_val;
-                fini_array = (Elf32_Addr*)runtime_address_to_load_address(runtime_address);
-                break;
-            }
-            case DT_INIT_ARRAYSZ:
-                init_arr_byte_size = d->d_un.d_val;
-                break;
-            case DT_FINI_ARRAYSZ:
-                fini_arr_byte_size = d->d_un.d_val;
-                break;
-            default:
-                break;
+            Elf32_Addr init_array_runtime_addr = runtime_load_address + h.sh_addr;
+            init_arr_byte_size = h.sh_size;
+            init_array = (Elf32_Addr*)runtime_address_to_load_address(init_array_runtime_addr);
+        }
+        else if (!strcmp(section_name, ".fini_array"))
+        {
+            Elf32_Addr fini_array_runtime_addr = runtime_load_address + h.sh_addr;
+            fini_arr_byte_size= h.sh_size;
+            fini_array = (Elf32_Addr*)runtime_address_to_load_address(fini_array_runtime_addr);
         }
     }
 
@@ -358,7 +347,7 @@ void ELFLoader::setup_stacks(Elf32_Addr& k_stack_top, Elf32_Addr& p_stack_top_v_
     Memory::allocate_page_user<false>(p_stack_pe_id);
 
     // Map it in current process' address space below first code page
-    uint p_stack_page_id = 767 * PT_ENTRIES + PT_ENTRIES - 1 - num_pages - 1;
+    uint p_stack_page_id = 767 * PT_ENTRIES + PT_ENTRIES - 2 - num_pages - 1;
     uint p_stack_pde = p_stack_page_id / PT_ENTRIES;
     uint p_stack_pte = p_stack_page_id % PT_ENTRIES;
     current_process->page_tables[p_stack_pde].entries[p_stack_pte] = PTE(Memory::page_tables, p_stack_pe_id);
@@ -369,17 +358,18 @@ void ELFLoader::setup_stacks(Elf32_Addr& k_stack_top, Elf32_Addr& p_stack_top_v_
     p_stack_top_v_addr = p_stack_bottom_v_addr + PAGE_SIZE;
 
     // Allocate syscall handler stack page
-    uint k_stack_pe = Memory::get_free_pe();
-    uint k_stack_pde = k_stack_pe / PDT_ENTRIES;
-    uint k_stack_pte = k_stack_pe % PDT_ENTRIES;
+    uint k_stack_pe = Memory::get_free_pe_user();
     Memory::allocate_page<false>(k_stack_pe);
 
-    k_stack_top = VIRT_ADDR(k_stack_pde, k_stack_pte, (PAGE_SIZE - sizeof(int)));
+    k_stack_top = VIRT_ADDR(767, 1022, (PAGE_SIZE - sizeof(int)));
 
     // Map process stack at 0xBFFFFFFC = 0xCFFFFFFF - 4 at pde 767 and pte 1023, just below the kernel
     if (page_tables[767].entries[1023] != 0)
         printf_error("Process kernel page entry is not empty");
     page_tables[767].entries[1023] = PTE(Memory::page_tables, p_stack_pe_id);
+    // Map kernel stack just below process stack
+    page_tables[767].entries[1022] = PTE(Memory::page_tables, k_stack_pe);
+    // Update relevant PDT entry
     pdt->entries[767] = PHYS_ADDR(Memory::page_tables, (uint) &page_tables[767]) | PAGE_USER | PAGE_WRITE |
             PAGE_PRESENT;
 }
@@ -399,7 +389,7 @@ void ELFLoader::unmap_new_process_from_current_process() const
 {
     for (size_t i = 0; i < num_pages + 1; i++) // +1 for stack
     {
-        uint page_id = 767 * PT_ENTRIES + PT_ENTRIES - 2 - i;
+        uint page_id = 767 * PT_ENTRIES + PT_ENTRIES - 3 - i; // entries [1023][1021 and 1022] are used for stacks
         uint pde = page_id / PT_ENTRIES;
         uint pte = page_id % PT_ENTRIES;
         current_process->page_tables[pde].entries[pte] = 0;
@@ -486,27 +476,11 @@ Elf32_Addr ELFLoader::finalize_process_setup(int argc, const char** argv)
     return k_stack_top;
 }
 
-const char** ELFLoader::add_argv0_to_argv(int& argc, const char** argv, const Dentry* file)
-{
-    argc++;
-    const char** new_argv = new const char*[argc];
-    memcpy(new_argv + 1, argv, (argc - 1) * sizeof(char*));
-    const char* abs_path = file->get_absolute_path();
-    if (abs_path)
-        new_argv[0] = abs_path;
-    else
-    {
-        delete[] new_argv;
-        return nullptr;
-    }
-    return new_argv;
-}
-
 Elf32_Addr ELFLoader::runtime_address_to_load_address(Elf32_Addr runtime_address) const
 {
-    uint page_sub = num_pages - (runtime_address >> 12);
+    uint page_sub = 2 + num_pages - (runtime_address >> 12);
     uint pde = (767 - page_sub / PT_ENTRIES);
-    uint pte = (PT_ENTRIES - 1) - page_sub % PT_ENTRIES;
+    uint pte = PT_ENTRIES - page_sub % PT_ENTRIES;
     uint off = runtime_address % PAGE_SIZE;
 
     return VIRT_ADDR(pde, pte, off);
@@ -517,7 +491,7 @@ void ELFLoader::offset_memory_mapping(uint offset) const
     // Offset pages
     for (size_t i = 0; i < num_pages; i++)
     {
-        uint page_id = 767 * PT_ENTRIES + PT_ENTRIES - 1 - num_pages + i;
+        uint page_id = 767 * PT_ENTRIES + PT_ENTRIES - 2 - num_pages + i;
         uint new_page_id = page_id - offset;
 
         current_process->update_pte(new_page_id, PTE(current_process->page_tables, page_id), true);
@@ -525,7 +499,7 @@ void ELFLoader::offset_memory_mapping(uint offset) const
     // Zero out 'offset' pages on the right
     for (size_t i = 0; i < offset; i++)
     {
-        uint page_id = 767 * PT_ENTRIES + PT_ENTRIES - 1 - offset + i;
+        uint page_id = 767 * PT_ENTRIES + PT_ENTRIES - 2 - offset + i;
         current_process->update_pte(page_id, 0, true);
     }
 }
@@ -535,15 +509,7 @@ Process* ELFLoader::setup_elf_process(pid_t pid, pid_t ppid, int argc, const cha
 {
     ELFLoader loader{};
 
-    // Add argv0 to argv. This can fail if the resolution of the absolute path fails
-    const char** full_argv;
-    if (!((full_argv = add_argv0_to_argv(argc, argv, file))))
-        return nullptr;
-
-    Process* proc = loader.build_process(argc, full_argv, pid, ppid, file, priority);
-
-    delete full_argv[0]; // delete argv[0]
-    delete[] full_argv;
+    Process* proc = loader.build_process(argc, argv, pid, ppid, file, priority);
 
     return proc;
 }
@@ -572,13 +538,14 @@ size_t ELFLoader::write_args_to_stack(size_t stack_top_v_addr, int argc, const c
 
     // Compute end of stack pointer, pointing at argc, then argv, then init and fini arrays, both null terminated
     uint num_funcs = init_array.size() + fini_array.size() + 2;
-    argv_ptr = (char**)((uint)argv_ptr - num_funcs * sizeof(Elf32_Addr) - sizeof(void*) - sizeof(uint));
-    argv_ptr = (char**)((uint)argv_ptr & ~0xF); // ABI 16 bytes alignment
+    uint free_bytes = (uint)argv_ptr - num_funcs * sizeof(Elf32_Addr);
+    uint aligned_free_bytes = (free_bytes - 0x10) & ~0xF; // ABI 16 bytes alignment
+    argv_ptr = (char**)aligned_free_bytes;
     *(argv_ptr + 1) = argv0_addr; // Argv
     *(uint*)(argv_ptr) = argc; // Argc
 
     // Write init and fini arrays, null terminated
-    Elf32_Addr* funcs_ptr = (Elf32_Addr*)(argv_ptr + 2);
+    Elf32_Addr* funcs_ptr = (Elf32_Addr*)((uint)argv_ptr + 0x10);
     for (const Elf32_Addr innit_func_addr : init_array)
         *funcs_ptr++ = innit_func_addr;
     *funcs_ptr++ = 0;

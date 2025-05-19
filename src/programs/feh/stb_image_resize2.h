@@ -379,14 +379,14 @@
 #ifndef STBIR_INCLUDE_STB_IMAGE_RESIZE2_H
 #define STBIR_INCLUDE_STB_IMAGE_RESIZE2_H
 
-#include <kstddef.h>
+#include <stddef.h>
 #ifdef _MSC_VER
 typedef unsigned char    stbir_uint8;
 typedef unsigned short   stbir_uint16;
 typedef unsigned int     stbir_uint32;
 typedef unsigned __int64 stbir_uint64;
 #else
-#include <kstdint.h>
+#include <stdint.h>
 typedef uint8_t  stbir_uint8;
 typedef uint16_t stbir_uint16;
 typedef uint32_t stbir_uint32;
@@ -779,7 +779,7 @@ STBIRDEF void stbir_resize_split_profile_info( STBIR_PROFILE_INFO * out_info, ST
 #endif
 
 #ifndef STBIR_MALLOC
-#include <kstdlib.h>
+#include <stdlib.h>
 #define STBIR_MALLOC(size,user_data) ((void)(user_data), malloc(size))
 #define STBIR_FREE(ptr,user_data)    ((void)(user_data), free(ptr))
 // (we used the comma operator to evaluate user_data, to avoid "unused parameter" warnings)
@@ -2807,7 +2807,7 @@ static void stbir_overlapping_memcpy( void * dest, void const * src, size_t byte
 #endif  // stbir_profile
 
 #ifndef STBIR_CEILF
-#include <kmath.h>
+#include <math.h>
 #if _MSC_VER <= 1200 // support VC6 for Sean
 #define STBIR_CEILF(x) ((float)ceil((float)(x)))
 #define STBIR_FLOORF(x) ((float)floor((float)(x)))
@@ -2819,7 +2819,7 @@ static void stbir_overlapping_memcpy( void * dest, void const * src, size_t byte
 
 #ifndef STBIR_MEMCPY
 // For memcpy
-#include <kstring.h>
+#include <string.h>
 #define STBIR_MEMCPY( dest, src, len ) memcpy( dest, src, len )
 #endif
 

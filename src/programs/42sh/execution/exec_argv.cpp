@@ -2,46 +2,30 @@
 
 static int run_execvp(char **args)
 {
+    pid_t pid = fork();
+    if (pid < 0) // flop
+    {
+        errx(1, "fork failed");
+    }
+    if (pid == 0) // child
+    {
 #pragma region k_adapted
-
-    //pid_t pid = fork();
-    //if (pid < 0) // flop
-    //{
-    //    errx(1, "fork failed");
-    //}
-    //if (pid == 0) // child
-    //{
-    //    if (execvp(args[0], args) == -1)
-    //    {
-    //        exit(127);
-    //    }
-    //}
-    //// parent
-    //int status;
-    //waitpid(pid, &status, 0);
-    //int exit_status = WEXITSTATUS(status);
-    //if (exit_status == 127)
-    //{
-    //    fprintf(stderr, "42sh: exec error\n");
-    //}
-    //return exit_status;
-    int argc = 0;
-    while (args[argc] != NULL)
-        argc++;
-    pid_t pid = exec(args[0], --argc, (const char**)(args + 1));
-    if (pid == -1)
-    {
-      	fprintf(stderr, "42sh: exec error\n");
-        return 127;
-    }
-    int wstatus;
-    if (waitpid(pid, &wstatus) == -1)
-    {
-      	fprintf(stderr, "42sh: exec (waitpid) error\n");
-        return 127;
-    }
-    return wstatus;
+//        if (execvp(args[0], args) == -1)
+        if (execve(args[0], args, NULL) == -1)
+        {
+            exit(127);
+        }
 #pragma endregion
+    }
+    // parent
+    int status;
+    waitpid(pid, &status, 0);
+    int exit_status = WEXITSTATUS(status);
+    if (exit_status == 127)
+    {
+        fprintf(stderr, "42sh: exec error\n");
+    }
+    return exit_status;
 }
 
 static int (*get_bi_function(int id))(BI_PROTOTYPE)

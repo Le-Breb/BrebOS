@@ -49,16 +49,19 @@ INTERNAL_OBJS=$(CRTI_OBJ) $(OBJECTS) $(CRTN_OBJ)
 programs=$(PROGRAMS_BUILD_DIR)
 CPPFLAGS=-I$(SRC_DIR)/libc
 libc=$(LIBC_BUILD_DIR)/libc.a
+libk=$(LIBC_BUILD_DIR)/libk.a
 libdynlk=$(LIBDYNLK_BUILD_DIR)/libdynlk.o
 
 programs_sources=$(shell find $(SRC_DIR)/programs -type f -name '*.cpp') $(SRC_DIR)/programs/start_program.s
 libc_sources=$(shell find $(SRC_DIR)/libc -type f -name '*.cpp')
+libk_sources=$(shell find $(SRC_DIR)/libk -type f -name '*.cpp')
 libdynlk_sources=$(shell find $(SRC_DIR)/libdynlk -type f -name '*.cpp')
 
 LD=ld
 
 BUILD_DIR=build
 LIBC_BUILD_DIR=$(SRC_DIR)/libc/build
+LIBK_BUILD_DIR=$(SRC_DIR)/libk/build
 LIBDYNLK_BUILD_DIR=$(SRC_DIR)/libdynlk/build
 GCC_BUILD_DIR=$(SRC_DIR)/gcc/build
 KERNEL_BUILD_DIR=$(SRC_DIR)/kernel/build
@@ -76,7 +79,7 @@ FONT_OBJ= $(BUILD_DIR)/$(FONT_FILE:%.psf=%.o)
 
 all: init $(OS_ISO) compilation_ended
 
-.PHONY: libc libdynlk programs
+.PHONY: libc libk libdynlk programs
 
 init:
 	@echo "$(CYAN)Compiling$(WHITE)"
@@ -99,6 +102,9 @@ $(libdynlk): $(libdynlk_sources)
 
 $(libc): $(libc_sources)
 	+make -C $(SRC_DIR)/libc
+
+$(libk): $(libk_sources)
+	+make -C $(SRC_DIR)/libk
 
 $(programs): $(programs_sources) $(libc) $(libdynlk)
 	+make -C $(SRC_DIR)/programs
@@ -136,10 +142,11 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(libdynlk) $(programs)
 	@mmd -i disk_image.img ::/fold2
 	@mmd -i disk_image.img ::/bin
 	@mmd -i disk_image.img ::/downloads
-	@mcopy -i disk_image.img $(LIBC_BUILD_DIR)/libc.so ::/bin
+	#@mcopy -i disk_image.img $(LIBC_BUILD_DIR)/libc.so ::/bin
+	@mcopy -i disk_image.img $(LIBK_BUILD_DIR)/libk.so ::/bin
 	@mcopy -i disk_image.img $(LIBDYNLK_BUILD_DIR)/libdynlk.so ::/bin
 	@echo "this is a text file :D" | mcopy -i disk_image.img - ::/"text-file.txt"
-	@for prog in $(shell find $(SRC_DIR)/programs/build -type f); do \
+	@for prog in $(shell find $(SRC_DIR)/programs/build -type f ! -name "*.*"); do \
     		mcopy -i disk_image.img $$prog ::/bin; \
 	done
 
@@ -169,10 +176,10 @@ run: $(OS_ISO)
 	@mdeltree -i disk_image.img ::/downloads/ # make sure downloads folder is cleanup up
 	@mmd -i disk_image.img ::/downloads # Recreate it
 	@echo "$(CYAN)Initializing NAT$(WHITE)"
-	@sudo ./utils/setup.sh
+	@sudo ./utils/net_setup.sh
 	qemu-system-i386 -device isa-debug-exit -cdrom $(OS_ISO) -drive file=disk_image.img,format=raw,if=ide,index=0 -boot d -netdev tap,id=net0,ifname=tap0,script=no,downscript=no  -device e1000,netdev=net0  -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap || true
 	@echo "$(CYAN)Restoring default network configuration...$(WHITE)"
-	@sudo ./utils/cleanup.sh
+	@sudo ./utils/net_cleanup.sh
 	@echo "$(CYAN)Done$(WHITE)"
 	@# -device isa-debug-exit -cdrom os.iso -gdb tcp::26000 -S -drive file=disk_image.img,format=raw,if=ide,index=0 -boot d -device e1000,netdev=net0 -netdev user,id=net0 -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap
 	@# -device isa-debug-exit -cdrom os.iso -gdb tcp::26000 -S -drive file=disk_image.img,format=raw,if=ide,index=0 -boot d -device e1000,netdev=net0 -netdev tap,id=net0,ifname=tap0,script=no,downscript=no -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap
@@ -181,8 +188,9 @@ ifdef PROFILING
 endif
 
 clean:
-	rm -rf *.o $(OUT_BIN) $(OS_ISO) isodir $(BUILD_DIR) $(KERNEL_BUILD_DIR)
+	rm -rf *.o $(OUT_BIN) $(OS_ISO) isodir $(BUILD_DIR) $(KERNEL_BUILD_DIR) grub.cfg
 	make -C $(SRC_DIR)/libc clean
+	make -C $(SRC_DIR)/libk clean
 	make -C $(SRC_DIR)/libdynlk clean
 	make -C $(SRC_DIR)/gcc/ clean
 	make -C $(SRC_DIR)/programs/ clean

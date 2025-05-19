@@ -46,11 +46,13 @@ private:
 	 */
 	static Process* get_next_process();
 
-	static pid_t get_free_pid();
-
 	static void release_pid(pid_t pid);
 
 	static void check_for_processes_to_wake_up();
+
+	static void* stack_switch_stack_top;
+
+	static Process* load_process(const char* path, pid_t pid, pid_t ppid, int argc, const char** argv);
 
 public:
 	/**
@@ -109,8 +111,6 @@ public:
 
 	static bool register_process_wait(pid_t waiting_process, pid_t waiting_for_process);
 
-	static pid_t fork(Process* p);
-
 	static void set_process_asleep(Process* p, uint duration);
 
 	/**
@@ -118,6 +118,12 @@ public:
 	 * @param eip address of the function to call
 	 */
 	static void start_kernel_process(void* eip);
+
+	static pid_t get_free_pid();
+
+	static void resume_process(Process* p);
+
+	static int execve(Process* p, const char* path, int argc, const char** argv);
 };
 
 

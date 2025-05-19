@@ -26,6 +26,9 @@ extern "C" bool fpu_init_asm_();
 //Todo: Process R_386_PC32 relocations
 //Todo: task bar displaying time and the progress bar
 //Todo: Use higher precision timer
+//Todo: Free ELFs after programs termination
+//Todo: Handle userland memory leaks
+//Todo: Copy on write to make fork faster
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointer
 {
     _init(); // Execute constructors
@@ -68,7 +71,8 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointe
     Network::run();
 
     // Set terminal process ready
-    Scheduler::exec("terminal", 0, 0, nullptr);
+    const char* argv[2] = { "terminal", nullptr };
+    Scheduler::exec("terminal", 0, 0, argv);
 
     // This makes the kernel initialization process end itself, thus ending kernel initialization
     Scheduler::stop_kernel_init_process();

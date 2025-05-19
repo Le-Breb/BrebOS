@@ -63,6 +63,7 @@ void Interrupts::page_fault_handler(const stack_state_t* stack_state)
 	//printf("Shadow stack: %s\n", err & 64 ? "True" : "False");
 	//printf("SGX: %s\n", err & 32768 ? "True" : "False");
 
+	FB::flush();
 	Scheduler::get_running_process()->terminate(SEGFAULT_RET_VAL);
 }
 
@@ -74,7 +75,8 @@ void Interrupts::gpf_handler(const stack_state* stack_state)
 	Scheduler::get_running_process()->terminate(GPF_RET_VAL);
 }
 
-[[noreturn]] void Interrupts::interrupt_timer(uint kesp, cpu_state_t* cpu_state, stack_state_t* stack_state)
+[[noreturn]]
+void Interrupts::interrupt_timer(uint kesp, cpu_state_t* cpu_state, stack_state_t* stack_state)
 {
 	// Update time
 	PIT::ticks++;
@@ -163,7 +165,8 @@ void Interrupts::disable_asm()
 	disable_interrupts_asm_();
 }
 
-[[noreturn]] void Interrupts::resume_user_process_asm(const cpu_state_t* cpu_state, const stack_state_t* stack_state)
+[[noreturn]]
+void Interrupts::resume_user_process_asm(const cpu_state_t* cpu_state, const stack_state_t* stack_state)
 {
 	// uint dr0 = stack_state->eip;
 	// uint dr7;

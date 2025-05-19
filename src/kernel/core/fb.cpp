@@ -209,6 +209,12 @@ void FB::write(const char* buf)
 		putchar(buf[i]);
 }
 
+void FB::write(const char* buf, uint len)
+{
+	for (uint i = 0; i < len; i++)
+		putchar(buf[i]);
+}
+
 void FB::ok()
 {
     ok_decorator();

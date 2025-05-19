@@ -1,5 +1,4 @@
-#include <kstdio.h>
-#include <ksyscalls.h>
+#include <stdio.h>
 #include "program3.h"
 
 extern "C" int main(int argc, char** argv)

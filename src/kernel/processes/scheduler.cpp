@@ -15,6 +15,15 @@ queue<pid_t, MAX_PROCESSES>* Scheduler::waiting_queue{};
 list<pid_t> Scheduler::process_waiting_list[MAX_PROCESSES] = {};
 Process* Scheduler::processes[MAX_PROCESSES] {};
 MinHeap<Scheduler::asleep_process>* Scheduler::sleeping_processes{};
+void* Scheduler::stack_switch_stack_top = nullptr;
+
+/**
+ * Switch to a new stack anc all a function (taking a process as parameter)
+ * @param new_esp new stack pointer
+ * @param fun function to call
+ * @param p function parameter
+ */
+extern "C" [[noreturn]] void switch_stack_and_call_process_function(void* new_esp, void (*fun)(Process*), Process* p);
 
 Process* Scheduler::get_next_process()
 {
@@ -42,6 +51,15 @@ Process* Scheduler::get_next_process()
             ready_queue->dequeue();
         else
         {
+            if (proc->exec_running())
+            {
+                auto replacement = proc->exec_replacement;
+                proc->set_flag(P_TERMINATED);
+                relinquish_first_ready_process();
+                processes[proc->pid] = replacement;
+                proc = replacement;
+            }
+
             // Update queue
             if (proc->quantum)
             {
@@ -62,10 +80,13 @@ Process* Scheduler::get_next_process()
 
 void Scheduler::relinquish_first_ready_process()
 {
-    pid_t pid = running_process = ready_queue->dequeue();
+    pid_t pid = running_process = ready_queue->getFirst();
     Process* proc = processes[pid];
 
-    // If process has no parent, free it rith away
+    if (!(proc->flags & P_EXEC))
+        ready_queue->dequeue(); // Do not dequeu to prevent form excluding the exec replacemnt from the ready queue
+
+    // If process has no parent, free it rith away, or if it has been replaced
     if (proc->ppid == proc->pid)
     {
         free_terminated_process(*proc);
@@ -73,7 +94,8 @@ void Scheduler::relinquish_first_ready_process()
     }
 
     // Nobody is waiting for this process to terminate, thus it's a zombie
-    if (process_waiting_list[pid].size() == 0)
+    // If it has been terminated because of exec, free it right away
+    if (process_waiting_list[pid].size() == 0 && !(proc->flags & P_EXEC))
         proc->set_flag(P_ZOMBIE);
     else // Someone is waiting for this process to end, thus we can actually end it
         free_terminated_process(*proc);
@@ -89,6 +111,45 @@ void Scheduler::set_first_ready_process_asleep_waiting_process()
 {
     running_process = ready_queue->dequeue();
     // Nothing else to do, the rest has already been done in register_process_wait
+}
+
+void Scheduler::resume_process(Process* p)
+{
+    // Set TSS esp0 to point to the syscall handler stack (i.e. tell the CPU where is syscall handler stack)
+    GDT::set_tss_kernel_stack(p->k_stack_top);
+
+    // Use process' address space
+    Interrupts::change_pdt_asm(PHYS_ADDR(Memory::page_tables, (uint) p->pdt));
+
+    // Write some values in process' address space (likely syscall return values)
+    for (const auto& pair : p->values_to_write)
+        *(int*)pair.address = pair.value;
+
+    // Safe to clear even though we use process address space since this data belongs to the kernel, and thus is in
+    // higher half, which is shared by processes address spaces
+    p->values_to_write.clear();
+
+    // Jump
+    if (p->flags & P_SYSCALL_INTERRUPTED)
+    {
+        p->flags &= ~P_SYSCALL_INTERRUPTED;
+        Interrupts::resume_syscall_handler_asm(&p->k_cpu_state, &p->k_stack_state);
+    }
+    else
+        Interrupts::resume_user_process_asm(&p->cpu_state, &p->stack_state);
+}
+
+int Scheduler::execve(Process* p, const char* path, int argc, const char** argv)
+{
+    Process* proc;
+    if (!((proc = load_process(path, p->pid, p->ppid, argc, argv))))
+        return -1;
+    p->execve_transfer(proc);
+    p->set_flag(P_EXEC);
+
+    TRIGGER_TIMER_INTERRUPT;
+
+    __builtin_unreachable();
 }
 
 [[noreturn]] void Scheduler::schedule()
@@ -115,28 +176,10 @@ void Scheduler::set_first_ready_process_asleep_waiting_process()
         __builtin_unreachable();
     }
 
-    // Set TSS esp0 to point to the syscall handler stack (i.e. tell the CPU where is syscall handler stack)
-    GDT::set_tss_kernel_stack(p->k_stack_top);
+    if (!p) // Although theoretically impossible, this happens sometimes, I'd like to know why
+        irrecoverable_error("%s: no process to run", __func__);
 
-    // Use process' address space
-    Interrupts::change_pdt_asm(PHYS_ADDR(Memory::page_tables, (uint) p->pdt));
-
-    // Write some values in process' address space (likely syscall return values)
-    for (const auto& pair : p->values_to_write)
-        *(int*)pair.address = pair.value;
-
-    // Safe to clear even though we use process address space since this data belongs to the kernel, and thus is in
-    // higher half, which is shared by processes address spaces
-    p->values_to_write.clear();
-
-    // Jump
-    if (p->flags & P_SYSCALL_INTERRUPTED)
-    {
-        p->flags &= ~P_SYSCALL_INTERRUPTED;
-        Interrupts::resume_syscall_handler_asm(&p->k_cpu_state, &p->k_stack_state);
-    }
-    else
-        Interrupts::resume_user_process_asm(&p->cpu_state, &p->stack_state);
+    switch_stack_and_call_process_function(stack_switch_stack_top, resume_process, p);
 }
 
 void Scheduler::start_module([[maybe_unused]] uint module, [[maybe_unused]] pid_t ppid, [[maybe_unused]] int argc, [[maybe_unused]] const char** argv)
@@ -167,11 +210,6 @@ void Scheduler::start_module([[maybe_unused]] uint module, [[maybe_unused]] pid_
 
 int Scheduler::exec(const char* path, pid_t ppid, int argc, const char** argv)
 {
-    if (ready_queue->full())
-    {
-        printf_error("Max process are already running");
-        return -1;
-    }
     pid_t pid = get_free_pid();
     if (pid == MAX_PROCESSES)
     {
@@ -179,17 +217,14 @@ int Scheduler::exec(const char* path, pid_t ppid, int argc, const char** argv)
         return -1;
     }
 
-    auto file = VFS::browse_to(path);
-    if (!file)
-        return -1;
-    Process* proc = ELFLoader::setup_elf_process(pid, ppid, argc, argv, file, 1);
-    if (!proc)
+    Process* proc;
+    if (!((proc = load_process(path, pid, ppid, argc, argv))))
         return -1;
 
-    processes[pid] = proc;
+    processes[proc->pid] = proc;
     set_process_ready(proc);
 
-    return pid;
+    return proc->pid;
 }
 
 
@@ -221,6 +256,10 @@ void Scheduler::init()
 {
     PIT::init();
     Process::init();
+
+    uint stack_switch_pe = Memory::get_free_pe();
+    Memory::allocate_page<false>(stack_switch_pe);
+    stack_switch_stack_top = (void*)((stack_switch_pe << 12) + PAGE_SIZE - sizeof(uint)); // Stack top is at the end of the page
 
     // Those have to be pointers because they cannot be instantiated at program start since dynamic memory allocation
     // is not available at this moment. However, it is ok to allocate them now.
@@ -264,6 +303,9 @@ void Scheduler::wake_up_key_waiting_processes(char key)
 
 void Scheduler::set_process_ready(Process* p)
 {
+    if (processes[p->pid] && processes[p->pid]->pid != p->pid)
+        irrecoverable_error("%s: a different process is registered at this pid", __func__);
+    processes[p->pid] = p;
     ready_queue->enqueue(p->pid);
     RESET_QUANTUM(processes[p->pid]);
 }
@@ -290,6 +332,21 @@ void Scheduler::check_for_processes_to_wake_up()
         else
             break;
     }
+}
+
+Process* Scheduler::load_process(const char* path, pid_t pid, pid_t ppid, int argc, const char** argv)
+{
+    if (ready_queue->full())
+    {
+        printf_error("Max process are already running");
+        return nullptr;
+    }
+
+    auto file = VFS::browse_to(path);
+    if (!file)
+        return nullptr;
+
+    return ELFLoader::setup_elf_process(pid, ppid, argc, argv, file, 1);
 }
 
 void Scheduler::create_kernel_init_process(void* process_host_mem, const uint lowest_free_pe, Process** kernel_process)
@@ -338,29 +395,42 @@ void Scheduler::free_terminated_process(Process& p)
     if (!(p.flags & P_TERMINATED) && !(p.flags & P_ZOMBIE))
         irrecoverable_error("Trying to free a process which is not terminated. PID: %d, flags: %d", p.pid, p.flags);
 
-    // Resume all processes that were waiting for this process to terminate
+    // Resume all processes that were waiting for this process to terminate, unless the process has terminated
+    // because of an exec. In such case, the resuming of waiting processes is delegated to the termination of the
+    // exec replacement process.
     pid_t pid = p.pid;
     pid_t curr_pid = get_running_process_pid();
-    for (const auto& waiting_process_pid : process_waiting_list[pid])
+    if (!(p.flags & P_EXEC))
     {
-        auto waiting_process = processes[waiting_process_pid];
+        for (const auto& waiting_process_pid : process_waiting_list[pid])
+        {
+            auto waiting_process = processes[waiting_process_pid];
 
-        // Resume process, unless it's the current process, in which case it is already in the ready queue
-        if (waiting_process_pid != curr_pid)
-            ready_queue->enqueue(waiting_process_pid);
-        // waitpid return value
-        auto wstatus_addr = (int*)waiting_process->cpu_state.esi;
-        if (wstatus_addr)
-            waiting_process->values_to_write.add({wstatus_addr, processes[pid]->ret_val});
-        // Clear flag
-        waiting_process->flags &= ~P_WAITING_PROCESS;
-        // Remove child
-        waiting_process->children.remove(pid);
+            // Resume process, unless it's the current process, in which case it is already in the ready queue
+            if (waiting_process_pid != curr_pid)
+                ready_queue->enqueue(waiting_process_pid);
+            // waitpid return value
+            auto wstatus_addr = (int*)waiting_process->cpu_state.esi;
+            if (wstatus_addr)
+                waiting_process->values_to_write.add({wstatus_addr, processes[pid]->ret_val});
+            // Clear flag
+            waiting_process->flags &= ~P_WAITING_PROCESS;
+            // Remove child
+            waiting_process->children.remove(pid);
+        }
+        process_waiting_list[pid].clear();
+
+        release_pid(p.pid);
+        processes[p.pid] = nullptr;
     }
-    process_waiting_list[pid].clear();
 
-    release_pid(p.pid);
-    processes[p.pid] = nullptr;
+    // Make children processes orphans
+    for (auto& child_id : p.children)
+    {
+        auto child = processes[child_id];
+        child->ppid = child->pid; // No parent anymore
+    }
+
     delete &p;
 }
 
@@ -399,16 +469,6 @@ bool Scheduler::register_process_wait(pid_t waiting_process, pid_t waiting_for_p
         processes[waiting_process]->set_flag(P_WAITING_PROCESS);
 
     return true;
-}
-
-pid_t Scheduler::fork([[maybe_unused]] Process* p)
-{
-    auto child_pid = get_free_pid();
-    if (child_pid == MAX_PROCESSES)
-        return -1;
-
-
-    return child_pid;
 }
 
 void Scheduler::set_process_asleep(Process* p, uint duration)

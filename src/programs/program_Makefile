@@ -2,6 +2,8 @@
 # This file is copied by $(SRC_DIR)/programs/Makefile in every subdirectory of
 # $(SRC_DIR)/programs before being called.
 
+GCC_INCLUDE_PATH=$(shell dirname $(shell which i686-elf-gcc))/../lib/gcc/i686-elf/13.2.0/include
+
 EXEC_NAME=$(shell basename $(CURDIR))
 SRC = $(shell find -name '*.cpp')
 OBJECTS= $(SRC:%.cpp=$(BUILD_DIR)/%.o)
@@ -10,7 +12,8 @@ CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfile
 -c -fno-exceptions -fno-rtti  -MMD -MP -g
 AS = nasm
 ASFLAGS = -f elf -F dwarf
-LDFLAGS = -T ../link_program.ld -melf_i386 -L../../libc/build/ -lc -dynamic-linker /dynlk -g
+LDFLAGS = -T ../link_program.ld -melf_i386 -L../../../newlib-build/i686-brebos/newlib -lc -lg -lm \
+-L../../libk/build/ -lk -dynamic-linker /dynlk -g
 ifdef RELEASE
 CFLAGS += -O3
 ASFLAGS += -O3
@@ -20,7 +23,8 @@ ASFLAGS += -O0
 endif
 libgcc=$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
 BUILD_DIR=build
-CPPFLAGS=-I../../libc -I./
+CPPFLAGS=-isystem ../../../sysroot/usr/i686-brebos/include/ \
+-isystem $(GCC_INCLUDE_PATH) -I../../libk -I./
 
 GCC_BUILD_DIR=../../gcc/build
 CRTI_OBJ=$(GCC_BUILD_DIR)/crti.o
@@ -30,7 +34,7 @@ CRTN_OBJ=$(GCC_BUILD_DIR)/crtn.o
 OBJ_LIST=$(CRTI_OBJ) $(CRTBEGIN_OBJ) $(OBJECTS) $(CRTEND_OBJ) $(CRTN_OBJ)
 INTERNAL_OBJS=$(CRTI_OBJ) $(OBJECTS) $(CRTN_OBJ)
 
-LIBC_PATH := ../../libc/build/libc.so
+LIBK_PATH := ../../libk/build/libk.so
 
 all: ../build/$(EXEC_NAME)
 
@@ -40,11 +44,11 @@ $(BUILD_DIR)/.dir_timestamp:
 	@mkdir -p $(BUILD_DIR)
 	@touch $(BUILD_DIR)/.dir_timestamp
 
-$(LIBC_PATH):
-	+make -C ../../libc
+$(LIBK_PATH):
+	+make -C ../../libk
 
-../build/$(EXEC_NAME): $(BUILD_DIR)/.dir_timestamp $(OBJECTS) $(LIBC_PATH) ../start_program.o
-	ld $(LDFLAGS) -o ../build/$(EXEC_NAME) ../start_program.o $(OBJ_LIST) $(libgcc)
+../build/$(EXEC_NAME): $(BUILD_DIR)/.dir_timestamp $(OBJECTS) $(LIBK_PATH) ../start_program.o
+	ld -o ../build/$(EXEC_NAME) ../start_program.o $(OBJ_LIST) $(LDFLAGS) $(libgcc)
 
 $(BUILD_DIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)

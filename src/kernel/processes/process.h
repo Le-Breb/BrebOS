@@ -7,7 +7,7 @@
 #include "../utils/list.h"
 #include <kstddef.h>
 
-typedef uint pid_t;
+typedef int pid_t;
 
 // Process is ready to be executed
 #define P_READY 0
@@ -23,6 +23,8 @@ typedef uint pid_t;
 #define P_ZOMBIE 16
 // Process is sleeping
 #define P_SLEEPING 32
+// Process is about to be replaced because of an exec
+#define P_EXEC 64
 
 #define SEGFAULT_RET_VAL 255
 #define GPF_RET_VAL 254
@@ -60,7 +62,14 @@ private:
 
 	int ret_val{};
 
+	list<void*> allocations{};
+
 	static list<env_var*> env_list; // Todo: make env var process specific
+
+	void copy_page_to_other(const Process* other, uint page_id, uint mapping_page_id) const;
+
+	Process* exec_replacement = nullptr; // Process which will replace this program after an call to execve
+
 public:
 	uint lowest_free_pe;
 	uint free_bytes = 0;
@@ -81,6 +90,8 @@ public:
 	// Process page tables. Process can use all virtual addresses below the kernel virtual location at pde 768
 	Memory::page_table_t* page_tables;
 	Memory::pdt_t* pdt; // process page directory table
+
+	Elf32_Addr program_break;
 
 private:
 	/** Frees a terminated process */
@@ -142,6 +153,8 @@ public:
 
 	[[nodiscard]] bool is_sleeping() const;
 
+	[[nodiscard]] bool exec_running() const;
+
 	/**
 	* Computes the runtime address of a symbol referenced by an ELF.
 	* Works in conjunction with dynlk to resolve symbol addresses at runtime for lazy binding.
@@ -160,7 +173,7 @@ public:
 
 	static void set_env(const char* name, const char* value);
 
-	Process* fork(pid_t child_pid);
+	pid_t fork();
 
 	/**
 	 * Updates a page table entry.
@@ -169,6 +182,14 @@ public:
 	 * @param update_cache whether TLB cache should be updated after applying the update
 	 */
 	void update_pte(uint pte, uint val, bool update_cache) const;
+
+	void* sbrk(int increment);
+
+	/**
+	 * Transfer various data to proc, which is set as exec replacement
+	 * @param proc process that whill replace this process
+	 */
+	void execve_transfer(Process* proc);
 };
 
 #endif //INCLUDE_PROCESS_H

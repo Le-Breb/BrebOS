@@ -1,4 +1,4 @@
-#include <kstdio.h>
+#include <stdio.h>
 
 bool cat(const char* path)
 {

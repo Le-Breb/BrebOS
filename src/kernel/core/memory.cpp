@@ -323,6 +323,31 @@ namespace Memory
         return v_minfo;
     }
 
+    uint get_contiguous_pages(uint n, const Process* process)
+    {
+        uint b = process->lowest_free_pe;
+        while (true)
+        {
+            // Maximum possibly free memory is too small to fulfill request
+            if (b + n > PDT_ENTRIES * PT_ENTRIES)
+                return (uint)-1;
+
+            uint pte = b;
+            uint target = b + n;
+
+            // Explore contiguous free blocks while explored block size does not fulfill the request
+            for (; !(PTE_USED(process->page_tables, pte)) && pte != target; pte++) {}
+
+            // We have explored a free block that is big enough
+            if (pte == target)
+                return b;
+
+            // There is a free virtual memory block from b to pte - 1 that is too small. Page entry pte - 1 is present.
+            // Then next possibly free page entry is the (pte)th
+            b = pte + 1;
+        }
+    }
+
     template<bool lazy_zero>
     void* sbrk(uint num_pages_requested, Process* process)
     {
@@ -330,33 +355,10 @@ namespace Memory
         if (lowest_free_frame == PT_ENTRIES * PDT_ENTRIES)
             return nullptr;
 
-        uint b = process->lowest_free_pe; /* block beginning page index */
-        uint e; /* block end page index + 1*/
-
-        // Try to find contiguous free virtual block of memory
-        while (true)
-        {
-            // Maximum possibly free memory is too small to fulfill request
-            if (b + num_pages_requested > PDT_ENTRIES * PT_ENTRIES)
-                return nullptr;
-
-            uint pte = b;
-            uint target = b + num_pages_requested;
-
-            // Explore contiguous free blocks while explored block size does not fulfill the request
-            for (; !(PTE_USED(process->page_tables, pte)) && pte != target; pte++) {}
-
-            // We have explored a free block that is big enough
-            if (pte == target)
-            {
-                e = target;
-                break;
-            }
-
-            // There is a free virtual memory block from b to pte - 1 that is too small. Page entry pte - 1 is present.
-            // Then next possibly free page entry is the (pte)th
-            b = pte + 1;
-        }
+        uint b = get_contiguous_pages(num_pages_requested, process);
+        if (b == (uint)-1)
+            return nullptr;
+        uint e = b + num_pages_requested; /* block end page index + 1*/
 
         // Allocate pages
         if (process->pdt == pdt) // Kernel process

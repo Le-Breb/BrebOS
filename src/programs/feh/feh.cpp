@@ -5,10 +5,11 @@
 // Also, this is painfully slow, especially downsizing. I don't understand why. Maybe SIMD support will make it run at a
 // decent speed.
 
-#include <kstdio.h>
-#include <kunistd.h>
-#include <kstdlib.h>
-#include <kwait.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <sys/wait.h>
+#include <ksyscalls.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_RESIZE2_IMPLEMENTATION
@@ -33,8 +34,8 @@ enum class ERROR_TYPE : int
 void size_screen_fit(int x, int y, int* new_x, int* new_y)
 {
     // Get screen dimensions
-    unsigned int SCREEN_WIDTH, SCREEN_HEIGHT;
-    __asm__ volatile("int $0x80" : "=a"(SCREEN_WIDTH), "=D"(SCREEN_HEIGHT) : "a"(24));
+    unsigned int SCREEN_WIDTH = 0, SCREEN_HEIGHT = 0;
+    get_screen_dimensions(&SCREEN_WIDTH, &SCREEN_HEIGHT);
 
     // Compute resized dimensions
     double x_ratio = (double)x / SCREEN_WIDTH;
@@ -102,16 +103,37 @@ ERROR_TYPE parse_and_display_image(unsigned char* raw_img, uint size)
             return ERROR_TYPE::FILE_SANITY;
     }
 
-    __asm__ volatile("int $0x80" : : "a"(22)); // Lock framebuffer flush
+    lock_framebuffer_flush();
     __asm__ volatile("int $0x80" : : "a"(21), "D"(data), "S"(new_x), "d"(new_y)); // Display image
-    __asm__ volatile("int $0x80" : : "a"(23)); // Unlock framebuffer flush
-
-    // Clear screen
-    pid_t pid = exec("cls", 0, nullptr);
-    [[maybe_unused]] int wstatus = 0;
-    waitpid(pid, &wstatus);
+    unlock_framebuffer_flush();
 
     free(data);
+
+    // Clear screen
+    pid_t child_pid = fork();
+    if (child_pid == -1)
+    {
+        fprintf(stderr, "Fork failed\n");
+        _exit(1);
+    }
+    if (child_pid == 0)
+    {
+        const char* argv[] = {"cls", nullptr};
+        if (execve(argv[0], (char**)argv, nullptr) == -1)
+        {
+            fprintf(stderr, "Exec failed\n");
+            _exit(1);
+        }
+
+        __builtin_unreachable();
+    }
+    [[maybe_unused]] int wstatus = 0;
+    if (waitpid(child_pid, &wstatus, 0) == -1)
+    {
+        fprintf(stderr, "Waitpid failed\n");
+        _exit(1);
+    }
+
     return ERROR_TYPE::NO_ERROR;
 }
 
@@ -129,14 +151,15 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    char* buf;
-    uint size;
+    char* buf = NULL;
+    uint size = get_file_size(argv[1]);
     printf("Loading image...\n");
-    __asm__ volatile("int $0x80" : "=a"(buf), "=D"(size) : "a"(25), "D"(argv[1]));
+    if (size != (uint)-1)
+        buf = (char*)malloc(size);
 
-    if (!buf)
+    if (!buf || !load_file(argv[1], buf))
     {
-        fprintf(stderr, "Failed to process image\n");
+        fprintf(stderr, "Failed to load image\n");
         return (int)ERROR_TYPE::FILE_LOAD;
     }
 

@@ -6,7 +6,7 @@
 #include <kstring.h>
 
 #define OS_INTERPR ("/dynlk") // OS default interpreter, used to run dynamically linked programs
-#define OS_LIB ("libc.so") // OS lib, allowing programs to use syscalls
+#define OS_LIB ("libk.so") // OS lib for syscalls not found in traditional libc (aka newlib)
 
 enum ELF_type
 {
@@ -35,6 +35,7 @@ public:
 	Elf32_Shdr* dynsym_hdr;
 	const char* interpreter_name;
 	const char* dynsym_strtab;
+	const char* shstrtab;
 	size_t num_plt_relocs;
 	size_t num_dyn_relocs;
 	char* lib_name = nullptr;

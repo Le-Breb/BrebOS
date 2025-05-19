@@ -141,7 +141,8 @@ void Syscall::get_key()
     TRIGGER_TIMER_INTERRUPT
 }
 
-[[noreturn]] void Syscall::dispatcher(cpu_state_t* cpu_state, const stack_state_t* stack_state)
+[[noreturn]]
+void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stack_state)
 {
     Process* p = Scheduler::get_running_process();
 
@@ -209,7 +210,8 @@ void Syscall::get_key()
             getenv(p);
             break;
         case 20:
-            fork(p);
+            p->cpu_state.eax = Scheduler::execve(p, (const char*)p->cpu_state.edi, (int)p->cpu_state.esi,
+                (const char**)p->cpu_state.edx);
             break;
         case 21:
             feh(p);
@@ -226,6 +228,23 @@ void Syscall::get_key()
         case 25:
             load_file(p);
             break;
+        case 26:
+        {
+            write(p);
+            break;
+        }
+        case 27:
+            p->cpu_state.eax = (uint)p->sbrk((int)p->cpu_state.edi);
+            break;
+        case 28:
+            p->cpu_state.eax = p->fork();
+            break;
+        case 29:
+        {
+            Dentry* file = VFS::browse_to((char*)p->cpu_state.edi);
+            p->cpu_state.eax = file ? file->inode->size : (uint)-1;
+            break;
+        }
         default:
             printf_error("Received unknown syscall id: 0x%x", cpu_state->eax);
             break;
@@ -290,11 +309,6 @@ void Syscall::getenv(Process* p)
         p->cpu_state.eax = 0;
 }
 
-void Syscall::fork(Process* p)
-{
-    Scheduler::fork(p);
-}
-
 __attribute__((no_instrument_function))
 void Syscall::feh(Process* p)
 {
@@ -336,14 +350,38 @@ void Syscall::load_file(Process* p)
 
     // Load file in user space
     auto f = VFS::load_file(dentry, 0, size);
-    auto buf = p->malloc(size);
-    memcpy(buf, f, size); // Todo: directly allocate in user space
+    if (!f)
+    {
+        p->cpu_state.eax = 0;
+        return;
+    }
+    memcpy((void*)p->cpu_state.esi, f, size);
 
     // Write return values
-    p->cpu_state.eax = (uint)buf;
+    p->cpu_state.eax = 1;
     p->cpu_state.edi = dentry->inode->size;
 
     delete[] (char*)f;
+}
+
+void Syscall::write(Process* p)
+{
+    int file = (int)p->cpu_state.edi;
+    if (file == 2)
+        FB::set_fg(FB_RED);
+    else if (file != 1)
+    {
+        p->cpu_state.eax = -1;
+        return;
+    }
+
+    char* str = (char*)p->cpu_state.esi;
+    uint len = p->cpu_state.edx;
+    FB::write(str, len);
+    if (file == 2)
+        FB::set_fg(FB_WHITE);
+
+    p->cpu_state.eax = len;
 }
 
 __attribute__((no_instrument_function)) // May not return, which would mess up profiling data

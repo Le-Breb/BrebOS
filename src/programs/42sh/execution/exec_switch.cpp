@@ -38,6 +38,5 @@ void exec_switch(EXEC_PROTOTYPE)
         return;
     }
 #pragma endregion
-
     funs[ast->type](ast, c);
 }

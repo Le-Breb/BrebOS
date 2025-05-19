@@ -96,9 +96,8 @@ int bi_echo(BI_PROTOTYPE)
     {
         printf("\n");
     }
-#pragma region k_adapted
-    // fflush(stdout);
-    flush();
-#pragma endregion
+
+    fflush(stdout);
+
     return 0;
 }

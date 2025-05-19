@@ -24,3 +24,11 @@ ssize_t write([[maybe_unused]] int fd, [[maybe_unused]] const void* buf, [[maybe
 {
     return -1;
 }
+
+pid_t fork()
+{
+    pid_t pid;
+    __asm__ volatile("int $0x80" : "=a"(pid) : "a"(28));
+
+    return pid;
+}

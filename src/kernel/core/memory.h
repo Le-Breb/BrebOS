@@ -20,12 +20,12 @@
 #define STACK_SIZE 4096
 #define KERNEL_VIRTUAL_BASE 0xC0000000
 
-#define ADDR_PDE(addr) (addr >> 22)
-#define ADDR_PTE(addr) ((addr >> 12) & 0x3FF)
-#define ADDR_PAGE(addr) (addr >> 12)
+#define ADDR_PDE(addr) ((addr) >> 22)
+#define ADDR_PTE(addr) (((addr) >> 12) & 0x3FF)
+#define ADDR_PAGE(addr) ((addr) >> 12)
 #define INVALIDATE_PAGE(pde, pte) __asm__ volatile("invlpg (%0)" : : "r" (VIRT_ADDR(pde, pte, 0)));
 #define FRAME_ID_ADDR(i) ((i) << 12)
-#define VIRT_ADDR(pde, pte, offset) ((pde) << 22 | (pte) << 12 | offset)
+#define VIRT_ADDR(pde, pte, offset) ((pde) << 22 | (pte) << 12 | (offset))
 #define PTE_PHYS_ADDR(i) (FRAME_ID_ADDR((PDT_ENTRIES + (i))))
 #define PTE_USED(page_tables, i) (PTE(page_tables, i) & (PAGE_PRESENT | PAGE_LAZY_ZERO))
 #define PTE(page_tables, i) (page_tables[(i) >> 10].entries[(i) & 0x3FF])
@@ -184,6 +184,14 @@ namespace Memory
 	 * @return virtual address of the mapped memory, nullptr on failure
 	 */
 	void* register_physical_data(uint physical_address, uint size);
+
+	/**
+	 *
+	 * @param n number of pages requested
+	 * @param process process owning the relevant address space
+	 * @return the first page entry id of a contiguous block of n pages, or -1 if no such block exists
+	 */
+	uint get_contiguous_pages(uint n, const Process* process);
 }
 
 class Process;

@@ -1,5 +1,4 @@
-#include <kstdio.h>
-#include <ksyscalls.h>
+#include <stdio.h>
 
 bool touch(const char* path)
 {

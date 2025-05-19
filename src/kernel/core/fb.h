@@ -135,6 +135,8 @@ public:
      */
     static void write(const char* buf);
 
+    static void write(const char* buf, uint len);
+
     /** Write an ok decorator without trailing newline */
     static void ok_decorator();
 

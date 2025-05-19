@@ -67,10 +67,25 @@ The build takes several minutes, don't forget to enable parallelization: wheneve
 
 This step assumes you fulfilled all the requirements aforementioned.
 
-You simply need to run:
-
+Add your cross compiler yto your path and add some links (mdify according to where you installed your cross compiler):
 ```sh
 export PATH="$HOME/opt/cross/bin:$PATH"
+ln i686-elf-ar i686-brebos-ar
+ln i686-elf-as i686-brebos-as
+ln i686-elf-gcc i686-brebos-gcc
+ln i686-elf-gcc i686-brebos-cc
+ln i686-elf-ranlib i686-brebos-ranlib
+```
+
+You need to install newlib, the libc used by *BrebOS*. One has to be very cautious when doing that, so I proivded a script which does everything for you. Run
+```sh
+./utils/newlib_setup.sh
+```
+ℹ️ This does not install anything globally on your machine, everything is downloaded and built in the repo. ℹ️
+
+Eventually, run:
+
+```sh
 RELEASE=1 make
 ```
 
@@ -112,11 +127,8 @@ The kernel `$PATH` is filled with `/bin`, where all programs are. Hence, to star
 BrebOS can run C++ programs that *you* write, provided they respect the following conditions:
 
 - Your program cannot use `dynamic_cast`, nor exceptions. They require additional support which i did not setup.
-- You cannot make use of any library, even `libc`, as it is not ported on `BrebOS`. The only exception is my custom
-  `libc`. The relevant headers are located under
-  `src/libc`. For example, if you want to use `printf`, simply write `#include <kstdio.h>`. Generally speaking, most
-  widely used headers of the linux libc have an equivalent which is the usual name preceded by 'k' (`stdio.h` <->
-  `kstdio.h`) - though, inevitably, i did not implement every function inside it.
+- Most of the standard libc is  available. If something is not available, you will have a compile error, indicating an undefined reference or undeclared function. You can also include `<ksyscalls.h>` in your programs, which you can find at `src/libk`. This is a small OS specific library which provides handy syscalls.
+- The STL is not available.
 - Any other C++ feature (supposedly) works!
 
 To add your program, simply follow the following steps:
@@ -173,7 +185,7 @@ running locally, which is automatically started when executing `make run`.
     - Dynamic libraries support
     - Lazy binding support (addresses of functions within dynamic libraries are resolved at runtime by `dynlk`, the OS'
       dynamic linker)
-    - Custom libc (basic functions such as `strlen` and syscalls wrappers)
+    - OS specific library, whici programs are dynamically linked to.
 - **42sh (Shell) 👨🏻‍💻**
     - command lists/compound lists
     - if/else

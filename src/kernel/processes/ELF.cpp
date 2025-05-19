@@ -181,7 +181,7 @@ ELF* ELF::is_valid(uint start_address, ELF_type expected_type)
     char* lib_name = elf->lib_name;
     if (strcmp(lib_name, OS_LIB) != 0)
     {
-        printf_error("Missing library: %s\n", lib_name);
+        printf_error("Missing library: %s", lib_name);
         is_valid_exit_err
     }
 
@@ -266,13 +266,13 @@ ELF::ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr,
     dyn_table = nullptr;
     for (int k = 0; k < this->global_hdr.e_shnum; ++k)
     {
-        Elf32_Shdr* h = (Elf32_Shdr*)((uint)elf32Shdr + this->global_hdr.e_shentsize * k);
+        Elf32_Shdr& h = section_hdrs[k];
 
-        if (h->sh_type != SHT_DYNAMIC)
+        if (h.sh_type != SHT_DYNAMIC)
             continue;
-        uint num_entries = h->sh_size / h->sh_entsize;
+        uint num_entries = h.sh_size / h.sh_entsize;
         dyn_table = new Elf32_Dyn[num_entries];
-        Elf32_Dyn* dyn_table = (Elf32_Dyn*)(start_address + h->sh_offset);
+        Elf32_Dyn* dyn_table = (Elf32_Dyn*)(start_address + h.sh_offset);
         int i = 0;
         for (; dyn_table->d_tag != DT_NULL; dyn_table++, i++)
             this->dyn_table[i] = *dyn_table;
@@ -299,7 +299,8 @@ ELF::ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr,
     // Copy strtab
     Elf32_Shdr* sh_strtab_h = (Elf32_Shdr*)((uint)elf32Shdr +
         elf32Ehdr->e_shentsize * elf32Ehdr->e_shstrndx);
-    char* shstrtab = (char*)(start_address + sh_strtab_h->sh_offset);
+    shstrtab = new char[sh_strtab_h->sh_size];
+    memcpy((char*)shstrtab, (char*)start_address + sh_strtab_h->sh_offset, sh_strtab_h->sh_size);
 
     // Copy plt relocation entries
     plt_relocs = nullptr;
@@ -370,26 +371,29 @@ ELF::ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr,
     uint lib_name_idx = (uint)-1; // lib name string table index
     uint base_addr = base_address();
     char* dyn_str_table = nullptr; // string table
-    for (Elf32_Dyn* d = dyn_table; d->d_tag != DT_NULL; d++)
+    if (dyn_table)
     {
-        switch (d->d_tag)
+        for (Elf32_Dyn* d = dyn_table; d->d_tag != DT_NULL; d++)
         {
-            case DT_STRTAB:
-                dyn_str_table = (char*)(start_address + d->d_un.d_ptr - base_addr);
-                break;
-            case DT_NEEDED:
-                lib_name_idx = d->d_un.d_val;
-                break;
-            case DT_PLTGOT:
-                runtime_got_addr = d->d_un.d_val;
-                break;
-            case DT_HASH:
+            switch (d->d_tag)
             {
-                hash_table_runtime_address = d->d_un.d_val;
-                break;
+                case DT_STRTAB:
+                    dyn_str_table = (char*)(start_address + d->d_un.d_ptr - base_addr);
+                    break;
+                case DT_NEEDED:
+                    lib_name_idx = d->d_un.d_val;
+                    break;
+                case DT_PLTGOT:
+                    runtime_got_addr = d->d_un.d_val;
+                    break;
+                case DT_HASH:
+                {
+                    hash_table_runtime_address = d->d_un.d_val;
+                    break;
+                }
+                default:
+                    break;
             }
-            default:
-                break;
         }
     }
 
