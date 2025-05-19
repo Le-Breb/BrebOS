@@ -106,7 +106,7 @@ $(libc): $(libc_sources)
 $(libk): $(libk_sources)
 	+make -C $(SRC_DIR)/libk
 
-$(programs): $(programs_sources) $(libc) $(libdynlk)
+$(programs): $(programs_sources) $(libk) $(libdynlk)
 	+make -C $(SRC_DIR)/programs
 
 $(KERNEL_BUILD_DIR)/%.o: $(SRC_DIR)/kernel/%.cpp
