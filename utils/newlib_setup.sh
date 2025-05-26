@@ -17,7 +17,7 @@ tools_path="$brebos_path/tools"
 newlib_config="$brebos_path/src/newlib-config"
 sysroot="$brebos_path/sysroot"
 newlib_build_path="$tools_path/newlib-build"
-toolchain_path="$brebos_path/toolchain_"
+toolchain_path="$brebos_path/toolchain"
 
 export PREFIX="$toolchain_path/gcc"
 export TARGET=i686-brebos

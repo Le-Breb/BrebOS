@@ -56,35 +56,23 @@ Make sure you have installed the following packages, using `sudo apt install pac
 - **qemu-system-i386** | Emulator
 - **dnsmasq** | DHCP server
 
-You also need a **Cross compiler**: Please refer to [this page](https://wiki.osdev.org/GCC_Cross-Compiler), and follow
-the instructionns on sections 2 and 3. <br>
-The build takes several minutes, don't forget to enable parallelization: whenever you execute the `make` command, add
-`-j $(lscpu | grep 'Core(s) per socket' | grep -o '[0-9]+')` at the end of the command.
-
 
 
 ### Build
 
-This step assumes you fulfilled all the requirements aforementioned.
-
-Add your cross compiler yto your path and add some links (mdify according to where you installed your cross compiler):
+Run
 ```sh
-export PATH="$HOME/opt/cross/bin:$PATH"
-ln i686-elf-ar i686-brebos-ar
-ln i686-elf-as i686-brebos-as
-ln i686-elf-gcc i686-brebos-gcc
-ln i686-elf-gcc i686-brebos-cc
-ln i686-elf-ranlib i686-brebos-ranlib
-```
-
-You need to install newlib, the libc used by *BrebOS*. One has to be very cautious when doing that, so I proivded a script which does everything for you. Run
-```sh
+./utils/gcc_setup.sh
 ./utils/newlib_setup.sh
+./utils/brebos_gcc_setup.sh
 ```
-ℹ️ This does not install anything globally on your machine, everything is downloaded and built in the repo. ℹ️
 
-Eventually, run:
+⚠️This takes a long time (~18min on my machine). You only need to run this once.⚠️ <br>
+ℹ️ This does not install anything globally on your machine, everything is downloaded and built in the repo. ℹ️<br>
 
+This installs a cross compiler which targets 32bits architecture, then it installs the libc used by userland programs, and finally it builts a hosted compiler, specifically set up for BrebOs.
+
+Now you can build the project itself:
 ```sh
 RELEASE=1 make
 ```
@@ -127,7 +115,7 @@ The kernel `$PATH` is filled with `/bin`, where all programs are. Hence, to star
 BrebOS can run C++ programs that *you* write, provided they respect the following conditions:
 
 - Your program cannot use `dynamic_cast`, nor exceptions. They require additional support which i did not setup.
-- Most of the standard libc is  available. If something is not available, you will have a compile error, indicating an undefined reference or undeclared function. You can also include `<ksyscalls.h>` in your programs, which you can find at `src/libk`. This is a small OS specific library which provides handy syscalls.
+- Most of the standard libc is  available. If something is not available, you will have a compile error, indicating an undefined reference or undeclared function. You can also include `<ksyscalls.h>` in your programs, which you can find at `src/libcv2`. This is a small OS specific library which provides handy syscalls.
 - The STL is not available.
 - Any other C++ feature (supposedly) works!
 
@@ -185,7 +173,7 @@ running locally, which is automatically started when executing `make run`.
     - Dynamic libraries support
     - Lazy binding support (addresses of functions within dynamic libraries are resolved at runtime by `dynlk`, the OS'
       dynamic linker)
-    - OS specific library, whici programs are dynamically linked to.
+    - OS specific library, which programs are dynamically linked to
 - **42sh (Shell) 👨🏻‍💻**
     - command lists/compound lists
     - if/else
