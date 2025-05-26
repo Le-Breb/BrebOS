@@ -1,15 +1,9 @@
 SRC=$(shell find -name '*.cpp')
 OBJECTS=$(patsubst %.cpp, $(BUILD_DIR)/%.o, $(SRC))
-libgcc=$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
-CC = i686-elf-gcc
-CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
+CC = i686-brebos-gcc
+CFLAGS = -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
 -fno-exceptions -fno-rtti -fPIC
-GCC_BUILD_DIR=../gcc/build
-CRTI_OBJ=$(GCC_BUILD_DIR)/crti.o
-CRTBEGIN_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtbegin.o)
-CRTEND_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtend.o)
-CRTN_OBJ=$(GCC_BUILD_DIR)/crtn.o
-OBJ_LIST=$(CRTI_OBJ) $(CRTBEGIN_OBJ) $(OBJECTS) $(CRTEND_OBJ) $(CRTN_OBJ)
+
 AS = nasm
 ASFLAGS = -f elf -F dwarf
 ifdef RELEASE
@@ -22,7 +16,7 @@ LDFLAGS += -g
 endif
 BUILD_DIR=build
 LIB=$(BUILD_DIR)/libk.so
-LIBFLAGS = -fPIC -Wl,-shared -pie
+LIBFLAGS = -fPIC -Wl,-shared -pie -static-libgcc
 CPPFLAGS=-I./
 
 all: gcc $(BUILD_DIR)/libk.so $(BUILD_DIR)/libk.a
@@ -31,7 +25,7 @@ gcc:
 	+make -C ../gcc
 
 $(BUILD_DIR)/libk.so: $(BUILD_DIR)/.dir_timestamp $(OBJECTS)
-	$(CC) $(CFLAGS) $(LIBFLAGS) -o $@ $(OBJ_LIST) $(libgcc)
+	$(CC) $(CFLAGS) $(LIBFLAGS) -o $@ $(OBJECTS) $(libgcc)
 
 $(BUILD_DIR)/libk.a: $(BUILD_DIR)/.dir_timestamp $(OBJECTS)
 	ar rcs $@ $(OBJECTS) $(libgcc)

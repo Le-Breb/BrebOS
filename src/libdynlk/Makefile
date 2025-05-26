@@ -1,6 +1,6 @@
 OBJECTS = $(BUILD_DIR)/libdynlk.o
 LIB = $(BUILD_DIR)/libdynlk.so
-CC = i686-elf-gcc
+CC = i686-brebos-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
 -g -fno-exceptions -fno-rtti
 AS=nasm
@@ -22,7 +22,7 @@ $(BUILD_DIR)/.dir_timestamp:
 	@touch $(BUILD_DIR)/.dir_timestamp
 
 $(LIB): $(BUILD_DIR)/.dir_timestamp $(OBJECTS)
-	ld -m elf_i386 -shared -o $(LIB) $(OBJECTS)
+	i686-brebos-ld -m elf_i386 -shared -o $(LIB) $(OBJECTS)
 
 $(BUILD_DIR)/%.o: %.s
 	$(AS) $(ASFLAGS) -f elf32 -o $@ $<

@@ -20,7 +20,7 @@ OBJECTS = $(patsubst %.cpp, $(KERNEL_BUILD_DIR)/%.o, $(filter %.cpp, $(SRC))) \
 DEPS=$(OBJECTS:.o=.d)
 -include $(DEPS)
 
-CC = i686-elf-gcc
+CC = i686-brebos-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
 -c -fno-exceptions -fno-rtti -MMD -MP
 AS = nasm
@@ -39,10 +39,11 @@ ifdef PROFILING
 	CFLAGS += -finstrument-functions -DPROFILING
 endif
 
-libgcc=$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
+CC_PATH=$(CURDIR)/toolchain/gcc/bin
+libgcc=$(shell $(CC_PATH)/$(CC) $(CFLAGS) -print-libgcc-file-name)
 CRTI_OBJ=$(GCC_BUILD_DIR)/crti.o
-CRTBEGIN_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtbegin.o)
-CRTEND_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtend.o)
+CRTBEGIN_OBJ:=$(shell $(CC_PATH)/$(CC) $(CFLAGS) -print-file-name=crtbegin.o)
+CRTEND_OBJ:=$(shell $(CC_PATH)/$(CC) $(CFLAGS) -print-file-name=crtend.o)
 CRTN_OBJ=$(GCC_BUILD_DIR)/crtn.o
 OBJ_LIST=$(CRTI_OBJ) $(CRTBEGIN_OBJ) $(OBJECTS) $(CRTEND_OBJ) $(CRTN_OBJ)
 INTERNAL_OBJS=$(CRTI_OBJ) $(OBJECTS) $(CRTN_OBJ)
@@ -77,8 +78,13 @@ GRUB_TIMEOUT=0
 FONT_FILE=Lat15-VGA16.psf
 FONT_OBJ= $(BUILD_DIR)/$(FONT_FILE:%.psf=%.o)
 
-all: init $(OS_ISO) compilation_ended
+all:
+	@PATH=$(CC_PATH):$(PATH) $(MAKE) all_
 
+run:
+	@PATH=$(CC_PATH):$(PATH) $(MAKE) run_
+
+all_: init $(OS_ISO) compilation_ended
 .PHONY: libc libk libdynlk programs
 
 init:
@@ -88,9 +94,9 @@ compilation_ended:
 	@echo "$(CYAN)Compilation ended$(WHITE)"
 
 $(CRTI_OBJ):
-	+make -C src/gcc
+	+$(MAKE) -C src/gcc
 $(CRTN_OBJ):
-	+make -C src/gcc
+	+$(MAKE) -C src/gcc
 
 $(BUILD_DIR)/.dir_timestamp:
 	@mkdir -p $(BUILD_DIR)
@@ -98,16 +104,16 @@ $(BUILD_DIR)/.dir_timestamp:
 	@mkdir -p $(KERNEL_BUILD_DIR)
 
 $(libdynlk): $(libdynlk_sources)
-	+make -C $(SRC_DIR)/libdynlk
+	+$(MAKE) -C $(SRC_DIR)/libdynlk
 
 $(libc): $(libc_sources)
-	+make -C $(SRC_DIR)/libc
+	+$(MAKE) -C $(SRC_DIR)/libc
 
 $(libk): $(libk_sources)
-	+make -C $(SRC_DIR)/libk
+	+$(MAKE) -C $(SRC_DIR)/libk
 
 $(programs): $(programs_sources) $(libk) $(libdynlk)
-	+make -C $(SRC_DIR)/programs
+	+$(MAKE) -C $(SRC_DIR)/programs
 
 $(KERNEL_BUILD_DIR)/%.o: $(SRC_DIR)/kernel/%.cpp
 	@mkdir -p $(dir $@)
@@ -116,13 +122,13 @@ $(KERNEL_BUILD_DIR)/%.o: $(SRC_DIR)/kernel/%.s
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) $< -o $@
 gcc:
-	+make -C $(SRC_DIR)/gcc
+	+$(MAKE) -C $(SRC_DIR)/gcc
 
 $(FONT_OBJ): $(FONT_FILE)
 	objcopy -I binary -O elf32-i386 -B i386 $(FONT_FILE) $(FONT_OBJ)
 
 $(BUILD_DIR)/kernel.elf: $(BUILD_DIR)/.dir_timestamp $(FONT_OBJ) $(INTERNAL_OBJS) $(libc) $(gcc)
-	ld $(LDFLAGS) $(OBJ_LIST) $(CPPFLAGS) $(libc) $(FONT_OBJ) -o $(BUILD_DIR)/kernel.elf $(libgcc)
+	i686-brebos-ld $(LDFLAGS) $(OBJ_LIST) $(CPPFLAGS) $(libc) $(FONT_OBJ) -o $(BUILD_DIR)/kernel.elf $(libgcc)
 
 $(OS_ISO): $(BUILD_DIR)/kernel.elf $(libdynlk) $(programs)
 	@#Create directories
@@ -171,7 +177,7 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(libdynlk) $(programs)
 	@echo "$(CYAN)"Building ISO..."$(WHITE)"
 	@grub-mkrescue -o $(OS_ISO) isodir
 
-run: $(OS_ISO)
+run_: $(OS_ISO)
 	@#	bochs -f bochsrc.txt -q
 	@mdeltree -i disk_image.img ::/downloads/ # make sure downloads folder is cleanup up
 	@mmd -i disk_image.img ::/downloads # Recreate it
@@ -189,8 +195,8 @@ endif
 
 clean:
 	rm -rf *.o $(OUT_BIN) $(OS_ISO) isodir $(BUILD_DIR) $(KERNEL_BUILD_DIR) grub.cfg
-	make -C $(SRC_DIR)/libc clean
-	make -C $(SRC_DIR)/libk clean
-	make -C $(SRC_DIR)/libdynlk clean
-	make -C $(SRC_DIR)/gcc/ clean
-	make -C $(SRC_DIR)/programs/ clean
+	$(MAKE) -C $(SRC_DIR)/libc clean
+	$(MAKE) -C $(SRC_DIR)/libk clean
+	$(MAKE) -C $(SRC_DIR)/libdynlk clean
+	$(MAKE) -C $(SRC_DIR)/gcc/ clean
+	$(MAKE) -C $(SRC_DIR)/programs/ clean

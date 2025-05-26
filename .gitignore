@@ -4,3 +4,5 @@ venv/
 *.d
 newlib-build/
 sysroot/
+toolchain/
+tools/

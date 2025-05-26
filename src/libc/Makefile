@@ -1,7 +1,7 @@
 SRC=$(shell find -name '*.cpp')
 OBJECTS=$(patsubst %.cpp, $(BUILD_DIR)/%.o, $(SRC))
 libgcc=$(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
-CC = i686-elf-gcc
+CC = i686-brebos-gcc
 CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
 -fno-exceptions -fno-rtti -fPIC
 GCC_BUILD_DIR=../gcc/build

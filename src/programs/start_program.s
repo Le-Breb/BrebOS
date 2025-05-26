@@ -3,6 +3,7 @@ extern exit
 extern __cxa_finalize
 extern libk_force_link
 section .text
+global _start
 
 ; Expected stack layout. ESP shall be 0x10 bytes aligned (ABI requirement)
 ; [ESP + 00] - argc
@@ -12,6 +13,7 @@ section .text
 ; [ESP + 18] - _init array (null terminated)
 ; [ESP + ??] - _fini array (null terminated)
 
+_start:
 .Linit:
     mov ebx, esp
     add ebx, 0x10 ; point to first init array entry

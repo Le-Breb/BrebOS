@@ -11,46 +11,44 @@ function cyan_echo()
 }
 
 num_jobs=$(nproc --all)
-script_path=$(dirname "$(realpath $0)")
-tools_path="$script_path/../tools"
-newlib_config="$script_path/../src/newlib-config"
-sysroot="$script_path/../sysroot"
-newlib_build="$script_path/../newlib-build"
+script_path=$(dirname "$(realpath "$0")")
+brebos_path="$script_path/.."
+tools_path="$brebos_path/tools"
+newlib_config="$brebos_path/src/newlib-config"
+sysroot="$brebos_path/sysroot"
+newlib_build_path="$tools_path/newlib-build"
+toolchain_path="$brebos_path/toolchain_"
 
-echo "$script_path"
-cd "$script_path"
+export PREFIX="$toolchain_path/gcc"
+export TARGET=i686-brebos
+export PATH="$PREFIX/bin:$PATH"
 
 mkdir -p "$tools_path"
-rm -rf "$tools_path"/*
 mkdir -p "$sysroot"
-rm -rf "$sysroot"/*
-mkdir -p "$newlib_build"
-rm -rf "$newlib_build"/*
+mkdir -p "$newlib_build_path"
 
-cd ../tools
+cd "$tools_path"
 
 cyan_echo "Downloading automake and autoconf"
-wget https://ftp.gnu.org/gnu/automake/automake-1.11.tar.gz
-wget https://ftp.gnu.org/gnu/autoconf/autoconf-2.64.tar.gz
-wget https://ftp.gnu.org/gnu/autoconf/autoconf-2.65.tar.gz
+wget https://ftp.gnu.org/gnu/automake/automake-1.11.tar.gz https://ftp.gnu.org/gnu/autoconf/autoconf-2.64.tar.gz \
+https://ftp.gnu.org/gnu/autoconf/autoconf-2.65.tar.gz
 
 cyan_echo "Extracting"
 tar -xf automake-1.11.tar.gz
 tar -xf autoconf-2.64.tar.gz
 tar -xf autoconf-2.65.tar.gz
 
-mkdir bin-65
-mkdir bin-64
-
 cyan_echo "Building automake and autoconf"
-mkdir build
-cd build
+mkdir -p build-65
+cd build-65
 ./../automake-1.11/configure --prefix="$(pwd)"/../bin-65
 make -j "$num_jobs" && make install
 ./../autoconf-2.65/configure --prefix="$(pwd)"/../bin-65
 make -j "$num_jobs" && make install
 
-rm -rf ./*
+cd ..
+mkdir -p build-64
+cd build-64
 ./../automake-1.11/configure --prefix="$(pwd)"/../bin-64
 make -j "$num_jobs" && make install
 ./../autoconf-2.65/configure --prefix="$(pwd)"/../bin-64
@@ -77,9 +75,14 @@ autoconf
 cd ./brebos
 autoreconf
 
-cd "$newlib_build"
-"$tools_path"/newlib-2.5.0/configure --prefix=/usr --target=i686-brebos
+cyan_echo "Building newlib"
+cd "$newlib_build_path"
+"$tools_path"/newlib-2.5.0/configure --prefix=/usr --target=$TARGET
 make all -j "$num_jobs"
 make DESTDIR="$sysroot" install
 
-rm -rf "$tools_path"
+cyan_echo "Last details"
+cp -ar "${sysroot:?}"/usr/"$TARGET"/* "$sysroot"/usr/ # Move everything to /usr so that gcc and binutils can find it
+rm -rf "${sysroot:?}"/usr/"$TARGET" # Remove the empty directory
+# Replace the dummy crt0 that newlib built out of the dummy ctr0.c i provided with the right one, compiled from asm
+nasm -f elf -F dwarf -O0 -g -o "$sysroot/usr/lib/crt0.o" "$newlib_config/../../src/programs/start_program.s"

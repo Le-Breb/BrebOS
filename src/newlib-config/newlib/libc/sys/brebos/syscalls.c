@@ -80,7 +80,7 @@ void* sbrk(ptrdiff_t incr) {
     if (br == NULL)
     {
         errno = ENOMEM;
-        return -1;
+        return (void*)-1;
     }
 
     return br;

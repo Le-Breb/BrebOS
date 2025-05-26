@@ -23,12 +23,13 @@ extern "C" bool fpu_init_asm_();
 
 //Todo: Add support for multiple dynamically linked libs (register dyn lib dependencies)
 //Todo: Advanced memory freeing (do something when free_pages do not manage to have free_bytes < FREE_THRESHOLD)
-//Todo: Process R_386_PC32 relocations
 //Todo: task bar displaying time and the progress bar
 //Todo: Use higher precision timer
 //Todo: Free ELFs after programs termination
 //Todo: Handle userland memory leaks
 //Todo: Copy on write to make fork faster
+//Todo: Process R_386_PC32 relocations in order to rewrite libdynlk' Makefile without ld
+//Todo: Fix waitpid return value so that it is usable with macros such as WEXITSTATUS
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointer
 {
     _init(); // Execute constructors
