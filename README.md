@@ -45,9 +45,8 @@ determination ended up creating *BrebOS* :D!
 
 ### Prerequisites
 
-Make sure you have installed the following packages, using `sudo apt install package_name`:
-
-- **make** | build system
+Make sure you have the following packages installed on you machine:
+- **make** | Build system
 - **nasm** | ASM compiler
 - **gcc** | C compiler
 - **g++** | C++ compiler
@@ -55,22 +54,23 @@ Make sure you have installed the following packages, using `sudo apt install pac
 - **xorriso** | ISO manipulator
 - **qemu-system-i386** | Emulator
 - **dnsmasq** | DHCP server
+- **libgmp3-dev** | GCC build dependance
+- **libmpc-dev** | GCC build dependance
+- **libmpfr-dev** | GCC build dependance
 
-
+The package names are the ones that I use on Ubuntu with `apt`. I guess most package names are similar on different package managers as those are very common packages, but it's up to you to find the correct package names to be used with your package manager. For GCC build dependances, you can find more information [here](https://wiki.osdev.org/GCC_Cross-Compiler#Installing_Dependencies)
 
 ### Build
 
-Run
+Run (inside the repo)
 ```sh
-./utils/gcc_setup.sh
-./utils/newlib_setup.sh
-./utils/brebos_gcc_setup.sh
+./utils/gcc_setup.sh && ./utils/newlib_setup.sh && ./utils/brebos_gcc_setup.sh
 ```
 
 ⚠️This takes a long time (~18min on my machine). You only need to run this once.⚠️ <br>
 ℹ️ This does not install anything globally on your machine, everything is downloaded and built in the repo. ℹ️<br>
 
-This installs a cross compiler which targets 32bits architecture, then it installs the libc used by userland programs, and finally it builts a hosted compiler, specifically set up for BrebOs.
+This installs a cross compiler which targets 32bits architecture, then it installs the libc used by userland programs, and finally it configures then rebuild the compiler so that it becomes a hosted compiler, specifically set up for BrebOs (a hosted compiler knows the target OS, what libc to use and other stuff).
 
 Now you can build the project itself:
 ```sh
@@ -115,7 +115,7 @@ The kernel `$PATH` is filled with `/bin`, where all programs are. Hence, to star
 BrebOS can run C++ programs that *you* write, provided they respect the following conditions:
 
 - Your program cannot use `dynamic_cast`, nor exceptions. They require additional support which i did not setup.
-- Most of the standard libc is  available. If something is not available, you will have a compile error, indicating an undefined reference or undeclared function. You can also include `<ksyscalls.h>` in your programs, which you can find at `src/libcv2`. This is a small OS specific library which provides handy syscalls.
+- Most of the standard libc is  available. If something is not available, you will have a compile error, indicating an undefined reference or undeclared function. You can also include `<ksyscalls.h>` in your programs, which you can find at `src/libc`. This is a small OS specific library which provides handy syscalls.
 - The STL is not available.
 - Any other C++ feature (supposedly) works!
 
