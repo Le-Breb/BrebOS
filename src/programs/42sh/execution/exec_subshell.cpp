@@ -1,5 +1,3 @@
-#ifdef IMPLEMENTED
-
 #include "headers.h"
 
 void exec_subshell(EXEC_PROTOTYPE)
@@ -10,7 +8,7 @@ void exec_subshell(EXEC_PROTOTYPE)
 
     if (pid == 0) // child
     {
-        exec_switch(ast->p1, c);
+        exec_switch((struct ast*)ast->p1, c);
         exit(c->last_rv);
     }
     // parent
@@ -19,6 +17,3 @@ void exec_subshell(EXEC_PROTOTYPE)
     int exit_status = WEXITSTATUS(status);
     c->last_rv = exit_status;
 }
-
-
-#endif

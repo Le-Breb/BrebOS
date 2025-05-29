@@ -182,6 +182,7 @@ running locally, which is automatically started when executing `make run`.
     - while/until/for
     - and or (&& ||)
     - double quotes and escape character
+    - subshells
     - builtins
         - true/false
         - echo
@@ -191,7 +192,7 @@ running locally, which is automatically started when executing `make run`.
         - variables
         - redirections
         - pipeline
-        - subshells and command substitution
+        - command substitution
 
 ### Misc ✚
 
