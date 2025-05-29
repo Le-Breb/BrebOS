@@ -183,6 +183,7 @@ running locally, which is automatically started when executing `make run`.
     - and or (&& ||)
     - double quotes and escape character
     - subshells
+    - functions
     - builtins
         - true/false
         - echo
