@@ -18,7 +18,14 @@ void _exit(int status)
     __builtin_unreachable();
 }
 int close(int file) {
-  return -1;
+    int ret;
+    __asm__ volatile("int $0x80" : "=a"(ret) : "a"(32), "D"(file));
+    
+    if (ret == 0)
+        return 0;
+
+    errno = EBADF;
+    return -1;
 }
 char *__env[1] = { 0 };
 char **environ = __env;
@@ -68,10 +75,40 @@ int lseek(int file, int ptr, int dir) {
   return 0;
 }
 int open(const char *name, int flags, ...) {
+  if (flags != O_RDONLY && flags != O_WRONLY && flags != O_RDWR)
+  {
+      errno = EINVAL;
+      return -1;
+  }
+
+  int fd;
+  __asm__ volatile("int $0x80" : "=a"(fd) : "a"(30), "D"(name), "S"(flags));
+
+  if (fd >= 0)
+      return fd;
+
+  if (fd == -2)
+      errno = ENFILE; // System wide fd limit reached
+  else if (fd == -3)
+      errno = ENOENT; // File does not exist
+  else if (fd == -4)
+      errno = EMFILE; // Process fd limit reached
+
   return -1;
 }
 int read(int file, char *ptr, int len) {
-  return 0;
+  int r;
+  __asm__ volatile("int $0x80" : "=a"(r) : "a"(31), "D"(file), "S"(ptr), "d"(len));
+
+  if (r >= 0)
+      return r;
+
+  if (r == -2)
+    errno = EBADF;
+  if (r == -3)
+      errno = EIO;
+
+  return -1;
 }
 void* sbrk(ptrdiff_t incr) {
     void* br;

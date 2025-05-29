@@ -30,6 +30,7 @@ extern "C" bool fpu_init_asm_();
 //Todo: Copy on write to make fork faster
 //Todo: Process R_386_PC32 relocations in order to rewrite libdynlk' Makefile without ld
 //Todo: Fix waitpid return value so that it is usable with macros such as WEXITSTATUS
+//Todo: Include newlib build in Makefile
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointer
 {
     _init(); // Execute constructors

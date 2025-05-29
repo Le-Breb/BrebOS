@@ -5,6 +5,7 @@
 #include "../core/interrupts.h"
 #include "ELF.h"
 #include "../utils/list.h"
+#include "../file_management/VFS.h"
 #include <kstddef.h>
 
 typedef int pid_t;
@@ -49,7 +50,6 @@ class Process
 		int value;
 	};
 
-private:
 	uint quantum, priority;
 
 	uint num_pages; // Num pages over which the process code spans, including unmapped pages
@@ -64,11 +64,14 @@ private:
 
 	list<void*> allocations{};
 
+	Process* exec_replacement = nullptr; // Process which will replace this program after an call to execve
+
+	VFS::file_descriptor* file_descriptors[MAX_FD_PER_PROCESS]{};
+	int lowest_free_fd = 0;
+
 	static list<env_var*> env_list; // Todo: make env var process specific
 
 	void copy_page_to_other(const Process* other, uint page_id, uint mapping_page_id) const;
-
-	Process* exec_replacement = nullptr; // Process which will replace this program after an call to execve
 
 public:
 	uint lowest_free_pe;
@@ -190,6 +193,30 @@ public:
 	 * @param proc process that whill replace this process
 	 */
 	void execve_transfer(Process* proc);
+
+	/**
+	 * Opens a file
+	 * @param pathname path of the file to open
+	 * @param flags opening parameters
+	 * @return file identifier on success, -2 if system-wide fd limit is reached, -3 if bad fd, -4 if process fd limit reached
+	 */
+	int open(const char* pathname, int flags);
+
+	/**
+	 * Reads data from a file descriptor
+	 * @param fd file descriptor to read from
+	 * @param buf buffer to read data into
+	 * @param count how many bytes to read
+	 * @return number of bytes read on success, -2 if fd not open, -3 if not a regular file, -4 if IO error
+	 */
+	int read(int fd, void* buf, size_t count) const;
+
+	/**
+	 * Closes a file descriptor
+	 * @param fd file descriptor to close
+	 * @return 0 on success, -2 if fd not open
+	 */
+	int close(int fd);
 };
 
 #endif //INCLUDE_PROCESS_H

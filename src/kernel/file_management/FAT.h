@@ -212,7 +212,7 @@ public:
 
 	static void shutdown();
 
-	void* load_file_to_buf(const char* file_name, Dentry* parent_dentry, uint offset, uint length) override;
+	bool load_file_to_buf(void* buf, const char* file_name, Dentry* parent_dentry, uint offset, uint length, uint& loaded_bytes) override;
 
 	~FAT_drive() override;
 

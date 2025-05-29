@@ -93,6 +93,12 @@ class Syscall
 	static void load_file(Process* p);
 
 	static void write(Process* p);
+
+	static int open(Process* p);
+
+	static int read(Process* p);
+
+	static int close(Process* p);
 public:
 	/**
 	 * Handles a syscall

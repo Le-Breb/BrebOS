@@ -2,8 +2,6 @@
 #include "FAT.h"
 #include <kstring.h>
 
-uint File::num_open_files = 0;
-
 Mode File::strmode_to_mode(const char* strmode)
 {
 	if (!strcmp(strmode, "r"))

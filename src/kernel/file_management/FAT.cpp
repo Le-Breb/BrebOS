@@ -279,41 +279,34 @@ void FAT_drive::shutdown()
         delete drive;
 }
 
-void* FAT_drive::load_file_to_buf(const char* file_name, Dentry* parent_dentry, uint offset, uint length)
+bool FAT_drive::load_file_to_buf(void* buf, const char* file_name, Dentry* parent_dentry, uint offset, uint length, uint& loaded_bytes)
 {
     ctx ctx{};
     uint file_entry_id;
     if ((file_entry_id = get_child_dir_entry_id(*parent_dentry, file_name, ctx)) == ENTRY_NOT_FOUND)
-        return nullptr;
+        ERR_RET_FALSE("File not found");
     DirEntry* file_entry = &entries[file_entry_id];
     uint next_cluster = file_entry->first_cluster_addr();
     if (offset + length > file_entry->file_size)
-        ERR_RET_NULL("Offset + length exceeds file size");
+        ERR_RET_FALSE("Offset + length exceeds file size");
 
-    uint wrote_bytes = 0;
-    char* b = new char[length];
-    while (wrote_bytes < length && next_cluster < CLUSTER_MIN_EOC)
+    loaded_bytes = 0;
+    auto b  = (char*)buf;
+    while (loaded_bytes < length && next_cluster < CLUSTER_MIN_EOC)
     {
         // Load data into buffer. If there is more than ATA_SECTOR_SIZE data left to load, copy directly to b, otherwise
         // copy an entire sector to buf and copy the meaningful data to b
-        uint rem = length - wrote_bytes;
-        void* load_buf = rem < ATA_SECTOR_SIZE ? this->buf : b + wrote_bytes;
+        uint rem = length - loaded_bytes;
+        void* load_buf = rem < ATA_SECTOR_SIZE ? this->buf : b + loaded_bytes;
         if (!change_active_cluster(next_cluster, ctx, load_buf))
-        {
-            delete[] b;
-            return nullptr;
-        }
+            ERR_RET_FALSE("Disk read error");
         if (rem < ATA_SECTOR_SIZE) // Entire sector has been loaded to buf, copy meaningful data to b
-            memcpy(b + wrote_bytes, buf, rem);
-        wrote_bytes += rem > ATA_SECTOR_SIZE ? ATA_SECTOR_SIZE : rem;
+            memcpy(b + loaded_bytes, this->buf, rem);
+        loaded_bytes += rem > ATA_SECTOR_SIZE ? ATA_SECTOR_SIZE : rem;
         next_cluster = ctx.table_value;
     }
 
-    if (wrote_bytes == length)
-        return b;
-
-    delete[] b;
-    ERR_RET_NULL("Could not read all file")
+    return true;
 }
 
 uint FAT_drive::get_child_dir_entry_id(const Dentry& parent_dentry, const char* name, ctx& ctx)

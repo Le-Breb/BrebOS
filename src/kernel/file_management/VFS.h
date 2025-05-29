@@ -8,8 +8,9 @@
 #define MAX_INODES 100
 #define MAX_DENTRIES 200
 #define PATH_CAPACITY 1024
+#define MAX_FD 100
+#define MAX_FD_PER_PROCESS 20
 
-#include "../utils/list.h"
 #include "file.h"
 #include "FS.h"
 
@@ -22,6 +23,16 @@
  */
 class VFS
 {
+public:
+	struct file_descriptor
+	{
+		int fd; // Local id
+		int system_fd; // System wise id
+		int flags;
+		int offset;
+		Dentry* dentry;
+	};
+private:
 	static uint lowest_free_inode;
 	static uint lowest_free_dentry;
 	static Inode* inodes[MAX_INODES]; // Caches Inodes entries. [0] = /, [1] = /mnt
@@ -29,6 +40,8 @@ class VFS
 	static File* fds[MAX_OPEN_FILES]; // Open file descriptors
 	static Dentry* path[PATH_CAPACITY];
 	static uint num_path;
+	static file_descriptor file_descriptors[MAX_FD];
+	static size_t lowest_free_fd;
 
 	/**
 	 * Searches a dentry into cached ones
@@ -58,6 +71,8 @@ class VFS
 
 	static void ls_printer(const Dentry& dentry);
 
+	[[nodiscard]]
+	static int get_free_fd();
 public:
 	static void init();
 
@@ -97,7 +112,6 @@ public:
 	/**
 	 * Browses file system to the folder located at path
 	 * @param path path to browse to
-	 * @param starting_point
 	 * @return Dentry of folder at path, nullptr if something went wront
 	 */
 	static Dentry* browse_to(const char* path);
@@ -105,6 +119,32 @@ public:
 	static void* load_file(const char* path, uint offset = 0, uint length = 0);
 
 	static void* load_file(const Dentry* path, uint offset = 0, uint length = 0);
+
+	/**
+	 * Reads data from a file descriptor
+	 * @param fd file descriptor to read from
+	 * @param length how many bytes to read
+	 * @param buf buffer to read data into
+	 * @return number of bytes read on success, -2 if fd not open, -3 if not a regular file, -4 if IO error
+	 */
+	static int read(int fd, uint length, void* buf);
+
+	/**
+	 * Closes a file descriptor
+	 * @param fd file descriptor to close
+	 * @return 0 on success, -2 if fd not open
+	 */
+	static int close(int fd);
+
+	/**
+	 * Opens a file
+	 * @param pathname path of the file to open
+	 * @param flags opening parameters
+	 * @param local_fd file descriptor to use in the process
+	 * @param err error code to return in case of failure
+	 * @return the file descriptor on success, nullptr if an error occurred
+	 */
+	static file_descriptor* open(const char* pathname, int flags, int local_fd, int& err);
 
 	/**
 	 * Resizes a file

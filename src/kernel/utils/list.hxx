@@ -4,8 +4,6 @@
 
 #include <kstddef.h>
 
-#include "../processes/process.h"
-
 template<class T>
 list<T>::Node::Node() {
     next = nullptr;

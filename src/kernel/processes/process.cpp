@@ -6,6 +6,7 @@
 #include "scheduler.h"
 #include "../core/memory.h"
 #include "../core/fb.h"
+#include "../file_management/VFS.h"
 
 list<Process::env_var*> Process::env_list = {};
 
@@ -72,6 +73,14 @@ Process::~Process()
     // Clear memory leaks
     // for (const auto alloc : allocations)
     //     free(alloc);
+
+    // Close open file descriptors
+    for (const auto& file_desc : file_descriptors)
+    {
+        if (!file_desc)
+            continue;
+        close(file_desc->fd);
+    }
 
     children.clear();
 
@@ -400,4 +409,51 @@ void Process::execve_transfer(Process* proc)
         proc->values_to_write.add(val);
     proc->pid = pid;
     exec_replacement = proc;
+}
+
+int Process::open(const char* pathname, int flags)
+{
+    if (lowest_free_fd == MAX_FD_PER_PROCESS)
+        return -4; // No more file descriptors available for current process
+
+    // Get local fd and update lowest_free_fd
+    int fd = lowest_free_fd;
+    do
+        lowest_free_fd++;
+    while (fd < MAX_FD_PER_PROCESS && file_descriptors[fd]);
+
+    // Actually try to open the file
+    int err;
+    if (auto file_descriptor = VFS::open(pathname, flags, fd, err))
+    {
+        // OK
+        file_descriptors[fd] = file_descriptor;
+        return file_descriptor->fd;
+    }
+
+    // Error
+    return err;
+}
+
+int Process::read(int fd, [[maybe_unused]] void* buf, size_t count) const
+{
+    if (file_descriptors[fd] == nullptr)
+        return -2; // File descriptor not found
+
+    auto& file_desc = file_descriptors[fd];
+
+    return VFS::read(file_desc->system_fd, count, buf);
+}
+
+int Process::close(int fd)
+{
+    if (!file_descriptors[fd])
+        return -2; // File descriptor not found
+
+    if (int err = VFS::close(file_descriptors[fd]->system_fd) < 0)
+        return err; // Propagate error from VFS
+
+    file_descriptors[fd] = nullptr; // Mark as closed
+
+    return 0; // Success
 }

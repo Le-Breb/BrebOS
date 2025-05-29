@@ -32,7 +32,9 @@ public:
 
 	virtual bool ls(const Dentry& dentry, ls_printer printer) = 0;
 
-	virtual void* load_file_to_buf(const char* file_name, Dentry* parent_dentry, uint offset, uint length) = 0;
+	void* load_file_to_buf(const char* file_name, Dentry* parent_dentry, uint offset, uint length, uint& loaded_bytes);
+
+	virtual bool load_file_to_buf(void* buf, const char* file_name, Dentry* parent_dentry, uint offset, uint length, uint& loaded_bytes) = 0;
 
 	virtual bool write_buf_to_file(Dentry& dentry, const void* buf, uint length) = 0;
 

@@ -3,6 +3,7 @@
 #include "superblock.h"
 #include <kstring.h>
 #include "../core/fb.h"
+#include "../utils/comparison.h"
 
 uint VFS::lowest_free_inode = 0;
 uint VFS::lowest_free_dentry = 0;
@@ -11,11 +12,16 @@ Dentry* VFS::dentries[MAX_DENTRIES] = {nullptr};
 File* VFS::fds[MAX_OPEN_FILES] = {nullptr};
 uint VFS::num_path = 0;
 Dentry* VFS::path[PATH_CAPACITY] = {};
+VFS::file_descriptor VFS::file_descriptors[MAX_FD] = {};
+size_t VFS::lowest_free_fd = 0;
 
 void VFS::init()
 {
 	FS::init();
 	FAT_drive::init();
+
+	for (auto& fd : file_descriptors)
+		fd.fd = -1;
 
 	mount_rootfs(*FS::fs_list->get(0));
 
@@ -436,13 +442,100 @@ void* VFS::load_file(const Dentry* file, uint offset, uint length)
 	if (!file)
 		return nullptr;
 
-	return file->inode->superblock->get_fs()->load_file_to_buf(file->name, file->parent, offset,
-																 length ? length : file->inode->size);
+	uint loaded_bytes;
+	uint l = length ? min(length, file->inode->size) : file->inode->size;
+	void* buf =  file->inode->superblock->get_fs()->load_file_to_buf(file->name, file->parent, offset, l,
+																	loaded_bytes);
+
+	if (loaded_bytes != l)
+	{
+		printf_error("Could only read %u out of %u bytes", l, loaded_bytes);
+		delete[] (char*)buf;
+		return nullptr;
+	}
+
+	return buf;
+}
+
+int VFS::read(int fd, uint length, void* buf)
+{
+	if (file_descriptors[fd].fd == -1)
+		return -2; // fd not open
+
+	auto& file_descriptor = file_descriptors[fd];
+	auto file = file_descriptor.dentry;
+	auto l = min(length, file->inode->size - file_descriptor.offset);
+	uint loaded_bytes;
+
+	if (file->inode->type != Inode::File)
+		return -3; // Not a regular file
+
+	if (!file->inode->superblock->get_fs()->load_file_to_buf(buf, file->name, file->parent, file_descriptor.offset, l,
+																		loaded_bytes))
+		return -4; // IO error
+
+
+	return (int)loaded_bytes;
+}
+
+int VFS::close(int fd)
+{
+	if (file_descriptors[fd].fd == -1)
+		return -2; // File descriptor not found
+
+	// Todo: have a proper system to manage created dentries
+	// delete file_descriptors[fd].dentry; // Free the dentry associated with this fd
+	file_descriptors[fd].fd = -1; // Mark as closed
+
+	return 0; // Success
+}
+
+VFS::file_descriptor* VFS::open(const char* pathname, int flags, int local_fd, int& err)
+{
+	Dentry* dentry = browse_to(pathname);
+	if (!dentry)
+	{
+		err = -2; // File not found
+		return nullptr;
+	};
+
+	int system_fd = get_free_fd();
+	if (system_fd == -1)
+	{
+		err = -3; // No free file descriptors
+		return nullptr;
+	}
+
+	file_descriptors[system_fd] = {
+		.fd = local_fd,
+		.system_fd = system_fd,
+		.flags = flags,
+		.offset = 0,
+		.dentry = dentry
+	};
+
+	return file_descriptors + system_fd;
 }
 
 bool VFS::resize(Dentry& dentry, size_t new_size)
 {
 	return dentry.inode->superblock->get_fs()->resize(dentry, new_size);
+}
+
+int VFS::get_free_fd()
+{
+	for (size_t i = lowest_free_fd; i < MAX_FD; ++i)
+	{
+		if (file_descriptors[i].fd == -1)
+		{
+			lowest_free_fd = i + 1;
+			while (lowest_free_fd < MAX_FD && file_descriptors[lowest_free_fd].fd != -1)
+				lowest_free_fd++;
+			return (int)i;
+		}
+	}
+
+	return -1; // No free file descriptor
 }
 
 bool VFS::mount(FS* fs)

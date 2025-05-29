@@ -20,8 +20,6 @@ class File
 {
 	Mode mode;
 
-	static uint num_open_files;
-
 	static enum Mode strmode_to_mode(const char* strmode);
 
 public:

@@ -229,10 +229,8 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             load_file(p);
             break;
         case 26:
-        {
             write(p);
             break;
-        }
         case 27:
             p->cpu_state.eax = (uint)p->sbrk((int)p->cpu_state.edi);
             break;
@@ -245,6 +243,15 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             p->cpu_state.eax = file ? file->inode->size : (uint)-1;
             break;
         }
+        case 30:
+            p->cpu_state.eax = open(p);
+            break;
+        case 31:
+            p->cpu_state.eax = read(p);
+            break;
+        case 32:
+            p->cpu_state.eax = close(p);
+            break;
         default:
             printf_error("Received unknown syscall id: 0x%x", cpu_state->eax);
             break;
@@ -384,9 +391,33 @@ void Syscall::write(Process* p)
     p->cpu_state.eax = len;
 }
 
+int Syscall::open(Process* p)
+{
+    const char* pathname = (const char*)p->cpu_state.edi;
+    int flags = (int)p->cpu_state.esi;
+
+    return p->open(pathname, flags);
+}
+
+int Syscall::read(Process* p)
+{
+    int fd = (int)p->cpu_state.edi;
+    void* buf = (void*)p->cpu_state.esi;
+    uint len = p->cpu_state.edx;
+
+    return p->read(fd, buf, len);
+}
+
+int Syscall::close(Process* p)
+{
+    int fd = (int)p->cpu_state.edi;
+
+    return p->close(fd);
+}
+
 __attribute__((no_instrument_function)) // May not return, which would mess up profiling data
 void Syscall::wait_pid(Process* p)
 {
-    Scheduler::register_process_wait(p->get_pid(), p->cpu_state.edi);
+    Scheduler::register_process_wait(p->get_pid(), (int)p->cpu_state.edi);
     TRIGGER_TIMER_INTERRUPT
 }
