@@ -70,7 +70,7 @@ Run (inside the repo)
 ⚠️This takes a long time (~18min on my machine). You only need to run this once.⚠️ <br>
 ℹ️ This does not install anything globally on your machine, everything is downloaded and built in the repo. ℹ️<br>
 
-This installs a cross compiler which targets 32bits architecture, then it installs the libc used by userland programs, and finally it configures then rebuild the compiler so that it becomes a hosted compiler, specifically set up for BrebOs (a hosted compiler knows the target OS, what libc to use and other stuff).
+This installs a cross compiler which targets 32bits architecture, then it installs the libc used by userland programs, and finally it configures then rebuild the compiler so that it becomes a hosted compiler, specifically set up for BrebOs (a hosted compiler knows the target OS, what libc to use and other nice stuff).
 
 Now you can build the project itself:
 ```sh
@@ -90,7 +90,7 @@ RELEASE=1 make run
 ### Commands
 
 Now that you have the kernel up and running, you can start executing commands. The kernel uses a shell made as a school
-project (42sh, made in groups of of 4 students), that I adapted to make it work in BrebOS. <br>
+project (42sh, made in groups of of 4 students), that ported in BrebOS. <br>
 The shell language is a subset of the linux one. You should be able to use every basic shell syntax that exists in
 linux, provided that it does not require heavy kernel support that i did not add yet (redirections for example)<br>
 Here is the list of the main commands (you can view the entire list by browsing at `BrebOS/src/programs`):
@@ -106,7 +106,7 @@ Here is the list of the main commands (you can view the entire list by browsing 
 | `cls`                | Clears the screen.                                                                              |
 | `feh <path>`                | Displays an image on the screen, before clearing it.                                                                              |
 
-As 42sh follows the linux shell syntax, you can start a program symply by typing `<program_path> [argv0] [argv1] ...`.
+As 42sh follows the linux shell syntax, you can start a program symply by typing `<program_path> [argv1] [argv2] ...`.
 The kernel `$PATH` is filled with `/bin`, where all programs are. Hence, to start `/bin/a_program`, simply write
 `a_program`.
 
@@ -182,13 +182,13 @@ running locally, which is automatically started when executing `make run`.
     - while/until/for
     - and or (&& ||)
     - double quotes and escape character
-    - variables
     - builtins
         - true/false
         - echo
         - continue
         - break
     - the following features are implemented within 42sh but BrebOS lacks support for them to work:
+        - variables
         - redirections
         - pipeline
         - subshells and command substitution
@@ -196,6 +196,8 @@ running locally, which is automatically started when executing `make run`.
 ### Misc ✚
 
 - PS2 Keyboard driver ⌨
+- Hosted cross compiler
+- Newlib integration
 
 ### Roadmap 🛣️
 
