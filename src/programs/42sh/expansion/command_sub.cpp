@@ -41,7 +41,7 @@ static char sub_substitution(EXPAND_PROTOTYPE)
     UNUSED(final_argsp);
     UNUSED(fargs_ip);
     UNUSED(cur_argp);
-    errx(1, "Substitution execution not ported to BrebOS");
+    errx(1, "Substitution execution not ported to BrebOS\n");
     return 0;
 #ifdef IMPLEMENTED
     //if (**cur_argp != '(')
@@ -228,7 +228,7 @@ void expand_backtick(char ***final_argsp, size_t *fargs_ip, char **cur_argp,
     UNUSED(fargs_ip);
     UNUSED(cur_argp);
 
-    errx(EXIT_FAILURE, "Expand backtick not implemented");
+    errx(EXIT_FAILURE, "Expand backtick not implemented because of missing feature support in BrebOS\n");
 #ifdef IMPLEMENTED
     //char **final_args = *final_argsp;
     //size_t fargs_i = *fargs_ip;

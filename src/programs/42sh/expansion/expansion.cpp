@@ -18,9 +18,7 @@ __attribute__((constructor)) void init0()
     funs['\\'] = expand_backslash;
     funs['\''] = expand_single;
     funs['\"'] = expand_double;
-#ifdef IMPLEMENTED
     funs['`'] = expand_backtick;
-#endif
     funs['$'] = expand_dollar;
 }
 
