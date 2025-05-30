@@ -418,9 +418,6 @@ int Process::open(const char* pathname, int flags)
 
     // Get local fd and update lowest_free_fd
     int fd = lowest_free_fd;
-    do
-        lowest_free_fd++;
-    while (fd < MAX_FD_PER_PROCESS && file_descriptors[fd]);
 
     // Actually try to open the file
     int err;
@@ -428,6 +425,7 @@ int Process::open(const char* pathname, int flags)
     {
         // OK
         file_descriptors[fd] = file_descriptor;
+        while (file_descriptors[++lowest_free_fd]) {}
         return file_descriptor->fd;
     }
 
@@ -435,7 +433,7 @@ int Process::open(const char* pathname, int flags)
     return err;
 }
 
-int Process::read(int fd, [[maybe_unused]] void* buf, size_t count) const
+int Process::read(int fd, void* buf, size_t count) const
 {
     if (file_descriptors[fd] == nullptr)
         return -2; // File descriptor not found

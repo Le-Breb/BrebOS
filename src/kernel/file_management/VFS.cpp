@@ -129,15 +129,6 @@ bool VFS::mkdir(const char* pathname)
 	return dentry;
 }
 
-bool VFS::cat(const char* pathname)
-{
-	Dentry* dentry = get_file_dentry(pathname);
-	if (!dentry)
-		return false;
-
-	return dentry->inode->superblock->get_fs()->cat(*dentry, file_printer);
-}
-
 char* VFS::get_absolute_path(const char* path)
 {
 	if (!path)
@@ -161,21 +152,6 @@ bool VFS::write_buf_to_file(const char* pathname, const void* buf, uint length)
 	return dentry->inode->superblock->get_fs()->write_buf_to_file(*dentry, buf, length);
 }
 
-void VFS::file_printer(const void* buf, size_t len, const char* extension)
-{
-	if (!strcmp(extension, "txt"))
-	{
-		auto cbuf = (char*)buf;
-		FB::write(cbuf);
-	}
-	else
-	{
-		auto bbuf = (uint8_t*)buf;
-		for (uint i = 0; i < len; i++)
-			printf("%02x", bbuf[i]);
-	}
-}
-
 void VFS::ls_printer(const Dentry& dentry)
 {
 	bool is_dir = dentry.inode->type == Inode::Dir;
@@ -189,7 +165,6 @@ void VFS::ls_printer(const Dentry& dentry)
 	FB::putchar('\n');
 	FB::set_fg(FB_WHITE);
 }
-
 
 Dentry* VFS::get_cached_dentry(Dentry* parent, const char* name) // Todo: use a hash map
 {
@@ -473,6 +448,8 @@ int VFS::read(int fd, uint length, void* buf)
 	if (!file->inode->superblock->get_fs()->load_file_to_buf(buf, file->name, file->parent, file_descriptor.offset, l,
 																		loaded_bytes))
 		return -4; // IO error
+
+	file_descriptor.offset += loaded_bytes;
 
 
 	return (int)loaded_bytes;

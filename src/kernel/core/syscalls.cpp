@@ -197,9 +197,6 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
         case 15:
             wget(&p->cpu_state);
             break;
-        case 16:
-            cat(&p->cpu_state);
-            break;
         case 17:
             calloc(p);
             break;
@@ -259,12 +256,6 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
 
     // Todo: Check if process ESP should be reset to process kernel stack top here
     Interrupts::resume_user_process_asm(&p->cpu_state, &p->stack_state);
-}
-
-void Syscall::cat(cpu_state_t* cpu_state)
-{
-    const char* path = (const char*)cpu_state->edi;
-    cpu_state->eax = VFS::cat(path);
 }
 
 void Syscall::wget(const cpu_state_t* cpu_state)

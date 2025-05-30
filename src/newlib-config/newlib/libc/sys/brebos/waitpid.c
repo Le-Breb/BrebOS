@@ -2,10 +2,6 @@
 #include <sys/errno.h>
 
 
-#undef error
-extern int errno;
-
-
 pid_t waitpid (pid_t  pid, int* wstatus, int options)
 {
     if (options)

@@ -3,12 +3,9 @@
 #include <sys/types.h>
 #include <sys/fcntl.h>
 #include <sys/times.h>
-#include <sys/errno.h>
+#include <errno.h>
 #include <sys/time.h>
 #include <stdio.h>
-
-#undef errno
-extern int errno;
 
 void _exit(int status)
 {
@@ -88,9 +85,9 @@ int open(const char *name, int flags, ...) {
       return fd;
 
   if (fd == -2)
-      errno = ENFILE; // System wide fd limit reached
-  else if (fd == -3)
       errno = ENOENT; // File does not exist
+  else if (fd == -3)
+      errno = ENFILE; // System wide fd limit reached
   else if (fd == -4)
       errno = EMFILE; // Process fd limit reached
 

@@ -15,7 +15,6 @@ protected:
 	Superblock* superblock;
 
 public:
-	typedef void (*cat_printer)(const void* buf, size_t len, const char* extension);
 	typedef void (*ls_printer)(const Dentry& dentry);
 
 	virtual ~FS();
@@ -37,8 +36,6 @@ public:
 	virtual bool load_file_to_buf(void* buf, const char* file_name, Dentry* parent_dentry, uint offset, uint length, uint& loaded_bytes) = 0;
 
 	virtual bool write_buf_to_file(Dentry& dentry, const void* buf, uint length) = 0;
-
-	virtual bool cat(const Dentry& dentry, cat_printer printer) = 0;
 
 	virtual bool resize(Dentry& dentry, uint new_size) = 0;
 

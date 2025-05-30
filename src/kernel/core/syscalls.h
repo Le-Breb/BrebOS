@@ -59,8 +59,6 @@ class Syscall
 
 	static void dns(const cpu_state_t* cpu_state);
 
-	static void cat(cpu_state_t* cpu_state);
-
 	static void wget(const cpu_state_t* cpu_state);
 
 	static void wait_pid(Process* p);

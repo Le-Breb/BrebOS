@@ -29,7 +29,7 @@ public:
 		int fd; // Local id
 		int system_fd; // System wise id
 		int flags;
-		int offset;
+		uint offset;
 		Dentry* dentry;
 	};
 private:
@@ -67,8 +67,6 @@ private:
 
 	static Dentry* get_file_dentry(const char* pathname, bool print_errors = true);
 
-	static void file_printer(const void* buf, size_t len, const char* extension);
-
 	static void ls_printer(const Dentry& dentry);
 
 	[[nodiscard]]
@@ -81,8 +79,6 @@ public:
 	static bool ls(const char* pathname);
 
 	static bool mkdir(const char* pathname);
-
-	static bool cat(const char* pathname);
 
 	static char* get_absolute_path(const char* path);
 

@@ -1,9 +1,6 @@
 #include <sys/stat.h>
 #include <sys/errno.h>
 
-#undef errno
-extern int errno;
-
 int	mkdir(const char *pathname, [[maybe_unused]] mode_t mode)
 {
     if (mode != 0777)

@@ -7,7 +7,7 @@
 #include "dentry.h"
 #include "../core/fb.h"
 #include "../core/memory.h"
-#include "../core/system.h"
+#include "../utils/comparison.h"
 
 FAT_drive* FAT_drive::drives[] = {};
 
@@ -226,14 +226,19 @@ FAT_drive::~FAT_drive()
 
 bool FAT_drive::change_active_cluster(uint new_active_cluster, ctx& ctx, void* buffer)
 {
+    if (!buffer)
+    {
+        ctx.buffer_updated = ctx.active_cluster != new_active_cluster;
+        ctx.active_cluster = new_active_cluster;
+    }
     // If active cluster changed or was updated on disk, read new cluster data
-    if (ctx.active_cluster != new_active_cluster || ctx.buffer_updated)
+    else if (ctx.active_cluster != new_active_cluster || ctx.buffer_updated)
     {
         ctx.active_cluster = new_active_cluster;
         ctx.active_sector = FIRST_SECTOR_OF_CLUSTER(ctx.active_cluster, bs.sectors_per_cluster, first_data_sector);
 
         // Read data from drive
-        if (ATA::read_sectors(id, 1, ctx.active_sector, ES, (uint)(!buffer ? buf : buffer)))
+        if (ATA::read_sectors(id, 1, ctx.active_sector, ES, (uint)buffer))
             ERR_RET_FALSE("Drive read error")
 
         ctx.buffer_updated = false;
@@ -290,7 +295,37 @@ bool FAT_drive::load_file_to_buf(void* buf, const char* file_name, Dentry* paren
     if (offset + length > file_entry->file_size)
         ERR_RET_FALSE("Offset + length exceeds file size");
 
-    loaded_bytes = 0;
+    // Skip clusters until we reach the offset
+    uint n_offset_clusters = offset / ATA_SECTOR_SIZE;
+    uint cluster_offset = offset - n_offset_clusters * ATA_SECTOR_SIZE;
+    uint co;
+    for (co = 0; co < n_offset_clusters && next_cluster < CLUSTER_MIN_EOC; co++)
+    {
+        if (!change_active_cluster(next_cluster, ctx, nullptr))
+            ERR_RET_FALSE("Disk read error");
+        next_cluster = ctx.table_value;
+    }
+    if (co < n_offset_clusters)
+        ERR_RET_FALSE("Offset exceeds file size");
+
+    // If offset is 0 and length is greater than a sector, we can read the entire sector directly
+    if (cluster_offset == 0 && length >= ATA_SECTOR_SIZE)
+    {
+        if (!change_active_cluster(next_cluster, ctx, buf))
+            ERR_RET_FALSE("Disk read error");
+        loaded_bytes = ATA_SECTOR_SIZE;
+    }
+    else // If offset is not 0, we need to load the sector and copy the meaningful data to buf
+    {
+        if (!change_active_cluster(next_cluster, ctx, this->buf))
+            ERR_RET_FALSE("Disk read error");
+        auto n = min(length, ATA_SECTOR_SIZE - cluster_offset);
+        memcpy(buf, this->buf + cluster_offset, n);
+        loaded_bytes = n;
+    }
+    next_cluster = ctx.table_value;
+
+    //loaded_bytes = 0;
     auto b  = (char*)buf;
     while (loaded_bytes < length && next_cluster < CLUSTER_MIN_EOC)
     {
@@ -323,7 +358,7 @@ uint FAT_drive::get_child_dir_entry_id(const Dentry& parent_dentry, const char* 
     do
     {
         // ~= cd wd
-        if (!change_active_cluster(curr_cluster, ctx))
+        if (!change_active_cluster(curr_cluster, ctx, this->buf))
             return ENTRY_NOT_FOUND;
 
         bool found_in_lfn = false;
@@ -405,7 +440,7 @@ Dentry* FAT_drive::touch(Dentry& parent_dentry, const char* entry_name)
     do
     {
         // ~= cd wd
-        if (!change_active_cluster(curr_cluster, ctx))
+        if (!change_active_cluster(curr_cluster, ctx, this->buf))
             return nullptr;
 
         // Skip used dir entries, aka files/folders inside wd
@@ -434,7 +469,7 @@ Dentry* FAT_drive::touch(Dentry& parent_dentry, const char* entry_name)
         ERR_RET_NULL("Drive write error")
 
     // ~= cd inside file
-    if (!change_active_cluster(file_content_cluster, ctx))
+    if (!change_active_cluster(file_content_cluster, ctx, this->buf))
         return nullptr;
 
     // Indicate that dir content cluster is the end of the cluster chain it belongs to
@@ -459,7 +494,7 @@ Dentry* FAT_drive::mkdir(Dentry& parent_dentry, const char* entry_name)
     do
     {
         // ~= cd wd
-        if (!change_active_cluster(curr_cluster, ctx))
+        if (!change_active_cluster(curr_cluster, ctx, this->buf))
             return nullptr;
 
         // Skip used dir entries, aka files/folders inside wd
@@ -486,7 +521,7 @@ Dentry* FAT_drive::mkdir(Dentry& parent_dentry, const char* entry_name)
         ERR_RET_NULL("Drive write error")
 
     // ~= cd new directory
-    if (!change_active_cluster(dir_content_cluster, ctx))
+    if (!change_active_cluster(dir_content_cluster, ctx, this->buf))
         return nullptr;
 
     uint dir_content_sector = ctx.active_sector;
@@ -523,7 +558,7 @@ bool FAT_drive::ls(const Dentry& dentry, ls_printer printer)
     do
     {
         // ~= cd wd
-        if (!change_active_cluster(curr_cluster, ctx))
+        if (!change_active_cluster(curr_cluster, ctx, this->buf))
             return false;
 
         // Acts like a boolean to know if the previous entry was a LFN entry, and if so, contains the lfn entry name
@@ -583,7 +618,7 @@ bool FAT_drive::write_buf_to_file(Dentry& dentry, const void* buf, uint length)
     // Write file content cluster by cluster
     while (wrote_bytes < length && next_cluster < CLUSTER_MIN_EOC)
     {
-        if (!change_active_cluster(next_cluster, ctx))
+        if (!change_active_cluster(next_cluster, ctx, this->buf))
             return false;
 
         // If there is more than ATA_SECTOR_SIZE bytes to write, use provided buffer, otherwise copy remaining data to buf
@@ -601,44 +636,6 @@ bool FAT_drive::write_buf_to_file(Dentry& dentry, const void* buf, uint length)
         wrote_bytes += num;
         next_cluster = ctx.table_value;
     }
-
-    return true;
-}
-
-bool FAT_drive::cat(const Dentry& dentry, cat_printer printer)
-{
-    if (dentry.inode->type != Inode::File)
-        ERR_RET_FALSE("Trying to cat something which is not a file")
-
-    // Find file entry
-    ctx ctx{};
-    uint entry_id;
-    if ((entry_id = get_child_dir_entry_id(*dentry.parent, dentry.name, ctx)) == ENTRY_NOT_FOUND)
-    {
-        printf_error("%s: couldn't find file %s", __func__, dentry.name);
-        return false;
-    }
-    DirEntry* file_entry = &entries[entry_id];
-
-    char* extension = file_entry->get_extension();
-    auto file_size = file_entry->file_size;
-    uint next_cluster = file_entry->first_cluster_addr();
-    size_t printed_size = 0;
-
-    // Print file content cluster by cluster
-    while (printed_size < file_size && next_cluster < CLUSTER_MIN_EOC)
-    {
-        if (!change_active_cluster(next_cluster, ctx))
-            return false;
-
-        uint rem = file_size - printed_size;
-        uint num = rem < ATA_SECTOR_SIZE ? rem : ATA_SECTOR_SIZE;
-        printer(buf, num, extension);
-        printed_size += num;
-        next_cluster = ctx.table_value;
-    }
-
-    delete[] extension;
 
     return true;
 }
@@ -671,7 +668,7 @@ bool FAT_drive::resize(Dentry& dentry, uint new_size) // Todo: handle files larg
     // Update FAT
     for (uint i = 0; i < num_data_sectors - 1; i++)
     {
-        if (!change_active_cluster(free_cluster_list[i], ctx))
+        if (!change_active_cluster(free_cluster_list[i], ctx, this->buf))
             ERR_RET_FALSE("drive read error")
 
         *(uint*)&FAT[ctx.FAT_entry_offset] = free_cluster_list[i + 1];
@@ -680,7 +677,7 @@ bool FAT_drive::resize(Dentry& dentry, uint new_size) // Todo: handle files larg
     }
 
     // Update last cluster
-    if (!change_active_cluster(free_cluster_list[num_data_sectors - 1], ctx))
+    if (!change_active_cluster(free_cluster_list[num_data_sectors - 1], ctx, this->buf))
         ERR_RET_FALSE("drive read error")
     *(uint*)&FAT[ctx.FAT_entry_offset] = CLUSTER_EOC;
     if (write_fat(ctx)) // Write new FAT // Update FAT on disk

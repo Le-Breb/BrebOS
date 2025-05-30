@@ -186,7 +186,7 @@ class FAT_drive : public FS
 	 * @return boolean indicating whether the operation succeeded
 	 */
 	bool
-	change_active_cluster(uint new_active_cluster, ctx& ctx, void* buffer = nullptr);
+	change_active_cluster(uint new_active_cluster, ctx& ctx, void* buffer);
 
 	static FAT_drive* from_drive(unsigned char drive);
 
@@ -219,8 +219,6 @@ public:
 	Inode* get_root_node() override;
 
 	bool write_buf_to_file(Dentry& dentry, const void* buf, uint length) override;
-
-	bool cat(const Dentry& dentry, cat_printer printer) override;
 
 	bool resize(Dentry& dentry, uint new_size) override;
 };
