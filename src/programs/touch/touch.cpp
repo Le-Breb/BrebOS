@@ -17,7 +17,7 @@ int main(int argc, char** argv)
 
     if (!touch(argv[1]))
     {
-        printf("Failed to create file %s\n", argv[1]);
+        perror("Failed to create file");
         return 1;
     }
 
