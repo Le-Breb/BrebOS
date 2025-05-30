@@ -11,7 +11,7 @@ int main(int argc, char** argv)
 
     if (mkdir(argv[1], 0777) == -1)
     {
-        printf("Failed to create directory %s\n", argv[1]);
+        perror("Failed to create directory");
         return 1;
     }
 
