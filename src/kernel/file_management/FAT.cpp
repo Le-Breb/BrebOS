@@ -684,6 +684,7 @@ bool FAT_drive::resize(Dentry& dentry, uint new_size) // Todo: handle files larg
         ERR_RET_FALSE("drive write error")
 
     delete[] free_cluster_list;
+    dentry.inode->size = new_size; // Update inode size
     return true;
 }
 
