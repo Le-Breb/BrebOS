@@ -15,13 +15,6 @@ unsigned int get_file_size(const char* path)
 	return file_size;
 }
 
-bool load_file(const char* path, void* buf)
-{
-	bool success;
-	__asm__ volatile ("int $0x80" : "=a"(success) : "a"(25), "D"(path), "S"(buf));
-	return success;
-}
-
 void lock_framebuffer_flush()
 {
 	__asm__ volatile("int $0x80" : : "a"(22)); // Lock framebuffer flush

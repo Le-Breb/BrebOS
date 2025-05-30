@@ -10,6 +10,8 @@
 #include <stdlib.h>
 #include <sys/wait.h>
 #include <ksyscalls.h>
+#include <fcntl.h>
+#include <ksyscalls.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_RESIZE2_IMPLEMENTATION
@@ -141,6 +143,27 @@ void show_usage()
 {
     fprintf(stderr, "Usage: feh <image_path>\n");
     fprintf(stderr, "Display an image on the screen.\n");
+}
+
+bool load_file(const char* path, char* buf)
+{
+    int fd = open(path, O_RDONLY);
+    if (fd == -1)
+    {
+        perror("Error opening file");
+        return false;
+    }
+
+    ssize_t bytes_read = read(fd, buf, get_file_size(path));
+    if (bytes_read == -1)
+    {
+        perror("Error reading file");
+        close(fd);
+        return false;
+    }
+
+    close(fd);
+    return true;
 }
 
 int main(int argc, char* argv[])

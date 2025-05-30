@@ -14,8 +14,6 @@ char get_keystroke();
  */
 unsigned int get_file_size(const char* path);
 
-bool load_file(const char* path, void* buf);
-
 void lock_framebuffer_flush();
 
 void unlock_framebuffer_flush();
