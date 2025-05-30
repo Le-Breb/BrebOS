@@ -7,6 +7,7 @@
 #include "../core/memory.h"
 #include "../core/fb.h"
 #include "../file_management/VFS.h"
+#include "../utils/comparison.h"
 
 list<Process::env_var*> Process::env_list = {};
 
@@ -452,6 +453,7 @@ int Process::close(int fd)
         return err; // Propagate error from VFS
 
     file_descriptors[fd] = nullptr; // Mark as closed
+    lowest_free_fd = min(lowest_free_fd, fd); // Update lowest free fd
 
     return 0; // Success
 }
