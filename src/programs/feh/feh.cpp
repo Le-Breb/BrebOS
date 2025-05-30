@@ -75,15 +75,15 @@ void size_screen_fit(int x, int y, int* new_x, int* new_y)
     }
 }
 
-ERROR_TYPE parse_and_display_image(unsigned char* raw_img, uint size)
+ERROR_TYPE parse_and_display_image(const char* pathname)
 {
     printf("Read image metadata...\n");
     int x, y, n;
-    if (!stbi_info_from_memory(raw_img, size, &x, &y, &n))
+    if (!stbi_info(pathname, &x, &y, &n))
         return ERROR_TYPE::FILE_FORMAT;
 
     printf("Decoding image...\n");
-    auto data = stbi_load_from_memory(raw_img, size, &x, &y, &n, 0);
+    auto data = stbi_load(pathname, &x, &y, &n, 0);
     if (!data)
     {
         fprintf(stderr, "%s", stbi_failure_reason());
@@ -145,27 +145,6 @@ void show_usage()
     fprintf(stderr, "Display an image on the screen.\n");
 }
 
-bool load_file(const char* path, char* buf)
-{
-    int fd = open(path, O_RDONLY);
-    if (fd == -1)
-    {
-        perror("Error opening file");
-        return false;
-    }
-
-    ssize_t bytes_read = read(fd, buf, get_file_size(path));
-    if (bytes_read == -1)
-    {
-        perror("Error reading file");
-        close(fd);
-        return false;
-    }
-
-    close(fd);
-    return true;
-}
-
 int main(int argc, char* argv[])
 {
     if (argc != 2)
@@ -174,19 +153,7 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    char* buf = NULL;
-    uint size = get_file_size(argv[1]);
-    printf("Loading image...\n");
-    if (size != (uint)-1)
-        buf = (char*)malloc(size);
-
-    if (!buf || !load_file(argv[1], buf))
-    {
-        fprintf(stderr, "Failed to load image\n");
-        return (int)ERROR_TYPE::FILE_LOAD;
-    }
-
-    ERROR_TYPE e = parse_and_display_image((unsigned char*)buf, size);
+    ERROR_TYPE e = parse_and_display_image(argv[1]);
     if (e == ERROR_TYPE::FILE_FORMAT || e == ERROR_TYPE::FILE_SANITY)
         fprintf(stderr, "Failed to load image: %s\n", stbi_failure_reason());
 
