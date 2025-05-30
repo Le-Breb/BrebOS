@@ -69,7 +69,19 @@ int link(char *old, char *new) {
   return -1;
 }
 int lseek(int file, int ptr, int dir) {
-  return 0;
+  int pos;
+  __asm__ volatile("int $0x80" : "=a"(pos) : "a"(33), "D"(file), "S"(ptr), "d"(dir));
+
+  if (pos >= 0)
+      return pos;
+
+  if (pos == -2)
+      errno = EBADF; // Bad FD
+  if (pos == -3)
+    errno = EINVAL; // whence is not valid. Or: the resulting file offset
+                     // would be negative, or beyond the end of a seekable device.
+  return -1;
+  
 }
 int open(const char *name, int flags, ...) {
   if (flags != O_RDONLY && flags != O_WRONLY && flags != O_RDWR)
