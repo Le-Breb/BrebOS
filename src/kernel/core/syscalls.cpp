@@ -249,6 +249,9 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
         case 32:
             p->cpu_state.eax = close(p);
             break;
+        case 33:
+            p->cpu_state.eax = lseek(p);
+            break;
         default:
             printf_error("Received unknown syscall id: 0x%x", cpu_state->eax);
             break;
@@ -305,6 +308,15 @@ void Syscall::getenv(Process* p)
     }
     else
         p->cpu_state.eax = 0;
+}
+
+int Syscall::lseek(const Process* p)
+{
+    int fd = (int)p->cpu_state.edi;
+    int offset = (int)p->cpu_state.esi;
+    int whence = (int)p->cpu_state.edx;
+
+    return p->lseek(fd, offset, whence);
 }
 
 __attribute__((no_instrument_function))

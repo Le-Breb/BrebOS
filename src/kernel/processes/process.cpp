@@ -455,3 +455,11 @@ int Process::close(int fd)
 
     return 0; // Success
 }
+
+int Process::lseek(int fd, int offset, int whence) const
+{
+    if (!file_descriptors[fd])
+        return -2; // File descriptor not found
+
+    return VFS::lseek(file_descriptors[fd]->system_fd, offset, whence);
+}

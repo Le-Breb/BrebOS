@@ -65,6 +65,8 @@ class Syscall
 
 	static void getenv(Process* p);
 
+	static int lseek(const Process* p);
+
 	/**
 	 * Displays an image and make the process sleep for a bit - This is ugly, and I am aware of it
 	 */

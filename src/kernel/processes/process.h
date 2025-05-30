@@ -217,6 +217,9 @@ public:
 	 * @return 0 on success, -2 if fd not open
 	 */
 	int close(int fd);
+
+	[[nodiscard]]
+	int lseek(int fd, int offset, int whence) const;
 };
 
 #endif //INCLUDE_PROCESS_H

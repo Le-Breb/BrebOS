@@ -494,6 +494,45 @@ VFS::file_descriptor* VFS::open(const char* pathname, int flags, int local_fd, i
 	return file_descriptors + system_fd;
 }
 
+#define SEEK_SET 0
+#define SEEK_CUR 1
+#define SEEK_END 2
+
+int VFS::lseek(int fd, int offset, int whence)
+{
+	// Check if fd is valid
+	if (file_descriptors[fd].fd == -1)
+		return -2; // File descriptor not found
+
+	// Check if whence is valid
+	if (whence < 0 || whence > 2)
+		return -3; // Invalid whence value
+
+	// Get the file descriptor
+	auto& file_descriptor = file_descriptors[fd];
+
+	// Compute the new offset based on whence
+	int ref = whence == SEEK_SET ? 0 :
+		whence == SEEK_CUR ? file_descriptor.offset :
+		file_descriptor.dentry->inode->size;
+	int new_offset = ref + offset;
+
+	// Check if the new offset is valid
+	if (new_offset < 0)
+		return -3; // Invalid offset
+	if ((uint)new_offset > file_descriptor.dentry->inode->size)
+	{
+		printf_error("lseek called with an offset which would result in a new offset greater than file size. "
+			   "This is compliant with the man page, but BrebOS VFS does not support this.");
+		return -3; // Invalid offset
+	}
+
+	// Apply the new offset
+	file_descriptor.offset = new_offset;
+
+	return new_offset;
+}
+
 bool VFS::resize(Dentry& dentry, size_t new_size)
 {
 	return dentry.inode->superblock->get_fs()->resize(dentry, new_size);

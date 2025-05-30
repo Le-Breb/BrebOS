@@ -143,6 +143,15 @@ public:
 	static file_descriptor* open(const char* pathname, int flags, int local_fd, int& err);
 
 	/**
+	 * Seeks in a file descriptor
+	 * @param fd file descriptor to seek in
+	 * @param offset offset to seek to
+	 * @param whence how to interpret the offset
+	 * @return new offset on success, -2 if fd not open, -3 if whence is invalid or offset is invalid
+	 */
+	static int lseek(int fd, int offset, int whence);
+
+	/**
 	 * Resizes a file
 	 * @param dentry dentry of the file to resize
 	 * @param new_size new size of the file
