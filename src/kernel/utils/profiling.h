@@ -2,7 +2,7 @@
 
 #ifndef PROFILING_H
 #define PROFILING_H
-#include <kstdint.h>
+#include <stdint.h>
 
 namespace Profiling
 {

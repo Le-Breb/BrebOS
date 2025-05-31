@@ -1,7 +1,5 @@
 #include "Socket.h"
 
-#include <kstdio.h>
-
 #include "DNS.h"
 #include "Endianness.h"
 #include "Network.h"
@@ -77,9 +75,7 @@ Socket::Socket(const char* hostname, uint16_t peer_port) : Socket(strcmp("host",
 {
     if (!strcmp("host", hostname))
         return;
-    auto hostname_len = strlen(hostname);
-    this->hostname = new char[hostname_len + 1];
-    memcpy((char*)this->hostname, hostname, hostname_len + 1);
+    this->hostname = strdup(hostname);
 }
 
 void Socket::set_listener(TCP_listener* listener)

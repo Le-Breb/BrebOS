@@ -4,7 +4,7 @@
 /* The I/O ports */
 #include <kstddef.h>
 
-#include "kstdint.h"
+#include <stdint.h>
 #include "../utils/PSF.h"
 
 #define FB_BLACK        0x000000
@@ -206,6 +206,8 @@ __attribute__ ((format (printf, 1, 2))) int printf(const char* format, ...);
 __attribute__ ((format (printf, 1, 2))) int printf_error(const char* format, ...);
 
 __attribute__ ((format (printf, 1, 2))) int printf_info(const char* format, ...);
+
+__attribute__((format(printf, 2, 3))) int sprintf(char* str, const char *format, ...);
 
 [[noreturn]]
 __attribute__ ((format (printf, 1, 2))) int irrecoverable_error(const char* format, ...);

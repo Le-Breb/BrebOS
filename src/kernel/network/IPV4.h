@@ -3,7 +3,7 @@
 
 // https://en.wikipedia.org/wiki/IPv4#Header
 
-#include <kstdint.h>
+#include <stdint.h>
 #include <kstddef.h>
 
 #include "Ethernet.h"

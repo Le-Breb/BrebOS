@@ -2,7 +2,6 @@
 
 #include "profiling.h"
 
-#include <kstdio.h>
 #include <kstring.h>
 
 #include "../core/fb.h"

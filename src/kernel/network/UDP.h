@@ -1,7 +1,7 @@
 #ifndef UDP_H
 #define UDP_H
 
-#include <kstdint.h>
+#include <stdint.h>
 #include <kstddef.h>
 
 #include "Ethernet.h"

@@ -1,7 +1,7 @@
 #ifndef E100_H
 #define E100_H
 
-#include <kstdint.h>
+#include <stdint.h>
 
 #include "Ethernet.h"
 #include "../core/PCI.h"

@@ -1,7 +1,7 @@
 #ifndef DHCP_H
 #define DHCP_H
 
-#include <kstdint.h>
+#include <stdint.h>
 #include <kstddef.h>
 
 #include "UDP.h"

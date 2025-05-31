@@ -1,5 +1,6 @@
-#include <kstdlib.h>
 #include <kstring.h>
+
+extern "C" void* malloc(size_t size);
 
 extern "C" unsigned long strlen(char const* str)
 {

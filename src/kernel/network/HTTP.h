@@ -1,7 +1,7 @@
 #ifndef HTTP_H
 #define HTTP_H
 
-#include <kstdint.h>
+#include <stdint.h>
 
 #include "NetworkConsts.h"
 #include "TCPListener.h"

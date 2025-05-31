@@ -1,8 +1,8 @@
 #include "fb.h"
 
-#include <kstdio.h>
 #include <kctype.h>
-#include <kwchar.h>
+#include <stdarg.h> // NOLINT(*-deprecated-headers)
+#include <wctype.h> // NOLINT(*-deprecated-headers)
 #include <kstring.h>
 
 #include "memory.h"

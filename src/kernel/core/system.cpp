@@ -2,7 +2,6 @@
 
 #include "fb.h"
 #include "IO.h"
-#include <kstdio.h>
 #include "../file_management/FAT.h"
 #include "../network/Socket.h"
 #include "../processes/scheduler.h"

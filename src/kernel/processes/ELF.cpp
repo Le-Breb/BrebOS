@@ -1,5 +1,4 @@
 #include "ELF.h"
-#include <kstdio.h>
 #include <kstring.h>
 #include "../core/fb.h"
 

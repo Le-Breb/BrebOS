@@ -3,7 +3,7 @@
 #include "fb.h"
 #include <kstring.h>
 
-#include "kstdint.h"
+#include <stdint.h>
 #include "../file_management/VFS.h"
 #include "../processes/scheduler.h"
 

@@ -1,4 +1,4 @@
-#include "kstdint.h"
+#include <stdint.h>
 
 #ifndef MULTIBOOT_HEADER
 #define MULTIBOOT_HEADER

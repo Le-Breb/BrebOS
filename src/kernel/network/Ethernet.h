@@ -1,6 +1,6 @@
 #ifndef ETHERNET_H
 #define ETHERNET_H
-#include <kstdint.h>
+#include <stdint.h>
 #include <kstddef.h>
 #include <kstring.h>
 

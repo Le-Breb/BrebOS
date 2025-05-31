@@ -2,7 +2,7 @@
 #define BREBOS_FAT_H
 
 #include <kstddef.h>
-#include <kstdint.h>
+#include <stdint.h>
 #include "FS.h"
 #include "dentry.h"
 

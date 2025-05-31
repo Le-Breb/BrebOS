@@ -1,7 +1,7 @@
 #ifndef ARP_H
 #define ARP_H
 
-#include <kstdint.h>
+#include <stdint.h>
 #include <kstring.h>
 
 #include "Endianness.h"

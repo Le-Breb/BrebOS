@@ -1,5 +1,4 @@
 #include "icxx.h"
-#include "kstdio.h"
 
 // https://wiki.osdev.org/C%2B%2B#Global_objects
 

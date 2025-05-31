@@ -1,6 +1,6 @@
 #include "PCI.h"
 
-#include <kstdint.h>
+#include <stdint.h>
 #include "fb.h"
 
 PCI::Device PCI::ethernet_card = Device(-1,-1, -1);

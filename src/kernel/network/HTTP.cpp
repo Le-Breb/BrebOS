@@ -1,13 +1,12 @@
 #include "HTTP.h"
 
-#include <kstring.h>
+#include <kstddef.h>
 
 #include "Socket.h"
 #include "TCP.h"
 #include "../core/fb.h"
 #include "../core/memory.h"
 #include "../file_management/VFS.h"
-#include <kstring.h>
 
 list<HTTP*> HTTP::instances = {};
 

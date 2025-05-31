@@ -1,7 +1,6 @@
 #include "syscalls.h"
 #include "interrupts.h"
 #include "../processes/scheduler.h"
-#include <kstdio.h>
 #include "system.h"
 #include "PIC.h"
 #include "../file_management/VFS.h"

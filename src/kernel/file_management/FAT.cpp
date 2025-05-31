@@ -2,7 +2,6 @@
 #include <kstddef.h>
 #include "ATA.h"
 #include <kstring.h>
-#include <kstdio.h>
 #include "superblock.h"
 #include "dentry.h"
 #include "../core/fb.h"
@@ -749,7 +748,7 @@ DirEntry::DirEntry(const char* name, uint8_t attrs, uint32_t first_cluster_addr,
     if (strlen(name) > 8)
         irrecoverable_error("%s: file name '%s' too long, requires LFN support. Max supported length is 8", __func__, name);
     if (attrs & DIRECTORY)
-        memcpy(this->name, name, strlen(name) + 1);
+        strcpy(this->name, name);
     else
     {
         uint l = strlen(name);

@@ -1,6 +1,6 @@
 #ifndef ENDIANNESS_H
 #define ENDIANNESS_H
-#include <kstdint.h>
+#include <stdint.h>
 
 
 class Endianness {

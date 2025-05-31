@@ -202,27 +202,18 @@ uint Process::get_symbol_runtime_address_at_runtime(uint dep_id, const char* sym
 
 void Process::init()
 {
-    // As the time I write this, strdup cannot be used as it uses malloc and malloc uses an interrupt in libc,
-    // and firing interrupts while in kernel is not a great idea
-    // So instead we gotta use this wonderful syntax...
     auto pwd = new env_var{};
-    pwd->name = new char[4];
-    memcpy((char*)pwd->name, "PWD", 4);
-    pwd->value = new char[2];
-    memcpy((char*)pwd->value, "/", 2);
+    pwd->name = strdup("PWD");
+    pwd->value = strdup("/");
     env_list.add(pwd);
 
     auto oldpwd = new env_var{};
-    oldpwd->name = new char[7];
-    memcpy((char*)oldpwd->name, "OLDPWD", 7);
-    oldpwd->value = new char[2];
-    memcpy((char*)oldpwd->value, "/", 2);
+    oldpwd->name = strdup("OLDPWD");
+    oldpwd->value = strdup("/");
 
     auto home = new env_var{};
-    home->name = new char[5];
-    memcpy((char*)home->name, "HOME", 5);
-    home->value = new char[3];
-    memcpy((char*)home->value, " \t\n", 5);
+    home->name = strdup("HOME");
+    home->value = strdup(" \t\n");
     env_list.add(home);
 }
 
@@ -239,10 +230,8 @@ char* Process::get_env(const char* name)
 
 void Process::set_env(const char* name, const char* value)
 {
-    irrecoverable_error("This function (%s) must be reworked to no call strdup and use better list iterating", __func__);
-    for (auto i = 0; i < env_list.size(); i++)
+    for (const auto& e : env_list)
     {
-        auto e = *env_list.get(i);
         if (strcmp(name, e->name) == 0)
         {
             delete e->value;

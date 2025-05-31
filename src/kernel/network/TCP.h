@@ -1,7 +1,7 @@
 #ifndef TCP_H
 #define TCP_H
 
-#include <kstdint.h>
+#include <stdint.h>
 #include <kstddef.h>
 
 #include "IPV4.h"

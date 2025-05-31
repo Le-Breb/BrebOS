@@ -1,6 +1,6 @@
 #ifndef SOCKET_H
 #define SOCKET_H
-#include <kstdint.h>
+#include <stdint.h>
 
 #include "Network.h"
 #include "TCPListener.h"

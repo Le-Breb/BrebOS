@@ -1,7 +1,7 @@
 #ifndef PSF_H
 #define PSF_H
 
-#include <kstdint.h>
+#include <stdint.h>
 
 #define PSF1_FONT_MAGIC 0x0436
 

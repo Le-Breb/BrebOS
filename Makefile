@@ -13,7 +13,19 @@ CYAN=\033[0;36m
 WHITE=\033[0;37m
 RESET=\033[0m
 
+BUILD_DIR=build
 SRC_DIR=src
+SYSROOT=./sysroot
+NEWLIB_INCLUDE_DIR=$(SYSROOT)/usr/include/
+TOOLCHAIN_DIR=./toolchain
+GCC_INCLUDE_DIR=$(TOOLCHAIN_DIR)/gcc/lib/gcc/i686-brebos/15.1.0/include
+LIBC_BUILD_DIR=$(SRC_DIR)/libc/build
+LIBK_BUILD_DIR=$(SRC_DIR)/libk/build
+LIBDYNLK_BUILD_DIR=$(SRC_DIR)/libdynlk/build
+GCC_BUILD_DIR=$(SRC_DIR)/gcc/build
+KERNEL_BUILD_DIR=$(SRC_DIR)/kernel/build
+PROGRAMS_BUILD_DIR=$(SRC_DIR)/programs/build
+
 SRC=$(shell cd $(SRC_DIR)/kernel; find . -name '*.cpp' -o -name '*.s' | sed 's|^\./||')
 OBJECTS = $(patsubst %.cpp, $(KERNEL_BUILD_DIR)/%.o, $(filter %.cpp, $(SRC))) \
           $(patsubst %.s, $(KERNEL_BUILD_DIR)/%.o, $(filter %.s, $(SRC)))
@@ -21,7 +33,7 @@ DEPS=$(OBJECTS:.o=.d)
 -include $(DEPS)
 
 CC = i686-brebos-gcc
-CFLAGS = -m32 -nostdlib -nostdinc -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
+CFLAGS = -m32 -nostdlib -fno-builtin -fno-stack-protector -nostartfiles -nodefaultlibs -Wall -Wextra -Werror \
 -c -fno-exceptions -fno-rtti -MMD -MP
 AS = nasm
 ASFLAGS = -f elf -F dwarf
@@ -59,14 +71,6 @@ libk_sources=$(shell find $(SRC_DIR)/libk -type f -name '*.cpp')
 libdynlk_sources=$(shell find $(SRC_DIR)/libdynlk -type f -name '*.cpp')
 
 LD=ld
-
-BUILD_DIR=build
-LIBC_BUILD_DIR=$(SRC_DIR)/libc/build
-LIBK_BUILD_DIR=$(SRC_DIR)/libk/build
-LIBDYNLK_BUILD_DIR=$(SRC_DIR)/libdynlk/build
-GCC_BUILD_DIR=$(SRC_DIR)/gcc/build
-KERNEL_BUILD_DIR=$(SRC_DIR)/kernel/build
-PROGRAMS_BUILD_DIR=$(SRC_DIR)/programs/build
 
 OUT_NAME=kernel
 OUT_BIN=$(OUT_NAME).elf
@@ -128,7 +132,7 @@ $(FONT_OBJ): $(FONT_FILE)
 	objcopy -I binary -O elf32-i386 -B i386 $(FONT_FILE) $(FONT_OBJ)
 
 $(BUILD_DIR)/kernel.elf: $(BUILD_DIR)/.dir_timestamp $(FONT_OBJ) $(INTERNAL_OBJS) $(libc) $(gcc)
-	i686-brebos-ld $(LDFLAGS) $(OBJ_LIST) $(CPPFLAGS) $(libc) $(FONT_OBJ) -o $(BUILD_DIR)/kernel.elf $(libgcc)
+	i686-brebos-ld $(LDFLAGS) $(OBJ_LIST) $(libc) $(FONT_OBJ) -o $(BUILD_DIR)/kernel.elf $(libgcc)
 
 $(OS_ISO): $(BUILD_DIR)/kernel.elf $(libdynlk) $(programs)
 	@#Create directories

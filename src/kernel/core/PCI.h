@@ -1,7 +1,7 @@
 #ifndef PCI_H
 #define PCI_H
 
-#include <kstdint.h>
+#include <stdint.h>
 
 #define PCI_BAR_MEM 0x0
 #define PCI_BAR_IO  0x1

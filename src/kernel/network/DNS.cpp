@@ -195,9 +195,7 @@ void DNS::resolve_hostname(const char* hostname, Socket* socket)
     }
 
     // Copy hostname
-    size_t hostname_len = strlen(hostname);
-    auto* host_name_cpy = new char[hostname_len + 1];
-    memcpy(host_name_cpy, hostname, hostname_len + 1);
+    auto* host_name_cpy = strdup(hostname);
 
     // Enqueu socket
     uint pending_queue_free_idx = 0;

@@ -1,6 +1,6 @@
 #ifndef INCLUDE_SYSTEM_H
 #define INCLUDE_SYSTEM_H
-#include "kstdint.h"
+#include <stdint.h>
 
 class System
 {

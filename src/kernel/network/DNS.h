@@ -1,6 +1,6 @@
 #ifndef DNS_H
 #define DNS_H
-#include <kstdint.h>
+#include <stdint.h>
 #include <kstddef.h>
 
 #include "NetworkConsts.h"
