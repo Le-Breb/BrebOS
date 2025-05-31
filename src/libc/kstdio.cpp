@@ -5,7 +5,6 @@
 #include "kwchar.h"
 #include "kctype.h"
 #include "kstdint.h"
-#include "ksyscalls.h"
 #include "circular_stream.h"
 
 static circular_stream s = circular_stream(circular_stream::Policy::STREAM_NEWLINE_FLUSHED);
@@ -174,7 +173,7 @@ int vprintf(const char* format, void (*output_char_func)(char, int*), void (*out
 				if (extBreak) break;
 			}
 
-			while (isdigit(format[i]))
+			while (k_isdigit(format[i]))
 			{
 				lengthSpec *= 10;
 				lengthSpec += format[i] - 48;
@@ -190,7 +189,7 @@ int vprintf(const char* format, void (*output_char_func)(char, int*), void (*out
 			if (format[i] == '.')
 			{
 				++i;
-				while (isdigit(format[i]))
+				while (k_isdigit(format[i]))
 				{
 					precSpec *= 10;
 					precSpec += format[i] - 48;
