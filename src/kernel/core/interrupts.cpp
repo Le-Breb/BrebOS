@@ -45,9 +45,10 @@ void Interrupts::page_fault_handler(const stack_state_t* stack_state)
 {
 	uint addr; // Address of the fault
 	__asm__ volatile("mov %%cr2, %0" : "=r"(addr)); // Get addr from CR2
+	bool write_access = stack_state->error_code & 2; // Check if the fault was caused by a write access
 
 	// If the fault is handled, then it's not an error, simpy return and resume execution.
-	if (Memory::page_fault_handler(Scheduler::get_running_process(), addr))
+	if (Memory::page_fault_handler(Scheduler::get_running_process(), addr, write_access))
 		return;
 
 	// Fault is an error, display debug info and kill process
@@ -55,7 +56,7 @@ void Interrupts::page_fault_handler(const stack_state_t* stack_state)
 
 	printf_error("Page fault at address 0x%x caused by instruction at 0x%x", addr, stack_state->eip);
 	printf(err & 1 ? "Page is present but page protection was violated\n" : "Page is not present\n");
-	printf("Fault was caused by a %s access\n", err & 2 ? "write" : "read");
+	printf("Fault was caused by a %s access\n", write_access ? "write" : "read");
 	printf("Fault occurred in %s\n", err & 4 ? "userland" : "kernel land");
 	//printf("Reserved: %s\n", err & 8 ? "True" : "False");
 	//printf("Instruction fetch: %s\n", err & 16 ? "True" : "False");

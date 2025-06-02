@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "../file_management/VFS.h"
 #include "../processes/scheduler.h"
+#include "../utils/comparison.h"
 
 namespace Memory
 {
@@ -16,6 +17,9 @@ namespace Memory
     pdt_t* pdt = (pdt_t*)boot_page_directory;
     page_table_t* asm_pt1 = (page_table_t*)boot_page_table1;
     page_table_t* page_tables;
+
+    // Frame reference counter
+    uint* frame_rc; // uint[PT_ENTRIES * PDT_ENTRIES];
 
     // Gives page id given frame id. -1 means that frame is not allocated
     uint* frame_to_page; // uint[PT_ENTRIES * PDT_ENTRIES];
@@ -45,7 +49,21 @@ namespace Memory
      */
     void* sbrk(uint num_pages_requested, Process* process, bool lazy_zero);
 
+    /** Initializes frame to page mapping
+     *
+     * This functions allocates PDT 770 to store frame_to_page, which maps frame ids to page ids.
+     * Then it fills the mapping for frames used by the kernel itself as well as and the page tables, which is the only
+     * thing dynamically allocated at this point.
+     */
     void init_frame_to_page();
+
+    /** Initializes frame reference counter
+     *
+     * This functions allocates PDT 771 to store frame_rc, which maps frame ids to their reference count.
+     * Then it fills the mapping for frames used by the kernel itself as well as and the page tables and frame_to_page,
+     * which are the only things dynamically allocated at this point.
+     */
+    void init_frame_rc();
 
     /** Tries to allocate a contiguous block of (virtual) memory
      *
@@ -102,6 +120,24 @@ namespace Memory
      */
     void create_kernel_process(uint lowest_free_pte);
 
+    /** Handles a COW page fault that occurred in the kernel address space
+     *
+     * @param current_process process that was running when the page fault occurred
+     * @param higher_half whether the page fault occurred in the higher half of the kernel address space
+     * @param page_id page id that caused the fault
+     * @param pt page table to use for the fault handling
+     */
+    void handle_shared_page_fault(const Process* current_process, bool higher_half, uint page_id, const page_table_t* pt);
+
+    /** Handles a lazy zero page fault that occurred in the kernel address space
+     *
+     * @param current_process process that was running when the page fault occurred
+     * @param higher_half whether the page fault occurred in the higher half of the kernel address space
+     * @param page_id page id that caused the fault
+     * @param pt page table to use for the fault handling
+     */
+    void handle_lazy_zero_page_fault(Process* current_process, bool higher_half, uint page_id, page_table_t* pt);
+
     uint get_free_frame()
     {
         while (lowest_free_frame < PDT_ENTRIES * PT_ENTRIES && FRAME_USED(lowest_free_frame))
@@ -126,6 +162,31 @@ namespace Memory
         return lowest_free_pe_user;
     }
 
+    void init_frame_rc()
+    {
+        // Allocate space for frame_rc
+        for (size_t i = 0; i < PT_ENTRIES; i++)
+        {
+            PTE(page_tables, 771 * PDT_ENTRIES + i) = FRAME_ID_ADDR(PDT_ENTRIES * 3 + i) | PAGE_WRITE | PAGE_PRESENT;
+            INVALIDATE_PAGE(771, i);
+        }
+        frame_rc = (uint*)VIRT_ADDR(771, 0, 0);
+
+        memset(frame_rc, 0, 767 * PT_ENTRIES * sizeof(uint));
+        memset(frame_rc + 771 * PT_ENTRIES, 0, (PDT_ENTRIES - 771) * PT_ENTRIES * sizeof(uint));
+
+        // Fill frame_rc
+        for (uint pde = 768; pde < 771; pde++)
+        {
+            uint frame_off = PDT_ENTRIES * pde;
+            for (uint pte = 0; pte < PT_ENTRIES; pte++)
+            {
+                uint frame_id = frame_off + pte;
+                frame_rc[frame_id] = PTE_USED(page_tables, frame_id);
+            }
+        }
+    }
+
     void init_frame_to_page()
     {
         // Allocate space for frame_to_page
@@ -144,8 +205,8 @@ namespace Memory
                 continue;
             frame_to_page[i] = 768 * PDT_ENTRIES + i;
         }
-        // Fill frame_to_page - page tables and frame_to_page
-        for (size_t i = 0; i < PT_ENTRIES * 2; i++)
+        // Fill frame_to_page - page tables and frame_to_page and frame_rc
+        for (size_t i = 0; i < PT_ENTRIES * 3; i++)
             frame_to_page[PT_ENTRIES + i] = 769 * PDT_ENTRIES + i;
     }
 
@@ -194,11 +255,11 @@ namespace Memory
         // Let user access all page tables. Access will be defined in page table entries
         for (int i = 0; i < PDT_ENTRIES; ++i)
             pdt->entries[i] |= PAGE_USER;
-        /** Clear unused page tables (all but 769 and 770)
+        /** Clear unused page tables (all but 769 and 770 and 771)
          * Kernel code is for now referenced in PDT[768] entries, not in page_tables[768], so we can also clear it
         */
         memset(&page_tables[0].entries[0], 0, 769 * PT_ENTRIES * sizeof(uint));
-        memset(&page_tables[770].entries[0], 0, (PDT_ENTRIES - 770) * PT_ENTRIES * sizeof(uint));
+        memset(&page_tables[772].entries[0], 0, (PDT_ENTRIES - 772) * PT_ENTRIES * sizeof(uint));
 
         // Copy asm_pt1 (the page table that maps the pages used by the kernel) in appropriated page table
         memcpy(&page_tables[768].entries[0], &asm_pt1->entries[0], PT_ENTRIES * sizeof(uint));
@@ -213,11 +274,13 @@ namespace Memory
         reload_cr3_asm(); // Apply changes | Full TLB flush is needed because we modified every pdt entry
 
         init_frame_to_page();
+        init_frame_rc();
 
-        lowest_free_frame = PT_ENTRIES * 3;
+        uint used_page_directories = 4; // 0 is kernel, 1 is page tables, 2 is frame_to_page, 3 is frame_rc
+        lowest_free_frame = PT_ENTRIES * used_page_directories;
         lowest_free_pe_user = 1; // 0 is reserved for page faulting
 
-        return 771 * PDT_ENTRIES; // Kernel is only allowed to allocate in higher half
+        return (768 + used_page_directories) * PDT_ENTRIES; // Kernel is only allowed to allocate in higher half
     }
 
     /*void load_grub_modules(const multiboot_info* multibootInfo)
@@ -281,7 +344,7 @@ namespace Memory
             auto pid = frame_to_page[pha >> 12];
             PTE(page_tables, pid)  = 0;
             __asm__ volatile("invlpg (%0)" : : "r" (pid << 12));
-            MARK_FRAME_FREE(pha >> 12);
+            MARK_FRAME_FREE((uint)(pha >> 12));
         }
     }
 
@@ -544,16 +607,19 @@ namespace Memory
             frame_id = PHYS_ADDR(page_tables, address) >> 12;
         }
 
+        uint rc = frame_rc[frame_id];
+        if (rc > 1) // Frame is still used, do not free it
+            return;
+
         // Write PTE in kernel global memory mapping
         auto pte_ptr = &PTE(page_tables, sys_page_id);
         bool lazy = *pte_ptr & PAGE_LAZY_ZERO;
         if (!lazy && frame_id == 0)
             irrecoverable_error("wut");
         *pte_ptr = 0;
-        MARK_FRAME_FREE(frame_id); // Internal deallocation registration
 
-        if (!lazy && frame_id < lowest_free_frame)
-            lowest_free_frame = frame_id;
+        if (!lazy)
+            MARK_FRAME_FREE(frame_id); // Internal deallocation registration
     }
 
     template<bool lazy_zero>
@@ -690,24 +756,43 @@ namespace Memory
         return (void*)(page_beg << 12);
     }
 
-    bool page_fault_handler(Process* current_process, uint fault_address)
+    void handle_shared_page_fault(const Process* current_process, bool higher_half, uint page_id, const page_table_t* pt)
     {
-        // Gather information
-        auto page_id = ADDR_PAGE(fault_address);
-        bool higher_half = fault_address >= KERNEL_VIRTUAL_BASE;
-        auto pt = higher_half ? page_tables : current_process->page_tables;
-        auto pte = PTE(pt, page_id);
+        if (current_process->pdt == pdt)
+            irrecoverable_error("COW on kernel process not supposed to happen");
+        if (higher_half)
+            irrecoverable_error("COW on higher half");
 
-        // Check whether relevant page has been lazily allocated
-        if (!(pte && pte & PAGE_LAZY_ZERO))
-            return false;
+        uint sys_pe = get_free_pe_user(); // Get sys PTE id
+        uint frame = get_free_frame(); // Get frame id
+        Memory::allocate_page_user<false>(frame, sys_pe); // Allocate page in kernel address space
+        auto pte_flags = ((PTE(pt, page_id) & 0x7FF) & ~PAGE_COW) | PAGE_WRITE; // Flags to use for new page
+        uint mapping_pe = get_contiguous_pages(1, current_process); // Get a free pe
 
+        // Move old page to mapping page
+        current_process->update_pte(mapping_pe, PTE(pt, page_id), true);
+        // Update page table entry to point to new page
+        current_process->update_pte(page_id, FRAME_ID_ADDR(frame) | pte_flags, true);
+
+        // Copy page to new page
+        memcpy((void*)(page_id << 12), (void*)(mapping_pe << 12), PAGE_SIZE);
+
+        // Unmap old page which is now at mapping_pe
+        current_process->update_pte(mapping_pe, 0, true);
+
+        // If the frame of the original page is not used anymore, free it
+        if (frame_rc[frame] == 0)
+            MARK_FRAME_FREE(frame);
+    }
+
+    void handle_lazy_zero_page_fault(Process* current_process, bool higher_half, uint page_id, page_table_t* pt)
+    {
         // Allocate frame and update memory mapping
         auto pte_ptr = &PTE(pt, page_id); // Get pointer to pte
         bool page_user = *pte_ptr & PAGE_USER; // Should page be user accessible ?
         uint frame_id = get_free_frame(); // Get frame
         *pte_ptr = FRAME_ID_ADDR(frame_id) | (page_user ? PAGE_USER : 0) | PAGE_WRITE | PAGE_PRESENT; // Update pte
-        INVALIDATE_PAGE(ADDR_PDE(fault_address), ADDR_PTE(fault_address)); // Invalidate cache
+        INVALIDATE_PAGE(page_id >> 10, page_id & 0x3FF); // Invalidate cache
         memset((void*)(page_id << 12), 0, PAGE_SIZE); // Zero out page
 
         // If process is kernel process or address is in higher half, kernel global page tables have already
@@ -715,13 +800,52 @@ namespace Memory
         if (current_process->pdt == pdt || higher_half)
         {
             MARK_FRAME_USED(frame_id, page_id);
-            return true;
+        }
+        else
+        {
+            // Register allocation of the frame in kernel global page tables
+            uint sys_page_id = get_free_pe();
+            PTE(page_tables, sys_page_id) = *pte_ptr;
+            MARK_FRAME_USED(frame_id, sys_page_id);
+        }
+        // If the process is not the kernel, then the page is referenced by the kernel AND the process, thus we need
+        // to increment the frame reference count by one
+        // Normally this is done in Process::update_pte, but here we are not using it, this could be changed. Mind
+        // that this would then trigger an error in MARK_FRAME_USED since we would be trying to allocate a frame
+        // which has a non-null ref count.
+        if (current_process->pdt != pdt)
+            frame_rc[frame_id]++;
+    }
+
+    bool page_fault_handler(Process* current_process, uint fault_address, bool write_access)
+    {
+        // Gather information
+        auto page_id = ADDR_PAGE(fault_address);
+        bool higher_half = fault_address >= KERNEL_VIRTUAL_BASE;
+        auto pt = higher_half ? page_tables : current_process->page_tables;
+        auto pte = PTE(pt, page_id);
+
+        bool handled = false;
+
+        // Handle Shared Read-Only (SHRO) and Copy-On-Write (COW) pages
+        if (pte & PAGE_SHRO)
+        {
+            if (write_access)
+                return false;
+            handle_shared_page_fault(current_process, higher_half, page_id, pt);
+            handled = true;
+        }
+        else if (pte & PAGE_COW)
+        {
+            handle_shared_page_fault(current_process, higher_half, page_id, pt);
+            handled = true;
         }
 
-        // Register allocation of the frame
-        uint sys_page_id = get_free_pe();
-        PTE(page_tables, sys_page_id) = *pte_ptr;
-        MARK_FRAME_USED(frame_id, sys_page_id);
+        // Check whether relevant page has been lazily allocated
+        if (!(pte && pte & PAGE_LAZY_ZERO))
+            return handled;
+
+        handle_lazy_zero_page_fault(current_process, higher_half, page_id, pt);
 
         return true;
     }

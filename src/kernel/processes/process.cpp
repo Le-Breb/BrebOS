@@ -244,7 +244,7 @@ void Process::set_env(const char* name, const char* value)
     env_list.add(new env_var{strdup(name), strdup(value)});
 }
 
-void Process::copy_page_to_other(const Process* other, uint page_id, uint mapping_page_id) const
+void Process::copy_page_to_other_process(const Process* other, uint page_id, uint mapping_page_id) const
 {
     if (!PTE(page_tables, page_id))
         return;
@@ -264,6 +264,19 @@ void Process::copy_page_to_other(const Process* other, uint page_id, uint mappin
 
     // Copy page to child page
     memcpy((void*)(mapping_page_id << 12), (void*)(page_id << 12), PAGE_SIZE);
+}
+
+void Process::copy_page_to_other_process_shared(const Process* other, uint page_id) const
+{
+    auto pte = PTE(page_tables, page_id);
+    if (!(pte & PAGE_PRESENT))
+        return;
+
+    // Remove write permission in current process, as we cannot write to the page anymore since it is shared
+    // Mark page as COW in current and other process
+    bool write = pte & PAGE_WRITE;
+    update_pte(page_id, (pte | (write ? PAGE_COW : PAGE_SHRO)) & ~PAGE_WRITE, true);
+    other->update_pte(page_id , (pte | PAGE_COW) & ~PAGE_WRITE, false);
 }
 
 pid_t Process::fork()
@@ -296,11 +309,11 @@ pid_t Process::fork()
     uint used_pages = ADDR_PAGE(program_break + PAGE_SIZE);
     uint mapping_page = used_pages; // Free page that will be used to map the child pages in the current address space
     for (uint i = 0; i < used_pages; i++)
-        copy_page_to_other(child, i, mapping_page);
+        copy_page_to_other_process_shared(child, i);
 
-    // Duplicate stacks
-    copy_page_to_other(child, ADDR_PAGE(KERNEL_VIRTUAL_BASE - PAGE_SIZE), mapping_page);
-    copy_page_to_other(child, ADDR_PAGE(KERNEL_VIRTUAL_BASE - PAGE_SIZE * 2), mapping_page);
+    // Duplicate stacks - do not use COW for stacks, because they are not shared
+    copy_page_to_other_process(child, ADDR_PAGE(KERNEL_VIRTUAL_BASE - PAGE_SIZE), mapping_page);
+    copy_page_to_other_process(child, ADDR_PAGE(KERNEL_VIRTUAL_BASE - PAGE_SIZE * 2), mapping_page);
 
     // Duplicate PDT entries - This MUST be done after copying the pages, because page tables are lazily allocated.
     // If we do it before, the page tables would not be actually allocated yet, thus PHYS_ADDR would return 0
@@ -329,6 +342,13 @@ pid_t Process::fork()
 
 void Process::update_pte(uint pte, uint val, bool update_cache) const
 {
+    // Decrease previously mapped frame reference count if there were one being referenced
+    uint previous_frame = PTE(page_tables, pte) >> 12;
+    if (Memory::frame_rc[previous_frame])
+        Memory::frame_rc[previous_frame]--;
+    else if (PTE(page_tables, pte) & PAGE_PRESENT && !(PTE(page_tables, pte) & PAGE_LAZY_ZERO))
+        irrecoverable_error("huh");
+
     PTE(page_tables, pte) = val;
     uint pde = pte >> 10;
     if (!pdt->entries[pde])
@@ -340,6 +360,13 @@ void Process::update_pte(uint pte, uint val, bool update_cache) const
     }
     else if (update_cache)
         INVALIDATE_PAGE(pde, pte);
+
+    // Increase frame reference count if we are actually mapping a frame
+    if (val & PAGE_PRESENT && !(val & PAGE_LAZY_ZERO))
+    {
+        uint frame_id = val >> 12;
+        Memory::frame_rc[frame_id]++;
+    }
 }
 
 void* Process::sbrk(int increment)

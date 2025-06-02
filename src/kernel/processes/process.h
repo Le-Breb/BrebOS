@@ -71,7 +71,9 @@ class Process
 
 	static list<env_var*> env_list; // Todo: make env var process specific
 
-	void copy_page_to_other(const Process* other, uint page_id, uint mapping_page_id) const;
+	void copy_page_to_other_process(const Process* other, uint page_id, uint mapping_page_id) const;
+
+	void copy_page_to_other_process_shared(const Process* other, uint page_id) const;
 
 public:
 	uint lowest_free_pe;

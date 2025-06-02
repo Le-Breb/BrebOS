@@ -9,7 +9,9 @@
 #define PAGE_PRESENT	0x1
 #define PAGE_WRITE		0x2
 #define PAGE_USER		0x4
-#define PAGE_LAZY_ZERO	0x200
+#define PAGE_LAZY_ZERO	0x200 // Page is lazily zeroed, meaning it will be allocated and zeroed on first access
+#define PAGE_COW		0x100 // Page is Copy On Write, meaning it is shared between processes and will be copied on first write
+#define PAGE_SHRO		0x400 // Page is shared read-only, meaning it is shared between processes but not writable
 
 #define PDT_ENTRIES 1024
 #define PT_ENTRIES 1024
@@ -32,8 +34,16 @@
 #define PTE(page_tables, i) (page_tables[(i) >> 10].entries[(i) & 0x3FF])
 #define FRAME_USED(i) (Memory::frame_to_page[i] != (uint)-1)
 #define FRAME_FREE(i) !(FRAME_USED(i))
-#define MARK_FRAME_USED(frame_id, page_id) frame_to_page[frame_id] = page_id
-#define MARK_FRAME_FREE(i) frame_to_page[i] = (uint)-1
+#define MARK_FRAME_USED(frame_id, page_id) {frame_to_page[frame_id] = page_id; \
+	if (frame_rc[frame_id]) { irrecoverable_error("Trying to allocate frame which is already allocated"); } \
+	frame_rc[frame_id]++;}
+#define MARK_FRAME_FREE(i) {frame_to_page[i] = (uint)-1; if (frame_rc[i] > 1){irrecoverable_error("Kernel is trying to " \
+ "free a frame which is referenced by a process");} \
+else \
+{\
+frame_rc[i] = 0;}\
+lowest_free_frame = min(lowest_free_frame, i); \
+}
 #define PHYS_ADDR(page_tables, virt_addr) ((page_tables[(virt_addr) >> 22].entries[((virt_addr) >> 12) & 0x3FF] & ~0x3FF) | ((virt_addr) & 0xFFF))
 
 //https://wiki.osdev.org/Paging
@@ -79,6 +89,7 @@ namespace Memory
 	extern page_table_t* page_tables;
 	extern GRUB_module* grub_modules;
 	extern uint* frame_to_page;
+	extern uint* frame_rc;
 	extern Process* kernel_process;
 
 	/** Reload cr3 which will acknowledge every pte change and invalidate TLB */
@@ -173,9 +184,10 @@ namespace Memory
 	 * actually allocates the page and returns true. Otherwise, returns false.
 	 * @param current_process process that was running when the page fault occurred
 	 * @param fault_address address which caused the fault
+	 * @param write_access whether the fault was caused by a write access
 	 * @return whether the fault has been handled or is an error
 	 */
-	bool page_fault_handler(Process* current_process, uint fault_address);
+	bool page_fault_handler(Process* current_process, uint fault_address, bool write_access);
 
 	/**
 	 * Attempts to map some memory that has been written somewhere by some entity (BIOS, GRUB...) with a known physical
