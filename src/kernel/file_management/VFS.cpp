@@ -477,6 +477,12 @@ VFS::file_descriptor* VFS::open(const char* pathname, int flags, int local_fd, i
 		return nullptr;
 	};
 
+	if (dentry->inode->type == Inode::Dir)
+	{
+		err = -EISDIR; // Is a directory
+		return nullptr;
+	}
+
 	int system_fd = get_free_fd();
 	if (system_fd == -1)
 	{
