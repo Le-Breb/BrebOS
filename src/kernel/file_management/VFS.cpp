@@ -4,6 +4,7 @@
 #include <kstring.h>
 #include "../core/fb.h"
 #include "../utils/comparison.h"
+#include "sys/errno.h"
 
 uint VFS::lowest_free_inode = 0;
 uint VFS::lowest_free_dentry = 0;
@@ -435,7 +436,7 @@ void* VFS::load_file(const Dentry* file, uint offset, uint length)
 int VFS::read(int fd, uint length, void* buf)
 {
 	if (file_descriptors[fd].fd == -1)
-		return -2; // fd not open
+		return -EBADF; // fd not open
 
 	auto& file_descriptor = file_descriptors[fd];
 	auto file = file_descriptor.dentry;
@@ -443,11 +444,11 @@ int VFS::read(int fd, uint length, void* buf)
 	uint loaded_bytes;
 
 	if (file->inode->type != Inode::File)
-		return -3; // Not a regular file
+		return -EINVAL; // Not a regular file
 
 	if (!file->inode->superblock->get_fs()->load_file_to_buf(buf, file->name, file->parent, file_descriptor.offset, l,
 																		loaded_bytes))
-		return -4; // IO error
+		return -EIO; // IO error
 
 	file_descriptor.offset += loaded_bytes;
 
@@ -458,7 +459,7 @@ int VFS::read(int fd, uint length, void* buf)
 int VFS::close(int fd)
 {
 	if (file_descriptors[fd].fd == -1)
-		return -2; // File descriptor not found
+		return -EBADF; // File descriptor not found
 
 	// Todo: have a proper system to manage created dentries
 	// delete file_descriptors[fd].dentry; // Free the dentry associated with this fd
@@ -472,14 +473,14 @@ VFS::file_descriptor* VFS::open(const char* pathname, int flags, int local_fd, i
 	Dentry* dentry = browse_to(pathname);
 	if (!dentry)
 	{
-		err = -2; // File not found
+		err = -ENOENT; // File not found
 		return nullptr;
 	};
 
 	int system_fd = get_free_fd();
 	if (system_fd == -1)
 	{
-		err = -3; // No free file descriptors
+		err = -ENFILE; // No free file descriptors
 		return nullptr;
 	}
 
@@ -502,11 +503,11 @@ int VFS::lseek(int fd, int offset, int whence)
 {
 	// Check if fd is valid
 	if (file_descriptors[fd].fd == -1)
-		return -2; // File descriptor not found
+		return -EBADF; // File descriptor not found
 
 	// Check if whence is valid
 	if (whence < 0 || whence > 2)
-		return -3; // Invalid whence value
+		return -EINVAL; // Invalid whence value
 
 	// Get the file descriptor
 	auto& file_descriptor = file_descriptors[fd];
@@ -519,12 +520,12 @@ int VFS::lseek(int fd, int offset, int whence)
 
 	// Check if the new offset is valid
 	if (new_offset < 0)
-		return -3; // Invalid offset
+		return -EINVAL; // Invalid offset
 	if ((uint)new_offset > file_descriptor.dentry->inode->size)
 	{
 		printf_error("lseek called with an offset which would result in a new offset greater than file size. "
 			   "This is compliant with the man page, but BrebOS VFS does not support this.");
-		return -3; // Invalid offset
+		return -EINVAL; // Invalid offset
 	}
 
 	// Apply the new offset

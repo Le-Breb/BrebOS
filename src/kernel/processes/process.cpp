@@ -8,6 +8,7 @@
 #include "../core/fb.h"
 #include "../file_management/VFS.h"
 #include "../utils/comparison.h"
+#include "sys/errno.h"
 
 list<Process::env_var*> Process::env_list = {};
 
@@ -404,7 +405,7 @@ void Process::execve_transfer(Process* proc)
 int Process::open(const char* pathname, int flags)
 {
     if (lowest_free_fd == MAX_FD_PER_PROCESS)
-        return -4; // No more file descriptors available for current process
+        return -EMFILE; // No more file descriptors available for current process
 
     // Get local fd and update lowest_free_fd
     int fd = lowest_free_fd;
@@ -426,7 +427,7 @@ int Process::open(const char* pathname, int flags)
 int Process::read(int fd, void* buf, size_t count) const
 {
     if (file_descriptors[fd] == nullptr)
-        return -2; // File descriptor not found
+        return -EBADF; // File descriptor not found
 
     auto& file_desc = file_descriptors[fd];
 
@@ -436,7 +437,7 @@ int Process::read(int fd, void* buf, size_t count) const
 int Process::close(int fd)
 {
     if (!file_descriptors[fd])
-        return -2; // File descriptor not found
+        return -EBADF; // File descriptor not found
 
     if (int err = VFS::close(file_descriptors[fd]->system_fd) < 0)
         return err; // Propagate error from VFS
@@ -450,7 +451,7 @@ int Process::close(int fd)
 int Process::lseek(int fd, int offset, int whence) const
 {
     if (!file_descriptors[fd])
-        return -2; // File descriptor not found
+        return -EBADF; // File descriptor not found
 
     return VFS::lseek(file_descriptors[fd]->system_fd, offset, whence);
 }

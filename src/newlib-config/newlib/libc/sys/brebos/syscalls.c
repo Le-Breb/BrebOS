@@ -21,7 +21,8 @@ int close(int file) {
     if (ret == 0)
         return 0;
 
-    errno = EBADF;
+    errno = -ret;
+
     return -1;
 }
 char *__env[1] = { 0 };
@@ -75,11 +76,8 @@ int lseek(int file, int ptr, int dir) {
   if (pos >= 0)
       return pos;
 
-  if (pos == -2)
-      errno = EBADF; // Bad FD
-  if (pos == -3)
-    errno = EINVAL; // whence is not valid. Or: the resulting file offset
-                     // would be negative, or beyond the end of a seekable device.
+  errno = -pos;
+
   return -1;
   
 }
@@ -96,12 +94,7 @@ int open(const char *name, int flags, ...) {
   if (fd >= 0)
       return fd;
 
-  if (fd == -2)
-      errno = ENOENT; // File does not exist
-  else if (fd == -3)
-      errno = ENFILE; // System wide fd limit reached
-  else if (fd == -4)
-      errno = EMFILE; // Process fd limit reached
+  errno = -fd;
 
   return -1;
 }
@@ -112,10 +105,7 @@ int read(int file, char *ptr, int len) {
   if (r >= 0)
       return r;
 
-  if (r == -2)
-    errno = EBADF;
-  if (r == -3)
-      errno = EIO;
+  errno = -r;
 
   return -1;
 }
@@ -132,8 +122,15 @@ void* sbrk(ptrdiff_t incr) {
     return br;
 }
 int stat(const char *file, struct stat *st) {
-  st->st_mode = S_IFCHR;
-  return 0;
+  int ret;
+  __asm__ volatile("int $0x80" : "=a"(ret) : "a"(16), "D"(file), "S"(st));
+
+  if (ret == 0)
+      return ret;
+
+  errno = -ret;
+
+  return -1;
 }
 long unsigned int times(struct tms *buf) {
   return -1;
