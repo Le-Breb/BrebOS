@@ -27,7 +27,6 @@ extern "C" bool fpu_init_asm_();
 //Todo: Use higher precision timer
 //Todo: Free ELFs after programs termination
 //Todo: Handle userland memory leaks
-//Todo: Copy on write to make fork faster
 //Todo: Process R_386_PC32 relocations in order to rewrite libdynlk' Makefile without ld
 //Todo: Fix waitpid return value so that it is usable with macros such as WEXITSTATUS
 //Todo: Include newlib build in Makefile
