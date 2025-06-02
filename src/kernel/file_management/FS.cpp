@@ -1,5 +1,9 @@
 #include "FS.h"
 
+FS::FS(blksize_t block_size, dev_t dev) : block_size(block_size), dev(dev), superblock(nullptr)
+{
+}
+
 FS::~FS() = default;
 
 list<FS*>* FS::fs_list = nullptr;
@@ -18,4 +22,14 @@ void* FS::load_file_to_buf(const char* file_name, Dentry* parent_dentry, uint of
 
 	delete[] buf;
 	return nullptr;
+}
+
+blksize_t FS::get_block_size() const
+{
+	return block_size;
+}
+
+dev_t FS::get_dev() const
+{
+	return dev;
 }

@@ -3,6 +3,7 @@
 
 #include "interrupts.h"
 #include "../processes/process.h"
+#include <sys/stat.h>
 
 
 class Syscall
@@ -99,6 +100,8 @@ class Syscall
 	static int read(Process* p);
 
 	static int close(Process* p);
+
+	static int stat(Process* p);
 public:
 	/**
 	 * Handles a syscall

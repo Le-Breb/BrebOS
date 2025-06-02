@@ -77,7 +77,7 @@ bool LongDirEntry::is_EOF() const
     return order & LAST_LONG_ENTRY;
 }
 
-FAT_drive* FAT_drive::from_drive(unsigned char drive)
+FAT_drive* FAT_drive::from_drive(unsigned char drive, uint major)
 {
     unsigned char buf[ATA_SECTOR_SIZE];
     if (ATA::read_sectors(drive, 1, 0, ES, (uint)buf))
@@ -106,32 +106,34 @@ FAT_drive* FAT_drive::from_drive(unsigned char drive)
     if (fat_type != FAT32)
         return nullptr;
 
-    return new FAT_drive(drive, fat_boot);
+    return new FAT_drive(drive, fat_boot, major);
 }
 
-FAT_drive::FAT_drive(unsigned char id, fat_BS_t* bs) : bs(*bs),
-                                                       extBS_32(*(fat_extBS_32*)this->bs.extended_section),
-                                                       total_sectors((bs->total_sectors_16 == 0)
-                                                                         ? bs->total_sectors_32
-                                                                         : bs->total_sectors_16),
-                                                       fat_size((bs->table_size_16 == 0)
-                                                                    ? extBS_32.table_size_32
-                                                                    : bs->table_size_16),
-                                                       root_dir_sectors(((bs->root_entry_count * 32) +
-                                                               (bs->bytes_per_sector - 1)) /
-                                                           bs->bytes_per_sector),
-                                                       first_data_sector(
-                                                           bs->reserved_sector_count +
-                                                           (bs->table_count * fat_size) +
-                                                           root_dir_sectors),
-                                                       first_fat_sector(bs->reserved_sector_count),
-                                                       data_sectors(
-                                                           total_sectors -
-                                                           (bs->reserved_sector_count +
-                                                               (bs->table_count * fat_size) +
-                                                               root_dir_sectors)),
-                                                       total_clusters(data_sectors / bs->sectors_per_cluster),
-                                                       id(id)
+FAT_drive::FAT_drive(unsigned char id, fat_BS_t* bs, uint major) : FS(ATA_SECTOR_SIZE,
+                                                                            (major & 0xFF) << 8 | (id & 0xFF)),
+                                                                   bs(*bs),
+                                                                   extBS_32(*(fat_extBS_32*)this->bs.extended_section),
+                                                                   total_sectors((bs->total_sectors_16 == 0)
+                                                                           ? bs->total_sectors_32
+                                                                           : bs->total_sectors_16),
+                                                                   fat_size((bs->table_size_16 == 0)
+                                                                                ? extBS_32.table_size_32
+                                                                                : bs->table_size_16),
+                                                                   root_dir_sectors(((bs->root_entry_count * 32) +
+                                                                           (bs->bytes_per_sector - 1)) /
+                                                                       bs->bytes_per_sector),
+                                                                   first_data_sector(
+                                                                       bs->reserved_sector_count +
+                                                                       (bs->table_count * fat_size) +
+                                                                       root_dir_sectors),
+                                                                   first_fat_sector(bs->reserved_sector_count),
+                                                                   data_sectors(
+                                                                       total_sectors -
+                                                                       (bs->reserved_sector_count +
+                                                                           (bs->table_count * fat_size) +
+                                                                           root_dir_sectors)),
+                                                                   total_clusters(data_sectors / bs->sectors_per_cluster),
+                                                                   id(id)
 {
     FAT = new unsigned char[ATA_SECTOR_SIZE];
     buf = new char[ATA_SECTOR_SIZE];
@@ -266,7 +268,9 @@ void FAT_drive::init()
 {
     ATA::init();
     for (uint i = 0; i < 4; ++i)
-        drives[i] = ATA::drive_present(i) && IDE::devices[i].Type == IDE_ATA ? from_drive(i) : nullptr;
+        drives[i] = ATA::drive_present(i) && IDE::devices[i].Type == IDE_ATA
+                        ? from_drive(i, DEV_ATA_PRIMARY_MASTER_MAJOR)
+                        : nullptr;
 
     // Register FS
     for (auto& drive : drives)
@@ -396,10 +400,36 @@ Dentry* FAT_drive::get_child_dentry(Dentry& parent_dentry, const char* name)
     return dir_entry_to_dentry(entries[entry_id], &parent_dentry, name);
 }
 
-Dentry* FAT_drive::dir_entry_to_dentry(const DirEntry& dir_entry, Dentry* parent_dentry, const char* name) const
+Dentry* FAT_drive::dir_entry_to_dentry(const DirEntry& dir_entry, Dentry* parent_dentry, const char* name)
 {
     Inode::Type inode_type = dir_entry.attrs & DIRECTORY ? Inode::Dir : Inode::File;
-    auto inode = new Inode(superblock, dir_entry.file_size, dir_entry.first_cluster_addr(), inode_type);
+
+    // Count blocks
+    blkcnt_t blocks;
+    if (inode_type == Inode::File)
+        blocks = (blkcnt_t)(dir_entry.file_size + 512 - 1) / 512; // 512 is the man page value, not ATA_SECTOR_SIZE
+    else
+    {
+        blocks = 0;
+        uint sector = dir_entry.first_cluster_addr();
+        uint cluster = sector * bs.sectors_per_cluster;
+        uint curr_cluster = cluster;
+        ctx ctx{};
+
+        // Count blocks until we reach the end of the cluster chain
+        do
+        {
+            if (!change_active_cluster(curr_cluster, ctx, nullptr))
+            {
+                printf_error("Failed to change active cluster while getting child dentry");
+                return nullptr;
+            }
+            curr_cluster = ctx.table_value;
+            blocks++;
+        } while (curr_cluster < CLUSTER_MIN_EOC);
+    }
+    auto inode = new Inode(superblock, dir_entry.file_size, dir_entry.first_cluster_addr(), inode_type,
+                           dir_entry.first_cluster_addr(), 1, 0, 0, 0, blocks, 0, 0, 0);
 
     return new Dentry(inode, parent_dentry, name);
 }
@@ -593,7 +623,7 @@ bool FAT_drive::drive_present(uint drive_id)
 
 Inode* FAT_drive::get_root_node()
 {
-    return new Inode(superblock, 0, extBS_32.root_cluster, Inode::Dir);
+    return new Inode(superblock, 0, extBS_32.root_cluster, Inode::Dir, 0, 1, 0, 0, 1, 0, 0, 0, 0);
 }
 
 bool FAT_drive::write_buf_to_file(Dentry& dentry, const void* buf, uint length)

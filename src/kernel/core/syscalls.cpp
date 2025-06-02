@@ -5,8 +5,10 @@
 #include "PIC.h"
 #include "../file_management/VFS.h"
 #include "fb.h"
+#include "../file_management/superblock.h"
 #include "../network/DNS.h"
 #include "../network/HTTP.h"
+#include "sys/errno.h"
 
 void Syscall::start_process(Process* p)
 {
@@ -195,6 +197,9 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             break;
         case 15:
             wget(&p->cpu_state);
+            break;
+        case 16:
+            p->cpu_state.eax = (uint)stat(p);
             break;
         case 17:
             calloc(p);
@@ -415,6 +420,33 @@ int Syscall::close(Process* p)
     int fd = (int)p->cpu_state.edi;
 
     return p->close(fd);
+}
+
+int Syscall::stat(Process* p)
+{
+    const char* pathname = (const char*)p->cpu_state.edi;
+    struct stat* statbuf = (struct stat*)p->cpu_state.esi;
+    Dentry* dentry = VFS::browse_to(pathname);
+
+    if (!dentry)
+        return -ENOENT; // No such file or directory
+
+    auto inode = dentry->inode;
+    statbuf->st_dev = inode->superblock->get_fs()->get_dev();
+    statbuf->st_ino = inode->id;
+    statbuf->st_mode = inode->mode;
+    statbuf->st_nlink = inode->nlink;
+    statbuf->st_uid = inode->uid;
+    statbuf->st_gid = inode->gid;
+    statbuf->st_rdev = 0;
+    statbuf->st_size = (off_t)inode->size;
+    statbuf->st_blksize = dentry->inode->superblock->get_fs()->get_block_size();
+    statbuf->st_blocks = inode->blocks;
+    statbuf->st_atime = inode->atime;
+    statbuf->st_mtime = inode->mtime;
+    statbuf->st_ctime = inode->ctime;
+
+    return 0;
 }
 
 __attribute__((no_instrument_function)) // May not return, which would mess up profiling data

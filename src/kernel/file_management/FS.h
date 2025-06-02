@@ -4,15 +4,24 @@
 #include "inode.h"
 #include "../utils/list.h"
 #include "dentry.h"
+#include <sys/stat.h>
 
 class Superblock;
+
+#define DEV_ATA_PRIMARY_MASTER_MAJOR 3
 
 class FS
 {
 	friend Superblock;
 
+	const blksize_t block_size;
+
+	dev_t dev;
+
 protected:
 	Superblock* superblock;
+
+	FS(blksize_t block_size, dev_t dev);
 
 public:
 	typedef void (*ls_printer)(const Dentry& dentry);
@@ -39,7 +48,14 @@ public:
 
 	virtual bool resize(Dentry& dentry, uint new_size) = 0;
 
-	[[nodiscard]] virtual Inode* get_root_node() = 0;
+	[[nodiscard]]
+	virtual Inode* get_root_node() = 0;
+
+	[[nodiscard]]
+	blksize_t get_block_size() const;
+
+	[[nodiscard]]
+	dev_t get_dev() const;
 };
 
 

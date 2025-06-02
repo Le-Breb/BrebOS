@@ -26,7 +26,7 @@ void VFS::init()
 	mount_rootfs(*FS::fs_list->get(0));
 
 	// Create /mnt
-	Inode* mnt_node = new Inode(nullptr, 0, 0, Inode::Dir);
+	Inode* mnt_node = new Inode(nullptr, 0, 0, Inode::Dir, 1, 1, 0, 0, 0, 1, 0, 0, 0);
 	Dentry* mnt_dentry = new Dentry(mnt_node, dentries[0], "mnt");
 	if (!cache_dentry(mnt_dentry))
 	{

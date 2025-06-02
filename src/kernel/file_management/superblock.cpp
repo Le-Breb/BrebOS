@@ -1,7 +1,7 @@
 #include "superblock.h"
 #include <kstring.h>
 
-uint Superblock::num_devices = 0;
+dev_t Superblock::num_devices = 0;
 Superblock* Superblock::block_list[MAX_DEVICES] = {nullptr};
 
 Superblock::Superblock(const char* mount_pathname, FS* fs) : fs(fs)
@@ -15,7 +15,7 @@ bool Superblock::add(const char* mount_pathname, FS* fs)
 	if (num_devices == MAX_DEVICES)
 		return false;
 
-	for (uint i = 0; i < num_devices; ++i)
+	for (dev_t i = 0; i < num_devices; ++i)
 	{
 		if (!strcmp(mount_pathname, block_list[i]->mount_pathname))
 			return false;
@@ -28,7 +28,7 @@ bool Superblock::add(const char* mount_pathname, FS* fs)
 	return true;
 }
 
-uint Superblock::get_num_devices()
+dev_t Superblock::get_num_devices()
 {
 	return num_devices;
 }

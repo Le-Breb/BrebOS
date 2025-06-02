@@ -3,12 +3,13 @@
 
 #include <kstddef.h>
 #include "FS.h"
+#include <sys/stat.h>
 
 #define MAX_DEVICES 4
 
 class Superblock
 {
-	static uint num_devices;
+	static dev_t num_devices;
 	static Superblock* block_list[MAX_DEVICES];
 
 	Superblock(const char* mount_pathname, FS* fs);
@@ -21,7 +22,8 @@ public:
 
 	static bool add(const char* mount_pathname, FS* fs);
 
-	[[nodiscard]] static uint get_num_devices();
+	[[nodiscard]]
+	static dev_t get_num_devices();
 };
 
 

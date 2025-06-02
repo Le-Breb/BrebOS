@@ -166,7 +166,7 @@ class FAT_drive : public FS
 	unsigned char* FAT; // Buffer to store FAT
 	const unsigned char id; // Drive IDE ID
 
-	explicit FAT_drive(unsigned char id, fat_BS_t* bs);
+	explicit FAT_drive(unsigned char id, fat_BS_t* bs, uint major);
 
 	/**Splits a string based on '/' separator
 	 *
@@ -188,13 +188,13 @@ class FAT_drive : public FS
 	bool
 	change_active_cluster(uint new_active_cluster, ctx& ctx, void* buffer);
 
-	static FAT_drive* from_drive(unsigned char drive);
+	static FAT_drive* from_drive(unsigned char drive, uint major);
 
 	uint get_child_dir_entry_id(const Dentry& parent_dentry, const char* name, ctx& ctx);
 
 	Dentry* get_child_dentry(Dentry& parent_dentry, const char* name) override;
 
-	Dentry* dir_entry_to_dentry(const DirEntry& dir_entry, Dentry* parent_dentry, const char* name) const;
+	Dentry* dir_entry_to_dentry(const DirEntry& dir_entry, Dentry* parent_dentry, const char* name);
 
 	bool write_fat(ctx& ctx) const;
 
