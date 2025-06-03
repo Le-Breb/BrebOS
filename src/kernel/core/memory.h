@@ -34,15 +34,15 @@
 #define PTE(page_tables, i) (page_tables[(i) >> 10].entries[(i) & 0x3FF])
 #define FRAME_USED(i) (Memory::frame_to_page[i] != (uint)-1)
 #define FRAME_FREE(i) !(FRAME_USED(i))
-#define MARK_FRAME_USED(frame_id, page_id) {frame_to_page[frame_id] = page_id; \
-	if (frame_rc[frame_id]) { irrecoverable_error("Trying to allocate frame which is already allocated"); } \
-	frame_rc[frame_id]++;}
-#define MARK_FRAME_FREE(i) {frame_to_page[i] = (uint)-1; if (frame_rc[i] > 1){irrecoverable_error("Kernel is trying to " \
- "free a frame which is referenced by a process");} \
+#define MARK_FRAME_USED(frame_id, page_id) {Memory::frame_to_page[(frame_id)] = (page_id); \
+	if (Memory::frame_rc[(frame_id)]) { irrecoverable_error("Trying to allocate frame which is already allocated"); } \
+	Memory::frame_rc[(frame_id)]++;}
+#define MARK_FRAME_FREE(i) {Memory::frame_to_page[(i)] = (uint)-1; if (Memory::frame_rc[(i)] > 1){irrecoverable_error \
+	("Kernel is trying to free a frame which is referenced by a process");} \
 else \
 {\
-frame_rc[i] = 0;}\
-lowest_free_frame = min(lowest_free_frame, i); \
+Memory::frame_rc[(i)] = 0;}\
+Memory::lowest_free_frame = min(Memory::lowest_free_frame, (i)); \
 }
 #define PHYS_ADDR(page_tables, virt_addr) ((page_tables[(virt_addr) >> 22].entries[((virt_addr) >> 12) & 0x3FF] & ~0x3FF) | ((virt_addr) & 0xFFF))
 
