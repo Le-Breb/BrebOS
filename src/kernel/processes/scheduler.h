@@ -53,7 +53,7 @@ private:
 
 	static Process* load_process(const char* path, pid_t pid, pid_t ppid, int argc, const char** argv);
 
-	static void wake_up_process_waiting_for_another_process(pid_t terminated_pid, pid_t waiting_process_pid);
+	static void wake_up_process_parent(pid_t process_pid);
 
 public:
 	/**

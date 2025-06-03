@@ -391,24 +391,25 @@ void Scheduler::create_kernel_init_process(void* process_host_mem, const uint lo
     *kernel_process = k;
 }
 
-void Scheduler::wake_up_process_waiting_for_another_process(pid_t terminated_pid, pid_t waiting_process_pid)
+void Scheduler::wake_up_process_parent(pid_t process_pid)
 {
     pid_t curr_pid = get_running_process_pid();
-    auto waiting_process = processes[waiting_process_pid];
+    pid_t ppid = processes[process_pid]->ppid;
+    auto waiting_process = processes[ppid];
 
     // Resume process, unless it's the current process, in which case it is already in the ready queue
-    if (waiting_process_pid != curr_pid)
-        ready_queue->enqueue(waiting_process_pid);
+    if (ppid != curr_pid)
+        ready_queue->enqueue(ppid);
     // waitpid return value
     auto wstatus_addr = (int*)waiting_process->cpu_state.esi;
     if (wstatus_addr)
-        waiting_process->values_to_write.add({wstatus_addr, processes[terminated_pid]->ret_val});
+        waiting_process->values_to_write.add({wstatus_addr, processes[process_pid]->ret_val});
     // Clear flag
     waiting_process->flags &= ~P_WAITING_PROCESS;
     // Set return value
-    waiting_process->cpu_state.eax = terminated_pid;
+    waiting_process->cpu_state.eax = process_pid;
     // Remove child
-    waiting_process->children.remove(terminated_pid);
+    waiting_process->children.remove(process_pid);
 }
 
 void Scheduler::free_terminated_process(Process& p)
@@ -424,7 +425,7 @@ void Scheduler::free_terminated_process(Process& p)
     {
         if (p.is_waited_by_parent || processes[p.ppid]->is_waiting_for_any_child_to_terminate)
         {
-            wake_up_process_waiting_for_another_process(pid, p.ppid);
+            wake_up_process_parent(pid);
             p.is_waited_by_parent = processes[p.ppid]->is_waiting_for_any_child_to_terminate = false;
         }
 
