@@ -85,6 +85,9 @@ RELEASE=1 make run
 
 ℹ️ This will ask for elevated privileges, which are required for setting up NAT. ℹ️
 
+
+Note: To date, running `git pull` may break stuff, because newlib is not included in the build system, thus you would update kernel code which could rely on non-updated newlib code. As for now, if u want the latest udpate, please re-clone the repo and rerun everything (i'm sorry, I'll fix that one day).
+
 ## What can I do with BrebOS ❓
 
 ### Commands
@@ -161,12 +164,31 @@ running locally, which is automatically started when executing `make run`.
 - **Paging 🔀** (PDT, page tables)
 - **Dynamic memory allocation 📦** (malloc, free)
 - **Lazy memory allocation 🥱** (actually allocate memory only when processes try to access it)
+- **Shared pages 🤝** (Read-Only shared pages and Copy-On-Write)
 
 ### Processes </>
 
 - **Userland 🙍🏻‍♂️** (processes run in ring 3, kernel in ring 0)
 - **Preemptive scheduling ✋**
 - **Syscalls 📞**
+    - 'man page'-ish 🖹
+      - execve
+      - fork
+      - malloc/free/realloc
+      - open/read/write/close/lseek
+      - stat
+      - get_pid
+      - wait_pid
+      - mkdir/touch
+    - custom 🎨
+      - terminate_process
+      - get_key
+      - shutdown
+      - runtime dynamic linker
+      - ls
+      - clear_screen
+      - wget
+      - feh
 - **ELF support </>**
     - ELF loading and execution (ELf processing, address space setup, global/local static variables handling)
     - Dynamic loader (relocations)
