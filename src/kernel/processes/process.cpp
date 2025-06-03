@@ -453,20 +453,20 @@ int Process::open(const char* pathname, int flags)
 
 int Process::read(int fd, void* buf, size_t count) const
 {
-    if (file_descriptors[fd] == nullptr)
+    int sys_fd = proc_to_sys_fd(fd);
+    if (sys_fd == -1)
         return -EBADF; // File descriptor not found
 
-    auto& file_desc = file_descriptors[fd];
-
-    return VFS::read(file_desc->system_fd, count, buf);
+    return VFS::read(sys_fd, count, buf);
 }
 
 int Process::close(int fd)
 {
-    if (!file_descriptors[fd])
+    int sys_fd = proc_to_sys_fd(fd);
+    if (sys_fd == -1)
         return -EBADF; // File descriptor not found
 
-    if (int err = VFS::close(file_descriptors[fd]->system_fd) < 0)
+    if (int err = VFS::close(sys_fd) < 0)
         return err; // Propagate error from VFS
 
     file_descriptors[fd] = nullptr; // Mark as closed
@@ -477,8 +477,17 @@ int Process::close(int fd)
 
 int Process::lseek(int fd, int offset, int whence) const
 {
-    if (!file_descriptors[fd])
+    int sys_fd = proc_to_sys_fd(fd);
+    if (sys_fd == -1)
         return -EBADF; // File descriptor not found
 
-    return VFS::lseek(file_descriptors[fd]->system_fd, offset, whence);
+    return VFS::lseek(sys_fd, offset, whence);
+}
+
+int Process::proc_to_sys_fd(int fd) const
+{
+    if (fd >= 0 && fd < MAX_FD_PER_PROCESS && file_descriptors[fd])
+        return file_descriptors[fd]->system_fd; // Return system file descriptor
+
+    return -1;
 }

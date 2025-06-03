@@ -32,6 +32,7 @@ public:
 		uint offset;
 		Dentry* dentry;
 	};
+	static file_descriptor file_descriptors[MAX_FD];
 private:
 	static uint lowest_free_inode;
 	static uint lowest_free_dentry;
@@ -40,7 +41,6 @@ private:
 	static File* fds[MAX_OPEN_FILES]; // Open file descriptors
 	static Dentry* path[PATH_CAPACITY];
 	static uint num_path;
-	static file_descriptor file_descriptors[MAX_FD];
 	static size_t lowest_free_fd;
 
 	/**

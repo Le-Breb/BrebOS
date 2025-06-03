@@ -256,6 +256,9 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
         case 33:
             p->cpu_state.eax = lseek(p);
             break;
+        case 34:
+            p->cpu_state.eax = fstat(p);
+            break;
         default:
             printf_error("Received unknown syscall id: 0x%x", cpu_state->eax);
             break;
@@ -422,15 +425,8 @@ int Syscall::close(Process* p)
     return p->close(fd);
 }
 
-int Syscall::stat(Process* p)
+void stat_base(struct stat* statbuf, const Dentry* dentry)
 {
-    const char* pathname = (const char*)p->cpu_state.edi;
-    struct stat* statbuf = (struct stat*)p->cpu_state.esi;
-    Dentry* dentry = VFS::browse_to(pathname);
-
-    if (!dentry)
-        return -ENOENT; // No such file or directory
-
     auto inode = dentry->inode;
     statbuf->st_dev = inode->superblock->get_fs()->get_dev();
     statbuf->st_ino = inode->id;
@@ -445,6 +441,34 @@ int Syscall::stat(Process* p)
     statbuf->st_atime = inode->atime;
     statbuf->st_mtime = inode->mtime;
     statbuf->st_ctime = inode->ctime;
+}
+
+int Syscall::stat(Process* p)
+{
+    const char* pathname = (const char*)p->cpu_state.edi;
+    struct stat* statbuf = (struct stat*)p->cpu_state.esi;
+    Dentry* dentry = VFS::browse_to(pathname);
+
+    if (!dentry)
+        return -ENOENT; // No such file or directory
+
+    stat_base(statbuf, dentry);
+
+    return 0;
+}
+
+int Syscall::fstat(Process* p)
+{
+    int proc_fd = (int)p->cpu_state.edi;
+    struct stat* statbuf = (struct stat*)p->cpu_state.esi;
+
+    // Get file from process' open files
+    auto fd = p->proc_to_sys_fd(proc_fd);
+    if (fd == -1)
+        return -EBADF; // Bad file descriptor
+
+    // Fill stat structure
+    stat_base(statbuf, VFS::file_descriptors[fd].dentry);
 
     return 0;
 }

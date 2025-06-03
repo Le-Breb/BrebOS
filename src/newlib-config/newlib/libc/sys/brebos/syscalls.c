@@ -49,8 +49,16 @@ int fork(void) {
 }
 int fstat(int file, struct stat *st)
 {
-    st->st_mode = S_IFCHR;
-    return 0;
+    int ret;
+    __asm__ volatile("int $0x80" : "=a"(ret) : "a"(34), "D"(file), "S"(st));
+
+
+    if (ret >= 0)
+        return ret;
+
+    errno = -ret;
+
+    return -1;
 }
 int getpid(void) {
     int pid;

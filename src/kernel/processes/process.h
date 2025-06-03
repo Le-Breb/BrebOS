@@ -67,7 +67,9 @@ class Process
 	Process* exec_replacement = nullptr; // Process which will replace this program after an call to execve
 
 	VFS::file_descriptor* file_descriptors[MAX_FD_PER_PROCESS]{};
-	int lowest_free_fd = 0;
+	// Lowest free file descriptor, 0, 1 and 2 are reserved for stdin, stdout and stderr. They are not implemented yet.
+	// but its for POSIX compatibility
+	int lowest_free_fd = 3;
 
 	static list<env_var*> env_list; // Todo: make env var process specific
 
@@ -222,6 +224,8 @@ public:
 
 	[[nodiscard]]
 	int lseek(int fd, int offset, int whence) const;
+
+	int proc_to_sys_fd(int fd) const;
 };
 
 #endif //INCLUDE_PROCESS_H
