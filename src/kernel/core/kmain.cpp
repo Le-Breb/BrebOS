@@ -13,7 +13,7 @@
 #define FPS 50
 
 // Write message, flush framebuffer, execute operation, write ok
-#define FLUSHED_FB_OK_OP(msg, op) { FB::write(msg); FB::flush(); (op); FB::ok(); }
+#define FLUSHED_FB_OK_OP(msg, op) { FB::write(msg); FB::flush(); (op); FB::ok(); FB::flush(); }
 // Write message, execute operation, write ok
 #define FB_OK_OP(msg, op) { FB::write(msg); (op); FB::ok(); }
 
@@ -30,7 +30,7 @@ extern "C" bool fpu_init_asm_();
 //Todo: Process R_386_PC32 relocations in order to rewrite libdynlk' Makefile without ld
 //Todo: Fix waitpid return value so that it is usable with macros such as WEXITSTATUS
 //Todo: Include newlib build in Makefile
-extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot structure pointer
+extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {
     _init(); // Execute constructors
 
