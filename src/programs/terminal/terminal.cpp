@@ -50,8 +50,7 @@ void exec(const char** argv)
 
 		__builtin_unreachable();
 	}
-	[[maybe_unused]] int wstatus;
-	if (waitpid(child_pid, &wstatus, 0) == -1)
+	if (waitpid(child_pid, nullptr, 0) == -1)
 	{
 		fprintf(stderr, "Waitpid failed\n");
 		_exit(1);

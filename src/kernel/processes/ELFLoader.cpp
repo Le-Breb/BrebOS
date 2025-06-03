@@ -193,7 +193,7 @@ ELFLoader::copy_elf_subsegment_to_address_space(const void* bytes_ptr, uint n, E
     copied_bytes += n;
 }
 
-void ELFLoader::register_elf_init_and_fini(const ELF* elf, [[maybe_unused]] uint runtime_load_address)
+void ELFLoader::register_elf_init_and_fini(const ELF* elf, uint runtime_load_address)
 {
     uint init_arr_byte_size = 0;
     uint fini_arr_byte_size = 0;

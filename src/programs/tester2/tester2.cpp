@@ -15,8 +15,7 @@ extern "C" int main(int argc, char** argv)
 	}
 	if (child > 0)
 	{
-		[[maybe_unused]] int wstatus;
-		waitpid(child, &wstatus, 0);
+		waitpid(child, nullptr, 0);
 		printf("Finished waiting for child PID: %u\n", child);
 	}
 	else

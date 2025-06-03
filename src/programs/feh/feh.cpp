@@ -129,8 +129,7 @@ ERROR_TYPE parse_and_display_image(const char* pathname)
 
         __builtin_unreachable();
     }
-    [[maybe_unused]] int wstatus = 0;
-    if (waitpid(child_pid, &wstatus, 0) == -1)
+    if (waitpid(child_pid, nullptr, 0) == -1)
     {
         fprintf(stderr, "Waitpid failed\n");
         _exit(1);

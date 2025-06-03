@@ -16,7 +16,7 @@ static uint64_t* start_cycle;
 
 
 extern "C" void __attribute__((no_instrument_function))
-__cyg_profile_func_enter([[maybe_unused]] void* this_fn, [[maybe_unused]] void* call_site)
+__cyg_profile_func_enter(void* this_fn, [[maybe_unused]] void* call_site)
 {
     if (initialized)
     {
@@ -28,7 +28,7 @@ __cyg_profile_func_enter([[maybe_unused]] void* this_fn, [[maybe_unused]] void* 
 }
 
 extern "C" void __attribute__((no_instrument_function))
-__cyg_profile_func_exit([[maybe_unused]] void* this_fn, [[maybe_unused]] void* call_site)
+__cyg_profile_func_exit(void* this_fn, [[maybe_unused]] void* call_site)
 {
     if (initialized)
     {
