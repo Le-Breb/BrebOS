@@ -193,7 +193,7 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             FB::clear_screen();
             break;
         case 14:
-            wait_pid(p);
+            p->cpu_state.eax = wait_pid(p);
             break;
         case 15:
             wget(&p->cpu_state);
@@ -474,8 +474,16 @@ int Syscall::fstat(Process* p)
 }
 
 __attribute__((no_instrument_function)) // May not return, which would mess up profiling data
-void Syscall::wait_pid(Process* p)
+int Syscall::wait_pid(Process* p)
 {
-    Scheduler::register_process_wait(p->get_pid(), (int)p->cpu_state.edi);
+    int wait = Scheduler::register_process_wait(p->get_pid(), (int)p->cpu_state.edi);
+
+    // Direct return, either error or child already terminated
+    if (wait != 0)
+        return wait;
+
+    // Wait
     TRIGGER_TIMER_INTERRUPT
+
+    return (int)p->cpu_state.eax; // Return value is written here by Scheduler
 }

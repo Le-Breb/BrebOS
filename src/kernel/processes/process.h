@@ -87,6 +87,8 @@ public:
 	stack_state_t stack_state{}; // Execution context
 	stack_state_t k_stack_state{}; // Syscall handler execution context
 
+	bool is_waiting_for_any_child_to_terminate = false; // Tells whether the process is waiting for any child to terminate
+	bool is_waited_by_parent = false; // Tells whether the parent specifically waited for this process to terminate
 	list<pid_t> children{};
 	list<address_val_pair> values_to_write{}; // list of values that need to be written in process address space
 

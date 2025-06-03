@@ -62,7 +62,7 @@ class Syscall
 
 	static void wget(const cpu_state_t* cpu_state);
 
-	static void wait_pid(Process* p);
+	static int wait_pid(Process* p);
 
 	static void getenv(Process* p);
 

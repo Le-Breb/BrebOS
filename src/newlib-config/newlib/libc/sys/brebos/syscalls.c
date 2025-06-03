@@ -3,6 +3,7 @@
 #include <sys/types.h>
 #include <sys/fcntl.h>
 #include <sys/times.h>
+#include <sys/wait.h>
 #include <errno.h>
 #include <sys/time.h>
 #include <stdio.h>
@@ -148,8 +149,7 @@ int unlink(char *name) {
   return -1;
 }
 int wait(int *status) {
-    errno = ECHILD;
-    return -1;
+    return waitpid(-1, status, 0);
 }
 int write(int file, char *ptr, int len)
 {

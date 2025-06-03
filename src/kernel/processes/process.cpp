@@ -336,6 +336,7 @@ pid_t Process::fork()
 
     Scheduler::set_process_ready(child);
 
+    children.add(child->pid);
     child->cpu_state.eax = 0; // Fork returns 0 in child process
     return child->pid;
 }
@@ -427,6 +428,8 @@ void Process::execve_transfer(Process* proc)
         proc->values_to_write.add(val);
     proc->pid = pid;
     exec_replacement = proc;
+    proc->is_waiting_for_any_child_to_terminate = is_waiting_for_any_child_to_terminate;
+    proc->is_waited_by_parent = is_waited_by_parent;
 }
 
 int Process::open(const char* pathname, int flags)

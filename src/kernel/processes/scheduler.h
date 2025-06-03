@@ -36,7 +36,6 @@ private:
 	static pid_t running_process;
 	static queue<pid_t, MAX_PROCESSES>* ready_queue;
 	static queue<pid_t, MAX_PROCESSES>* waiting_queue;
-	static list<pid_t> process_waiting_list[MAX_PROCESSES];
 	static Process* processes[MAX_PROCESSES];
 	static MinHeap<asleep_process>* sleeping_processes;
 
@@ -53,6 +52,8 @@ private:
 	static void* stack_switch_stack_top;
 
 	static Process* load_process(const char* path, pid_t pid, pid_t ppid, int argc, const char** argv);
+
+	static void wake_up_process_waiting_for_another_process(pid_t terminated_pid, pid_t waiting_process_pid);
 
 public:
 	/**
@@ -109,7 +110,7 @@ public:
 	 */
 	static void stop_kernel_init_process();
 
-	static bool register_process_wait(pid_t waiting_process, pid_t waiting_for_process);
+	static int register_process_wait(pid_t waiting_process, pid_t waited_for_process);
 
 	static void set_process_asleep(Process* p, uint duration);
 
