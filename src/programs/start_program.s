@@ -1,6 +1,7 @@
 extern main
 extern exit
 extern __cxa_finalize
+extern _init_signal
 extern libk_force_link
 section .text
 global _start
@@ -30,6 +31,7 @@ _start:
     xor eax, eax ; clear eax
 
 .Lmain:
+    call _init_signal
     call main ; execute code, store return value in eax
     sub esp, 0xC ; ABI alignment
     push eax ; save return value
