@@ -287,11 +287,11 @@ void FAT_drive::shutdown()
         delete drive;
 }
 
-bool FAT_drive::load_file_to_buf(void* buf, const char* file_name, Dentry* parent_dentry, uint offset, uint length, uint& loaded_bytes)
+bool FAT_drive::load_file_to_buf(void* buf, const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset, uint length, uint& loaded_bytes)
 {
     ctx ctx{};
     uint file_entry_id;
-    if ((file_entry_id = get_child_dir_entry_id(*parent_dentry, file_name, ctx)) == ENTRY_NOT_FOUND)
+    if ((file_entry_id = get_child_dir_entry_id(parent_dentry, file_name, ctx)) == ENTRY_NOT_FOUND)
         ERR_RET_FALSE("File not found");
     DirEntry* file_entry = &entries[file_entry_id];
     uint next_cluster = file_entry->first_cluster_addr();
@@ -347,13 +347,13 @@ bool FAT_drive::load_file_to_buf(void* buf, const char* file_name, Dentry* paren
     return true;
 }
 
-uint FAT_drive::get_child_dir_entry_id(const Dentry& parent_dentry, const char* name, ctx& ctx)
+uint FAT_drive::get_child_dir_entry_id(const SharedPointer<Dentry>& parent_dentry, const char* name, ctx& ctx)
 {
     // Make sure path makes sense
     if (!name || name[0] == '/')
         return ENTRY_NOT_FOUND;
 
-    uint parent_sector = parent_dentry.inode->lba;
+    uint parent_sector = parent_dentry->inode->lba;
     uint parent_cluster = parent_sector * bs.sectors_per_cluster;
     uint curr_cluster = parent_cluster;
 
@@ -391,16 +391,16 @@ uint FAT_drive::get_child_dir_entry_id(const Dentry& parent_dentry, const char* 
     return ENTRY_NOT_FOUND;
 }
 
-Dentry* FAT_drive::get_child_dentry(Dentry& parent_dentry, const char* name)
+SharedPointer<Dentry> FAT_drive::get_child_dentry(SharedPointer<Dentry>& parent_dentry, const char* name)
 {
     uint entry_id;
     ctx ctx{};
     if ((entry_id = get_child_dir_entry_id(parent_dentry, name, ctx)) == ENTRY_NOT_FOUND)
         return nullptr;
-    return dir_entry_to_dentry(entries[entry_id], &parent_dentry, name);
+    return dir_entry_to_dentry(entries[entry_id], parent_dentry, name);
 }
 
-Dentry* FAT_drive::dir_entry_to_dentry(const DirEntry& dir_entry, Dentry* parent_dentry, const char* name)
+SharedPointer<Dentry> FAT_drive::dir_entry_to_dentry(const DirEntry& dir_entry, SharedPointer<Dentry>& parent_dentry, const char* name)
 {
     Inode::Type inode_type = dir_entry.attrs & DIRECTORY ? Inode::Dir : Inode::File;
 
@@ -434,7 +434,7 @@ Dentry* FAT_drive::dir_entry_to_dentry(const DirEntry& dir_entry, Dentry* parent
     return new Dentry(inode, parent_dentry, name);
 }
 
-bool FAT_drive::write_fat(ctx& ctx) const
+bool FAT_drive::write_fat(const ctx& ctx) const
 {
     if (ATA::write_sectors(id, 1, ctx.FAT_sector, ES, (uint)FAT)) // Write new FAT
         return true;
@@ -455,13 +455,13 @@ bool FAT_drive::write_data_sectors(uint numsects, uint lba, const void* buffer, 
     return false;
 }
 
-Dentry* FAT_drive::touch(Dentry& parent_dentry, const char* entry_name)
+SharedPointer<Dentry> FAT_drive::touch(SharedPointer<Dentry>& parent_dentry, const char* entry_name)
 {
     // Make sure path makes sense
     if (!entry_name || entry_name[0] == '/')
         return nullptr;
 
-    uint parent_sector = parent_dentry.inode->lba;
+    uint parent_sector = parent_dentry->inode->lba;
     uint parent_cluster = parent_sector * bs.sectors_per_cluster;
     uint curr_cluster = parent_cluster;
     ctx ctx{};
@@ -506,16 +506,16 @@ Dentry* FAT_drive::touch(Dentry& parent_dentry, const char* entry_name)
     if (write_fat(ctx)) // Write new FAT
         ERR_RET_NULL("Drive write error")
 
-    return dir_entry_to_dentry(new_entry, &parent_dentry, entry_name);
+    return dir_entry_to_dentry(new_entry, parent_dentry, entry_name);
 }
 
-Dentry* FAT_drive::mkdir(Dentry& parent_dentry, const char* entry_name)
+SharedPointer<Dentry> FAT_drive::mkdir(SharedPointer<Dentry>& parent_dentry, const char* entry_name)
 {
     uint l = strlen(entry_name);
     if (l >= 12 - 3)
         ERR_RET_NULL("Dir name requires LFN support")
 
-    uint parent_sector = parent_dentry.inode->lba;
+    uint parent_sector = parent_dentry->inode->lba;
     uint parent_cluster = parent_sector * bs.sectors_per_cluster;
     uint curr_cluster = parent_cluster;
     ctx ctx{};
@@ -574,12 +574,12 @@ Dentry* FAT_drive::mkdir(Dentry& parent_dentry, const char* entry_name)
     if (write_data_sectors(1, dir_content_sector, buf, ctx))
         ERR_RET_NULL("Drive write error")
 
-    return dir_entry_to_dentry(new_entry, &parent_dentry, entry_name);
+    return dir_entry_to_dentry(new_entry, parent_dentry, entry_name);
 }
 
-bool FAT_drive::ls(const Dentry& dentry, ls_printer printer)
+bool FAT_drive::ls(const SharedPointer<Dentry>& dentry, ls_printer printer)
 {
-    uint parent_sector = dentry.inode->lba;
+    uint parent_sector = dentry->inode->lba;
     uint parent_cluster = parent_sector * bs.sectors_per_cluster;
     ctx ctx{};
 
@@ -601,9 +601,9 @@ bool FAT_drive::ls(const Dentry& dentry, ls_printer printer)
             else
             {
                 char* entry_name = prev_is_lfn ? prev_is_lfn : entry->get_name();
-                Dentry* dir_dentry = dir_entry_to_dentry(*entry, nullptr, entry_name);
+                SharedPointer<Dentry> null_parent = {nullptr};
+                SharedPointer<Dentry> dir_dentry = dir_entry_to_dentry(*entry, null_parent, entry_name);
                 printer(*dir_dentry);
-                delete dir_dentry;
                 delete[] entry_name;
                 prev_is_lfn = nullptr;
             }
@@ -623,21 +623,23 @@ bool FAT_drive::drive_present(uint drive_id)
 
 Inode* FAT_drive::get_root_node()
 {
-    return new Inode(superblock, 0, extBS_32.root_cluster, Inode::Dir, 0, 1, 0, 0, 1, 0, 0, 0, 0);
+    return root_node
+               ? root_node
+               : root_node = new Inode(superblock, 0, extBS_32.root_cluster, Inode::Dir, 0, 1, 0, 0, 1, 0, 0, 0, 0);
 }
 
-bool FAT_drive::write_buf_to_file(Dentry& dentry, const void* buf, uint length)
+bool FAT_drive::write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length)
 {
-    if (dentry.inode->type != Inode::File)
+    if (dentry->inode->type != Inode::File)
         ERR_RET_FALSE("Trying to write data on something which is not a file")
     // Resize file if necessary
-    if (dentry.inode->size != length)
+    if (dentry->inode->size != length)
         if (!resize(dentry, length))
             return false;
 
     ctx ctx{};
     uint entry_id;
-    if ((entry_id = get_child_dir_entry_id(*dentry.parent, dentry.name, ctx)) == ENTRY_NOT_FOUND)
+    if ((entry_id = get_child_dir_entry_id(dentry->parent, dentry->name, ctx)) == ENTRY_NOT_FOUND)
         ERR_RET_FALSE("couldn't find file")
     DirEntry* file_entry = &entries[entry_id];
 
@@ -669,14 +671,14 @@ bool FAT_drive::write_buf_to_file(Dentry& dentry, const void* buf, uint length)
     return true;
 }
 
-bool FAT_drive::resize(Dentry& dentry, uint new_size) // Todo: handle files larger than new_size
+bool FAT_drive::resize(SharedPointer<Dentry>& dentry, uint new_size) // Todo: handle files larger than new_size
 {
     ctx ctx{};
 
     uint entry_id;
-    if ((entry_id = get_child_dir_entry_id(*dentry.parent, dentry.name, ctx)) == ENTRY_NOT_FOUND)
+    if ((entry_id = get_child_dir_entry_id(dentry->parent, dentry->name, ctx)) == ENTRY_NOT_FOUND)
     {
-        printf_error("%s: couldn't find file %s", __func__, dentry.name);
+        printf_error("%s: couldn't find file %s", __func__, dentry->name);
         return false;
     }
 
@@ -713,7 +715,7 @@ bool FAT_drive::resize(Dentry& dentry, uint new_size) // Todo: handle files larg
         ERR_RET_FALSE("drive write error")
 
     delete[] free_cluster_list;
-    dentry.inode->size = new_size; // Update inode size
+    dentry->inode->size = new_size; // Update inode size
     return true;
 }
 

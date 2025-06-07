@@ -2,16 +2,15 @@
 #define BREBOS_VFS_H
 
 #include "dentry.h"
+#include "../utils/shared_pointer.h"
 
 #define MAX_FS 10
 #define MAX_OPEN_FILES 100
-#define MAX_INODES 100
 #define MAX_DENTRIES 200
 #define PATH_CAPACITY 1024
 #define MAX_FD 100
 #define MAX_FD_PER_PROCESS 20
 
-#include "file.h"
 #include "FS.h"
 
 /**
@@ -30,16 +29,13 @@ public:
 		int system_fd; // System wise id
 		int flags;
 		uint offset;
-		Dentry* dentry;
+		SharedPointer<Dentry> dentry;
 	};
 	static file_descriptor file_descriptors[MAX_FD];
 private:
-	static uint lowest_free_inode;
 	static uint lowest_free_dentry;
-	static Inode* inodes[MAX_INODES]; // Caches Inodes entries. [0] = /, [1] = /mnt
-	static Dentry* dentries[MAX_DENTRIES]; // Caches directory entries. [0] = /, [1] = /mnt
-	static File* fds[MAX_OPEN_FILES]; // Open file descriptors
-	static Dentry* path[PATH_CAPACITY];
+	static SharedPointer<Dentry>* dentries[MAX_DENTRIES]; // Caches directory entries. [0] = /, [1] = /mnt
+	static SharedPointer<Dentry>* path[PATH_CAPACITY];
 	static uint num_path;
 	static size_t lowest_free_fd;
 
@@ -49,23 +45,19 @@ private:
 	 * @param name name of looked after dentry
 	 * @return matching cached dentry, or nullptr if not found
 	 */
-	static Dentry* get_cached_dentry(Dentry* parent, const char* name);
+	static SharedPointer<Dentry> get_cached_dentry(const SharedPointer<Dentry>& parent, const char* name);
 
 	static bool add_to_path(const char* path);
 
-	static Dentry* browse_to(const char* path, Dentry* starting_point, bool print_errors = true);
+	static SharedPointer<Dentry> browse_to(const char* path, const SharedPointer<Dentry>& starting_point, bool print_errors = true);
 
-	static bool cache_dentry(Dentry* dentry);
+	static bool cache_dentry(const SharedPointer<Dentry>& dentry);
 
 	static void free_unused_dentry_cache_entries();
 
-	static void free_unused_inode_cache_entries();
+	static SharedPointer<Dentry> get_file_parent_dentry(const char* pathname, const char*& file_name);
 
-	static void free_unused_cache_entries();
-
-	static Dentry* get_file_parent_dentry(const char* pathname, const char*& file_name);
-
-	static Dentry* get_file_dentry(const char* pathname, bool print_errors = true);
+	static SharedPointer<Dentry> get_file_dentry(const char* pathname, bool print_errors = true);
 
 	static void ls_printer(const Dentry& dentry);
 
@@ -74,7 +66,7 @@ private:
 public:
 	static void init();
 
-	static Dentry* touch(const char* pathname);
+	static SharedPointer<Dentry> touch(const char* pathname);
 
 	static bool ls(const char* pathname);
 
@@ -110,11 +102,11 @@ public:
 	 * @param path path to browse to
 	 * @return Dentry of folder at path, nullptr if something went wront
 	 */
-	static Dentry* browse_to(const char* path);
+	static SharedPointer<Dentry> browse_to(const char* path);
 
 	static void* load_file(const char* path, uint offset = 0, uint length = 0);
 
-	static void* load_file(const Dentry* path, uint offset = 0, uint length = 0);
+	static void* load_file(const SharedPointer<Dentry>& path, uint offset = 0, uint length = 0);
 
 	/**
 	 * Reads data from a file descriptor
@@ -157,7 +149,7 @@ public:
 	 * @param new_size new size of the file
 	 * @return boolean indicating success of the operation
 	 */
-	static bool resize(Dentry& dentry, size_t new_size);
+	static bool resize(SharedPointer<Dentry>& dentry, size_t new_size);
 };
 
 

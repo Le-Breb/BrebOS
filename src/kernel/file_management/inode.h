@@ -24,7 +24,6 @@ public:
     const uint lba; // Logical block address, will be interpreted as needed by FS driver
 
     const Type type;
-    int rc = 0;
     ino_t id;
     mode_t mode;
     nlink_t nlink; // Number of hard links to this inode

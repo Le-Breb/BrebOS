@@ -13,7 +13,7 @@ void FS::init()
 	fs_list = new list<FS*>();
 }
 
-void* FS::load_file_to_buf(const char* file_name, Dentry* parent_dentry, uint offset, uint length, uint& loaded_bytes)
+void* FS::load_file_to_buf(const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset, uint length, uint& loaded_bytes)
 {
 	auto buf = new char[length];
 

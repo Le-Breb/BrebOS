@@ -32,21 +32,21 @@ public:
 
 	static list<FS*>* fs_list;
 
-	virtual Dentry* get_child_dentry(Dentry& parent_dentry, const char* entry_name) = 0;
+	virtual SharedPointer<Dentry> get_child_dentry(SharedPointer<Dentry>& parent_dentry, const char* entry_name) = 0;
 
-	virtual Dentry* touch(Dentry& parent_dentry, const char* entry_name) = 0;
+	virtual SharedPointer<Dentry> touch(SharedPointer<Dentry>& parent_dentry, const char* entry_name) = 0;
 
-	virtual Dentry* mkdir(Dentry& parent_dentry, const char* entry_name) = 0;
+	virtual SharedPointer<Dentry> mkdir(SharedPointer<Dentry>& parent_dentry, const char* entry_name) = 0;
 
-	virtual bool ls(const Dentry& dentry, ls_printer printer) = 0;
+	virtual bool ls(const SharedPointer<Dentry>& dentry, ls_printer printer) = 0;
 
-	void* load_file_to_buf(const char* file_name, Dentry* parent_dentry, uint offset, uint length, uint& loaded_bytes);
+	void* load_file_to_buf(const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset, uint length, uint& loaded_bytes);
 
-	virtual bool load_file_to_buf(void* buf, const char* file_name, Dentry* parent_dentry, uint offset, uint length, uint& loaded_bytes) = 0;
+	virtual bool load_file_to_buf(void* buf, const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset, uint length, uint& loaded_bytes) = 0;
 
-	virtual bool write_buf_to_file(Dentry& dentry, const void* buf, uint length) = 0;
+	virtual bool write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length) = 0;
 
-	virtual bool resize(Dentry& dentry, uint new_size) = 0;
+	virtual bool resize(SharedPointer<Dentry>& dentry, uint new_size) = 0;
 
 	[[nodiscard]]
 	virtual Inode* get_root_node() = 0;

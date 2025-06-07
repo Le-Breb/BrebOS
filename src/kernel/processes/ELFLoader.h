@@ -91,7 +91,7 @@ private:
      * @param expected_type
      * @return Loaded ELF, nullptr on error
      */
-    ELF* load_elf(const Dentry* file, ELF_type expected_type);
+    ELF* load_elf(const SharedPointer<Dentry>& file, ELF_type expected_type);
 
     ELF* load_elf(void* buf, ELF_type expected_type);
 
@@ -117,7 +117,7 @@ private:
      *
      * @return program's process
      */
-    Process* build_process(int argc, const char** argv, pid_t pid, pid_t ppid, const Dentry* file, uint);
+    Process* build_process(int argc, const char** argv, pid_t pid, pid_t ppid, const SharedPointer<Dentry>& file, uint);
 
     /**
      * Writes argc, argv array pointer, argv pointer array and argv contents to stack
@@ -177,7 +177,7 @@ public:
      * @return process, nullptr if an error occurred
      */
     static Process* setup_elf_process(pid_t pid, pid_t ppid, int argc, const char** argv,
-                                      const Dentry* file, uint priority);
+                                      const SharedPointer<Dentry>& file, uint priority);
 };
 
 

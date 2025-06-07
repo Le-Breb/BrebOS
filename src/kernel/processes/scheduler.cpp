@@ -153,7 +153,8 @@ int Scheduler::execve(Process* p, const char* path, int argc, const char** argv)
     __builtin_unreachable();
 }
 
-[[noreturn]] void Scheduler::schedule()
+[[noreturn]]
+void Scheduler::schedule()
 {
     // Wake up processes that have been sleeping enough
     check_for_processes_to_wake_up();

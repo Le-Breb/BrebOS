@@ -414,7 +414,7 @@ void ELFLoader::setup_pdt()
         pdt->entries[i] = PHYS_ADDR(Memory::page_tables, (uint) &Memory::page_tables[i]) | PAGE_WRITE | PAGE_PRESENT;
 }
 
-ELF* ELFLoader::load_elf(const Dentry* file, ELF_type expected_type)
+ELF* ELFLoader::load_elf(const SharedPointer<Dentry>& file, ELF_type expected_type)
 {
     auto buf = VFS::load_file(file);
     if (!buf)
@@ -449,7 +449,7 @@ ELF* ELFLoader::load_elf(void* buf, ELF_type expected_type)
 }
 
 Process* ELFLoader::build_process(int argc, const char** argv, pid_t pid, pid_t ppid,
-                                  const Dentry* file, uint priority)
+                                  const SharedPointer<Dentry>& file, uint priority)
 {
     if (!load_elf(file, Executable))
         return nullptr;
@@ -505,7 +505,7 @@ void ELFLoader::offset_memory_mapping(uint offset) const
 }
 
 Process* ELFLoader::setup_elf_process(pid_t pid, pid_t ppid, int argc, const char** argv,
-                                      const Dentry* file, uint priority)
+                                      const SharedPointer<Dentry>& file, uint priority)
 {
     ELFLoader loader{};
 

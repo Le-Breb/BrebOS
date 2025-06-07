@@ -166,6 +166,8 @@ class FAT_drive : public FS
 	unsigned char* FAT; // Buffer to store FAT
 	const unsigned char id; // Drive IDE ID
 
+	Inode* root_node = nullptr;
+
 	explicit FAT_drive(unsigned char id, fat_BS_t* bs, uint major);
 
 	/**Splits a string based on '/' separator
@@ -190,21 +192,21 @@ class FAT_drive : public FS
 
 	static FAT_drive* from_drive(unsigned char drive, uint major);
 
-	uint get_child_dir_entry_id(const Dentry& parent_dentry, const char* name, ctx& ctx);
+	uint get_child_dir_entry_id(const SharedPointer<Dentry>& parent_dentry, const char* name, ctx& ctx);
 
-	Dentry* get_child_dentry(Dentry& parent_dentry, const char* name) override;
+	SharedPointer<Dentry> get_child_dentry(SharedPointer<Dentry>& parent_dentry, const char* name) override;
 
-	Dentry* dir_entry_to_dentry(const DirEntry& dir_entry, Dentry* parent_dentry, const char* name);
+	SharedPointer<Dentry> dir_entry_to_dentry(const DirEntry& dir_entry, SharedPointer<Dentry>& parent_dentry, const char* name);
 
-	bool write_fat(ctx& ctx) const;
+	bool write_fat(const ctx& ctx) const;
 
 	bool write_data_sectors(uint numsects, uint lba, const void* buffer, ctx& ctx) const;
 public:
-	Dentry* touch(Dentry& parent_dentry, const char* entry_name) override;
+	SharedPointer<Dentry> touch(SharedPointer<Dentry>& parent_dentry, const char* entry_name) override;
 
-	Dentry* mkdir(Dentry& parent_dentry, const char* entry_name) override;
+	SharedPointer<Dentry> mkdir(SharedPointer<Dentry>& parent_dentry, const char* entry_name) override;
 
-	bool ls(const Dentry& dentry, ls_printer printer) override;
+	bool ls(const SharedPointer<Dentry>& dentry, ls_printer printer) override;
 
 	[[nodiscard]] static bool drive_present(uint drive_id);
 
@@ -212,15 +214,16 @@ public:
 
 	static void shutdown();
 
-	bool load_file_to_buf(void* buf, const char* file_name, Dentry* parent_dentry, uint offset, uint length, uint& loaded_bytes) override;
+	bool load_file_to_buf(void* buf, const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset, uint length, uint& loaded_bytes) override;
 
 	~FAT_drive() override;
 
+	[[nodiscard]]
 	Inode* get_root_node() override;
 
-	bool write_buf_to_file(Dentry& dentry, const void* buf, uint length) override;
+	bool write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length) override;
 
-	bool resize(Dentry& dentry, uint new_size) override;
+	bool resize(SharedPointer<Dentry>& dentry, uint new_size) override;
 };
 
 

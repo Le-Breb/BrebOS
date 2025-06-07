@@ -101,9 +101,9 @@ class Syscall
 
 	static int close(Process* p);
 
-	static int stat(Process* p);
+	static int stat(const Process* p);
 
-	static int fstat(Process* p);
+	static int fstat(const Process* p);
 public:
 	/**
 	 * Handles a syscall

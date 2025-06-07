@@ -6,13 +6,10 @@
 #include "../utils/comparison.h"
 #include "sys/errno.h"
 
-uint VFS::lowest_free_inode = 0;
 uint VFS::lowest_free_dentry = 0;
-Inode* VFS::inodes[MAX_INODES] = {nullptr};
-Dentry* VFS::dentries[MAX_DENTRIES] = {nullptr};
-File* VFS::fds[MAX_OPEN_FILES] = {nullptr};
+SharedPointer<Dentry>* VFS::dentries[MAX_DENTRIES] = {nullptr};
 uint VFS::num_path = 0;
-Dentry* VFS::path[PATH_CAPACITY] = {};
+SharedPointer<Dentry>* VFS::path[PATH_CAPACITY] = {};
 VFS::file_descriptor VFS::file_descriptors[MAX_FD] = {};
 size_t VFS::lowest_free_fd = 0;
 
@@ -28,7 +25,7 @@ void VFS::init()
 
 	// Create /mnt
 	Inode* mnt_node = new Inode(nullptr, 0, 0, Inode::Dir, 1, 1, 0, 0, 0, 1, 0, 0, 0);
-	Dentry* mnt_dentry = new Dentry(mnt_node, dentries[0], "mnt");
+	auto mnt_dentry = SharedPointer<Dentry>(new Dentry{mnt_node, *dentries[0], "mnt"});
 	if (!cache_dentry(mnt_dentry))
 	{
 		printf_error("Couldn't mount mnt");
@@ -50,14 +47,14 @@ void VFS::init()
 		printf_error("Failed to add /bin to path");
 }
 
-Dentry* VFS::touch(const char* pathname)
+SharedPointer<Dentry> VFS::touch(const char* pathname)
 {
 	const char* file_name;
-	Dentry* parent_dentry = get_file_parent_dentry(pathname, file_name);
+	SharedPointer<Dentry> parent_dentry = get_file_parent_dentry(pathname, file_name);
 	if (!parent_dentry)
 		return nullptr;
 
-	auto dentry = parent_dentry->inode->superblock->get_fs()->touch(*parent_dentry, file_name);
+	auto dentry = parent_dentry->inode->superblock->get_fs()->touch(parent_dentry, file_name);
 	if (dentry)
 		cache_dentry(dentry);
 
@@ -73,7 +70,7 @@ bool VFS::ls(const char* pathname)
 		return false;
 	}
 
-	Dentry* dentry = browse_to(pathname);
+	SharedPointer<Dentry> dentry = browse_to(pathname);
 
 	// Couldn't browse up to parent directory, abort
 	if (!dentry || dentry->inode->type != Inode::Dir)
@@ -82,7 +79,7 @@ bool VFS::ls(const char* pathname)
 		return false;
 	}
 
-	return dentry->inode->superblock->get_fs()->ls(*dentry, ls_printer);
+	return dentry->inode->superblock->get_fs()->ls(dentry, ls_printer);
 }
 
 bool VFS::mkdir(const char* pathname)
@@ -113,7 +110,7 @@ bool VFS::mkdir(const char* pathname)
 	const char* dir_name = pathname + i + 1;
 
 	// ~cd parent
-	Dentry* dentry = browse_to(parent_dir_path);
+	SharedPointer<Dentry> dentry = browse_to(parent_dir_path);
 	if (!dentry)
 		return false;
 	// Couldn't browse up to parent directory, abort
@@ -124,7 +121,7 @@ bool VFS::mkdir(const char* pathname)
 	}
 	delete[] parent_dir_path;
 
-	dentry = dentry->inode->superblock->get_fs()->mkdir(*dentry, dir_name);
+	dentry = dentry->inode->superblock->get_fs()->mkdir(dentry, dir_name);
 	if (dentry)
 		cache_dentry(dentry);
 	return dentry;
@@ -134,7 +131,7 @@ char* VFS::get_absolute_path(const char* path)
 {
 	if (!path)
 		return nullptr;
-	Dentry* dentry = browse_to(path);
+	SharedPointer<Dentry> dentry = browse_to(path);
 	if (!dentry || dentry->inode->type != Inode::File)
 	{
 		printf_error("%s: no such file", path);
@@ -145,12 +142,12 @@ char* VFS::get_absolute_path(const char* path)
 
 bool VFS::write_buf_to_file(const char* pathname, const void* buf, uint length)
 {
-	Dentry* dentry = get_file_dentry(pathname, false);
+	SharedPointer<Dentry> dentry = get_file_dentry(pathname, false);
 	if (!dentry)
 		if (!((dentry = touch(pathname))))
 			return false;
 
-	return dentry->inode->superblock->get_fs()->write_buf_to_file(*dentry, buf, length);
+	return dentry->inode->superblock->get_fs()->write_buf_to_file(dentry, buf, length);
 }
 
 void VFS::ls_printer(const Dentry& dentry)
@@ -167,12 +164,14 @@ void VFS::ls_printer(const Dentry& dentry)
 	FB::set_fg(FB_WHITE);
 }
 
-Dentry* VFS::get_cached_dentry(Dentry* parent, const char* name) // Todo: use a hash map
+SharedPointer<Dentry> VFS::get_cached_dentry(const SharedPointer<Dentry>& parent, const char* name) // Todo: use a hash map
 {
-	for (auto & dentry : dentries)
+	for (auto& ddentry : dentries)
 	{
-		if (!dentry)
+		if (!ddentry)
 			continue;
+		auto dentry = *ddentry;
+		
 		if (!strcmp(dentry->name, name) && dentry->parent == parent)
 			return dentry;
 	}
@@ -182,21 +181,16 @@ Dentry* VFS::get_cached_dentry(Dentry* parent, const char* name) // Todo: use a 
 
 bool VFS::add_to_path(const char* path)
 {
-	if (lowest_free_inode >= PATH_CAPACITY)
+	SharedPointer<Dentry> dentry = browse_to(path);
+	if (!dentry || dentry->inode->type != Inode::Dir)
 		return false;
 
-	Dentry* dentry = browse_to(path);
-	if (!dentry || dentry->inode->type != Inode::Dir)
-	{
-		delete dentry;
-		return false;
-	}
-	VFS::path[num_path++] = dentry;
+	VFS::path[num_path++] = new SharedPointer<Dentry>(dentry);
 
 	return true;
 }
 
-Dentry* VFS::browse_to(const char* path, Dentry* starting_point, bool print_errors)
+SharedPointer<Dentry> VFS::browse_to(const char* path, const SharedPointer<Dentry>& starting_point, bool print_errors)
 {
 #define exit_free() delete[] p;
 #define err(...) {\
@@ -210,12 +204,12 @@ Dentry* VFS::browse_to(const char* path, Dentry* starting_point, bool print_erro
 	char* p = new char[strlen(path) + 1];
 	strcpy(p, path);
 	char* token = strtok_r(p, "/", &svptr);
-	Dentry* dentry = starting_point;
+	SharedPointer<Dentry> dentry = starting_point;
 
 	// Browse cached dentries as much as possible
 	while (token)
 	{
-		Dentry* next_entry = strcmp(".", token) ?
+		SharedPointer<Dentry> next_entry = strcmp(".", token) ?
 			strcmp("..", token) ?
 				get_cached_dentry(dentry, token) : dentry->parent
 			: dentry;
@@ -243,7 +237,7 @@ Dentry* VFS::browse_to(const char* path, Dentry* starting_point, bool print_erro
 		if (dentry->inode->type != Inode::Dir)
 			err("%s not a directory", path);
 		dentry = strcmp(".", token) ?
-			strcmp("..", token) ? fs->get_child_dentry(*dentry, token) : dentry->parent
+			strcmp("..", token) ? fs->get_child_dentry(dentry, token) : dentry->parent
 			: dentry;
 		if (!dentry)
 			err("%s no such directory", path);
@@ -251,7 +245,7 @@ Dentry* VFS::browse_to(const char* path, Dentry* starting_point, bool print_erro
 		if (!cache_dentry(dentry))
 		{
 			if (print_errors)
-				irrecoverable_error("Too many inodes or dentries");
+				irrecoverable_error("Too many dentries");
 			exit_free()
 			return nullptr;
 		}
@@ -263,21 +257,18 @@ Dentry* VFS::browse_to(const char* path, Dentry* starting_point, bool print_erro
 	return dentry;
 }
 
-bool VFS::cache_dentry(Dentry* dentry)
+bool VFS::cache_dentry(const SharedPointer<Dentry>& dentry)
 {
 	if (lowest_free_dentry == MAX_DENTRIES)
-		free_unused_cache_entries();
+		free_unused_dentry_cache_entries();
 	// No need to check for lowest_free_inode cause there is one or more dentry per inode,
 	// ie there cannot have more inodes than dentires
 
-	if (lowest_free_dentry == MAX_DENTRIES || lowest_free_inode == MAX_INODES)
+	if (lowest_free_dentry == MAX_DENTRIES)
 		return false;
 
-	inodes[lowest_free_inode++] = dentry->inode;
-	dentries[lowest_free_dentry++] = dentry;
+	dentries[lowest_free_dentry++] = new SharedPointer<Dentry>(dentry);
 
-	while (lowest_free_inode < MAX_INODES && inodes[lowest_free_inode])
-		lowest_free_inode++;
 	while (lowest_free_dentry < MAX_DENTRIES && dentries[lowest_free_dentry])
 		lowest_free_dentry++;
 
@@ -290,49 +281,20 @@ void VFS::free_unused_dentry_cache_entries()
 	{
 		if (!dentries[i])
 		{
-			if (i < lowest_free_dentry)
-				lowest_free_dentry = i;
+			lowest_free_dentry = min(i, lowest_free_dentry);
 			continue;
 		}
-		if (!dentries[i]->rc)
+		if (dentries[i]->use_count() == 1)
 		{
 			delete dentries[i];
 			dentries[i] = nullptr;
 
-			if (i < lowest_free_inode)
-				lowest_free_dentry = i;
+			lowest_free_dentry = min(lowest_free_dentry, i);
 		}
 	}
 }
 
-void VFS::free_unused_inode_cache_entries()
-{
-	for (uint i = 2; i < MAX_INODES; ++i) // skip root and mnt entries
-	{
-		if (!inodes[i])
-		{
-			if (i < lowest_free_inode)
-				lowest_free_inode = i;
-			continue;
-		}
-		if (!inodes[i]->rc)
-		{
-			delete inodes[i];
-			inodes[i] = nullptr;
-
-			if (i < lowest_free_inode)
-				lowest_free_inode = i;
-		}
-	}
-}
-
-void VFS::free_unused_cache_entries()
-{
-	free_unused_dentry_cache_entries();
-	free_unused_inode_cache_entries();
-}
-
-Dentry* VFS::get_file_parent_dentry(const char* pathname, const char*& file_name)
+SharedPointer<Dentry> VFS::get_file_parent_dentry(const char* pathname, const char*& file_name)
 {
 	// Basic path checks
 	if (!pathname || pathname[0] != '/' || !strcmp(pathname, "/"))
@@ -358,7 +320,7 @@ Dentry* VFS::get_file_parent_dentry(const char* pathname, const char*& file_name
 		return nullptr;
 	}
 
-	Dentry* dentry = browse_to(p);
+	SharedPointer<Dentry> dentry = browse_to(p);
 	if (!dentry || dentry->inode->type != Inode::Dir)
 	{
 		printf_error("%s no such/not a directory", pathname);
@@ -369,17 +331,17 @@ Dentry* VFS::get_file_parent_dentry(const char* pathname, const char*& file_name
 	return dentry;
 }
 
-Dentry* VFS::get_file_dentry(const char* pathname, bool print_errors)
+SharedPointer<Dentry> VFS::get_file_dentry(const char* pathname, bool print_errors)
 {
 	const char* file_name;
-	Dentry* parent_dentry = get_file_parent_dentry(pathname, file_name);
+	SharedPointer<Dentry> parent_dentry = get_file_parent_dentry(pathname, file_name);
 	if (!parent_dentry)
 		return nullptr;
 
 	return browse_to(file_name, parent_dentry, print_errors);
 }
 
-Dentry* VFS::browse_to(const char* path)
+SharedPointer<Dentry> VFS::browse_to(const char* path)
 {
 	if (path[0] == '\0')
 	{
@@ -387,11 +349,11 @@ Dentry* VFS::browse_to(const char* path)
 		return nullptr;
 	}
 	if (path[0] == '/')
-		return browse_to(path, dentries[0]);
+		return browse_to(path, *dentries[0]);
 
 	for (uint i = 0; i < num_path; ++i)
 	{
-		Dentry* d = browse_to(path, VFS::path[i]);
+		SharedPointer<Dentry> d = browse_to(path, *VFS::path[i]);
 		if (d)
 			return d;
 	}
@@ -403,7 +365,7 @@ void* VFS::load_file(const char* path, uint offset, uint length)
 {
 	if (!path)
 		return nullptr;
-	Dentry* dentry = browse_to(path);
+	SharedPointer<Dentry> dentry = browse_to(path);
 	if (!dentry || dentry->inode->type != Inode::File)
 	{
 		printf_error("%s: no such file", path);
@@ -413,7 +375,7 @@ void* VFS::load_file(const char* path, uint offset, uint length)
 	return load_file(dentry, offset, length);
 }
 
-void* VFS::load_file(const Dentry* file, uint offset, uint length)
+void* VFS::load_file(const SharedPointer<Dentry>& file, uint offset, uint length)
 {
 	if (!file)
 		return nullptr;
@@ -470,7 +432,7 @@ int VFS::close(int fd)
 
 VFS::file_descriptor* VFS::open(const char* pathname, int flags, int local_fd, int& err)
 {
-	Dentry* dentry = browse_to(pathname);
+	SharedPointer<Dentry> dentry = browse_to(pathname);
 	if (!dentry)
 	{
 		err = -ENOENT; // File not found
@@ -540,9 +502,9 @@ int VFS::lseek(int fd, int offset, int whence)
 	return new_offset;
 }
 
-bool VFS::resize(Dentry& dentry, size_t new_size)
+bool VFS::resize(SharedPointer<Dentry>& dentry, size_t new_size)
 {
-	return dentry.inode->superblock->get_fs()->resize(dentry, new_size);
+	return dentry->inode->superblock->get_fs()->resize(dentry, new_size);
 }
 
 int VFS::get_free_fd()
@@ -572,8 +534,8 @@ bool VFS::mount(FS* fs)
 		return false;
 
 	// Get and register FS root
-	Inode* n = fs->get_root_node();
-	Dentry* d = new Dentry(n, dentries[1], mount_point + 4);
+	auto n = fs->get_root_node();
+	Dentry* d = new Dentry(n, *dentries[1], mount_point + 4);
 
 	if (!cache_dentry(d))
 	{
@@ -588,7 +550,7 @@ bool VFS::mount(FS* fs)
 
 bool VFS::mount_rootfs(FS* fs)
 {
-	if (inodes[0])
+	if (dentries[0])
 		return false;
 
 	// Compute mount point
@@ -600,7 +562,8 @@ bool VFS::mount_rootfs(FS* fs)
 
 	// Get and register FS root
 	Inode* n = fs->get_root_node();
-	auto d = new Dentry(n, nullptr, mount_point);
+	SharedPointer<Dentry> null_parent = {nullptr};
+	auto d = new Dentry(n, null_parent, mount_point);
 
 	if (!cache_dentry(d))
 	{

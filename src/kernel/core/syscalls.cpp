@@ -240,7 +240,7 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             break;
         case 29:
         {
-            Dentry* file = VFS::browse_to((char*)p->cpu_state.edi);
+            SharedPointer<Dentry> file = VFS::browse_to((char*)p->cpu_state.edi);
             p->cpu_state.eax = file ? file->inode->size : (uint)-1;
             break;
         }
@@ -356,7 +356,7 @@ void Syscall::load_file(Process* p)
     auto path = (const char*)p->cpu_state.edi;
 
     // Get file
-    Dentry* dentry = VFS::browse_to(path);
+    SharedPointer<Dentry> dentry = VFS::browse_to(path);
     if (!dentry)
     {
         p->cpu_state.eax = 0;
@@ -425,7 +425,7 @@ int Syscall::close(Process* p)
     return p->close(fd);
 }
 
-void stat_base(struct stat* statbuf, const Dentry* dentry)
+void stat_base(struct stat* statbuf, const SharedPointer<Dentry>& dentry)
 {
     auto inode = dentry->inode;
     statbuf->st_dev = inode->superblock->get_fs()->get_dev();
@@ -443,11 +443,11 @@ void stat_base(struct stat* statbuf, const Dentry* dentry)
     statbuf->st_ctime = inode->ctime;
 }
 
-int Syscall::stat(Process* p)
+int Syscall::stat(const Process* p)
 {
     const char* pathname = (const char*)p->cpu_state.edi;
     struct stat* statbuf = (struct stat*)p->cpu_state.esi;
-    Dentry* dentry = VFS::browse_to(pathname);
+    SharedPointer<Dentry> dentry = VFS::browse_to(pathname);
 
     if (!dentry)
         return -ENOENT; // No such file or directory
@@ -457,7 +457,7 @@ int Syscall::stat(Process* p)
     return 0;
 }
 
-int Syscall::fstat(Process* p)
+int Syscall::fstat(const Process* p)
 {
     int proc_fd = (int)p->cpu_state.edi;
     struct stat* statbuf = (struct stat*)p->cpu_state.esi;
