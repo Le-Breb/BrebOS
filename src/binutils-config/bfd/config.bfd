@@ -450,7 +450,7 @@ case "${targ}" in
     targ64_selvecs=x86_64_elf64_vec
     ;;
 #ifdef BFD64
-  x86_64-*-myos*)
+  x86_64-*-brebos*)
     targ_defvec=x86_64_elf64_vec
     targ_selvecs=i386_elf32_vec
     want64=true
