@@ -6,6 +6,9 @@ global SCREEN_WIDTH
 global SCREEN_HEIGHT
 global SCREEN_DEPTH
 
+section .jumpstart
+jmp _start
+
 KERNEL_STACK_SIZE equ 4096          ; size of stack in bytes
 
 MAGIC_NUMBER    equ 0xE85250D6      ; define the magic number constant
@@ -31,33 +34,35 @@ SCREEN_WIDTH  dd SCREEN_WIDTH_VAL
 SCREEN_HEIGHT dd SCREEN_HEIGHT_VAL
 SCREEN_DEPTH  dd SCREEN_DEPTH_VAL
 
+loader_start:
+
 ; Declare a multiboot header that marks the program as a kernel.
 section .multiboot2
 align 8
 
     ; === Multiboot2 magic header ===
-    dd MAGIC_NUMBER
-    dd I386
-    dd header_end - header_start
-    dd CHECKSUM
+;    dd MAGIC_NUMBER
+;    dd I386
+;    dd header_end - header_start
+;    dd CHECKSUM
 
 align 8
 header_start:
 
     ; === Framebuffer tag ===
-    dw 5                      ; type = framebuffer
-    dw 0                      ; flags
-    dd 20                     ; size of this tag (must be 20 bytes)
-    dd SCREEN_WIDTH_VAL       ; width
-    dd SCREEN_HEIGHT_VAL      ; height
-    dd SCREEN_DEPTH_VAL       ; depth (bits per pixel)
+;    dw 5                      ; type = framebuffer
+;    dw 0                      ; flags
+;    dd 20                     ; size of this tag (must be 20 bytes)
+;    dd SCREEN_WIDTH_VAL       ; width
+;    dd SCREEN_HEIGHT_VAL      ; height
+;    dd SCREEN_DEPTH_VAL       ; depth (bits per pixel)
 
 align 8
 
     ; === End tag ===
-    dw 0                      ; type = end tag
-    dw 0                      ; flags
-    dd 8                      ; size of end tag (must be 8 bytes)
+;    dw 0                      ; type = end tag
+;    dw 0                      ; flags
+;    dd 8                      ; size of end tag (must be 8 bytes)
 
 header_end:
 
@@ -142,6 +147,7 @@ done_mapping:
     mov cr0, ecx
 
     ; Jump to higher half with an absolute jump.
+    call set_main_args
     lea ecx, [rel higher_half]
     jmp ecx
 
@@ -160,11 +166,23 @@ higher_half:
     mov esp, stack_top
 
     ; Enter the high-level kernel.
-    push ebx  ; save module structure pointer
+    call set_main_args
     call kmain
 
     ; Infinite loop if the system has nothing more to do.
     cli
+
+; Set arguments of main:
+; EBX = 0 if multiboot2 not used, else multiboot2 structure pointer
+set_main_args:
+    xor eax, eax
+    mov eax, [loader_start]
+    cmp eax, MAGIC_NUMBER
+    jne exit_set_main_args
+    mov eax, ebx
+    xor ebx, ebx
+exit_set_main_args:
+    ret
 
 halt_loop:
     hlt

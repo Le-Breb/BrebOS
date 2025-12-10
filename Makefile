@@ -25,6 +25,7 @@ LIBDYNLK_BUILD_DIR=$(SRC_DIR)/libdynlk/build
 GCC_BUILD_DIR=$(SRC_DIR)/gcc/build
 KERNEL_BUILD_DIR=$(SRC_DIR)/kernel/build
 PROGRAMS_BUILD_DIR=$(SRC_DIR)/programs/build
+BOOTLOADER_BUILD_DIR=./bootloader/build
 
 SRC=$(shell cd $(SRC_DIR)/kernel; find . -name '*.cpp' -o -name '*.s' | sed 's|^\./||')
 OBJECTS = $(patsubst %.cpp, $(KERNEL_BUILD_DIR)/%.o, $(filter %.cpp, $(SRC))) \
@@ -52,6 +53,7 @@ ifdef PROFILING
 endif
 
 CC_PATH=$(CURDIR)/toolchain/gcc/bin
+CC_PATH2=$(CURDIR)/tools/gcc-build/bin
 libgcc=$(shell $(CC_PATH)/$(CC) $(CFLAGS) -print-libgcc-file-name)
 CRTI_OBJ=$(GCC_BUILD_DIR)/crti.o
 CRTBEGIN_OBJ:=$(shell $(CC_PATH)/$(CC) $(CFLAGS) -print-file-name=crtbegin.o)
@@ -83,13 +85,13 @@ FONT_FILE=Lat15-VGA16.psf
 FONT_OBJ= $(BUILD_DIR)/$(FONT_FILE:%.psf=%.o)
 
 all:
-	@PATH=$(CC_PATH):$(PATH) $(MAKE) all_
+	@PATH=$(CC_PATH):$(CC_PATH2):$(PATH) $(MAKE) all_
 
 run:
-	@PATH=$(CC_PATH):$(PATH) $(MAKE) run_
+	@PATH=$(CC_PATH):$(CC_PATH2):$(PATH) $(MAKE) run_
 
 all_: init $(OS_ISO) compilation_ended
-.PHONY: libc libk libdynlk programs
+.PHONY: libc libk libdynlk programs bootloader
 
 init:
 	@echo "$(CYAN)Compiling$(WHITE)"
@@ -134,7 +136,7 @@ $(FONT_OBJ): $(FONT_FILE)
 $(BUILD_DIR)/kernel.elf: $(BUILD_DIR)/.dir_timestamp $(FONT_OBJ) $(INTERNAL_OBJS) $(libc) $(gcc)
 	i686-brebos-ld $(LDFLAGS) $(OBJ_LIST) $(libc) $(FONT_OBJ) -o $(BUILD_DIR)/kernel.elf $(libgcc)
 
-$(OS_ISO): $(BUILD_DIR)/kernel.elf $(libdynlk) $(programs)
+$(OS_ISO): $(BUILD_DIR)/kernel.elf $(libdynlk) $(programs) bootloader
 	@#Create directories
 	@mkdir -p isodir
 	@mkdir -p isodir/boot
@@ -179,7 +181,16 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(libdynlk) $(programs)
 	@cp grub.cfg isodir/boot/grub/grub.cfg
 
 	@echo "$(CYAN)"Building ISO..."$(WHITE)"
+	dd if=/dev/zero of=disk_image2.img bs=512 count=2880
+    # write boot sector at offset 0
+	dd if=$(BOOTLOADER_BUILD_DIR)/bootloader.bin of=disk_image2.img bs=512 count=1 conv=notrunc status=none
+    # write kernel right after boot sector (seek=1 = sector 2 when BIOS counts sectors from 1 in CHS)
+	dd if=$(BOOTLOADER_BUILD_DIR)/bootloader2.bin of=disk_image2.img bs=512 seek=1 count=21 conv=notrunc status=none
+	dd if=build/kernel.elf of=disk_image2.img bs=512 seek=22 conv=notrunc status=none
 	@grub-mkrescue -o $(OS_ISO) isodir
+
+bootloader:
+	+$(MAKE) -C bootloader
 
 run_: $(OS_ISO)
 	@#	bochs -f bochsrc.txt -q
@@ -187,7 +198,14 @@ run_: $(OS_ISO)
 	@mmd -i disk_image.img ::/downloads # Recreate it
 	@echo "$(CYAN)Initializing NAT$(WHITE)"
 	@sudo ./utils/net_setup.sh
-	qemu-system-i386 -device isa-debug-exit -cdrom $(OS_ISO) -drive file=disk_image.img,format=raw,if=ide,index=0 -boot d -netdev tap,id=net0,ifname=tap0,script=no,downscript=no  -device e1000,netdev=net0  -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap || true
+	qemu-system-i386 \
+      -device isa-debug-exit \
+      -drive file=disk_image2.img,format=raw,if=ide -boot c \
+      -drive file=disk_image.img,format=raw,if=ide \
+      -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
+      -device e1000,netdev=net0 \
+      -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap \
+      || true
 	@echo "$(CYAN)Restoring default network configuration...$(WHITE)"
 	@sudo ./utils/net_cleanup.sh
 	@echo "$(CYAN)Done$(WHITE)"
@@ -204,3 +222,4 @@ clean:
 	$(MAKE) -C $(SRC_DIR)/libdynlk clean
 	$(MAKE) -C $(SRC_DIR)/gcc/ clean
 	$(MAKE) -C $(SRC_DIR)/programs/ clean
+	$(MAKE) -C bootloader clean

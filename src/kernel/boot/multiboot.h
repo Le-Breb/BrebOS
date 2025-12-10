@@ -53,6 +53,8 @@ public:
     static void init(const multiboot_info_t* multiboot_info);
 
     static void* get_tag(uint32_t type);
+
+    static bool is_used;
 };
 
 #endif

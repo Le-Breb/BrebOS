@@ -21,7 +21,10 @@ void VFS::init()
 	for (auto& fd : file_descriptors)
 		fd.fd = -1;
 
-	mount_rootfs(*FS::fs_list->get(0));
+	FS** main_fs = FS::fs_list->get(0);
+	if (main_fs == nullptr)
+		irrecoverable_error("Couldn't get main file system");
+	mount_rootfs(*main_fs);
 
 	// Create /mnt
 	Inode* mnt_node = new Inode(nullptr, 0, 0, Inode::Dir, 1, 1, 0, 0, 0, 1, 0, 0, 0);

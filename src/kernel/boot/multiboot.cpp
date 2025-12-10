@@ -4,10 +4,13 @@
 #include "../core/memory.h"
 
 const multiboot_info_t* Multiboot::multiboot_info = nullptr;
+bool Multiboot::is_used = false;
 
 void Multiboot::init(const multiboot_info_t* multiboot_info)
 {
 	Multiboot::multiboot_info = (multiboot_info_t*)multiboot_info;
+	if (multiboot_info == nullptr)
+		is_used = false;
 }
 
 void* Multiboot::get_tag(uint32_t type)

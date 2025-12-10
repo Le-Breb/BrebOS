@@ -92,6 +92,8 @@ namespace Memory
 	extern uint* frame_rc;
 	extern Process* kernel_process;
 
+	static inline constexpr uint FB_MODE_INFO_ADDR_WHEN_CUSTOM_BOOTLOADER_USED = 0x700;
+
 	/** Reload cr3 which will acknowledge every pte change and invalidate TLB */
 	extern "C" void reload_cr3_asm();
 
@@ -205,6 +207,13 @@ namespace Memory
 	 * @return the first page entry id of a contiguous block of n pages, or -1 if no such block exists
 	 */
 	uint get_contiguous_pages(uint n, const Process* process);
+
+	/**
+	 * Translates a physical address to a virtual address
+	 * @param phys_addr physical address to translate
+	 * @return the corresponding virtual address if the provided physical address is mapped, (uint)-1 otherwise
+	 */
+	uint phys_to_virt_addr(uint phys_addr);
 }
 
 class Process;

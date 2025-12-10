@@ -8,6 +8,7 @@ SECTIONS {
     /* align at 4 KB and load at 1 MB */
     .text ALIGN (0x1000) : AT(ADDR(.text)-0xC0000000)
     {
+        *(.jumpstart)
         *(.multiboot2) /* first the multiboot2 header */
         *(.text)             /* all text sections from all files */
     }

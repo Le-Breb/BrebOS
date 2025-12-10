@@ -10,10 +10,6 @@
 
 namespace Memory
 {
-    extern "C" void boot_page_directory();
-
-    extern "C" void boot_page_table1();
-
     pdt_t* pdt = (pdt_t*)boot_page_directory;
     page_table_t* asm_pt1 = (page_table_t*)boot_page_table1;
     page_table_t* page_tables;
@@ -353,11 +349,21 @@ namespace Memory
         uint lfpe = allocate_page_tables();
         create_kernel_process(lfpe);
         //load_grub_modules(multibootInfo);
+
         Multiboot::init(register_multiboot_info(multiboot_info));
+        if (multiboot_info == nullptr)
+        {
+            uint fb_info_addr = phys_to_virt_addr(FB_MODE_INFO_ADDR_WHEN_CUSTOM_BOOTLOADER_USED);
+            if (fb_info_addr == (uint)-1)
+                register_physical_data(FB_MODE_INFO_ADDR_WHEN_CUSTOM_BOOTLOADER_USED, sizeof(FB::vbe_mode_info_structure));
+        }
     }
 
     multiboot_info_t* register_multiboot_info(const multiboot_info* minfo)
     {
+        if (minfo == nullptr)
+            return nullptr;
+
         uint uaddr = (uint)minfo;
         uint base = uaddr >> 12;
         uint page_id = get_free_pe();
@@ -409,6 +415,15 @@ namespace Memory
             // Then next possibly free page entry is the (pte)th
             b = pte + 1;
         }
+    }
+
+    uint phys_to_virt_addr(uint phys_addr)
+    {
+        uint frame_id = phys_addr >> 12;
+        if (frame_to_page[frame_id] == (uint)-1)
+            return (uint)-1;
+
+        return (frame_to_page[frame_id] << 12) + (phys_addr & (PAGE_SIZE - 1));
     }
 
     template<bool lazy_zero>
@@ -865,7 +880,7 @@ namespace Memory
         }
 
         // No frame over the required block is referenced, so will then try to find enough contiguous page table entries
-        // to map the whole memoery block
+        // to map the whole memory block
         if (no_frame_used)
         {
             uint b = kernel_process->lowest_free_pe; /* block beginning page index */

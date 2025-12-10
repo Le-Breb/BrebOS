@@ -32,7 +32,8 @@ extern "C" bool fpu_init_asm_();
 //Todo: Include newlib build in Makefile
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {
-    _init(); // Execute constructors
+    // Get why this fails
+    // _init(); // Execute constructors
 
     Interrupts::disable_asm();
 

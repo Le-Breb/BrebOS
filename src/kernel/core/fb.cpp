@@ -43,7 +43,7 @@ bool FB::show_cursor = false;
 
 PSF1_font* FB::font = (PSF1_font*)_binary_Lat15_VGA16_psf_start;
 uint32_t* FB::r_font = nullptr;
-char* FB::glyphs = (char*)(font + 1);
+char* FB::glyphs = (char*)((PSF1_font*)_binary_Lat15_VGA16_psf_start + 1);
 
 uint FB::progress_bar_height = 0;
 char FB::progress_bar_percentage = 0;
@@ -428,31 +428,46 @@ void FB::flush()
 
 void FB::init(uint fps)
 {
-	auto fb_tag = (multiboot_tag_framebuffer*)Multiboot::get_tag(MULTIBOOT_FRAMEBUFFER_TAG);
+	uint framebuffer_addr = 0;
+	if (Multiboot::is_used)
+	{
+		auto fb_tag = (multiboot_tag_framebuffer*)Multiboot::get_tag(MULTIBOOT_FRAMEBUFFER_TAG);
 
-	if (!fb_tag)
-		irrecoverable_error("Cannot find framebuffer multiboot tag");
-	if (fb_tag->framebuffer_type != MULTIBOOT_FRAMEBUFFER_TYPE_RGB)
-		irrecoverable_error("Framebuffer is not in RGB mode");
-	/*if (fb_tag->framebuffer_type != MULTIBOOT_FRAMEBUFFER_TYPE_EGA_TEXT)
-		irrecoverable_error("Framebuffer is not in EGA text mode");*/
-	if (fb_tag->framebuffer_bpp != 32)
-		irrecoverable_error("Framebuffer has bpp != 32");
+		if (!fb_tag)
+			irrecoverable_error("Cannot find framebuffer multiboot tag");
+		if (fb_tag->framebuffer_type != MULTIBOOT_FRAMEBUFFER_TYPE_RGB)
+			irrecoverable_error("Framebuffer is not in RGB mode");
+		/*if (fb_tag->framebuffer_type != MULTIBOOT_FRAMEBUFFER_TYPE_EGA_TEXT)
+			irrecoverable_error("Framebuffer is not in EGA text mode");*/
+		if (fb_tag->framebuffer_bpp != 32)
+			irrecoverable_error("Framebuffer has bpp != 32");
 
-	auto rgb_tag = (multiboot_tag_framebuffer_rgb*)(fb_tag + 1);
+		auto rgb_tag = (multiboot_tag_framebuffer_rgb*)(fb_tag + 1);
 
-	if (rgb_tag->framebuffer_red_field_position != 16 || rgb_tag->framebuffer_red_mask_size != 8 ||
-	    rgb_tag->framebuffer_green_field_position != 8 || rgb_tag->framebuffer_green_mask_size != 8 ||
-	    rgb_tag->framebuffer_blue_field_position != 0 || rgb_tag->framebuffer_blue_mask_size != 8)
-		irrecoverable_error("Unsupported RGB layout");
+		if (rgb_tag->framebuffer_red_field_position != 16 || rgb_tag->framebuffer_red_mask_size != 8 ||
+			rgb_tag->framebuffer_green_field_position != 8 || rgb_tag->framebuffer_green_mask_size != 8 ||
+			rgb_tag->framebuffer_blue_field_position != 0 || rgb_tag->framebuffer_blue_mask_size != 8)
+			irrecoverable_error("Unsupported RGB layout");
 
-	fb_width = fb_tag->framebuffer_width;
-	fb_height = fb_tag->framebuffer_height;
-	fb_pitch = fb_tag->framebuffer_pitch;
+		fb_width = fb_tag->framebuffer_width;
+		fb_height = fb_tag->framebuffer_height;
+		fb_pitch = fb_tag->framebuffer_pitch;
+		framebuffer_addr = fb_tag->framebuffer_addr;
+	}
+	else
+	{
+		uint fb_mode_info_buffer_addr = Memory::phys_to_virt_addr(Memory::FB_MODE_INFO_ADDR_WHEN_CUSTOM_BOOTLOADER_USED);
+		auto mode_info = (vbe_mode_info_structure*)fb_mode_info_buffer_addr;
+		fb_width = mode_info->width;
+		fb_height = mode_info->height;
+		fb_pitch = mode_info->pitch;
+		framebuffer_addr = mode_info->framebuffer;
+	}
+
 	n_row = fb_pitch / sizeof(uint32_t);
 
 	auto fb_size = fb_pitch * fb_height;
-	if (!((fb = (uint32_t*)Memory::register_physical_data(fb_tag->framebuffer_addr, fb_size))))
+	if (!((fb = (uint32_t*)Memory::register_physical_data(framebuffer_addr, fb_size))))
 		irrecoverable_error("Cannot map framebuffer");
 
 	fb_shadow = new cell[fb_width * fb_height];
