@@ -18,23 +18,33 @@ FB_RED_POS          equ 16
 FB_GREEN_POS        equ 8
 FB_BLUE_POS         equ 0
 
-; Get  boot drive, stored in db by the BIOS
+; -------------------------------------------
+; Get  boot drive, stored in dl by the BIOS
+; -------------------------------------------
 mov [BOOT_DRIVE], dl
 
 cli ; Disable interrupts
 
+; -------------------------------------------
 ; Setup stack - 0x9000 is free and does not collide with anything
+; -------------------------------------------
 xor ax, ax
 mov ss, ax
 mov bp, 0x9000
 mov sp, bp
 
+; -------------------------------------------
+; Enable A20 line
+; -------------------------------------------
 enable_a20_fast:
     in al, 0x92        ; Read port 0x92 (System Control Port A)
     or al, 00000010b   ; Set bit 1 (A20 Gate)
     and al, 0xFE       ; Clear bit 0 (System reset)
     out 0x92, al
 
+; -------------------------------------------
+; Load stage2 bootloader
+; -------------------------------------------
 read_from_disk:
     mov ah, 0x02         ; Read
     mov al, N_SECTORS    ; Number of secotrs to read
@@ -155,6 +165,7 @@ set_video_mode_loop:
     cmp al, FB_BLUE_POS
     jne next_mode
 
+; -------------------------------------------
 ; FOUND MATCHING MODE → set it!
 ; -------------------------------------------
 found_mode:
@@ -174,12 +185,16 @@ next_mode:
     add bx, 2               ; next mode in list
     jmp set_video_mode_loop
 
-
+; -------------------------------------------
+; Global Descriptor Table
+; -------------------------------------------
 gdt_start:
     ; First null entry
     dq 0
 
-    ; Code segment selector
+; -------------------------------------------
+; Code segment selector
+; -------------------------------------------
 gdt_code:
     dw 0xFFFF      ; Segment limit [00-15]
     dw 0x0000      ; Base address [00-15]
@@ -188,7 +203,9 @@ gdt_code:
     db 11001111b   ; Flags (4 bits) + Segment limit [16-19]
     db 0x0         ; Base address [24-31]
 
-    ; data segment descriptor
+; -------------------------------------------
+; Data segment descriptor
+; -------------------------------------------
 gdt_data:
     dw 0xFFFF    ; Segment length, bits 0-15
     dw 0x0000    ; Base address [00-15]
@@ -199,7 +216,9 @@ gdt_data:
 
 gdt_end:
 
+; -------------------------------------------
 ; GDT descriptor
+; -------------------------------------------
 gdt_descriptor:
     dw gdt_end - gdt_start - 1 ; size (16 bit)
     dd gdt_start ; address (32 bit)
@@ -207,7 +226,9 @@ gdt_descriptor:
 CODE_SEG equ gdt_code - gdt_start
 DATA_SEG equ gdt_data - gdt_start
 
-
+; -------------------------------------------
+; Jump in protected mode
+; -------------------------------------------
 switch_to_protected_mode:
     cli                              ; Disable interrupts
     lgdt [gdt_descriptor]            ; load GDT
@@ -216,6 +237,9 @@ switch_to_protected_mode:
     mov cr0, eax                     ; Enable protected mode
     jmp CODE_SEG:init_protected_mode ; far jump to properly execute 32 bits code
 
+; -------------------------------------------
+; Protected mode
+; -------------------------------------------
 [bits 32]
 init_protected_mode:
     ; Set segment registers
@@ -230,7 +254,7 @@ init_protected_mode:
     mov ebp, 0x9000
     mov esp, ebp
 
-    call STAGE2_ADDR
+    call STAGE2_ADDR ; Enter stage2 bootloader
     cli
     hlt
     jmp $ ; Endless loop if kernel ever returns
@@ -238,8 +262,12 @@ init_protected_mode:
 
 BOOT_DRIVE db 0
 
+; -------------------------------------------
 ; Padding
+; -------------------------------------------
 times 510 - ($-$$) db 0
 
+; -------------------------------------------
 ; Magic number
+; -------------------------------------------
 dw 0xAA55

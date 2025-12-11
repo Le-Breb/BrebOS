@@ -20,7 +20,7 @@ LDFLAGS += -g
 endif
 
 CPP_SRC=bootloader2.cpp ATA.cpp IO.cpp ELF.cpp ELFLoader.cpp libc.cpp malloc.cpp
-ASM_SRC=kernel-entry.s io.s
+ASM_SRC=stage2-entry.s io.s
 CPP_OBJ=$(patsubst %.cpp, $(BUILD_DIR)/%.o, $(CPP_SRC))
 ASM_OBJ=$(patsubst %.s, $(BUILD_DIR)/%.o, $(ASM_SRC))
 

@@ -11,4 +11,5 @@ typedef unsigned long size_t;
 #define DRIVE 0
 #define SECTOR_SIZE 512
 #define DS 0x10
+#define MALLOC_BASE 0x4000
 #endif
