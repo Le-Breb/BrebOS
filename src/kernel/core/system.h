@@ -10,6 +10,8 @@ public:
 
 	[[nodiscard]]
 	static uint64_t rdtsc();
+
+	static bool irrecoverable_error_happened;
 };
 
 #endif //INCLUDE_SYSTEM_H

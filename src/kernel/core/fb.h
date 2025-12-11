@@ -140,8 +140,11 @@ public:
     /** Write an ok decorator without trailing newline */
     static void ok_decorator();
 
-    /** Write an error decorator without trailing newline */
+    /** Write a fatal decorator without trailing newline */
     static void error_decorator();
+
+    /** Write an error decorator without trailing newline */
+    static void fatal_error_decorator();
 
     /** Write an info decorator without trailing newline*/
     static void info_decorator();
@@ -151,6 +154,9 @@ public:
 
     /** Write an ok decorator */
     static void ok();
+
+    /** Write a fatal error decorator */
+    static void fatal_error();
 
     /** Write an error decorator */
     static void error();

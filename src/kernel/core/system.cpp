@@ -9,6 +9,8 @@
 
 extern "C" uint is_running_in_qemu_asm();
 
+bool System::irrecoverable_error_happened = false;
+
 [[noreturn]] int System::shutdown()
 {
 #ifdef PROFILING
@@ -17,9 +19,8 @@ extern "C" uint is_running_in_qemu_asm();
 	FAT_drive::shutdown();
 	Socket::close_all_connections();
 	Scheduler::shutdown();
-	uint qemu = is_running_in_qemu_asm();
 
-	if (qemu)
+	if (is_running_in_qemu_asm())
 	{
 		outb(0x501, 0x31);
 		io_wait();
@@ -28,7 +29,7 @@ extern "C" uint is_running_in_qemu_asm();
 	else
 	{
 		printf_info("System halted (Hardware shutdown not implemented)");
-		while (1)
+		while (true)
 		{
 		};
 	}

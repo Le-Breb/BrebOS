@@ -2,6 +2,7 @@
 
 #include "fb.h"
 #include "interrupts.h"
+#include "system.h"
 #include "../processes/scheduler.h"
 
 #define CTRL_PRESSED 1
@@ -60,6 +61,10 @@ void Keyboard::handle_char(unsigned char c)
     //printf("%d\n", c);
     if (c < 128)
     {
+        // When a fatal error occurs, the system shuts down whenever a key is pressed
+        if (System::irrecoverable_error_happened)
+            System::shutdown();
+
         c = kbd_US[c];
         if (c == CTRL_PRESSED)
         {

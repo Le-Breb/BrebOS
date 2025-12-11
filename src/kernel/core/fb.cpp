@@ -221,6 +221,12 @@ void FB::ok()
     putchar('\n');
 }
 
+void FB::fatal_error()
+{
+	fatal_error_decorator();
+	putchar('\n');
+}
+
 void FB::error()
 {
     error_decorator();
@@ -239,40 +245,36 @@ void FB::warn()
     putchar('\n');
 }
 
+#define decorator(text, color) \
+	putchar('['); \
+	set_fg(color); \
+	write(#text); \
+	set_fg(FB_WHITE); \
+	putchar(']');
+
 void FB::ok_decorator()
 {
-    putchar('[');
-    set_fg(FB_GREEN);
-    write("OK");
-    set_fg(FB_WHITE);
-    putchar(']');
+	decorator(OK, FB_GREEN);
 }
 
 void FB::error_decorator()
 {
-    putchar('[');
-    set_fg(FB_RED);
-    write("ERROR");
-    set_fg(FB_WHITE);
-    putchar(']');
+	decorator(ERROR, FB_RED);
+}
+
+void FB::fatal_error_decorator()
+{
+	decorator(FATAL ERROR, FB_RED);
 }
 
 void FB::info_decorator()
 {
-    putchar('[');
-    set_fg(FB_BLUE);
-    write("INFO");
-    set_fg(FB_WHITE);
-    putchar(']');
+	decorator(INFO, FB_BLUE);
 }
 
 void FB::warn_decorator()
 {
-    putchar('[');
-    set_fg(FB_BROWN);
-    write("WARN");
-    set_fg(FB_WHITE);
-    putchar(']');
+	decorator(WARN, FB_BROWN);
 }
 
 void FB::set_fg(uint32_t fg)
@@ -1122,21 +1124,22 @@ int printf_warn(const char* format, ...)
 [[noreturn]]
 __attribute__ ((format (printf, 1, 2))) int irrecoverable_error(const char* format, ...)
 {
-	auto fmt_len = strlen(format);
-	const char* prelude = "IRRECOVERABLE ERROR: ";
-	char*full_format = new char[fmt_len + strlen(prelude) + 1];
-	strcpy(full_format, prelude);
-	strcat(full_format, format);
-
-	FB::error_decorator();
+	FB::fatal_error_decorator();
 	FB::putchar(' ');
 	va_list list;
 	va_start(list, format);
-	kvprintf(full_format, output_funcs(kprintf_output), list);
+	kvprintf(format, output_funcs(kprintf_output), list);
 	va_end(list);
 	FB::putchar(' ');
-	FB::error();
+	FB::fatal_error();
+	FB::write("Press any key to continue...");
 	FB::flush();
 
-	System::shutdown();
+	System::irrecoverable_error_happened = true;
+
+	// Hang until a key is pressed and system is shut down
+	while (true)
+	{
+		__asm__ volatile("hlt");
+	}
 }
