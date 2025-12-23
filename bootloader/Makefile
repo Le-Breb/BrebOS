@@ -37,6 +37,7 @@ $(BUILD_DIR)/%.o: %.s
 all: bootloader.bin bootloader2.bin
 
 bootloader.bin: bootloader.s
+	@mkdir -p $(dir $@)
 	$(NASM) -f bin bootloader.s -o $(BUILD_DIR)/bootloader.bin
 
 bootloader2.elf: $(CPP_OBJ) $(ASM_OBJ)
