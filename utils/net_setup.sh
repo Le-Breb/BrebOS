@@ -36,9 +36,11 @@ sudo iptables -A FORWARD -i "$TAP_IF" -o "$PRIMARY_IFACE" -j ACCEPT
 sudo iptables -A FORWARD -i "$PRIMARY_IFACE" -o "$TAP_IF" -m state --state RELATED,ESTABLISHED -j ACCEPT
 
 # Start dnsmasq for DHCP
+# I use port 0 because port 53 is already occupied on my machine
 echo "Starting dnsmasq for DHCP on $TAP_IF"
 sudo dnsmasq --interface="$TAP_IF" --bind-interfaces \
     --dhcp-range="$DHCP_RANGE" --dhcp-option=3,"$GATEWAY" \
-    --dhcp-option=6,8.8.8.8,8.8.4.4 --pid-file="$DNSMASQ_PID"
+    --dhcp-option=6,8.8.8.8,8.8.4.4 --pid-file="$DNSMASQ_PID" \
+    --port=0
 
 echo "Setup complete."
