@@ -55,6 +55,8 @@ private:
 
 	static void wake_up_process_parent(pid_t process_pid);
 
+	static void signal_handling(Process* p);
+
 public:
 	/**
 	 * Create the process that will be used for global kernel memory mappings, and which will handle the end of kernel
@@ -125,6 +127,12 @@ public:
 	static void resume_process(Process* p);
 
 	static int execve(Process* p, const char* path, int argc, const char** argv);
+
+	[[nodiscard]]
+	static Process* get_process(pid_t pid);
+
+	[[noreturn]]
+	static void resume_user_process(Process* p);
 };
 
 

@@ -94,7 +94,7 @@ ELF* ELF::is_valid(uint start_address, ELF_type expected_type)
             if (reloc_type == R_386_PC32)
             {
                 uint symbol_id = ELF32_R_SYM(elf->dyn_relocs[i].r_info);
-                Elf32_Sym* symbol = &elf->symbols[symbol_id];
+                Elf32_Sym* symbol = &elf->dynsym[symbol_id];
 
                 // Weak symbols that are not yet defined are not an issue
                 if (ELF32_ST_BIND(symbol->st_info) != STB_WEAK || symbol->st_shndx != 0)
@@ -188,7 +188,7 @@ ELF* ELF::is_valid(uint start_address, ELF_type expected_type)
     uint dynsym_num_entries = elf->dynsym_hdr->sh_size / elf->dynsym_hdr->sh_entsize;
     for (uint i = 1; i < dynsym_num_entries; ++i) // First entry has to be null, we skip it
     {
-        Elf32_Sym* dd = elf->symbols + i;
+        Elf32_Sym* dd = elf->dynsym + i;
         //printf("%s\n", &dyn_str_table[dd->st_name]);
         uint type = ELF32_ST_TYPE(dd->st_info);
         if (type != STT_FUNC && type != STT_NOTYPE) // _init and _fini have type STT_NOTYPE
@@ -218,7 +218,7 @@ uint ELF::get_highest_runtime_addr() const
     return highest_addr;
 }
 
-Elf32_Sym* ELF::get_symbol(const char* symbol_name, Elf32_Addr load_address) const
+Elf32_Sym* ELF::get_dynamic_symbol(const char* symbol_name, Elf32_Addr load_address) const
 {
     // If there is not hash table available, linearly search for the symbol
     if (hash_table_runtime_address == ELF32_ADDR_ERR)
@@ -226,8 +226,8 @@ Elf32_Sym* ELF::get_symbol(const char* symbol_name, Elf32_Addr load_address) con
         uint lib_dynsym_num_entries = dynsym_hdr->sh_size / dynsym_hdr->sh_entsize;
         for (uint i = 1; i < lib_dynsym_num_entries; i++)
         {
-            if (strcmp(&dynsym_strtab[symbols[i].st_name], symbol_name) == 0)
-                return &symbols[i];
+            if (strcmp(&dynsym_strtab[dynsym[i].st_name], symbol_name) == 0)
+                return &dynsym[i];
         }
     }
     else // Otherwise, make fast lookup during the hash table
@@ -239,10 +239,22 @@ Elf32_Sym* ELF::get_symbol(const char* symbol_name, Elf32_Addr load_address) con
         uint* chain = buckets + nbucket;
         uint y = buckets[h % nbucket];
 
-        while (y != STN_UNDEF && strcmp(&dynsym_strtab[symbols[y].st_name], symbol_name) != 0)
+        while (y != STN_UNDEF && strcmp(&dynsym_strtab[dynsym[y].st_name], symbol_name) != 0)
             y = chain[y];
 
-        return y == STN_UNDEF ? nullptr : &symbols[y];
+        return y == STN_UNDEF ? nullptr : &dynsym[y];
+    }
+
+    return nullptr;
+}
+
+Elf32_Sym* ELF::get_symbol(const char* symbol_name) const
+{
+    uint symtab_num_entries = symtab_hdr->sh_size / symtab_hdr->sh_entsize;
+    for (uint i = 1; i < symtab_num_entries; i++)
+    {
+        if (strcmp(&strtab[symtab[i].st_name], symbol_name) == 0)
+            return &symtab[i];
     }
 
     return nullptr;
@@ -295,11 +307,34 @@ ELF::ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr,
         break;
     }
 
-    // Copy strtab
+    // Copy shstrtab
     Elf32_Shdr* sh_strtab_h = (Elf32_Shdr*)((uint)elf32Shdr +
         elf32Ehdr->e_shentsize * elf32Ehdr->e_shstrndx);
     shstrtab = new char[sh_strtab_h->sh_size];
     memcpy((char*)shstrtab, (char*)start_address + sh_strtab_h->sh_offset, sh_strtab_h->sh_size);
+
+    // Copy symtab and strtab
+    for (int k = 0; k < elf32Ehdr->e_shnum; ++k)
+    {
+        auto h = (Elf32_Shdr*)((uint)elf32Shdr + elf32Ehdr->e_shentsize * k);
+
+        if (h->sh_type != SHT_SYMTAB)
+            continue;
+        symtab_hdr = new Elf32_Shdr(*h);
+        uint symtab_num_entries = symtab_hdr->sh_size / symtab_hdr->sh_entsize;
+        symtab = new Elf32_Sym[symtab_num_entries];
+        for (uint i = 0; i < symtab_num_entries; i++)
+        {
+            Elf32_Sym* symbol_entry = (Elf32_Sym*)(start_address + symtab_hdr->sh_offset +
+                i * symtab_hdr->sh_entsize);
+            symtab[i] = *symbol_entry;
+        }
+
+        Elf32_Shdr* strtab_hdr = (Elf32_Shdr*)((uint)elf32Shdr + elf32Ehdr->e_shentsize * symtab_hdr->sh_link);
+        strtab = new char[strtab_hdr->sh_size];
+        memcpy((char*)strtab, (char*)start_address + strtab_hdr->sh_offset, strtab_hdr->sh_size);
+        break;
+    }
 
     // Copy plt relocation entries
     plt_relocs = nullptr;
@@ -340,7 +375,7 @@ ELF::ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr,
     dynsym_strtab = nullptr;
     for (int k = 0; k < elf32Ehdr->e_shnum; ++k)
     {
-        Elf32_Shdr* h = (Elf32_Shdr*)((uint)elf32Shdr + elf32Ehdr->e_shentsize * k);
+        auto h = (Elf32_Shdr*)((uint)elf32Shdr + elf32Ehdr->e_shentsize * k);
 
         if (h->sh_type != SHT_DYNSYM)
             continue;
@@ -351,17 +386,17 @@ ELF::ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr,
         break;
     }
 
-    // Copy symbols
-    symbols = nullptr;
+    // Copy dynamic symbols
+    dynsym = nullptr;
     if (dynsym_hdr)
     {
         uint lib_dynsym_num_entries = dynsym_hdr->sh_size / dynsym_hdr->sh_entsize;
-        symbols = new Elf32_Sym[lib_dynsym_num_entries];
+        dynsym = new Elf32_Sym[lib_dynsym_num_entries];
         for (uint i = 0; i < lib_dynsym_num_entries; i++)
         {
             Elf32_Sym* lib_symbol_entry = (Elf32_Sym*)(start_address + dynsym_hdr->sh_offset +
                 i * dynsym_hdr->sh_entsize);
-            symbols[i] = *lib_symbol_entry;
+            dynsym[i] = *lib_symbol_entry;
         }
     }
 
@@ -436,8 +471,11 @@ ELF::~ELF()
     delete[] plt_relocs;
     delete[] dyn_relocs;
     delete dynsym_hdr;
-    delete[] symbols;
+    delete[] dynsym;
     delete[] lib_name;
+    delete[] strtab;
+    delete[] symtab;
+    delete symtab_hdr;
 }
 
 size_t ELF::base_address() const

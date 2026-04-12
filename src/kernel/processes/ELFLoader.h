@@ -74,7 +74,7 @@ private:
      * @param copied_bytes counter of bytes processed in current segment
      */
     void
-    copy_elf_subsegment_to_address_space(const void* bytes_ptr, uint n, Elf32_Phdr* h, uint lib_runtime_load_address,
+    copy_elf_subsegment_to_address_space(const void* bytes_ptr, uint n, const Elf32_Phdr* h, uint lib_runtime_load_address,
                                          uint& copied_bytes) const;
 
     /**

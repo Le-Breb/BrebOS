@@ -21,8 +21,15 @@ public:
     {
         CLOSED,
         GET_SENT,
+        RECEIVING_CHUNK_LEN,
         RECEIVING_RESPONSE,
         RESPONSE_COMPLETE
+    };
+
+    enum class TransferType
+    {
+        Regular,
+        Chunked
     };
 
     struct header
@@ -71,6 +78,10 @@ public:
 
     void send_get(const char* uri);
 
+    void* handle_chunk_length(void* packet, uint16_t packet_size);
+
+    void handle_response_continuation(void* packet, uint16_t packet_size);
+
     void on_data_received(void* packet, uint16_t packet_size) override;
 
     ~HTTP() override;
@@ -88,6 +99,8 @@ private:
     [[nodiscard]] static size_t get_request_size(const request_t* request);
 
     State state = State::CLOSED;
+    TransferType transfer_type = TransferType::Regular;
+    uint16_t current_chunk_size = 0;
 
     static uint16_t atoi(const char* str);
 

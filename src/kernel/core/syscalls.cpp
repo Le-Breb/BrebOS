@@ -116,7 +116,7 @@ void Syscall::dynlk(const cpu_state_t* cpu_state)
                      dynsym_num_entries);
 
     // Get symbol name
-    Elf32_Sym* s = &elf->symbols[symbol_id];
+    Elf32_Sym* s = &elf->dynsym[symbol_id];
     const char* symbol_name = &elf->dynsym_strtab[s->st_name];
 
     // Find symbol
@@ -259,13 +259,21 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
         case 34:
             p->cpu_state.eax = fstat(p);
             break;
+        case 35:
+            p->cpu_state.eax = kill(p);
+            break;
+        case 36:
+            p->cpu_state.eax = (uint)signal(p);
+            break;
+        case 37:
+            signal_return(p);
+            break;
         default:
             printf_error("Received unknown syscall id: 0x%x", cpu_state->eax);
             break;
     }
 
-    // Todo: Check if process ESP should be reset to process kernel stack top here
-    Interrupts::resume_user_process_asm(&p->cpu_state, &p->stack_state);
+    Scheduler::resume_user_process(p);
 }
 
 void Syscall::wget(const cpu_state_t* cpu_state)
@@ -471,6 +479,31 @@ int Syscall::fstat(const Process* p)
     stat_base(statbuf, VFS::file_descriptors[fd].dentry);
 
     return 0;
+}
+
+int Syscall::kill(const Process* p)
+{
+    int pid = (int)p->cpu_state.edi;
+    int signal = (int)p->cpu_state.esi;
+
+    Process* proc = Scheduler::get_process(pid);
+    if (!proc)
+        return -ESRCH; // No such process
+
+    return proc->register_signal(signal);
+}
+
+_sig_func_ptr Syscall::signal(Process* p)
+{
+    int signal = (int)p->cpu_state.edi;
+    auto handler = (_sig_func_ptr)p->cpu_state.esi;
+
+    return p->register_signal_handler(signal, handler);
+}
+
+void Syscall::signal_return(Process* p)
+{
+    p->signal_context_restore();
 }
 
 __attribute__((no_instrument_function)) // May not return, which would mess up profiling data

@@ -96,7 +96,7 @@ void ELFLoader::apply_relocations(ELF* elf, uint elf_runtime_load_address) const
             case R_386_GLOB_DAT:
             {
                 uint symbol_id = ELF32_R_SYM(reloc->r_info);
-                Elf32_Sym* symbol = &elf->symbols[symbol_id];
+                Elf32_Sym* symbol = &elf->dynsym[symbol_id];
                 Elf32_Addr symbol_address = symbol->st_value;
                 Elf32_Addr S = B + symbol_address;
 
@@ -127,7 +127,7 @@ void ELFLoader::apply_relocations(ELF* elf, uint elf_runtime_load_address) const
             case R_386_32:
             {
                 uint symbol_id = ELF32_R_SYM(reloc->r_info);
-                Elf32_Sym* symbol = &elf->symbols[symbol_id];
+                Elf32_Sym* symbol = &elf->dynsym[symbol_id];
                 // Weak symbols that are not yet defined are not an issue
                 if (ELF32_ST_BIND(symbol->st_info) == STB_WEAK && symbol->st_shndx == 0)
                     break;
@@ -181,7 +181,7 @@ bool ELFLoader::alloc_elf_memory(const ELF& elf)
 }
 
 void
-ELFLoader::copy_elf_subsegment_to_address_space(const void* bytes_ptr, uint n, Elf32_Phdr* h,
+ELFLoader::copy_elf_subsegment_to_address_space(const void* bytes_ptr, uint n, const Elf32_Phdr* h,
                                                 uint lib_runtime_load_address,
                                                 uint& copied_bytes) const
 {
@@ -335,7 +335,7 @@ Elf32_Addr ELFLoader::get_libdynlk_runtime_address()
 
     // Find and return libdynlk runtime entry point
     uint libdynlk_load_address = runtime_address_to_load_address(proc_num_pages << 12);
-    Elf32_Sym* s = libdynlk_elf->get_symbol("lib_main", libdynlk_load_address);
+    Elf32_Sym* s = libdynlk_elf->get_dynamic_symbol("lib_main", libdynlk_load_address);
     return libdynlk_runtime_entry_point =
         s == nullptr ? ELF32_ADDR_ERR : proc_num_pages * PAGE_SIZE + s->st_value;
 }
@@ -455,9 +455,12 @@ Process* ELFLoader::build_process(int argc, const char** argv, pid_t pid, pid_t 
         return nullptr;
 
     auto k_stack_top = finalize_process_setup(argc, argv);
+    Elf32_Addr sig_ret = ELF32_ADDR_ERR;
+    if (Elf32_Sym* sig_ret_symbol = elf_dep_list->get(0)->elf->get_symbol("sig_return"))
+        sig_ret = sig_ret_symbol->st_value;
 
     used = true;
-    return new Process(num_pages, elf_dep_list, page_tables, pdt, &stack_state, priority, pid, ppid, k_stack_top);
+    return new Process(num_pages, elf_dep_list, page_tables, pdt, &stack_state, priority, pid, ppid, k_stack_top, sig_ret);
 }
 
 Elf32_Addr ELFLoader::finalize_process_setup(int argc, const char** argv)
@@ -508,7 +511,6 @@ Process* ELFLoader::setup_elf_process(pid_t pid, pid_t ppid, int argc, const cha
                                       const SharedPointer<Dentry>& file, uint priority)
 {
     ELFLoader loader{};
-
     Process* proc = loader.build_process(argc, argv, pid, ppid, file, priority);
 
     return proc;

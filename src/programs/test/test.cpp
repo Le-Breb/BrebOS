@@ -1,9 +1,18 @@
-#include <sys/stat.h>
+#include <stdio.h>
+#include <signal.h>
 
-int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
+void handler(int sig)
 {
-    struct stat statbuf;
-    stat("/img2.jpg", &statbuf);
+    printf("Signal %d received\n", sig);
+}
 
+int main() {
+    signal(SIGQUIT, handler);
+    printf("%d\n", raise(SIGILL));
+    printf("%d\n", raise(SIGQUIT));
+    signal(SIGQUIT, SIG_DFL);
+    printf("%d\n", raise(SIGQUIT));
+    printf("This shouldn't be printed");
     return 0;
 }
+

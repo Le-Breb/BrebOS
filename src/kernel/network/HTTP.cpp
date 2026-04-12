@@ -171,8 +171,7 @@ void HTTP::send_get(const char* uri)
     request = new request_t();
 
     request->method = (char*)"GET";
-    request->uri = new char[strlen(uri) + 1];
-    strcpy(request->uri, uri);
+    request->uri = (char*)"/";
     request->version = (char*)"HTTP/1.1";
     constexpr uint16_t num_headers = 4;
     request->num_headers = num_headers;
@@ -196,6 +195,70 @@ void HTTP::send_get(const char* uri)
     socket->send_data(packet, packet_size);
 }
 
+void HTTP::handle_response_continuation(void* packet, uint16_t packet_size)
+{
+    if (buf_size + packet_size > buf_capacity)
+    {
+        // Chunked transfers are headers\r\nlength\r\npayload\r\n
+        // If buf_size + packet_size > buf_capacity, its probably because it's the end of a chunked response, as
+        // 'length' does not account for the trailing \r\n. If it's the case, simply remove 2 to packet size and
+        // proceed normally
+        if (transfer_type == TransferType::Chunked &&
+            buf_size + packet_size == buf_capacity + 2 && memcmp((char*)packet + packet_size - 2, "\r\n", 2) == 0)
+        {
+            if (current_chunk_size == 0)
+            {
+                state = State::RESPONSE_COMPLETE;
+                return;
+            }
+            packet_size -= 2;
+            state = State::RECEIVING_CHUNK_LEN;
+        }
+        else {
+            printf_error("size of received data exceeds buffer capacity");
+            socket->close();
+            state = State::CLOSED;
+            return;
+        }
+    }
+    memcpy(buf + buf_size, packet, packet_size);
+    buf_size += packet_size;
+    update_progress(buf_size, buf_capacity);
+
+    if (transfer_type == TransferType::Regular && buf_size == buf_capacity)
+        state = State::RESPONSE_COMPLETE;
+}
+
+/** Gets chunk length and store it in current_chunk_length
+ *
+ * @param packet received packet
+ * @param packet_size size of the received packet
+ * @return beginning address of the chunk
+ */
+void* HTTP::handle_chunk_length(void* packet, uint16_t packet_size)
+{
+    constexpr char end_of_len_signature[] = "\r\n";
+    void* end_of_chunk_len = memmem(packet, packet_size, end_of_len_signature, sizeof(end_of_len_signature) - 1);
+
+    if (end_of_chunk_len == nullptr)
+    {
+        printf_error("Couldn't find chunk length");
+        socket->close();
+        state = State::CLOSED;
+        return nullptr;
+    }
+
+    size_t chunk_len_len = (char*)end_of_chunk_len - (char*)packet;
+    current_chunk_size = 0;
+    for (size_t i = 0; i < chunk_len_len;  i++)
+    {
+        current_chunk_size *= 16;
+        current_chunk_size += ((char*)packet)[i] - '0';
+    }
+
+    return (char*)end_of_chunk_len + sizeof(end_of_len_signature) - 1;
+}
+
 void HTTP::on_data_received(void* packet, uint16_t packet_size)
 {
     switch (state)
@@ -203,18 +266,19 @@ void HTTP::on_data_received(void* packet, uint16_t packet_size)
         case State::GET_SENT: // Get response
             handle_response_descriptor(packet, packet_size);
             break;
+        case State::RECEIVING_CHUNK_LEN:
+        {
+            if (void* content = handle_chunk_length(packet, packet_size))
+            {
+                uint16_t content_size = packet_size - ((char*)content - (char*)packet);
+                handle_response_continuation(content, content_size);
+            }
+
+            break;
+        }
         case State::RECEIVING_RESPONSE: // Get response body
         {
-            if (buf_size + packet_size > buf_capacity)
-            {
-                socket->close();
-                printf_error("size of received data exceed buffer capacity");
-                state = State::CLOSED;
-            }
-            memcpy(buf + buf_size, packet, packet_size);
-            buf_size += packet_size;
-            update_progress(buf_size, buf_capacity);
-            //printf("Received %u/%u bytes\n", buf_size, buf_capacity);
+            handle_response_continuation(packet, packet_size);
             break;
         }
         default:
@@ -252,37 +316,85 @@ void HTTP::handle_response_descriptor(const void* packet, uint16_t packet_size)
         return;
     }
 
-    auto content_length_header = response->get_header("Content-Length");
-    if (content_length_header == nullptr)
+    char* cpacket = (char*)packet;
+    void* end_of_headers = nullptr;
+    constexpr char end_of_headers_signature[] = "\r\n\r\n";
+    if ((end_of_headers = memmem(cpacket, packet_size, end_of_headers_signature, sizeof(end_of_headers_signature) - 1)) == nullptr)
     {
-        printf("No content length header\n");
+        printf_error("Couldn't find end of HTTP headers");
         socket->close();
         state = State::CLOSED;
         return;
     }
-    size_t content_len_len = 0;
-    while (content_length_header->value[content_len_len])
-    {
-        buf_capacity *= 10;
-        buf_capacity += content_length_header->value[content_len_len] - '0';
-        content_len_len++;
-    }
+    end_of_headers = (char*)end_of_headers + sizeof(end_of_headers_signature) - 1;
+    size_t payload_size = packet_size - ((char*)end_of_headers - cpacket);
+    size_t content_len = 0;
+    void* content_start = end_of_headers;
 
-    // Create a buffer to store response body
-    buf = new uint8_t[buf_capacity];
+    auto content_length_header = response->get_header("Content-Length");
+    if (content_length_header == nullptr)
+    {
+        // No content length provided: check if response is chunked
+        if (auto transfer_type_header = response->get_header("Transfer-Encoding"))
+        {
+            if (strcmp(transfer_type_header->value, "chunked") != 0)
+            {
+                printf_error("Unsupported transfer type: %s\n", transfer_type_header->value);
+                socket->close();
+                state = State::CLOSED;
+                return;
+            }
+
+            state = State::RECEIVING_CHUNK_LEN;
+            transfer_type = TransferType::Chunked;
+
+            // Get chunk length length
+            constexpr char end_of_content_len_len_signature[] = "\r\n";
+            void* end_of_content_len = memmem(end_of_headers, payload_size, end_of_content_len_len_signature, sizeof(end_of_content_len_len_signature) - 1);
+            if (end_of_content_len == nullptr)
+            {
+                printf_error("Couldn't find HTTP chunk length");
+                socket->close();
+                state = State::CLOSED;
+                return;
+            }
+            size_t content_len_len = (char*)end_of_content_len - (char*)end_of_headers;
+            // Get chunk length
+            for (size_t i = 0; i < content_len_len; i++)
+            {
+                content_len *= 16;
+                content_len += ((char*)end_of_headers)[i] - '0';
+            }
+            current_chunk_size = content_len;
+            content_start = (char*)end_of_content_len + sizeof(end_of_content_len_len_signature) - 1;
+        }
+        else
+        {
+            printf("No content length header\n");
+            socket->close();
+            state = State::CLOSED;
+        }
+    }
+    else
+    {
+        size_t content_len_len = 0;
+        while (content_length_header->value[content_len_len])
+        {
+            content_len *= 10;
+            content_len += content_length_header->value[content_len_len] - '0';
+            content_len_len++;
+        }
+    }
 
     state = State::RECEIVING_RESPONSE;
 
-    // Gather remaining data
-    uint16_t i = 0; // Skip HTTP response
-    char* cpacket = (char*)packet;
-    while (i < packet_size - 3 && !(cpacket[i] == '\r' && cpacket[i + 1] == '\n' && cpacket[i + 2] == '\r' &&
-           cpacket[i + 3] == '\n'))
-        i++;
+    // Create a buffer to store response body
+    buf_capacity = content_len;
+    buf = new uint8_t[buf_capacity];
 
-    // Copy remaining data
-    auto data_size = packet_size - i - 4; // -4 for \r\n\r\n
-    memcpy(buf, cpacket + i + 4, data_size);
+    // Copy remaining data. It's not necessarily content_len bytes long as chunked responses can be split by TCP
+    auto data_size = packet_size - ((char*)content_start - (char*)packet);
+    memcpy(buf, content_start, data_size);
 
     buf_size = data_size;
 
@@ -298,10 +410,8 @@ void HTTP::on_connection_terminated(const char* error_message)
     else
     {
         // Response body completely received
-        if (buf_size == buf_capacity && state == State::RECEIVING_RESPONSE)
+        if (buf_size == buf_capacity && state == State::RESPONSE_COMPLETE)
         {
-            state = State::RESPONSE_COMPLETE;
-
             // Build file path
             const char save_path[] = "/downloads/";
             const char* file_name = "res.txt"; // request->uri;

@@ -43,8 +43,8 @@ void VFS::init()
 	}
 
 	// Mount other File Systems
-	for (int i = 1; i < FS::fs_list->size(); i++)
-		mount(*FS::fs_list->get(i));
+	for (const auto fs : *FS::fs_list)
+		mount(fs);
 
 	if (!add_to_path("/bin"))
 		printf_error("Failed to add /bin to path");

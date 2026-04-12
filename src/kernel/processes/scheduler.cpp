@@ -137,7 +137,7 @@ void Scheduler::resume_process(Process* p)
         Interrupts::resume_syscall_handler_asm(&p->k_cpu_state, &p->k_stack_state);
     }
     else
-        Interrupts::resume_user_process_asm(&p->cpu_state, &p->stack_state);
+        resume_user_process(p);
 }
 
 int Scheduler::execve(Process* p, const char* path, int argc, const char** argv)
@@ -151,6 +151,22 @@ int Scheduler::execve(Process* p, const char* path, int argc, const char** argv)
     TRIGGER_TIMER_INTERRUPT;
 
     __builtin_unreachable();
+}
+
+Process* Scheduler::get_process(pid_t pid)
+{
+    if (pid >= (pid_t)MAX_PROCESSES || pid < 0)
+        return nullptr;
+
+    return processes[pid];
+}
+
+[[noreturn]]
+void Scheduler::resume_user_process(Process* p)
+{
+    signal_handling(p);
+
+    Interrupts::resume_user_process_asm(&p->cpu_state, &p->stack_state);
 }
 
 [[noreturn]]
@@ -202,7 +218,7 @@ void Scheduler::start_module([[maybe_unused]] uint module, [[maybe_unused]] pid_
 
     char path[] = "GRUB_module_x";
     path[strlen(path) - 1] = '0' + module;
-    Process* proc = ELFLoader::setup_elf_process(pid, ppid, argc, argv, path);
+    Process* proc = ELFLoader::setup_elf_process(pid, ppid, argc, argv, path);x
     if (!proc)
         return;
 
@@ -374,7 +390,7 @@ void Scheduler::create_kernel_init_process(void* process_host_mem, const uint lo
     // Now we can properly construct the process
     stack_state_t dummy_stack_state{};
     auto k = new Process(0, nullptr, Memory::page_tables, Memory::pdt, &dummy_stack_state,
-                         1, pid, pid, (uint)-1);
+                         1, pid, pid, ELF32_ADDR_ERR, ELF32_ADDR_ERR);
 
     // Transfer allocation information from dummy process to actual process
     k->lowest_free_pe = kernel->lowest_free_pe;
@@ -410,6 +426,42 @@ void Scheduler::wake_up_process_parent(pid_t process_pid)
     waiting_process->cpu_state.eax = process_pid;
     // Remove child
     waiting_process->children.remove(process_pid);
+}
+
+void Scheduler::signal_handling(Process* p)
+{
+    if (p->pending_signals.empty())
+        return;
+
+    int signal = p->pending_signals.delete_min();
+
+    if (p->signal_action[signal] == SIGDISP_IGN)
+    {
+        // Signal is ignored, proceed to next signal
+        signal_handling(p);
+        return;
+    }
+
+    if (p->signal_action[signal] != SIGDISP_HLDR)
+        irrecoverable_error("Signal %d is not handled by a signal handler", signal);
+
+    if (p->sig_ret == ELF32_ADDR_ERR)
+        irrecoverable_error("Trying to handle a signal although sig_ret is not set."
+                            "This means that the process does not have a valid signal handler return address, "
+                            "which is required to handle signals. PID: %d", p->pid);
+
+    // ReSharper disable once CppDFANullDereference
+    Elf32_Addr sig_ret= p->sig_ret + p->elf_dep_list->get(0)->runtime_load_address;
+
+    // Save saved context
+    p->signal_context_save();
+
+    // Setup new context, by sig_ret (the return address) to the stack and the signal handler address to eip
+    p->stack_state.esp &= ~0b11; // ABI stack alignment: align to 4 bytes
+    p->stack_state.esp -= sizeof(sig_ret) + sizeof(signal); // Reserve space on the stack
+    *((Elf32_Addr*)p->stack_state.esp) = sig_ret; // Push return address to the stack
+    ((uint*)p->stack_state.esp)[1] = signal; // Push signal number to the stack, as argument for the signal handler
+    p->stack_state.eip = (uint)p->signal_handlers[signal];
 }
 
 void Scheduler::free_terminated_process(Process& p)
@@ -533,7 +585,7 @@ void Scheduler::start_kernel_process(void* eip)
 
     // Create process
     auto p = new Process(0, nullptr, Memory::page_tables, Memory::pdt, &stack_state,
-                         2, pid, pid, k_stack_top);
+                         2, pid, pid, k_stack_top, ELF32_ADDR_ERR);
 
     // Setup process to mimic kernel_process
     p->lowest_free_pe = Memory::kernel_process->lowest_free_pe;

@@ -11,6 +11,7 @@
 #include "sys/errno.h"
 
 list<Process::env_var*> Process::env_list = {};
+int Process::signal_default_action[HIGHEST_SIGNAL + 1] = {};
 
 /** Change current pdt */
 extern "C" void change_pdt_asm_(uint pdt_phys_addr);
@@ -97,16 +98,19 @@ Process::~Process()
 }
 
 Process::Process(uint num_pages, list<elf_dependence>* elf_dep_list, Memory::page_table_t* page_tables,
-    Memory::pdt_t* pdt, stack_state_t* stack_state, uint priority, pid_t pid, pid_t ppid, Elf32_Addr k_stack_top) :
+                 Memory::pdt_t* pdt, stack_state_t* stack_state, uint priority, pid_t pid, pid_t ppid, Elf32_Addr k_stack_top,
+                 Elf32_Addr sig_ret) :
     quantum(0), priority(priority),
     num_pages(num_pages),
-    pid(pid), ppid(ppid), k_stack_top(k_stack_top), flags(P_READY), lowest_free_pe(num_pages),
+    pid(pid), ppid(ppid), k_stack_top(k_stack_top), flags(P_READY),
+    sig_ret(sig_ret), lowest_free_pe(num_pages),
     elf_dep_list(elf_dep_list),
     page_tables(page_tables),
     pdt(pdt),
     program_break(num_pages * PAGE_SIZE)
 {
     memcpy(&this->stack_state, stack_state, sizeof(stack_state_t));
+    memcpy(signal_action, signal_default_action, sizeof(signal_action));
 }
 
 
@@ -193,7 +197,7 @@ uint Process::get_symbol_runtime_address_at_runtime(uint dep_id, const char* sym
     for (int i = dep_id; i < elf_dep_list->size(); i++)
     {
         auto dep = elf_dep_list->get(i);
-        auto s = dep->elf->get_symbol(symbol_name, dep->runtime_load_address);
+        auto s = dep->elf->get_dynamic_symbol(symbol_name, dep->runtime_load_address);
         if (s && s->st_shndx && ELF32_ST_BIND(s->st_info) == STB_GLOBAL)
             return dep->runtime_load_address + s->st_value;
     }
@@ -216,6 +220,17 @@ void Process::init()
     home->name = strdup("HOME");
     home->value = strdup(" \t\n");
     env_list.add(home);
+
+    signal_default_action[SIGHUP] = SIGDISP_TERM;
+    signal_default_action[SIGINT] = SIGDISP_TERM;
+    signal_default_action[SIGQUIT] = SIGDISP_CORE;
+    signal_default_action[SIGILL] = SIGDISP_CORE;
+    signal_default_action[SIGTRAP] = SIGDISP_CORE;
+    signal_default_action[SIGIOT] = SIGDISP_CORE;
+    signal_default_action[SIGABRT] = SIGDISP_CORE;
+    signal_default_action[SIGEMT] = SIGDISP_TERM;
+    signal_default_action[SIGFPE] = SIGDISP_CORE;
+    signal_default_action[SIGKILL] = SIGDISP_TERM;
 }
 
 char* Process::get_env(const char* name)
@@ -296,7 +311,7 @@ pid_t Process::fork()
 
     // Creat child process
     auto child = new Process(num_pages, dep_list, child_page_tables, child_pdt, &stack_state, priority, child_pid,
-        pid, k_stack_top);
+        pid, k_stack_top, sig_ret);
 
     // Copy PCB
     child->cpu_state = cpu_state;
@@ -493,4 +508,56 @@ int Process::proc_to_sys_fd(int fd) const
         return file_descriptors[fd]->system_fd; // Return system file descriptor
 
     return -1;
+}
+
+int Process::register_signal(int signal)
+{
+    if (signal != SIGKILL && signal && signal != SIGQUIT)
+    {
+        printf_warn("Signal %d is not supported yet, ignoring it", signal);
+        return -EINVAL;
+    }
+    if (signal_action[signal] == SIGDISP_TERM || signal_action[signal] == SIGDISP_CORE)
+    {
+        terminate(128 + signal);
+        TRIGGER_TIMER_INTERRUPT
+        return 0;
+    }
+    if (!pending_signals.contains(signal))
+        pending_signals.insert(signal);
+
+    return 0;
+}
+
+_sig_func_ptr Process::register_signal_handler(int signal, _sig_func_ptr handler)
+{
+    if (signal != SIGQUIT) // Cannot register handler for SIGKILL, so for now the only signal that can be registered is SIGQUIT
+        return (_sig_func_ptr)-EINVAL;
+
+    auto prev = signal_handlers[signal];
+    if (handler == SIG_IGN)
+        signal_action[signal] = SIGDISP_IGN;
+    else if (handler == SIG_DFL)
+        signal_action[signal] = signal_default_action[signal];
+    else
+    {
+        signal_handlers[signal] = handler;
+        signal_action[signal] = SIGDISP_HLDR;
+    }
+
+    return prev;
+}
+
+void Process::signal_context_save()
+{
+    sig_saved_cpu_state = cpu_state;
+    sig_saved_stack_state = stack_state;
+}
+
+void Process::signal_context_restore()
+{
+    cpu_state = sig_saved_cpu_state;
+    stack_state = sig_saved_stack_state;
+    sig_saved_cpu_state = {};
+    sig_saved_stack_state = {};
 }

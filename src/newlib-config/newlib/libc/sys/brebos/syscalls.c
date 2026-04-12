@@ -71,8 +71,15 @@ int isatty(int file)
     return 1;
 }
 int kill(int pid, int sig) {
-  errno = EINVAL;
-  return -1;
+    int ret;
+    __asm__ volatile("int $0x80" : "=a"(ret) : "a"(35), "D"(pid), "S"(sig));
+
+  if (ret == 0)
+      return 0;
+
+    errno = -ret;
+
+    return -1;
 }
 int link(char *old, char *new) {
   errno = EMLINK;

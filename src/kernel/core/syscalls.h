@@ -104,6 +104,12 @@ class Syscall
 	static int stat(const Process* p);
 
 	static int fstat(const Process* p);
+
+	static int kill(const Process* p);
+
+	static _sig_func_ptr signal(Process* p);
+
+	static void signal_return(Process* p);
 public:
 	/**
 	 * Handles a syscall

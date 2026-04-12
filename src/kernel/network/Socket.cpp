@@ -170,7 +170,7 @@ void Socket::handle_packet(const TCP::packet_info_t* packet_info, const IPV4::pa
             Network::send_packet(&response_info);
 
             // Trigger data received callback
-            if (listener != nullptr)
+            if (listener != nullptr && payload_size)
                 listener->on_data_received(payload, payload_size);
         }
 

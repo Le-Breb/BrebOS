@@ -20,27 +20,29 @@ class ELF
 private:
 	ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr, uint start_address);
 
-
 	[[nodiscard]]
 	static unsigned long hash(const unsigned char *name);
 
 public:
 	Elf32_Ehdr global_hdr;
-	Elf32_Phdr* prog_hdrs;
-	Elf32_Shdr* section_hdrs;
-	Elf32_Dyn* dyn_table;
-	Elf32_Sym* symbols;
-	Elf32_Rel* plt_relocs;
-	Elf32_Rel* dyn_relocs;
-	Elf32_Shdr* dynsym_hdr;
-	const char* interpreter_name;
-	const char* dynsym_strtab;
-	const char* shstrtab;
+	Elf32_Phdr* prog_hdrs = nullptr;
+	Elf32_Shdr* section_hdrs = nullptr;
+	Elf32_Dyn* dyn_table = nullptr;
+	Elf32_Rel* plt_relocs = nullptr;
+	Elf32_Rel* dyn_relocs = nullptr;
+	Elf32_Sym* dynsym = nullptr;
+	Elf32_Shdr* dynsym_hdr = nullptr;
+	Elf32_Sym* symtab = nullptr;
+	Elf32_Shdr* symtab_hdr = nullptr;
+	const char* interpreter_name = nullptr;
+	const char* dynsym_strtab = nullptr;
+	const char* strtab = nullptr;
+	const char* shstrtab = nullptr;
 	size_t num_plt_relocs;
 	size_t num_dyn_relocs;
 	char* lib_name = nullptr;
-    Elf32_Addr runtime_got_addr = (Elf32_Addr)-1;
-    Elf32_Addr hash_table_runtime_address = (Elf32_Addr)-1;
+    Elf32_Addr runtime_got_addr = ELF32_ADDR_ERR;
+    Elf32_Addr hash_table_runtime_address = ELF32_ADDR_ERR;
 
 	explicit ELF(uint start_address);
 
@@ -58,7 +60,9 @@ public:
 	 * @param load_address where is the ELF loaded
 	 * @return symbol, NULL if error occurred
 	 */
-	Elf32_Sym* get_symbol(const char* symbol_name, Elf32_Addr load_address) const;
+	Elf32_Sym* get_dynamic_symbol(const char* symbol_name, Elf32_Addr load_address) const;
+
+	Elf32_Sym* get_symbol(const char* symbol_name) const;
 
 	/**
 	 * Checks whether an ELF file is valid and supported

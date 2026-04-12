@@ -378,6 +378,7 @@ esac
 case "${host}" in
   i[3-7]86-*-brebos*)
     sys_dir=brebos
+    newlib_cflags="${newlib_cflags} -DSIGNAL_PROVIDED"
     ;;
   *-*-cygwin*)
 	posix_dir=posix

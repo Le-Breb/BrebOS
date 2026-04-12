@@ -1,7 +1,6 @@
 extern main
 extern exit
 extern __cxa_finalize
-extern _init_signal
 extern libk_force_link
 section .text
 global _start
@@ -31,7 +30,6 @@ _start:
     xor eax, eax ; clear eax
 
 .Lmain:
-    call _init_signal
     call main ; execute code, store return value in eax
     sub esp, 0xC ; ABI alignment
     push eax ; save return value
@@ -64,3 +62,12 @@ _start:
     ; obviously, this will never be executed. It is only here to have a reference to a symbol inside libk so that the
     ; the linker generates the GOT and other dynamic stuff
     call libk_force_link
+
+
+global sig_return
+
+sig_return:
+    ; This is a signal return address. It is used by the signal handler to return to the main program.
+    ; Signal handlers will return to this address when it is done.
+    mov eax, 0x25
+    int 0x80

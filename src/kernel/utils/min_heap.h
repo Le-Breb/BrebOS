@@ -40,6 +40,9 @@ public:
 
 	[[nodiscard]]
 	bool empty() const;
+
+	[[nodiscard]]
+	bool contains(T elem) const;
 };
 
 #include "min_heap.hxx"

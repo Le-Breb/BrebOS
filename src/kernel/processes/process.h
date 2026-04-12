@@ -1,12 +1,15 @@
 #ifndef INCLUDE_PROCESS_H
 #define INCLUDE_PROCESS_H
 
+#include <signal.h>
 #include "../core/memory.h"
 #include "../core/interrupts.h"
 #include "ELF.h"
 #include "../utils/list.h"
 #include "../file_management/VFS.h"
 #include <kstddef.h>
+
+#include "../utils/min_heap.h"
 
 typedef int pid_t;
 
@@ -30,6 +33,17 @@ typedef int pid_t;
 #define SEGFAULT_RET_VAL 255
 #define GPF_RET_VAL 254
 #define INIT_ERR_RET_VAL 253
+
+// Do not forget to update signal validity check in register_sinal and below func when adding a new signal and signal default action
+// in init
+#define HIGHEST_SIGNAL 9
+
+#define SIGDISP_TERM 0
+#define SIGDISP_IGN  1
+#define SIGDISP_CORE 2
+#define SIGDISP_STOP 3
+#define SIGDISP_CONT 4
+#define SIGDISP_HLDR 5
 
 class Scheduler;
 
@@ -64,7 +78,7 @@ class Process
 
 	list<void*> allocations{};
 
-	Process* exec_replacement = nullptr; // Process which will replace this program after an call to execve
+	Process* exec_replacement = nullptr; // Process which will replace this program after a call to execve
 
 	VFS::file_descriptor* file_descriptors[MAX_FD_PER_PROCESS]{};
 	// Lowest free file descriptor, 0, 1 and 2 are reserved for stdin, stdout and stderr. They are not implemented yet.
@@ -72,6 +86,14 @@ class Process
 	int lowest_free_fd = 3;
 
 	static list<env_var*> env_list; // Todo: make env var process specific
+
+	MinHeap<int> pending_signals{HIGHEST_SIGNAL + 1};
+	_sig_func_ptr signal_handlers[HIGHEST_SIGNAL + 1]{};
+	int signal_action[HIGHEST_SIGNAL + 1]{}; // Action for each signal
+	static int signal_default_action[HIGHEST_SIGNAL + 1]; // Default action for each signal
+	cpu_state_t sig_saved_cpu_state{};
+	stack_state_t sig_saved_stack_state{};
+	Elf32_Addr sig_ret = ELF32_ADDR_ERR;
 
 	void copy_page_to_other_process(const Process* other, uint page_id, uint mapping_page_id) const;
 
@@ -108,7 +130,7 @@ private:
 
 	Process(uint num_pages, list<elf_dependence>* elf_dep_list, Memory::page_table_t* page_tables,
 		Memory::pdt_t* pdt, stack_state_t* stack_state, uint priority, pid_t pid,
-		pid_t ppid, Elf32_Addr k_stack_top);
+		pid_t ppid, Elf32_Addr k_stack_top, Elf32_Addr sig_ret);
 
 	/**
 	 * Loads a flat binary in memory
@@ -228,6 +250,14 @@ public:
 	int lseek(int fd, int offset, int whence) const;
 
 	int proc_to_sys_fd(int fd) const;
+
+	int register_signal(int signal);
+
+	_sig_func_ptr register_signal_handler(int signal, _sig_func_ptr handler);
+
+	void signal_context_save();
+
+	void signal_context_restore();
 };
 
 #endif //INCLUDE_PROCESS_H

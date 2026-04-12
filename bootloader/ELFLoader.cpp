@@ -41,7 +41,7 @@ void ELFLoader::apply_relocations(ELF* elf, uint elf_runtime_load_address) const
             case R_386_GLOB_DAT:
             {
                 uint symbol_id = ELF32_R_SYM(reloc->r_info);
-                Elf32_Sym* symbol = &elf->symbols[symbol_id];
+                Elf32_Sym* symbol = &elf->dynsym[symbol_id];
                 Elf32_Addr symbol_address = symbol->st_value;
                 Elf32_Addr S = B + symbol_address;
 
@@ -72,7 +72,7 @@ void ELFLoader::apply_relocations(ELF* elf, uint elf_runtime_load_address) const
             case R_386_32:
             {
                 uint symbol_id = ELF32_R_SYM(reloc->r_info);
-                Elf32_Sym* symbol = &elf->symbols[symbol_id];
+                Elf32_Sym* symbol = &elf->dynsym[symbol_id];
                 // Weak symbols that are not yet defined are not an issue
                 if (ELF32_ST_BIND(symbol->st_info) == STB_WEAK && symbol->st_shndx == 0)
                     break;

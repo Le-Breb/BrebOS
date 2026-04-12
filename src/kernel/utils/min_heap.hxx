@@ -100,3 +100,14 @@ bool MinHeap<T>::empty() const
 {
     return count == 0;
 }
+
+template <typename T>
+bool MinHeap<T>::contains(T elem) const
+{
+    for (uint i = 0; i < count; ++i)
+    {
+        if (elements[i] == elem)
+            return true;
+    }
+    return false;
+}

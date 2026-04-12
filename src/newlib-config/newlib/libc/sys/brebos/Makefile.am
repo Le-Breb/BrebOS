@@ -5,7 +5,7 @@ AM_CCASFLAGS = $(INCLUDES)
 noinst_LIBRARIES = lib.a
 
 if MAY_SUPPLY_SYSCALLS
-extra_objs = waitpid.o mkdir.o syscalls.o # add more object files here if you split up
+extra_objs = waitpid.o mkdir.o syscalls.o signal.o # add more object files here if you split up
 else                    # syscalls.c into multiple files in the previous step
 extra_objs =
 endif

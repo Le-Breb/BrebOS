@@ -2,10 +2,9 @@
 
 extern void exit(int code);
 extern int main ();
-extern void _init_signal();
 
+// For now this is not used, and manually replaced by start_program.s by setup_newlib.sh
 void _start() {
-    _init_signal();
     int ex = main();
     exit(ex);
 }

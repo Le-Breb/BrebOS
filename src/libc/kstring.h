@@ -44,4 +44,8 @@ void* mempcpy(void* dest, const void* src, size_t n);
 size_t strnlen(const char* s, size_t maxlen);
 
 char* strstr(const char *haystack, const char *needle);
+
+char* strnstr(const char *haystack, const char *needle, size_t len);
+
+void *memmem(const void *haystack, size_t hlen, const void *needle, size_t nlen);
 #endif //INCLUDE_OS_STRING_H

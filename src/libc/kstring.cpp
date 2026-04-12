@@ -60,7 +60,7 @@ char* strncat(char* dest, const char* src, size_t ssize)
 	return ret;
 }
 
-extern "C" void* memcpy(void* dest, const void* src, unsigned long num)
+void* memcpy(void* dest, const void* src, unsigned long num)
 {
 	unsigned char* d = (unsigned char*) dest;
 	const unsigned char* s = (const unsigned char*) src;
@@ -176,6 +176,7 @@ size_t strcspn(const char* s, const char* reject)
 	}
 	return res;
 }
+
 char* strdup(const char* s)
 {
 	auto len = strlen(s);
@@ -288,5 +289,24 @@ char* strstr(const char *haystack, const char *needle)
 		if (strstr_match(haystack + i, needle))
 			return (char*)haystack + i;
 
+	return nullptr;
+}
+
+void *memmem(const void *haystack, size_t hlen, const void *needle, size_t nlen)
+{
+	if (nlen == 0)
+		return (void *)haystack;
+	if (hlen < nlen)
+		return nullptr;
+
+	auto *h = (const unsigned char *)haystack;
+	auto *n = (const unsigned char *)needle;
+
+	for (size_t i = 0; i <= hlen - nlen; i++) {
+		if (h[i] == n[0]) {
+			if (memcmp(h + i, n, nlen) == 0)
+				return (void *)(h + i);
+		}
+	}
 	return nullptr;
 }
