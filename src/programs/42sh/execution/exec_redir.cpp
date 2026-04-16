@@ -1,5 +1,3 @@
-#ifdef IMPLEMENTED
-
 #include <ctype.h>
 #include <sys/stat.h>
 
@@ -22,6 +20,8 @@ static int get_default_fd(enum token_type redir_type)
         errx(1, "Unknown redirection type");
         break;
     }
+
+    __builtin_unreachable();
 }
 
 /**
@@ -93,7 +93,7 @@ static void dup2_(int oldfd, int newfd)
 // > or >> or >| // Todo: handle no clobber (cf FCL)
 void exec_redir_output(EXEC_PROTOTYPE)
 {
-    struct redir_info *r = ast->p1;
+    struct redir_info *r = (redir_info*)ast->p1;
     int fd = get_fd(r);
     if (-1 == fcntl(fd, F_GETFL))
         errx(1, "fd %u is not open\n", fd);
@@ -113,7 +113,7 @@ void exec_redir_output(EXEC_PROTOTYPE)
     close(file);
 
     // execute command
-    exec_switch(ast->p2, c);
+    exec_switch((struct ast*)ast->p2, c);
     flush_fd(fd);
 
     // restore
@@ -132,7 +132,7 @@ static int is_number(const char *str)
 // <
 void exec_redir_input(EXEC_PROTOTYPE)
 {
-    struct redir_info *r = ast->p1;
+    struct redir_info *r = (redir_info*)ast->p1;
     int fd = get_fd(r);
     if (-1 == fcntl(fd, F_GETFL))
         errx(1, "fd %u is not open\n", fd);
@@ -152,7 +152,7 @@ void exec_redir_input(EXEC_PROTOTYPE)
     close(file);
 
     // execute command
-    exec_switch(ast->p2, c);
+    exec_switch((struct ast*)ast->p2, c);
     flush_fd(fd);
 
     // restore
@@ -163,7 +163,7 @@ void exec_redir_input(EXEC_PROTOTYPE)
 // >&  or <&
 void exec_redir_duplicate(EXEC_PROTOTYPE)
 {
-    struct redir_info *r = ast->p1;
+    struct redir_info *r = (redir_info*)ast->p1;
     int fd = get_fd(r);
     int out_is_number = is_number(r->word);
 
@@ -197,7 +197,7 @@ void exec_redir_duplicate(EXEC_PROTOTYPE)
         close(out_fd);
 
         // execute command
-        exec_switch(ast->p2, c);
+        exec_switch((struct ast*)ast->p2, c);
         flush_fd(fd);
 
         // restore
@@ -222,7 +222,7 @@ void exec_redir_duplicate(EXEC_PROTOTYPE)
 // <> // Todo: find how to test this thing
 void exec_int_out_redir(EXEC_PROTOTYPE)
 {
-    struct redir_info *r = ast->p1;
+    struct redir_info *r = (redir_info*)ast->p1;
     int fd = get_fd(r);
 
     // open file
@@ -238,7 +238,7 @@ void exec_int_out_redir(EXEC_PROTOTYPE)
     close(file);
 
     // execute command
-    exec_switch(ast->p2, c);
+    exec_switch((struct ast*)ast->p2, c);
     flush_fd(fd);
 
     // restore
@@ -272,5 +272,3 @@ void exec_redir(EXEC_PROTOTYPE)
         errx(1, "Unexpected redir type %u\n", *(enum token_type *)ast->p1);
     }
 }
-
-#endif

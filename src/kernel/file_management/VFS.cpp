@@ -2,24 +2,23 @@
 #include "FAT.h"
 #include "superblock.h"
 #include <kstring.h>
+
 #include "../core/fb.h"
 #include "../utils/comparison.h"
 #include "sys/errno.h"
+#include "sys/_default_fcntl.h"
 
 uint VFS::lowest_free_dentry = 0;
 SharedPointer<Dentry>* VFS::dentries[MAX_DENTRIES] = {nullptr};
 uint VFS::num_path = 0;
 SharedPointer<Dentry>* VFS::path[PATH_CAPACITY] = {};
-VFS::file_descriptor VFS::file_descriptors[MAX_FD] = {};
+FileInterface* VFS::file_descriptors[MAX_FD] = {};
 size_t VFS::lowest_free_fd = 0;
 
 void VFS::init()
 {
 	FS::init();
 	FAT_drive::init();
-
-	for (auto& fd : file_descriptors)
-		fd.fd = -1;
 
 	FS** main_fs = FS::fs_list->get(0);
 	if (main_fs == nullptr)
@@ -196,7 +195,7 @@ bool VFS::add_to_path(const char* path)
 SharedPointer<Dentry> VFS::browse_to(const char* path, const SharedPointer<Dentry>& starting_point, bool print_errors)
 {
 #define exit_free() delete[] p;
-#define err(...) {\
+#define error(...) {\
 	if (print_errors) \
 		printf_error(__VA_ARGS__); \
 	exit_free() \
@@ -227,23 +226,23 @@ SharedPointer<Dentry> VFS::browse_to(const char* path, const SharedPointer<Dentr
 
 	// Pure virtual node, cannot do anything there
 	if (!dentry->inode->superblock)
-		err("%s targets full virtual Inode", path);
+		error("%s targets full virtual Inode", path);
 
-	// We browsed up to a file's cached dentry but we haven't finished browsing (i.e., part of the path targets a file)
+	// We browsed up to a file's cached dentry, but we haven't finished browsing (i.e., part of the path targets a file)
 	if (token && dentry->inode->type != Inode::Dir)
-		err("%s no such directory", path);
+		error("%s no such directory", path);
 
 	// Full path cannot be fully browsed only using cached entries, now manually browse
 	FS* fs = dentry->inode->superblock->get_fs();
 	while (token)
 	{
 		if (dentry->inode->type != Inode::Dir)
-			err("%s not a directory", path);
+			error("%s not a directory", path);
 		dentry = strcmp(".", token) ?
 			strcmp("..", token) ? fs->get_child_dentry(dentry, token) : dentry->parent
 			: dentry;
 		if (!dentry)
-			err("%s no such directory", path);
+			error("%s no such directory", path);
 
 		if (!cache_dentry(dentry))
 		{
@@ -400,109 +399,101 @@ void* VFS::load_file(const SharedPointer<Dentry>& file, uint offset, uint length
 
 int VFS::read(int fd, uint length, void* buf)
 {
-	if (file_descriptors[fd].fd == -1)
+	auto f = file_descriptors[fd];
+	if (!f)
 		return -EBADF; // fd not open
 
-	auto& file_descriptor = file_descriptors[fd];
-	auto file = file_descriptor.dentry;
-	auto l = min(length, file->inode->size - file_descriptor.offset);
-	uint loaded_bytes;
+	return f->read(buf, length);
+}
 
-	if (file->inode->type != Inode::File)
-		return -EINVAL; // Not a regular file
+int VFS::write(int fd, void* buf, uint count)
+{
+	auto f = file_descriptors[fd];
+	if (!f)
+		return -EBADF; // fd not open
 
-	if (!file->inode->superblock->get_fs()->load_file_to_buf(buf, file->name, file->parent, file_descriptor.offset, l,
-																		loaded_bytes))
-		return -EIO; // IO error
-
-	file_descriptor.offset += loaded_bytes;
-
-
-	return (int)loaded_bytes;
+	return f->write(buf, count);
 }
 
 int VFS::close(int fd)
 {
-	if (file_descriptors[fd].fd == -1)
+	auto f = file_descriptors[fd];
+	if (f == nullptr)
 		return -EBADF; // File descriptor not found
 
-	// Todo: have a proper system to manage created dentries
-	// delete file_descriptors[fd].dentry; // Free the dentry associated with this fd
-	file_descriptors[fd].fd = -1; // Mark as closed
+	if (f->rc == 0)
+	{
+		delete f;
+		file_descriptors[fd] = nullptr;
+	}
 
 	return 0; // Success
 }
 
-VFS::file_descriptor* VFS::open(const char* pathname, int flags, int local_fd, int& err)
+FileInterface* VFS::open_file(const char* pathname, int flags, int& err)
 {
-	SharedPointer<Dentry> dentry = browse_to(pathname);
+#define open_file_leave_with_error(e) { lowest_free_fd=min((int)lowest_free_fd, system_fd); err = e; return nullptr;}
+	int system_fd = get_free_fd();
+	if (system_fd == -1)
+		open_file_leave_with_error(-ENFILE) // No free file descriptors
+
+	SharedPointer<Dentry> dentry = get_file_dentry(pathname, false);
 	if (!dentry)
 	{
-		err = -ENOENT; // File not found
-		return nullptr;
+		if (flags & O_CREAT)
+		{
+			dentry = touch(pathname);
+			if (!dentry)
+				open_file_leave_with_error(-EACCES)
+		}
+		else
+			open_file_leave_with_error(-ENOENT) // File not found
 	};
 
 	if (dentry->inode->type == Inode::Dir)
-	{
-		err = -EISDIR; // Is a directory
-		return nullptr;
-	}
+		open_file_leave_with_error(-EISDIR) // Is a directory
 
-	int system_fd = get_free_fd();
-	if (system_fd == -1)
-	{
-		err = -ENFILE; // No free file descriptors
-		return nullptr;
-	}
+	if (flags & O_TRUNC)
+		resize(dentry, 0);
 
-	file_descriptors[system_fd] = {
-		.fd = local_fd,
-		.system_fd = system_fd,
-		.flags = flags,
-		.offset = 0,
-		.dentry = dentry
-	};
+	// Truncate file if asked and permitted by flags
+	if (flags & O_TRUNC && (flags & O_WRONLY || flags & O_RDWR))
+		if (!dentry->inode->superblock->get_fs()->write_buf_to_file(dentry, nullptr, 0))
+			open_file_leave_with_error(-EIO) // IO error (I did not check if this whether it's man compliant)
+	file_descriptors[system_fd] = new File(system_fd, flags, 0, dentry);
 
-	return file_descriptors + system_fd;
+	return file_descriptors[system_fd];
 }
 
-#define SEEK_SET 0
-#define SEEK_CUR 1
-#define SEEK_END 2
+FileInterface* VFS::open_tty(TTY::Target target, int& err)
+{
+#define leave_with_error(e) {err = e; return nullptr;}
+	int sys_fd = get_free_fd();
+	if (sys_fd == -1)
+		leave_with_error(-EMFILE); // No more FDs available
+
+	return file_descriptors[sys_fd] = new TTY(sys_fd, O_RDWR, target);
+}
+
 
 int VFS::lseek(int fd, int offset, int whence)
 {
 	// Check if fd is valid
-	if (file_descriptors[fd].fd == -1)
+	auto f = file_descriptors[fd];
+	if (f == nullptr)
 		return -EBADF; // File descriptor not found
 
-	// Check if whence is valid
-	if (whence < 0 || whence > 2)
-		return -EINVAL; // Invalid whence value
+	return f->lseek(offset, whence);
+}
 
-	// Get the file descriptor
-	auto& file_descriptor = file_descriptors[fd];
+int VFS::fstat(int fd, struct stat* statbuf)
+{
+	// Check if fd is valid
+	auto f = file_descriptors[fd];
+	if (f == nullptr)
+		return -EBADF; // File descriptor not found
 
-	// Compute the new offset based on whence
-	int ref = whence == SEEK_SET ? 0 :
-		whence == SEEK_CUR ? file_descriptor.offset :
-		file_descriptor.dentry->inode->size;
-	int new_offset = ref + offset;
-
-	// Check if the new offset is valid
-	if (new_offset < 0)
-		return -EINVAL; // Invalid offset
-	if ((uint)new_offset > file_descriptor.dentry->inode->size)
-	{
-		printf_error("lseek called with an offset which would result in a new offset greater than file size. "
-			   "This is compliant with the man page, but BrebOS VFS does not support this.");
-		return -EINVAL; // Invalid offset
-	}
-
-	// Apply the new offset
-	file_descriptor.offset = new_offset;
-
-	return new_offset;
+	return f->fstat(statbuf);
 }
 
 bool VFS::resize(SharedPointer<Dentry>& dentry, size_t new_size)
@@ -514,10 +505,10 @@ int VFS::get_free_fd()
 {
 	for (size_t i = lowest_free_fd; i < MAX_FD; ++i)
 	{
-		if (file_descriptors[i].fd == -1)
+		if (file_descriptors[i] == nullptr)
 		{
 			lowest_free_fd = i + 1;
-			while (lowest_free_fd < MAX_FD && file_descriptors[lowest_free_fd].fd != -1)
+			while (lowest_free_fd < MAX_FD && file_descriptors[lowest_free_fd] != nullptr)
 				lowest_free_fd++;
 			return (int)i;
 		}

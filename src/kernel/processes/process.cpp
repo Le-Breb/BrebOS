@@ -9,6 +9,7 @@
 #include "../file_management/VFS.h"
 #include "../utils/comparison.h"
 #include "sys/errno.h"
+#include "sys/_default_fcntl.h"
 
 list<Process::env_var*> Process::env_list = {};
 int Process::signal_default_action[HIGHEST_SIGNAL + 1] = {};
@@ -111,6 +112,36 @@ Process::Process(uint num_pages, list<elf_dependence>* elf_dep_list, Memory::pag
 {
     memcpy(&this->stack_state, stack_state, sizeof(stack_state_t));
     memcpy(signal_action, signal_default_action, sizeof(signal_action));
+
+    int tty_opening_err;
+    if (FileInterface* stdin = VFS::open_tty(TTY::Target::STDOUT, tty_opening_err))
+        file_descriptors[0] = new file_descriptor(0, stdin->fd);
+    if (FileInterface* stdout = VFS::open_tty(TTY::Target::STDOUT, tty_opening_err))
+        file_descriptors[1] = new file_descriptor(1, stdout->fd);
+    if (FileInterface* stderr = VFS::open_tty(TTY::Target::STDERR, tty_opening_err))
+        file_descriptors[2] = new file_descriptor(2, stderr->fd);
+
+    for (int i = 2; i >= 0; i--)
+        if (file_descriptors[i] == nullptr)
+            lowest_free_fd = i;
+}
+
+int Process::get_free_fd()
+{
+    if (lowest_free_fd == MAX_FD_PER_PROCESS)
+        return -1;
+
+    int ret = lowest_free_fd++; // ++ so that fd is not reserved (of course this is not concurrency compliant...)
+    while (file_descriptors[lowest_free_fd]) lowest_free_fd++;
+
+    return ret;
+}
+
+void Process::release_fd(int fd)
+{
+    delete file_descriptors[fd];
+    file_descriptors[fd] = nullptr;
+    lowest_free_fd = min(lowest_free_fd, fd);
 }
 
 
@@ -349,6 +380,17 @@ pid_t Process::fork()
     // Clear mapping page
     update_pte(mapping_page, 0, true);
 
+    // Copy file descriptors
+    for (uint i = 0; i < MAX_FD_PER_PROCESS; i++)
+    {
+        if (file_descriptors[i] == nullptr)
+            continue;
+        const file_descriptor* fd = file_descriptors[i];
+        file_descriptor*& child_fd = child->file_descriptors[i];
+        delete child_fd; // Delete child fd if there is one (typically for stdin/out/err)
+        child_fd = new file_descriptor(fd->fd, fd->sys_fd, fd->clo_exec);
+    }
+
     Scheduler::set_process_ready(child);
 
     children.add(child->pid);
@@ -445,37 +487,96 @@ void Process::execve_transfer(Process* proc)
     exec_replacement = proc;
     proc->is_waiting_for_any_child_to_terminate = is_waiting_for_any_child_to_terminate;
     proc->is_waited_by_parent = is_waited_by_parent;
+
+    // Transfer file descriptors that are not marked to close-on-exec
+    for (int i = 0; i < MAX_FD_PER_PROCESS; i++)
+    {
+        file_descriptor* fd = file_descriptors[i];
+        if (fd == nullptr)
+            continue;
+
+        if (fd->clo_exec)
+            close(fd->fd);
+        else
+        {
+            // Close already opened FD (typically for stdin/out/err)
+            if (proc->file_descriptors[i] != nullptr)
+                proc->close(i);
+            proc->file_descriptors[i] = fd;
+            file_descriptors[i] = nullptr;
+        }
+    }
+    // Update proc->lowest_free_fd
+    proc->lowest_free_fd = MAX_FD_PER_PROCESS;
+    for (int i = MAX_FD_PER_PROCESS - 1; i >= 0; i--)
+    {
+        if (proc->file_descriptors[i] == nullptr)
+            proc->lowest_free_fd = i;
+    }
 }
 
 int Process::open(const char* pathname, int flags)
 {
-    if (lowest_free_fd == MAX_FD_PER_PROCESS)
+    constexpr int supported_flags = O_RDONLY | O_RDWR | O_WRONLY | O_TRUNC | O_CREAT | O_SYNC | O_APPEND;
+    if (const int flags_check = flags & ~supported_flags)
+    {
+        printf_warn("Open called with the following unsupported flags: 0x%x", flags_check);
+        return -EINVAL;
+    }
+
+    int fd = get_free_fd();
+    if (fd == -1)
         return -EMFILE; // No more file descriptors available for current process
 
-    // Get local fd and update lowest_free_fd
-    int fd = lowest_free_fd;
-
-    // Actually try to open the file
     int err;
-    if (auto file_descriptor = VFS::open(pathname, flags, fd, err))
+    if (auto sys_fd = VFS::open_file(pathname, flags, err))
     {
         // OK
-        file_descriptors[fd] = file_descriptor;
-        while (file_descriptors[++lowest_free_fd]) {}
-        return file_descriptor->fd;
+        file_descriptors[fd] = new file_descriptor {fd, sys_fd->fd};
+        return fd;
     }
 
     // Error
+    release_fd(fd);
     return err;
 }
 
 int Process::read(int fd, void* buf, size_t count) const
 {
-    int sys_fd = proc_to_sys_fd(fd);
+    auto sys_fd = proc_to_sys_fd(fd);
     if (sys_fd == -1)
         return -EBADF; // File descriptor not found
 
     return VFS::read(sys_fd, count, buf);
+}
+
+int Process::write(int fd, uint count, void* buf) const
+{
+    auto sys_fd = proc_to_sys_fd(fd);
+    if (sys_fd == -1)
+        return -EBADF; // File descriptor not found
+
+    return VFS::write(sys_fd, buf, count);
+}
+
+int Process::fstat(int fd, struct stat* statbuf) const
+{
+    auto sys_fd = proc_to_sys_fd(fd);
+    if (sys_fd == -1)
+        return -EBADF; // File descriptor not found
+
+    return VFS::fstat(sys_fd, statbuf);
+}
+
+int Process::stat(const char* pathname, struct stat* statbuf) const
+{
+    int open_err;
+    FileInterface* sys_fd = VFS::open_file(pathname, O_RDONLY, open_err);
+    if (sys_fd == nullptr)
+        return -open_err;
+    int res = VFS::fstat(sys_fd->fd, statbuf);
+    VFS::close(sys_fd->fd);
+    return res;
 }
 
 int Process::close(int fd)
@@ -484,11 +585,9 @@ int Process::close(int fd)
     if (sys_fd == -1)
         return -EBADF; // File descriptor not found
 
+    release_fd(fd);
     if (int err = VFS::close(sys_fd) < 0)
         return err; // Propagate error from VFS
-
-    file_descriptors[fd] = nullptr; // Mark as closed
-    lowest_free_fd = min(lowest_free_fd, fd); // Update lowest free fd
 
     return 0; // Success
 }
@@ -505,7 +604,12 @@ int Process::lseek(int fd, int offset, int whence) const
 int Process::proc_to_sys_fd(int fd) const
 {
     if (fd >= 0 && fd < MAX_FD_PER_PROCESS && file_descriptors[fd])
-        return file_descriptors[fd]->system_fd; // Return system file descriptor
+    {
+        FileInterface* sys_fd = VFS::file_descriptors[file_descriptors[fd]->sys_fd];
+        if (!sys_fd)
+            irrecoverable_error("Dangling process file descriptor");
+        return sys_fd->fd; // Return system file descriptor
+    }
 
     return -1;
 }
@@ -560,4 +664,68 @@ void Process::signal_context_restore()
     stack_state = sig_saved_stack_state;
     sig_saved_cpu_state = {};
     sig_saved_stack_state = {};
+}
+
+int Process::fcntl(int fd, int op, va_list arg) const
+{
+    int sys_fd = proc_to_sys_fd(fd);
+    if (sys_fd == -1)
+        return -EBADF; // File descriptor not found
+
+    switch(op)
+    {
+        case F_GETFL:
+            return VFS::file_descriptors[sys_fd]->flags;
+        case F_SETFL:
+        {
+            int flags = va_arg(arg, int);
+            // man page indicates only those flags can be affected bby SETFL
+            constexpr int flags_mask = (O_APPEND /*O_ASYNC, O_DIRECT, O_NOATIME,*/ | O_NONBLOCK);
+            flags &= flags_mask;
+            VFS::file_descriptors[sys_fd]->flags &= ~flags_mask;
+            VFS::file_descriptors[sys_fd]->flags |= flags;
+            break;
+        }
+        case F_SETFD:
+        {
+            int flags = va_arg(arg, int);
+            file_descriptors[fd]->clo_exec = flags & FD_CLOEXEC;
+            break;
+        }
+        default:
+            return -EINVAL; // op not supported
+    }
+
+    __builtin_unreachable();
+}
+
+int Process::dup(int oldfd)
+{
+    int sys_fd = proc_to_sys_fd(oldfd);
+    if (sys_fd == -1)
+        return -EBADF;
+
+    int newfd = get_free_fd();
+    if (newfd == -1)
+        return -EMFILE;
+
+    file_descriptors[newfd] = new file_descriptor{newfd, sys_fd, false};
+    return newfd;
+}
+
+int Process::dup2(int oldfd, int newfd)
+{
+    int sys_fd = proc_to_sys_fd(oldfd);
+    if (sys_fd == -1)
+        return -EBADF;
+
+    if (oldfd == newfd)
+        return newfd;
+
+    if (file_descriptors[newfd] != nullptr)
+        close(newfd);
+
+    file_descriptors[newfd] = new file_descriptor{newfd, sys_fd, false};
+
+    return newfd;
 }

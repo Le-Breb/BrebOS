@@ -11,6 +11,7 @@
 #define MAX_FD 100
 #define MAX_FD_PER_PROCESS 20
 
+#include "FileInterface.h"
 #include "FS.h"
 
 /**
@@ -23,15 +24,7 @@
 class VFS
 {
 public:
-	struct file_descriptor
-	{
-		int fd; // Local id
-		int system_fd; // System wise id
-		int flags;
-		uint offset;
-		SharedPointer<Dentry> dentry;
-	};
-	static file_descriptor file_descriptors[MAX_FD];
+	static FileInterface* file_descriptors[MAX_FD];
 private:
 	static uint lowest_free_dentry;
 	static SharedPointer<Dentry>* dentries[MAX_DENTRIES]; // Caches directory entries. [0] = /, [1] = /mnt
@@ -113,9 +106,18 @@ public:
 	 * @param fd file descriptor to read from
 	 * @param length how many bytes to read
 	 * @param buf buffer to read data into
-	 * @return number of bytes read on success, -2 if fd not open, -3 if not a regular file, -4 if IO error
+	 * @return number of bytes read on success, -2 if fd not open, -3 if file type error, -4 if IO error
 	 */
 	static int read(int fd, uint length, void* buf);
+
+	/**
+	 *
+	 * @param fd file descriptor to write to
+	 * @param buf how many bytes to write
+	 * @param count buffer to write the data from
+	 * @return number of bytes written on success, -2 if fd not open, -3 if file type error, -4 if IO error
+	 */
+	static int write(int fd, void* buf, uint count);
 
 	/**
 	 * Closes a file descriptor
@@ -128,11 +130,18 @@ public:
 	 * Opens a file
 	 * @param pathname path of the file to open
 	 * @param flags opening parameters
-	 * @param local_fd file descriptor to use in the process
 	 * @param err error code to return in case of failure
 	 * @return the file descriptor on success, nullptr if an error occurred
 	 */
-	static file_descriptor* open(const char* pathname, int flags, int local_fd, int& err);
+	static FileInterface* open_file(const char* pathname, int flags, int& err);
+
+	/**
+	 * Opens a TTY
+	 * @param target TTY to open
+	 * @param err error code to return in case of failure
+	 * @return the file descriptor on success, nullptr if an error occurred
+	 */
+	static FileInterface* open_tty(TTY::Target target, int& err);
 
 	/**
 	 * Seeks in a file descriptor
@@ -142,6 +151,8 @@ public:
 	 * @return new offset on success, -2 if fd not open, -3 if whence is invalid or offset is invalid
 	 */
 	static int lseek(int fd, int offset, int whence);
+
+	static int fstat(int fd, struct stat* statbuf);
 
 	/**
 	 * Resizes a file

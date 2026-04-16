@@ -2,7 +2,9 @@
 #define HEADERS_H
 
 #define _POSIX_C_SOURCE 200809L
-#define NULL 0
+#pragma region k_adapted
+//#define NULL 0
+#pragma endregion
 
 #define HERE printf("HERE\n");
 #define HERE2 printf("HERE2\n");
@@ -13,7 +15,7 @@
 #include "err.h"
 #pragma endregion
 #include <ctype.h>
-//#include <fcntl.h>
+#include <fcntl.h>
 //#include <kstdbool.h>
 #include <stddef.h>
 #include <stdio.h>

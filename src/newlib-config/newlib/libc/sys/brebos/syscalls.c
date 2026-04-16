@@ -98,12 +98,6 @@ int lseek(int file, int ptr, int dir) {
   
 }
 int open(const char *name, int flags, ...) {
-  if (flags != O_RDONLY && flags != O_WRONLY && flags != O_RDWR)
-  {
-      errno = EINVAL;
-      return -1;
-  }
-
   int fd;
   __asm__ volatile("int $0x80" : "=a"(fd) : "a"(30), "D"(name), "S"(flags));
 
@@ -162,6 +156,12 @@ int write(int file, char *ptr, int len)
 {
     int count;
     __asm__ volatile("int $0x80" : "=a"(count) : "a"(26), "D"(file), "S"(ptr), "d"(len));
-    return count;
+
+    if (count >= 0)
+        return count;
+
+    errno = -count;
+
+    return -1;
 }
 int gettimeofday(struct timeval *p, void *z);

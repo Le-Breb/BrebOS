@@ -15,6 +15,10 @@ void FS::init()
 
 void* FS::load_file_to_buf(const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset, uint length, uint& loaded_bytes)
 {
+	// If reading an empty file, just return a dummy vector without solicitation of the disk
+	if (length == 0)
+		return new char[1];
+
 	auto buf = new char[length];
 
 	if (load_file_to_buf(buf, file_name, parent_dentry, offset, length, loaded_bytes))

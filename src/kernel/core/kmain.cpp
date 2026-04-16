@@ -29,7 +29,10 @@ extern "C" bool fpu_init_asm_();
 //Todo: Handle userland memory leaks
 //Todo: Process R_386_PC32 relocations in order to rewrite libdynlk' Makefile without ld
 //Todo: Fix waitpid return value so that it is usable with macros such as WEXITSTATUS
+//Todo: Fast kernel memory pool: constantly allocated memory region with super-fast allocator for tmp operations
 //Todo: Include newlib build in Makefile
+//Todo: Syscall concurrent safety (that's a goddamn huge task)
+//Todo: Check if userland programs can manipulate kernel space addresses througout syscalls (ex: write(1, KERNEL_VIRTUAL_ADDRESS_BASE), 10)
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {
     // Get why this fails

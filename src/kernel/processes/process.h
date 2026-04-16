@@ -9,6 +9,7 @@
 #include "../file_management/VFS.h"
 #include <kstddef.h>
 
+#include "stdarg.h"
 #include "../utils/min_heap.h"
 
 typedef int pid_t;
@@ -64,6 +65,31 @@ class Process
 		int value;
 	};
 
+	struct file_descriptor
+	{
+		file_descriptor(int fd, int sys_fd, bool clo_exec = false)
+			: fd(fd),
+			  sys_fd(sys_fd),
+			  clo_exec(clo_exec)
+		{
+			if (VFS::file_descriptors[sys_fd] == nullptr)
+				irrecoverable_error("Trying to create a dangling file descriptor");
+			VFS::file_descriptors[sys_fd]->rc++;
+		}
+		~file_descriptor()
+		{
+			if (VFS::file_descriptors[sys_fd] == nullptr)
+				irrecoverable_error("Trying to delete a dangling file descriptor");
+			VFS::file_descriptors[sys_fd]->rc--;
+		}
+
+		int fd = -1;
+		int sys_fd = -1;
+		bool clo_exec = false;
+
+
+	};
+
 	uint quantum, priority;
 
 	uint num_pages; // Num pages over which the process code spans, including unmapped pages
@@ -80,7 +106,7 @@ class Process
 
 	Process* exec_replacement = nullptr; // Process which will replace this program after a call to execve
 
-	VFS::file_descriptor* file_descriptors[MAX_FD_PER_PROCESS]{};
+	file_descriptor* file_descriptors[MAX_FD_PER_PROCESS]{};
 	// Lowest free file descriptor, 0, 1 and 2 are reserved for stdin, stdout and stderr. They are not implemented yet.
 	// but its for POSIX compatibility
 	int lowest_free_fd = 3;
@@ -140,6 +166,10 @@ private:
 	 * @return program's process, NULL if an error occurred
 	 */
 	//static Process* from_binary(GRUB_module* module);
+
+	int get_free_fd();
+
+	void release_fd(int fd);
 
 public:
 	/** Gets the process' PID */
@@ -239,6 +269,12 @@ public:
 	 */
 	int read(int fd, void* buf, size_t count) const;
 
+	int write(int fd, uint count, void* buf) const;
+
+	int fstat(int fd, struct stat* statbuf) const;
+
+	int stat(const char* pathname, struct stat* statbuf) const;
+
 	/**
 	 * Closes a file descriptor
 	 * @param fd file descriptor to close
@@ -258,6 +294,12 @@ public:
 	void signal_context_save();
 
 	void signal_context_restore();
+
+	int fcntl(int fd, int op, va_list arg) const;
+
+	int dup(int oldfd);
+
+	int dup2(int oldfd, int newfd);
 };
 
 #endif //INCLUDE_PROCESS_H

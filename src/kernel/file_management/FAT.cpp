@@ -189,6 +189,9 @@ const char** FAT_drive::split_at_slashes(const char* str, uint* num_tokens)
 
 uint* FAT_drive::get_free_clusters(size_t n) const
 {
+    if (n == 0)
+        return (uint*)calloc(1, sizeof(uint));
+
     auto free_cluster_list = new uint[n];
     size_t free_clusters_found = 0;
     size_t num_fat_entries_per_sector = ATA_SECTOR_SIZE / sizeof(uint32_t);
@@ -484,26 +487,10 @@ SharedPointer<Dentry> FAT_drive::touch(SharedPointer<Dentry>& parent_dentry, con
     if (ctx.dir_entry_id * sizeof(DirEntry) == bs.bytes_per_sector * bs.sectors_per_cluster)
         ERR_RET_NULL("Working directory cluster is full, cluster chain extension implementation is needed");
 
-    // Get a free cluster for file content
-    auto free_cluster_list = get_free_clusters(1);
-    if (free_cluster_list == nullptr)
-        ERR_RET_NULL("No free cluster found")
-    uint file_content_cluster = free_cluster_list[0];
-    delete free_cluster_list;
-
     // Write file entry
-    DirEntry new_entry(entry_name, 0, file_content_cluster, 0);
+    DirEntry new_entry(entry_name, 0, 0, 0);
     memcpy(&entries[ctx.dir_entry_id], &new_entry, sizeof(DirEntry));
     if (write_data_sectors(1, ctx.active_sector, buf, ctx))
-        ERR_RET_NULL("Drive write error")
-
-    // ~= cd inside file
-    if (!change_active_cluster(file_content_cluster, ctx, this->buf))
-        return nullptr;
-
-    // Indicate that dir content cluster is the end of the cluster chain it belongs to
-    *(uint*)&FAT[ctx.FAT_entry_offset] = CLUSTER_EOC;
-    if (write_fat(ctx)) // Write new FAT
         ERR_RET_NULL("Drive write error")
 
     return dir_entry_to_dentry(new_entry, parent_dentry, entry_name);
@@ -636,6 +623,8 @@ bool FAT_drive::write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf
     if (dentry->inode->size != length)
         if (!resize(dentry, length))
             return false;
+    if (length == 0)
+        return true;
 
     ctx ctx{};
     uint entry_id;
@@ -671,7 +660,7 @@ bool FAT_drive::write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf
     return true;
 }
 
-bool FAT_drive::resize(SharedPointer<Dentry>& dentry, uint new_size) // Todo: handle files larger than new_size
+bool FAT_drive::resize(SharedPointer<Dentry>& dentry, uint new_size)
 {
     ctx ctx{};
 
@@ -682,39 +671,120 @@ bool FAT_drive::resize(SharedPointer<Dentry>& dentry, uint new_size) // Todo: ha
         return false;
     }
 
-    // multiple sectors per cluster absolutely not accounted for
-    // Get free clusters
-    uint num_data_sectors = (new_size + ATA_SECTOR_SIZE - 1) / ATA_SECTOR_SIZE;
-    auto free_cluster_list = get_free_clusters(num_data_sectors);
-    if (free_cluster_list == nullptr)
-        ERR_RET_FALSE("Not enough free clusters")
+    uint current_file_size = dentry->inode->size;
+    uint curr_num_data_sectors = (current_file_size + ATA_SECTOR_SIZE - 1) / ATA_SECTOR_SIZE;
+    uint new_num_data_sectors = (new_size + ATA_SECTOR_SIZE - 1) / ATA_SECTOR_SIZE;
 
-    // Update file entry
+    // Update file size on disk
     entries[entry_id].file_size = new_size;
-    entries[entry_id].first_cluster_high = free_cluster_list[0] >> 16;
-    entries[entry_id].first_cluster_low = free_cluster_list[0] & 0xFFFF;
-    if (write_data_sectors(1, ctx.active_sector, this->buf, ctx))
-        ERR_RET_FALSE("Drive write error")
 
-    // Update FAT
-    for (uint i = 0; i < num_data_sectors - 1; i++)
+    if (new_num_data_sectors < curr_num_data_sectors)
     {
-        if (!change_active_cluster(free_cluster_list[i], ctx, this->buf))
-            ERR_RET_FALSE("drive read error")
+        uint curr_sector = entries[entry_id].first_cluster_addr();
 
-        *(uint*)&FAT[ctx.FAT_entry_offset] = free_cluster_list[i + 1];
-        if (write_fat(ctx)) // Update FAT on disk
+        // If new size is 0, there's no need for any cluster, so we must unset the beginning of the cluster chain
+        if (new_size == 0)
+        {
+            entries[entry_id].first_cluster_high = 0;
+            entries[entry_id].first_cluster_low = 0;
+        }
+        // Persist disk file size metadata modification (and cluster beginning change if one has been made)
+        if (write_data_sectors(1, ctx.active_sector, this->buf, ctx))
+            ERR_RET_FALSE("Drive write error")
+
+        // Shorten cluster chain
+        // 1 - Skip remaining entries
+        for (uint i = 0; i < new_num_data_sectors; i++)
+        {
+            if (!change_active_cluster(curr_sector, ctx, this->buf))
+                ERR_RET_FALSE("drive read error")
+            curr_sector = ctx.table_value;
+        }
+        // 2 - Indicate EOC
+        if (!change_active_cluster(curr_sector, ctx, this->buf))
+            ERR_RET_FALSE("drive read error")
+        uint next_sect = ctx.table_value;
+        *(uint*)&FAT[ctx.FAT_entry_offset] = ctx.table_value = new_size == 0 ? 0 : CLUSTER_EOC;
+        if (write_fat(ctx)) // Write new FAT // Update FAT on disk
             ERR_RET_FALSE("drive write error")
+        curr_sector = next_sect;
+        // 3 - Clear the rest of the chain
+        for (uint i = 0; i < curr_num_data_sectors - new_num_data_sectors - 1; i++)
+        {
+            if (!change_active_cluster(curr_sector, ctx, this->buf))
+                ERR_RET_FALSE("drive read error")
+            uint next_sector = *(uint*)&FAT[ctx.FAT_entry_offset];
+            *(uint*)&FAT[ctx.FAT_entry_offset] = ctx.table_value = 0;
+            if (write_fat(ctx)) // Write new FAT // Update FAT on disk
+                ERR_RET_FALSE("drive write error")
+            curr_sector = next_sector;
+        }
+    }
+    else if (new_num_data_sectors > curr_num_data_sectors)
+    {
+#define RESIZE_BIGGER_ERR_RET_FALSE(errmsg) {delete free_cluster_list; ERR_RET_FALSE(errmsg)}
+
+        // multiple sectors per cluster absolutely not accounted for
+        // Get free clusters
+        const uint num_added_clusters = new_num_data_sectors - curr_num_data_sectors;
+        auto free_cluster_list = get_free_clusters(num_added_clusters);
+        if (free_cluster_list == nullptr)
+            RESIZE_BIGGER_ERR_RET_FALSE("Not enough free clusters")
+
+        // Index of the first new cluster to be added in the chain. It is most of the time 0, except for when
+        // cluster chain's beginning is set, in which case its registration in the chain is taken care of manually,
+        // as it is considered to be already part of the chain.
+        uint clusters_to_be_registered_start_idx = 0;
+
+        // If file was empty, indicate chain's first sector
+        if (curr_num_data_sectors == 0)
+        {
+            entries[entry_id].first_cluster_high = free_cluster_list[0] >> 16;
+            entries[entry_id].first_cluster_low = free_cluster_list[0] & 0xFFFF;
+            clusters_to_be_registered_start_idx = 1;
+        }
+        // Persist disk file size metadata modification (and cluster chain's first sector change if it's the case)
+        if (write_data_sectors(1, ctx.active_sector, this->buf, ctx))
+            ERR_RET_FALSE("Drive write error")
+
+        // Lengthen cluster chain with free_cluster_list
+        // 1 - Skip current cluster chain
+        uint curr_sector = entries[entry_id].first_cluster_addr();
+        if (curr_num_data_sectors > 0)
+        {
+            for (uint i = 0; i < curr_num_data_sectors - 1; i++)
+            {
+                if (!change_active_cluster(curr_sector, ctx, this->buf))
+                    ERR_RET_FALSE("drive read error")
+                curr_sector = ctx.table_value;
+            }
+        }
+        // 2 - Add new chain entries
+        for (uint i = clusters_to_be_registered_start_idx; i < num_added_clusters; i++)
+        {
+            if (!change_active_cluster(curr_sector, ctx, this->buf))
+                ERR_RET_FALSE("drive read error")
+            *(uint*)&FAT[ctx.FAT_entry_offset] = ctx.table_value = free_cluster_list[i];
+            if (write_fat(ctx)) // Write new FAT // Update FAT on disk
+                ERR_RET_FALSE("drive write error")
+            curr_sector = free_cluster_list[i];
+        }
+        // 3- Indicate EOC
+        if (!change_active_cluster(curr_sector, ctx, this->buf))
+            ERR_RET_FALSE("drive read error")
+        *(uint*)&FAT[ctx.FAT_entry_offset] = ctx.table_value = CLUSTER_EOC;
+        if (write_fat(ctx)) // Write new FAT // Update FAT on disk
+            RESIZE_BIGGER_ERR_RET_FALSE("drive write error")
+
+        delete[] free_cluster_list;
+    }
+    else
+    {
+        // Persist disk file size metadata modification
+        if (write_data_sectors(1, ctx.active_sector, this->buf, ctx))
+            ERR_RET_FALSE("Drive write error")
     }
 
-    // Update last cluster
-    if (!change_active_cluster(free_cluster_list[num_data_sectors - 1], ctx, this->buf))
-        ERR_RET_FALSE("drive read error")
-    *(uint*)&FAT[ctx.FAT_entry_offset] = CLUSTER_EOC;
-    if (write_fat(ctx)) // Write new FAT // Update FAT on disk
-        ERR_RET_FALSE("drive write error")
-
-    delete[] free_cluster_list;
     dentry->inode->size = new_size; // Update inode size
     return true;
 }

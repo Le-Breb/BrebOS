@@ -93,7 +93,7 @@ class Syscall
 	 */
 	static void load_file(Process* p);
 
-	static void write(Process* p);
+	static int write(Process* p);
 
 	static int open(Process* p);
 
@@ -110,6 +110,12 @@ class Syscall
 	static _sig_func_ptr signal(Process* p);
 
 	static void signal_return(Process* p);
+
+	static int fcntl(Process* p);
+
+	static int dup(Process* p);
+
+	static int dup2(Process* p);
 public:
 	/**
 	 * Handles a syscall

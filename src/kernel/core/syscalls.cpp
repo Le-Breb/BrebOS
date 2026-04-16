@@ -5,6 +5,7 @@
 #include "PIC.h"
 #include "../file_management/VFS.h"
 #include "fb.h"
+#include "stdarg.h"
 #include "../file_management/superblock.h"
 #include "../network/DNS.h"
 #include "../network/HTTP.h"
@@ -230,7 +231,7 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             load_file(p);
             break;
         case 26:
-            write(p);
+            p->cpu_state.eax = write(p);
             break;
         case 27:
             p->cpu_state.eax = (uint)p->sbrk((int)p->cpu_state.edi);
@@ -267,6 +268,15 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             break;
         case 37:
             signal_return(p);
+            break;
+        case 38:
+            p->cpu_state.eax = fcntl(p);
+            break;
+        case 39:
+            p->cpu_state.eax = dup2(p);
+            break;
+        case 40:
+            p->cpu_state.eax = dup(p);
             break;
         default:
             printf_error("Received unknown syscall id: 0x%x", cpu_state->eax);
@@ -389,24 +399,13 @@ void Syscall::load_file(Process* p)
     delete[] (char*)f;
 }
 
-void Syscall::write(Process* p)
+int Syscall::write(Process* p)
 {
-    int file = (int)p->cpu_state.edi;
-    if (file == 2)
-        FB::set_fg(FB_RED);
-    else if (file != 1)
-    {
-        p->cpu_state.eax = -1;
-        return;
-    }
+    int fd = (int)p->cpu_state.edi;
+    void* buf = (void*)p->cpu_state.esi;
+    uint count = p->cpu_state.edx;
 
-    char* str = (char*)p->cpu_state.esi;
-    uint len = p->cpu_state.edx;
-    FB::write(str, len);
-    if (file == 2)
-        FB::set_fg(FB_WHITE);
-
-    p->cpu_state.eax = len;
+    return p->write(fd, count, buf);
 }
 
 int Syscall::open(Process* p)
@@ -423,6 +422,9 @@ int Syscall::read(Process* p)
     void* buf = (void*)p->cpu_state.esi;
     uint len = p->cpu_state.edx;
 
+    if (buf == nullptr)
+        return -EFAULT;
+
     return p->read(fd, buf, len);
 }
 
@@ -433,52 +435,20 @@ int Syscall::close(Process* p)
     return p->close(fd);
 }
 
-void stat_base(struct stat* statbuf, const SharedPointer<Dentry>& dentry)
-{
-    auto inode = dentry->inode;
-    statbuf->st_dev = inode->superblock->get_fs()->get_dev();
-    statbuf->st_ino = inode->id;
-    statbuf->st_mode = inode->mode;
-    statbuf->st_nlink = inode->nlink;
-    statbuf->st_uid = inode->uid;
-    statbuf->st_gid = inode->gid;
-    statbuf->st_rdev = 0;
-    statbuf->st_size = (off_t)inode->size;
-    statbuf->st_blksize = dentry->inode->superblock->get_fs()->get_block_size();
-    statbuf->st_blocks = inode->blocks;
-    statbuf->st_atime = inode->atime;
-    statbuf->st_mtime = inode->mtime;
-    statbuf->st_ctime = inode->ctime;
-}
-
 int Syscall::stat(const Process* p)
 {
     const char* pathname = (const char*)p->cpu_state.edi;
-    struct stat* statbuf = (struct stat*)p->cpu_state.esi;
-    SharedPointer<Dentry> dentry = VFS::browse_to(pathname);
+    auto statbuf = (struct stat*)p->cpu_state.esi;
 
-    if (!dentry)
-        return -ENOENT; // No such file or directory
-
-    stat_base(statbuf, dentry);
-
-    return 0;
+    return p->stat(pathname, statbuf);
 }
 
 int Syscall::fstat(const Process* p)
 {
     int proc_fd = (int)p->cpu_state.edi;
-    struct stat* statbuf = (struct stat*)p->cpu_state.esi;
+    auto statbuf = (struct stat*)p->cpu_state.esi;
 
-    // Get file from process' open files
-    auto fd = p->proc_to_sys_fd(proc_fd);
-    if (fd == -1)
-        return -EBADF; // Bad file descriptor
-
-    // Fill stat structure
-    stat_base(statbuf, VFS::file_descriptors[fd].dentry);
-
-    return 0;
+    return p->fstat(proc_fd, statbuf);
 }
 
 int Syscall::kill(const Process* p)
@@ -504,6 +474,30 @@ _sig_func_ptr Syscall::signal(Process* p)
 void Syscall::signal_return(Process* p)
 {
     p->signal_context_restore();
+}
+
+int Syscall::fcntl(Process* p)
+{
+    int fd = (int)p->cpu_state.edi;
+    int op = (int)p->cpu_state.esi;
+    auto arg = (va_list)p->cpu_state.edx;
+
+    return p->fcntl(fd, op, arg);
+}
+
+int Syscall::dup(Process* p)
+{
+    int fd = p->cpu_state.edi;
+
+    return p->dup(fd);
+}
+
+int Syscall::dup2(Process* p)
+{
+    int oldfd = p->cpu_state.edi;
+    int newfd = p->cpu_state.esi;
+
+    return p->dup2(oldfd, newfd);
 }
 
 __attribute__((no_instrument_function)) // May not return, which would mess up profiling data
