@@ -106,10 +106,12 @@ class Process
 
 	Process* exec_replacement = nullptr; // Process which will replace this program after a call to execve
 
+public:
 	file_descriptor* file_descriptors[MAX_FD_PER_PROCESS]{};
 	// Lowest free file descriptor, 0, 1 and 2 are reserved for stdin, stdout and stderr. They are not implemented yet.
 	// but its for POSIX compatibility
 	int lowest_free_fd = 3;
+private:
 
 	static list<env_var*> env_list; // Todo: make env var process specific
 
@@ -129,6 +131,7 @@ public:
 	uint lowest_free_pe;
 	uint free_bytes = 0;
 
+	char* bin_path = nullptr;
 	list<elf_dependence>* elf_dep_list;
 	cpu_state_t cpu_state{}; // Registers
 	cpu_state_t k_cpu_state{}; // Syscall handler registers
@@ -154,7 +157,7 @@ private:
 	/** Frees a terminated process */
 	~Process();
 
-	Process(uint num_pages, list<elf_dependence>* elf_dep_list, Memory::page_table_t* page_tables,
+	Process(char* bin_path, uint num_pages, list<elf_dependence>* elf_dep_list, Memory::page_table_t* page_tables,
 		Memory::pdt_t* pdt, stack_state_t* stack_state, uint priority, pid_t pid,
 		pid_t ppid, Elf32_Addr k_stack_top, Elf32_Addr sig_ret);
 
@@ -300,6 +303,8 @@ public:
 	int dup(int oldfd);
 
 	int dup2(int oldfd, int newfd);
+
+	int pipe(int pipefd[2]);
 };
 
 #endif //INCLUDE_PROCESS_H

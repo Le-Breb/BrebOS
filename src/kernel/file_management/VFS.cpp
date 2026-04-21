@@ -4,6 +4,7 @@
 #include <kstring.h>
 
 #include "../core/fb.h"
+#include "../processes/scheduler.h"
 #include "../utils/comparison.h"
 #include "sys/errno.h"
 #include "sys/_default_fcntl.h"
@@ -13,7 +14,7 @@ SharedPointer<Dentry>* VFS::dentries[MAX_DENTRIES] = {nullptr};
 uint VFS::num_path = 0;
 SharedPointer<Dentry>* VFS::path[PATH_CAPACITY] = {};
 FileInterface* VFS::file_descriptors[MAX_FD] = {};
-size_t VFS::lowest_free_fd = 0;
+int VFS::lowest_free_fd = 0;
 
 void VFS::init()
 {
@@ -412,7 +413,11 @@ int VFS::write(int fd, void* buf, uint count)
 	if (!f)
 		return -EBADF; // fd not open
 
-	return f->write(buf, count);
+	int status = f->write(buf, count);
+	if (status == -EPIPE)
+		Scheduler::get_running_process()->register_signal(SIGPIPE);
+
+	return status;
 }
 
 int VFS::close(int fd)
@@ -425,6 +430,7 @@ int VFS::close(int fd)
 	{
 		delete f;
 		file_descriptors[fd] = nullptr;
+		lowest_free_fd = min(lowest_free_fd, fd);
 	}
 
 	return 0; // Success
@@ -499,6 +505,27 @@ int VFS::fstat(int fd, struct stat* statbuf)
 bool VFS::resize(SharedPointer<Dentry>& dentry, size_t new_size)
 {
 	return dentry->inode->superblock->get_fs()->resize(dentry, new_size);
+}
+
+int VFS::pipe(int pipefd[2])
+{
+	int rfd = get_free_fd();
+	if (rfd == -1)
+		return -ENFILE; // No more free FD
+	int wfd = get_free_fd();
+	if (wfd == -1)
+	{
+		lowest_free_fd = min(rfd, lowest_free_fd);
+		return -ENFILE;
+	}
+	Pipe* pipes[2];
+	Pipe::create_pipe(rfd, wfd, 0, pipes);
+	pipefd[0] = pipes[0]->fd;
+	pipefd[1] = pipes[1]->fd;
+	file_descriptors[rfd] = pipes[0];
+	file_descriptors[wfd] = pipes[1];
+
+	return 0;
 }
 
 int VFS::get_free_fd()

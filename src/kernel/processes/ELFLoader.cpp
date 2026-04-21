@@ -460,7 +460,7 @@ Process* ELFLoader::build_process(int argc, const char** argv, pid_t pid, pid_t 
         sig_ret = sig_ret_symbol->st_value;
 
     used = true;
-    return new Process(num_pages, elf_dep_list, page_tables, pdt, &stack_state, priority, pid, ppid, k_stack_top, sig_ret);
+    return new Process(file->get_absolute_path(), num_pages, elf_dep_list, page_tables, pdt, &stack_state, priority, pid, ppid, k_stack_top, sig_ret);
 }
 
 Elf32_Addr ELFLoader::finalize_process_setup(int argc, const char** argv)

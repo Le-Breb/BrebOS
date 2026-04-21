@@ -1160,3 +1160,8 @@ void* realloc(void* ptr, size_t size)
 {
     return realloc(ptr, size, kernel_process);
 }
+
+void* lazy_malloc(uint n)
+{
+    return malloc<true>(n, kernel_process);
+}

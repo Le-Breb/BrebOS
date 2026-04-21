@@ -89,6 +89,7 @@ Process::~Process()
     children.clear();
 
     delete elf_dep_list;
+    delete bin_path;
 
     Memory::freea(page_tables);
     Memory::freea(pdt);
@@ -98,13 +99,14 @@ Process::~Process()
     //printf_info("Process %u exited with code %d", pid, ret_val);
 }
 
-Process::Process(uint num_pages, list<elf_dependence>* elf_dep_list, Memory::page_table_t* page_tables,
+Process::Process(char* bin_path, uint num_pages, list<elf_dependence>* elf_dep_list, Memory::page_table_t* page_tables,
                  Memory::pdt_t* pdt, stack_state_t* stack_state, uint priority, pid_t pid, pid_t ppid, Elf32_Addr k_stack_top,
                  Elf32_Addr sig_ret) :
     quantum(0), priority(priority),
     num_pages(num_pages),
     pid(pid), ppid(ppid), k_stack_top(k_stack_top), flags(P_READY),
     sig_ret(sig_ret), lowest_free_pe(num_pages),
+    bin_path(bin_path),
     elf_dep_list(elf_dep_list),
     page_tables(page_tables),
     pdt(pdt),
@@ -131,8 +133,11 @@ int Process::get_free_fd()
     if (lowest_free_fd == MAX_FD_PER_PROCESS)
         return -1;
 
+
+    if (file_descriptors[lowest_free_fd])
+        irrecoverable_error("%s: fd lowest_free_id is not free", __func__);
     int ret = lowest_free_fd++; // ++ so that fd is not reserved (of course this is not concurrency compliant...)
-    while (file_descriptors[lowest_free_fd]) lowest_free_fd++;
+    while (lowest_free_fd < MAX_FD_PER_PROCESS && file_descriptors[lowest_free_fd]) lowest_free_fd++;
 
     return ret;
 }
@@ -320,9 +325,10 @@ void Process::copy_page_to_other_process_shared(const Process* other, uint page_
 
     // Remove write permission in current process, as we cannot write to the page anymore since it is shared
     // Mark page as COW in current and other process
-    bool write = pte & PAGE_WRITE;
-    update_pte(page_id, (pte | (write ? PAGE_COW : PAGE_SHRO)) & ~PAGE_WRITE, true);
-    other->update_pte(page_id , (pte | PAGE_COW) & ~PAGE_WRITE, false);
+    const bool write = pte & PAGE_WRITE || pte & PAGE_COW;
+    const uint pte_val = (pte | (write ? PAGE_COW : PAGE_SHRO)) & ~PAGE_WRITE;
+    update_pte(page_id, pte_val, true);
+    other->update_pte(page_id , pte_val, false);
 }
 
 pid_t Process::fork()
@@ -341,7 +347,7 @@ pid_t Process::fork()
         dep_list->add(dep);
 
     // Creat child process
-    auto child = new Process(num_pages, dep_list, child_page_tables, child_pdt, &stack_state, priority, child_pid,
+    auto child = new Process(strdup(bin_path), num_pages, dep_list, child_page_tables, child_pdt, &stack_state, priority, child_pid,
         pid, k_stack_top, sig_ret);
 
     // Copy PCB
@@ -387,9 +393,11 @@ pid_t Process::fork()
             continue;
         const file_descriptor* fd = file_descriptors[i];
         file_descriptor*& child_fd = child->file_descriptors[i];
-        delete child_fd; // Delete child fd if there is one (typically for stdin/out/err)
+        if (child_fd)
+            child->close(child_fd->fd);
         child_fd = new file_descriptor(fd->fd, fd->sys_fd, fd->clo_exec);
     }
+    child->lowest_free_fd = lowest_free_fd;
 
     Scheduler::set_process_ready(child);
 
@@ -726,6 +734,37 @@ int Process::dup2(int oldfd, int newfd)
         close(newfd);
 
     file_descriptors[newfd] = new file_descriptor{newfd, sys_fd, false};
+    while (lowest_free_fd < MAX_FD_PER_PROCESS && file_descriptors[lowest_free_fd] != nullptr) lowest_free_fd++;
 
     return newfd;
+}
+
+int Process::pipe(int pipefd[2])
+{
+    int rfd = get_free_fd();
+    if (rfd == -1)
+        return -EMFILE;
+    int wfd = get_free_fd();
+    if (wfd == -1)
+    {
+        release_fd(rfd);
+        return -EMFILE;
+    }
+
+    int sys_pipefd[2];
+    int status = VFS::pipe(sys_pipefd);
+    if (status != 0)
+    {
+        release_fd(rfd);
+        release_fd(wfd);
+        return status;
+    }
+
+    file_descriptors[rfd] = new file_descriptor(rfd, sys_pipefd[0]);
+    file_descriptors[wfd] = new file_descriptor(wfd, sys_pipefd[1]);
+
+    pipefd[0] = rfd;
+    pipefd[1] = wfd;
+
+    return 0;
 }

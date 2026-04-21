@@ -30,7 +30,7 @@ private:
 	static SharedPointer<Dentry>* dentries[MAX_DENTRIES]; // Caches directory entries. [0] = /, [1] = /mnt
 	static SharedPointer<Dentry>* path[PATH_CAPACITY];
 	static uint num_path;
-	static size_t lowest_free_fd;
+	static int lowest_free_fd;
 
 	/**
 	 * Searches a dentry into cached ones
@@ -161,6 +161,13 @@ public:
 	 * @return boolean indicating success of the operation
 	 */
 	static bool resize(SharedPointer<Dentry>& dentry, size_t new_size);
+
+	/**
+	 * Opens a pipe with the specified flags
+	 * @param pipefd Open flags
+	 * @return 0 on success, -errno on error
+	 */
+	static int pipe(int pipefd[2]);
 };
 
 

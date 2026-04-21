@@ -1,5 +1,3 @@
-#ifdef IMPLEMENTED
-
 #include "headers.h"
 
 static int dup_fd(int fd)
@@ -19,7 +17,7 @@ static void dup2_(int oldfd, int newfd)
 static size_t get_number_of_pipes(const struct ast *pipe)
 {
     size_t size = 0;
-    for (; pipe; pipe = pipe->p2)
+    for (; pipe; pipe = (const ast*)pipe->p2)
         size++;
     if (size == 0)
         errx(1, "No pipes found in get_number_of_pipes");
@@ -90,10 +88,10 @@ static void exec_first_pipe(EXEC_PROTOTYPE)
     save_stdout(ast, c);
     dup2_(c->pipes[0][1], STDOUT_FILENO);
     c->pipe_index++;
-    exec_switch(ast->p1, c);
+    exec_switch((struct ast*)ast->p1, c);
     close(c->pipes[0][1]); // Send EOF
     restore_stdout(ast, c);
-    exec_switch(ast->p2, c);
+    exec_switch((struct ast*)ast->p2, c);
 }
 
 static void exec_middle_pipe(EXEC_PROTOTYPE)
@@ -108,14 +106,14 @@ static void exec_middle_pipe(EXEC_PROTOTYPE)
     dup2_(c->pipes[output_pipe_set][1], STDOUT_FILENO);
 
     c->pipe_index++;
-    exec_switch(ast->p1, c);
+    exec_switch((struct ast*)ast->p1, c);
     restore_stdin(ast, c);
     restore_stdout(ast, c);
     close(c->pipes[input_pipe_set][0]); // Close read fd
     close(c->pipes[output_pipe_set][1]); // Send EOF
     if (pipe(c->pipes[input_pipe_set])) // Open another pipe for the future
         errx(1, "pipe failed in exec_pipe");
-    exec_switch(ast->p2, c);
+    exec_switch((struct ast*)ast->p2, c);
 }
 
 static void exec_last_pipe(EXEC_PROTOTYPE)
@@ -125,9 +123,9 @@ static void exec_last_pipe(EXEC_PROTOTYPE)
     save_stdin(ast, c);
     dup2_(c->pipes[input_pipe_set][0], STDIN_FILENO);
 
-    exec_switch(ast->p1, c);
+    exec_switch((struct ast*)ast->p1, c);
     restore_stdin(ast, c);
-    exec_switch(ast->p2, c);
+    exec_switch((struct ast*)ast->p2, c);
 
     // Close everything
     close(c->pipes[0][0]);
@@ -153,5 +151,3 @@ void exec_pipe(EXEC_PROTOTYPE)
     exec_last_pipe(ast, c);
     pipe_cleanup(ast, c);
 }
-
-#endif

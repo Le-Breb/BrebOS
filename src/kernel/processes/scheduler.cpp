@@ -389,7 +389,7 @@ void Scheduler::create_kernel_init_process(void* process_host_mem, const uint lo
 
     // Now we can properly construct the process
     stack_state_t dummy_stack_state{};
-    auto k = new Process(0, nullptr, Memory::page_tables, Memory::pdt, &dummy_stack_state,
+    auto k = new Process(nullptr, 0, nullptr, Memory::page_tables, Memory::pdt, &dummy_stack_state,
                          1, pid, pid, ELF32_ADDR_ERR, ELF32_ADDR_ERR);
 
     // Transfer allocation information from dummy process to actual process
@@ -584,7 +584,7 @@ void Scheduler::start_kernel_process(void* eip)
     stack_state_t stack_state{};
 
     // Create process
-    auto p = new Process(0, nullptr, Memory::page_tables, Memory::pdt, &stack_state,
+    auto p = new Process(nullptr, 0, nullptr, Memory::page_tables, Memory::pdt, &stack_state,
                          2, pid, pid, k_stack_top, ELF32_ADDR_ERR);
 
     // Setup process to mimic kernel_process

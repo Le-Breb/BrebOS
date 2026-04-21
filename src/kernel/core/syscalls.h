@@ -116,6 +116,8 @@ class Syscall
 	static int dup(Process* p);
 
 	static int dup2(Process* p);
+
+	static int pipe(Process* p);
 public:
 	/**
 	 * Handles a syscall

@@ -7,9 +7,7 @@ __attribute__((constructor)) void init()
     funs[AST_LIST] = exec_list;
     funs[AST_IF] = exec_if;
     funs[AST_REDIR] = exec_redir;
-#ifdef IMPLEMENTED
     funs[AST_PIPE] = exec_pipe;
-#endif
     funs[AST_NOT] = exec_not;
     funs[AST_WHILE] = exec_while;
     funs[AST_UNTIL] = exec_until;
@@ -29,12 +27,5 @@ void exec_switch(EXEC_PROTOTYPE)
     if (!ast || c->shall_exit || c->break_count)
         return;
 
-#pragma region k_adapted
-    if (ast->type == AST_PIPE)
-    {
-        errx(1, "You just used a 42sh fonctionnality that is not yet ported to BrebOS, sorry");
-        return;
-    }
-#pragma endregion
     funs[ast->type](ast, c);
 }

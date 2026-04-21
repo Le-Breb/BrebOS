@@ -278,6 +278,9 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
         case 40:
             p->cpu_state.eax = dup(p);
             break;
+        case 41:
+            p->cpu_state.eax = pipe(p);
+            break;
         default:
             printf_error("Received unknown syscall id: 0x%x", cpu_state->eax);
             break;
@@ -498,6 +501,13 @@ int Syscall::dup2(Process* p)
     int newfd = p->cpu_state.esi;
 
     return p->dup2(oldfd, newfd);
+}
+
+int Syscall::pipe(Process* p)
+{
+    int* pipefd = (int*)p->cpu_state.edi;
+
+    return p->pipe(pipefd);
 }
 
 __attribute__((no_instrument_function)) // May not return, which would mess up profiling data

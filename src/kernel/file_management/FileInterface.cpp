@@ -158,3 +158,88 @@ int TTY::fstat([[maybe_unused]] struct stat* statbuf)
 
     return 0;
 }
+
+Pipe::Pipe(int rfd, int wrd, int flags, End end) : FileInterface(end == End::Read ? rfd : wrd, flags, 0, FileType::Pipe),
+    end(end)
+{
+    if (end == Write)
+    {
+        buf = {new CircularBuffer<char>(BUF_SIZE, (CircularBuffer<char>::mem_allocator)lazy_malloc)};
+    }
+}
+
+void Pipe::register_other_end(Pipe* other)
+{
+    if ((end == Read && other->end != Write) || (end == Write && other->end != Read))
+        irrecoverable_error("Creating a pipe with wrong type of ends");
+
+    other_end = other;
+    if (end == Read)
+        buf = other->buf;
+}
+
+int Pipe::read(void* buf, uint count)
+{
+    if (end != Read)
+        return -EINVAL; // Unsuitable for reading
+
+    CircularBuffer<char>::section* sections = this->buf->read(count);
+    memcpy(buf, sections[0].beg, sections[0].size);
+    memcpy((char*)buf + sections[0].size, sections[1].beg, sections[1].size);
+
+    size_t read = sections[0].size + sections[1].size;
+    delete sections;
+
+    return (int)read;
+}
+
+int Pipe::lseek([[maybe_unused]] int offset, [[maybe_unused]] int whence)
+{
+    return -ESPIPE; // Pipes cannot be sought
+}
+
+int Pipe::write(void* buf, uint count)
+{
+    if (end == Read)
+        return -EINVAL; // Unsuitable for writing
+    if (other_end == nullptr)
+        return -EPIPE; // Read end is closed
+
+    return (int)this->buf->write((char*)buf, count);
+}
+
+int Pipe::fstat(struct stat* statbuf)
+{
+    statbuf->st_dev = PIPE_DEV;
+    statbuf->st_ino = -1; // Pipes do not have an inode for now, it may be interesting to investigate why its != from Unix
+    statbuf->st_mode = S_IFIFO | 0b110110110; // Fifo, read-writable by anybody (as it targets the pipe, not the read/write end)
+    statbuf->st_nlink = 1;
+    statbuf->st_uid = 0;
+    statbuf->st_gid = 0;
+    statbuf->st_rdev = 0;
+    statbuf->st_size = 0;
+    statbuf->st_blksize = 0;
+    statbuf->st_blocks = 0;
+    statbuf->st_atime = 0;
+    statbuf->st_mtime = 0;
+    statbuf->st_ctime = 0;
+
+    return 0;
+}
+
+Pipe::~Pipe()
+{
+    // Register our destruction in other end of the pipe
+    if (other_end != nullptr)
+        other_end->other_end = nullptr;
+}
+
+void Pipe::create_pipe(int rfd, int wrd, int flags, Pipe* pipes[])
+{
+    Pipe* rp = new Pipe(rfd, wrd, flags, Read);
+    Pipe* wp = new Pipe(rfd, wrd, flags, Write);
+    rp->register_other_end(wp);
+    wp->register_other_end(rp);
+    pipes[0] = rp;
+    pipes[1] = wp;
+}

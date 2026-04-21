@@ -3,12 +3,15 @@
 #include "dentry.h"
 #include "kstddef.h"
 #include "../utils/shared_pointer.h"
+#include "../core/memory.h"
+#include "../utils/circular_buffer.h"
 
 #define SEEK_SET 0
 #define SEEK_CUR 1
 #define SEEK_END 2
 
 #define TTY_DEV 25 // fstat st_dev for TTYs (set arbitrarily, this is what I get when fstating stdout on my machine)
+#define PIPE_DEV 14 // fstat st_dev for pipes (set arbitrarily, this is what I get when fstating a pipe on my machine)
 
 class FileInterface {
 public:
@@ -61,6 +64,29 @@ public:
     int fstat(struct stat* statbuf) override;
 };
 
+class Pipe : public FileInterface
+{
+    static constexpr uint BUF_SIZE_N_PAGES = 16;
+    static constexpr uint BUF_SIZE = BUF_SIZE_N_PAGES * PAGE_SIZE;
+
+    enum End {Read, Write};
+
+    SharedPointer<CircularBuffer<char>> buf = nullptr;
+    Pipe* other_end = nullptr;
+    End end;
+
+    Pipe(int rfd, int wrd, int flags, End end);
+    void register_other_end(Pipe* other);
+public:
+    int read(void* buf, uint count) override;
+    int lseek(int offset, int whence) override;
+    int write(void* buf, uint count) override;
+    int fstat(struct stat* statbuf) override;
+
+    ~Pipe() override;
+
+    static void create_pipe(int rfd, int wrd, int flags, Pipe* pipes[]);
+};
 
 
 #endif //BREBOS_FILEINTERFACE_H

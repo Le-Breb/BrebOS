@@ -227,6 +227,8 @@ extern "C" void* malloc(uint n);
 
 extern "C" void* realloc(void* ptr, size_t size);
 
+void* lazy_malloc(uint n);
+
 /** Tries to allocate a contiguous block of memory on pages marked with PAGE_USER
  *
  * @param n Size of the block in bytes
