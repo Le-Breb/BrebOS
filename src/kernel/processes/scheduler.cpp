@@ -490,7 +490,9 @@ void Scheduler::free_terminated_process(Process& p)
     {
         auto child = processes[child_id];
         child->ppid = child->pid; // No parent anymore
+        free_terminated_process(*child);
     }
+    p.children.clear();
 
     delete &p;
 }

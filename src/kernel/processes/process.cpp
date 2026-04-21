@@ -86,7 +86,8 @@ Process::~Process()
         close(file_desc->fd);
     }
 
-    children.clear();
+    if (children.size())
+        irrecoverable_error("Freeing a process that has children");
 
     delete elf_dep_list;
     delete bin_path;
