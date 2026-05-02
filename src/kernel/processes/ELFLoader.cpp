@@ -527,7 +527,8 @@ size_t ELFLoader::write_args_to_stack(size_t stack_top_v_addr, int argc, const c
         args_len & (sizeof(int) - 1) ? (args_len & ~(sizeof(int) - 1)) + sizeof(int) : args_len;
 
     char* stack_top = (char*)stack_top_v_addr;
-    char** argv_ptr = (char**)((uint)(stack_top - args_occupied_space));
+    char** argv_ptr = (char**)((uint)(stack_top - args_occupied_space)) - 1;
+    *argv_ptr = nullptr; // Argv null terminator
     for (int i = argc - 1; i >= 0; --i)
     {
         size_t l = strlen(argv[i]) + 1; // Current arg len

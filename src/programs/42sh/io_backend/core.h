@@ -3,12 +3,10 @@
 
 #include "headers.h"
 
-#pragma region k_adapted
-// struct IO_ctx
-// {
-//     FILE *file;
-// };
-#pragma endregion
+struct IO_ctx
+{
+    FILE *file;
+};
 
 int io_backend_init(int argc, char *argv[], struct context *c);
 

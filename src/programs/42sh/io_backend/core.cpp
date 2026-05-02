@@ -1,9 +1,10 @@
 #define _POSIX_C_SOURCE 200809L
-#include "headers.h"
+#include "core.h"
 
-#pragma region k_adapted
-//static struct IO_ctx ctx;
-#pragma endregion
+#include "headers.h"
+#include "sys/cdefs.h"
+
+static struct IO_ctx ctx;
 
 static char **create_args(const int argc, char **argv, char type,
                           struct context *c)
@@ -36,74 +37,53 @@ static char **create_args(const int argc, char **argv, char type,
         return res;
     }
 }
-static const char* chars;
 int io_backend_init(const int argc, char *argv[], struct context *c)
 {
-#ifdef IMPLEMENTED
     if (argc == 1)
     {
         ctx.file = stdin;
         c->argc = 1;
         c->argv = create_args(0, argv, 0, c);
     }
-    else
-#endif
-#pragma region k_adapted
-    // if (!strcmp(argv[1], "-c"))
-    if (argc > 1 && !strcmp(argv[1], "-c"))
-#pragma endregion
+    else if (!strcmp(argv[1], "-c"))
     {
         if (argc >= 3)
         {
-#pragma region k_adapted
-            //ctx.file = fmemopen(argv[2], strlen(argv[2]), "r");
-            chars = argv[2];
-#pragma endregion
+            ctx.file = fmemopen(argv[2], strlen(argv[2]), "r");
             c->argv = create_args(argc, argv, 1, c);
         }
         else
         {
             fprintf(stderr, "42sh: No string provided\n");
-            return 1;
         }
     }
-#ifdef IMPLEMENTED
     else
     {
         ctx.file = fopen(argv[1], "r");
         c->argc = argc - 1;
         c->argv = create_args(0, argv + 1, 0, c);
     }
-#endif
-#pragma region k_adapted
-    //if (ctx.file == NULL)
-    if (argc == 1 || strcmp(argv[1], "-c")) // pragma region breaks access to previous if so i had to write the opposite condition
+    if (ctx.file == NULL)
     {
         fprintf(stderr, "42sh: Could not process parameters\n");
         return 1;
     }
-#pragma endregion
     return 0;
 }
 
 void io_backend_exit(void)
 {
-#ifdef IMPLEMENTED
     if (ctx.file != NULL)
         fclose(ctx.file);
-#endif
 }
 
 int read_char(void)
 {
-#pragma region k_adapted
-    //char c;
-    //const ssize_t r = fread(&c, sizeof(char), 1, ctx.file);
-    //if (r <= 0)
-    //    return -1; // EOF
-    //return c;
-    return *chars ? *chars++ : -1;
-#pragma endregion
+    char c;
+    const ssize_t r = fread(&c, sizeof(char), 1, ctx.file);
+    if (r <= 0)
+        return -1; // EOF
+    return c;
 }
 
 char *io_backend_get_line(void)

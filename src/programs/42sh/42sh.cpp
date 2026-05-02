@@ -20,9 +20,6 @@ int exit_42sh(int ret_val, struct lexer *lexer, struct ast *ast,
 
 int main(int argc, char **argv)
 {
-  //for (auto i = 0; i < argc; i++)
-    //printf("%s\n", argv[i]);
-
     struct context *c = context_new(argv[0]);
     if (io_backend_init(argc, argv, c))
         return exit_42sh(IO_ERROR_EXIT_CODE, NULL, NULL, c);

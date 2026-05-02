@@ -213,9 +213,9 @@ running locally, which is automatically started when executing `make run`.
         - break
     - redirections
     - pipeline
+    - command substitution
     - the following features are implemented within 42sh but BrebOS lacks support for them to work:
         - variables
-        - command substitution
 ### Bootloader
 Hand made bootloader, that:
 - enables A20 line
