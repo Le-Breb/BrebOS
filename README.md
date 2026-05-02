@@ -30,8 +30,8 @@
 ### What is it ?
 
 BrebOS is a hand made x86 32 bits OS made for learning and fun!
-It is designed to work under QEMU, but it can also be used on real computers ! (It properly boots, though driver errors
-are likely to occur because i did not add support for the specific hardware of the machine used, so do not try it).<br>
+It is designed to work under QEMU, and hopefully i'll manage to have an USB driver working so that it can work on real
+machines!.<br>
 BrebOS is written in C++ and ASM_x86.
 
 ### Creation process
@@ -94,8 +94,8 @@ Note: To date, running `git pull` may break stuff, because newlib is not include
 
 Now that you have the kernel up and running, you can start executing commands. The kernel uses a shell made as a school
 project (42sh, made in groups of of 4 students), that ported in BrebOS. <br>
-The shell language is a subset of the linux one. You should be able to use every basic shell syntax that exists in
-linux, provided that it does not require heavy kernel support that i did not add yet (redirections for example)<br>
+The shell language is a subset of the Linux one. You should be able to use every basic shell syntax that exists in
+Linux.<br>
 Here is the list of the main commands (you can view the entire list by browsing at `BrebOS/src/programs`):
 
 | Command                      | Description                                                                                    |
@@ -109,7 +109,7 @@ Here is the list of the main commands (you can view the entire list by browsing 
 | `cls`                | Clears the screen.                                                                              |
 | `feh <path>`                | Displays an image on the screen, before clearing it.                                                                              |
 
-As 42sh follows the linux shell syntax, you can start a program symply by typing `<program_path> [argv1] [argv2] ...`.
+As 42sh follows the Linux shell syntax, you can start a program simply by typing `<program_path> [argv1] [argv2] ...`.
 The kernel `$PATH` is filled with `/bin`, where all programs are. Hence, to start `/bin/a_program`, simply write
 `a_program`.
 
@@ -211,11 +211,21 @@ running locally, which is automatically started when executing `make run`.
         - echo
         - continue
         - break
+    - redirections
+    - pipeline
     - the following features are implemented within 42sh but BrebOS lacks support for them to work:
         - variables
-        - redirections
-        - pipeline
         - command substitution
+### Bootloader
+Hand made bootloader, that:
+- enables A20 line
+- switches from VGA to VBE for wider screen resolution and manual pixel plotting
+- sets up a stack
+- sets up a GDT
+- loads a stage2 bootloader
+- switches to protected mode
+- jumps in stage2 bootloader
+- stage2 then loads the kernel and jumps in it
 
 ### Misc ✚
 
@@ -229,11 +239,11 @@ Those are things I'm willing to do. To not mistake it with things *I will* do.
 
 - **Multithreading**
 - **Multi core**
-- **Bootloader**
 - **C++ RTTI and exceptions support**
 
 - **Drivers** <br>
   Add various real-life hardware drivers to be able to fully use BrebOS on real machines.
-  For now, the kernel only works with the specific hardware emulated by QEMU.
+  For now, the kernel only works with the specific hardware emulated by QEMU. Especially, a USB driver would be
+particularly handy.
 
 
