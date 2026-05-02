@@ -41,28 +41,25 @@ static char sub_substitution(EXPAND_PROTOTYPE)
     UNUSED(final_argsp);
     UNUSED(fargs_ip);
     UNUSED(cur_argp);
-    errx(1, "Substitution execution not ported to BrebOS\n");
-    return 0;
-#ifdef IMPLEMENTED
-    //if (**cur_argp != '(')
-    //    return 0;
-//
-    //char **final_args = *final_argsp;
-    //size_t fargs_i = *fargs_ip;
-//
-    //const char *cur_arg = *cur_argp;
-    //size_t len = 0;
-//
-    //read_until_char(&cur_arg, &len, ')');
-    //char *cmd_sub = strndup(*cur_argp + 1, len - 2); // Don't copy '(' and ')'
-    //char *cmd = substitute(cmd_sub, c->exec_path);
-//
-    //append_str(&final_args, fargs_i, cmd);
-    //free(cmd_sub);
-    //free(cmd);
-    //UPDATE_POINTERS(final_args, fargs_i, len);
-    //return 1;
-#endif
+
+    if (**cur_argp != '(')
+        return 0;
+
+    char **final_args = *final_argsp;
+    size_t fargs_i = *fargs_ip;
+
+    const char *cur_arg = *cur_argp;
+    size_t len = 0;
+
+    read_until_char(&cur_arg, &len, ')');
+    char *cmd_sub = strndup(*cur_argp + 1, len - 2); // Don't copy '(' and ')'
+    char *cmd = substitute(cmd_sub, c->exec_path);
+
+    append_str(&final_args, fargs_i, cmd);
+    free(cmd_sub);
+    free(cmd);
+    UPDATE_POINTERS(final_args, fargs_i, len);
+    return 1;
 }
 
 static char sub_shell_var(char ***final_argsp, size_t *fargs_ip,
@@ -196,7 +193,6 @@ void expand_dollar(char ***final_argsp, size_t *fargs_ip, char **cur_argp,
             return;
 }
 
-#ifdef IMPLEMENTED
 static void interprete_backslash(char **cmd_sub, size_t len)
 {
     char *cmd = *cmd_sub;
@@ -218,7 +214,6 @@ static void interprete_backslash(char **cmd_sub, size_t len)
         }
     }
 }
-#endif
 
 void expand_backtick(char ***final_argsp, size_t *fargs_ip, char **cur_argp,
                      struct context *c)
@@ -228,22 +223,20 @@ void expand_backtick(char ***final_argsp, size_t *fargs_ip, char **cur_argp,
     UNUSED(fargs_ip);
     UNUSED(cur_argp);
 
-    errx(EXIT_FAILURE, "Expand backtick not implemented because of missing feature support in BrebOS\n");
-#ifdef IMPLEMENTED
-    //char **final_args = *final_argsp;
-    //size_t fargs_i = *fargs_ip;
-//
-    //const char *cur_arg = *cur_argp;
-    //size_t len = 0;
-//
-    //read_until_char(&cur_arg, &len, '`');
-    //char *cmd_sub = strndup(*cur_argp, len - 1);
-    //interprete_backslash(&cmd_sub, len - 1);
-    //char *cmd = substitute(cmd_sub, c->exec_path);
-//
-    //append_str(&final_args, fargs_i, cmd);
-    //free(cmd_sub);
-    //free(cmd);
-    //UPDATE_POINTERS(final_args, fargs_i, len);
-#endif
+
+    char **final_args = *final_argsp;
+    size_t fargs_i = *fargs_ip;
+
+    const char *cur_arg = *cur_argp;
+    size_t len = 0;
+
+    read_until_char(&cur_arg, &len, '`');
+    char *cmd_sub = strndup(*cur_argp, len - 1);
+    interprete_backslash(&cmd_sub, len - 1);
+    char *cmd = substitute(cmd_sub, c->exec_path);
+
+    append_str(&final_args, fargs_i, cmd);
+    free(cmd_sub);
+    free(cmd);
+    UPDATE_POINTERS(final_args, fargs_i, len);
 }

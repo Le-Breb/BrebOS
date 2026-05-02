@@ -51,7 +51,7 @@ private:
 
 	static void* stack_switch_stack_top;
 
-	static Process* load_process(const char* path, pid_t pid, pid_t ppid, int argc, const char** argv);
+	static Process* load_process(const char* path, pid_t pid, pid_t ppid, int argc, const char** argv, bool use_path_if_no_beginning_slash);
 
 	static void wake_up_process_parent(pid_t process_pid);
 
@@ -126,7 +126,7 @@ public:
 
 	static void resume_process(Process* p);
 
-	static int execve(Process* p, const char* path, int argc, const char** argv);
+	static int execve(Process* p, const char* path, int argc, const char** argv, bool use_path_if_no_beginning_slash);
 
 	[[nodiscard]]
 	static Process* get_process(pid_t pid);

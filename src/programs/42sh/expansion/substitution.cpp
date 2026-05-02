@@ -1,5 +1,3 @@
-#ifdef IMPLEMENTED
-
 #include "../headers.h"
 
 char *read_output(const int pipefd[])
@@ -16,12 +14,12 @@ char *read_output(const int pipefd[])
         if ((size_t)nread == read_step)
         {
             buffer_size += read_step;
-            substitution = realloc(substitution, buffer_size);
+            substitution = (char*)realloc(substitution, buffer_size);
         }
     }
 
     if (nread == -1)
-        err(1, "read failed");
+        errx(1, "read failed");
 
     close(pipefd[0]);
     substitution[total_read] = '\0'; // Null-terminate
@@ -43,7 +41,7 @@ char *substitute(const char *input, const char *argv0)
 
     if (pid == 0)
     { // child
-        char *const argv[] = { (char *)argv0, "-c", (char *)input, NULL };
+        char *const argv[] = { (char *)argv0, (char*)"-c", (char *)input, NULL };
         close(pipefd[0]);
         if (-1 == dup2(pipefd[1], STDOUT_FILENO))
             errx(1, "dup2 failed");
@@ -58,4 +56,3 @@ char *substitute(const char *input, const char *argv0)
 
     return read_output(pipefd);
 }
-#endif

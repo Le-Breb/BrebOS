@@ -213,7 +213,7 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             break;
         case 20:
             p->cpu_state.eax = Scheduler::execve(p, (const char*)p->cpu_state.edi, (int)p->cpu_state.esi,
-                (const char**)p->cpu_state.edx);
+                                                 (const char**)p->cpu_state.edx, false);
             break;
         case 21:
             feh(p);
@@ -280,6 +280,10 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             break;
         case 41:
             p->cpu_state.eax = pipe(p);
+            break;
+        case 42: // Execvp
+            p->cpu_state.eax = Scheduler::execve(p, (const char*)p->cpu_state.edi, (int)p->cpu_state.esi,
+                                                 (const char**)p->cpu_state.edx, true);
             break;
         default:
             printf_error("Received unknown syscall id: 0x%x", cpu_state->eax);

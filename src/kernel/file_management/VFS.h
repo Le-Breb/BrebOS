@@ -93,9 +93,10 @@ public:
 	/**
 	 * Browses file system to the folder located at path
 	 * @param path path to browse to
+	 * @param use_path_if_no_starting_slash whether to look for program in path entries if path does not start with '/'
 	 * @return Dentry of folder at path, nullptr if something went wront
 	 */
-	static SharedPointer<Dentry> browse_to(const char* path);
+	static SharedPointer<Dentry> browse_to(const char* path, bool use_path_if_no_starting_slash = true);
 
 	static void* load_file(const char* path, uint offset = 0, uint length = 0);
 

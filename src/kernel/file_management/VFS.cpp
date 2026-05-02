@@ -231,7 +231,7 @@ SharedPointer<Dentry> VFS::browse_to(const char* path, const SharedPointer<Dentr
 
 	// We browsed up to a file's cached dentry, but we haven't finished browsing (i.e., part of the path targets a file)
 	if (token && dentry->inode->type != Inode::Dir)
-		error("%s no such directory", path);
+		error("%s: no such directory", path);
 
 	// Full path cannot be fully browsed only using cached entries, now manually browse
 	FS* fs = dentry->inode->superblock->get_fs();
@@ -243,7 +243,7 @@ SharedPointer<Dentry> VFS::browse_to(const char* path, const SharedPointer<Dentr
 			strcmp("..", token) ? fs->get_child_dentry(dentry, token) : dentry->parent
 			: dentry;
 		if (!dentry)
-			error("%s no such directory", path);
+			error("%s: no such directory", path);
 
 		if (!cache_dentry(dentry))
 		{
@@ -344,7 +344,7 @@ SharedPointer<Dentry> VFS::get_file_dentry(const char* pathname, bool print_erro
 	return browse_to(file_name, parent_dentry, print_errors);
 }
 
-SharedPointer<Dentry> VFS::browse_to(const char* path)
+SharedPointer<Dentry> VFS::browse_to(const char* path, bool use_path_if_no_starting_slash)
 {
 	if (path[0] == '\0')
 	{
@@ -353,6 +353,9 @@ SharedPointer<Dentry> VFS::browse_to(const char* path)
 	}
 	if (path[0] == '/')
 		return browse_to(path, *dentries[0]);
+
+	if (!use_path_if_no_starting_slash)
+		return nullptr;
 
 	for (uint i = 0; i < num_path; ++i)
 	{

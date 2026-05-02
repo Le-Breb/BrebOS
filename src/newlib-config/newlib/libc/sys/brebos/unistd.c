@@ -42,3 +42,16 @@ int pipe(int pipefd[2])
 
     return -1;
 }
+
+int execvp(const char *file, char *const argv[])
+{
+    int argc = 0;
+    for (char* const* argv2 = argv; *argv2; argv2++, argc++){};
+
+    int ret;
+    __asm__ volatile("int $0x80" : "=a"(ret) : "a"(42), "D"(file), "S"(argc), "d"(argv));
+
+    // If this point  is reached, then execve failed
+    errno = ENOMEM;
+    return -1;
+}

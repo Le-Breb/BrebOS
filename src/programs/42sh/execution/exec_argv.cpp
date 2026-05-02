@@ -9,13 +9,10 @@ static int run_execvp(char **args)
     }
     if (pid == 0) // child
     {
-#pragma region k_adapted
-//        if (execvp(args[0], args) == -1)
-        if (execve(args[0], args, NULL) == -1)
+        if (execvp(args[0], args) == -1)
         {
             exit(127);
         }
-#pragma endregion
     }
     // parent
     int status;

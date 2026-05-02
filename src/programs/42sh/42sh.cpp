@@ -22,10 +22,8 @@ int main(int argc, char **argv)
 {
   //for (auto i = 0; i < argc; i++)
     //printf("%s\n", argv[i]);
-#pragma region k_adapted
-    //struct context *c = context_new(argv[0]);
-    struct context *c = context_new(nullptr);
-#pragma endregion
+
+    struct context *c = context_new(argv[0]);
     if (io_backend_init(argc, argv, c))
         return exit_42sh(IO_ERROR_EXIT_CODE, NULL, NULL, c);
 

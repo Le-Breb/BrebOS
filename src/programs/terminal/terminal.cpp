@@ -84,7 +84,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 
 		if (c_id != MAX_CMD_LEN)
 		{
-			const char* argv[4] = {"42sh", "-c", cmd, nullptr};
+			const char* argv[4] = {"/bin/42sh", "-c", cmd, nullptr};
 			exec(argv);
 		}
 
