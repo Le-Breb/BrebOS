@@ -8,7 +8,7 @@ extern "C" int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 {
 	const char* const prog_name = "cls";
 	const char* const args[] = {prog_name, nullptr};
-	if (execve("cls", (char**)args, nullptr) != -1)
+	if (execvp("cls", (char**)args) != -1)
 	{
 		printf("wtf\n");
 	}

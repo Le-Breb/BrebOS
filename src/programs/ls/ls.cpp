@@ -1,4 +1,7 @@
 #include <stdio.h>
+#include <stdlib.h>
+
+#include "sys/unistd.h"
 
 bool ls(const char* path)
 {
@@ -9,17 +12,22 @@ bool ls(const char* path)
 
 int main(int argc, char** argv)
 {
-    if (argc != 2)
+    if (argc != 2 && argc != 1)
     {
-        fprintf(stderr, "ls: Usage: ls <path>\n");
+        fprintf(stderr, "ls: Usage: ls [path]\n");
         return 1;
     }
 
-    if (!ls(argv[1]))
+    char* path = argc == 1 ? getcwd(nullptr, 0) : argv[1];
+
+    if (!ls(path))
     {
         fprintf(stderr, "ls: error displaying content of '%s'\n", argv[1]);
         return 1;
     }
+
+    if (argc == 1)
+        free(path);
 
     return 0;
 }

@@ -11,7 +11,6 @@
 #include "sys/errno.h"
 #include "sys/_default_fcntl.h"
 
-list<Process::env_var*> Process::env_list = {};
 int Process::signal_default_action[HIGHEST_SIGNAL + 1] = {};
 
 /** Change current pdt */
@@ -67,6 +66,19 @@ Process::~Process()
         return;
     }
 
+    pre_free();
+
+    delete bin_path;
+    delete[] work_dir;
+
+    //printf_info("Process %u exited with code %d", pid, ret_val);
+}
+
+void Process::pre_free()
+{
+    if (is_pre_freed)
+        return;
+
     // Free process code
     for (uint i = 0; i < num_pages; ++i)
     {
@@ -86,18 +98,15 @@ Process::~Process()
         close(file_desc->fd);
     }
 
-    if (children.size())
+    if (children.size() && !exec_running())
         irrecoverable_error("Freeing a process that has children");
 
     delete elf_dep_list;
-    delete bin_path;
 
     Memory::freea(page_tables);
     Memory::freea(pdt);
 
-    flags |= P_TERMINATED;
-
-    //printf_info("Process %u exited with code %d", pid, ret_val);
+    is_pre_freed = true;
 }
 
 Process::Process(char* bin_path, uint num_pages, list<elf_dependence>* elf_dep_list, Memory::page_table_t* page_tables,
@@ -127,6 +136,9 @@ Process::Process(char* bin_path, uint num_pages, list<elf_dependence>* elf_dep_l
     for (int i = 2; i >= 0; i--)
         if (file_descriptors[i] == nullptr)
             lowest_free_fd = i;
+
+    [[maybe_unused]] const char* file_name;
+    work_dir = bin_path ? VFS::get_file_parent_dentry(bin_path, file_name)->get_absolute_path() : nullptr;
 }
 
 int Process::get_free_fd()
@@ -204,6 +216,11 @@ void Process::set_flag(uint flag)
     flags |= flag;
 }
 
+const char* Process::get_work_dir() const
+{
+    return work_dir;
+}
+
 bool Process::is_terminated() const
 {
     return flags & P_TERMINATED;
@@ -217,6 +234,11 @@ bool Process::is_waiting_key() const
 bool Process::is_waiting_program() const
 {
     return flags & P_WAITING_PROCESS;
+}
+
+bool Process::is_waiting_read() const
+{
+    return flags & P_WAITING_READ;
 }
 
 bool Process::is_sleeping() const
@@ -244,20 +266,6 @@ uint Process::get_symbol_runtime_address_at_runtime(uint dep_id, const char* sym
 
 void Process::init()
 {
-    auto pwd = new env_var{};
-    pwd->name = strdup("PWD");
-    pwd->value = strdup("/");
-    env_list.add(pwd);
-
-    auto oldpwd = new env_var{};
-    oldpwd->name = strdup("OLDPWD");
-    oldpwd->value = strdup("/");
-
-    auto home = new env_var{};
-    home->name = strdup("HOME");
-    home->value = strdup(" \t\n");
-    env_list.add(home);
-
     signal_default_action[SIGHUP] = SIGDISP_TERM;
     signal_default_action[SIGINT] = SIGDISP_TERM;
     signal_default_action[SIGQUIT] = SIGDISP_CORE;
@@ -268,32 +276,6 @@ void Process::init()
     signal_default_action[SIGEMT] = SIGDISP_TERM;
     signal_default_action[SIGFPE] = SIGDISP_CORE;
     signal_default_action[SIGKILL] = SIGDISP_TERM;
-}
-
-char* Process::get_env(const char* name)
-{
-    for (const auto& e : env_list)
-    {
-        if (strcmp(name, e->name) == 0)
-            return e->value;
-    }
-
-    return nullptr;
-}
-
-void Process::set_env(const char* name, const char* value)
-{
-    for (const auto& e : env_list)
-    {
-        if (strcmp(name, e->name) == 0)
-        {
-            delete e->value;
-            e->value = strdup(value);
-            return;
-        }
-    }
-
-    env_list.add(new env_var{strdup(name), strdup(value)});
 }
 
 void Process::copy_page_to_other_process(const Process* other, uint page_id, uint mapping_page_id) const
@@ -538,7 +520,7 @@ int Process::open(const char* pathname, int flags)
         return -EMFILE; // No more file descriptors available for current process
 
     int err;
-    if (auto sys_fd = VFS::open_file(pathname, flags, err))
+    if (auto sys_fd = VFS::open_file(pathname, flags, err, work_dir))
     {
         // OK
         file_descriptors[fd] = new file_descriptor {fd, sys_fd->fd};
@@ -550,7 +532,7 @@ int Process::open(const char* pathname, int flags)
     return err;
 }
 
-int Process::read(int fd, void* buf, size_t count) const
+int Process::read(int fd, void* buf, size_t count)
 {
     auto sys_fd = proc_to_sys_fd(fd);
     if (sys_fd == -1)
@@ -580,7 +562,7 @@ int Process::fstat(int fd, struct stat* statbuf) const
 int Process::stat(const char* pathname, struct stat* statbuf) const
 {
     int open_err;
-    FileInterface* sys_fd = VFS::open_file(pathname, O_RDONLY, open_err);
+    FileInterface* sys_fd = VFS::open_file(pathname, O_RDONLY, open_err, work_dir);
     if (sys_fd == nullptr)
         return -open_err;
     int res = VFS::fstat(sys_fd->fd, statbuf);
@@ -766,6 +748,19 @@ int Process::pipe(int pipefd[2])
 
     pipefd[0] = rfd;
     pipefd[1] = wfd;
+
+    return 0;
+}
+
+int Process::chdir(const char* path)
+{
+    const auto dir = VFS::browse_to(path);
+
+    if (!dir)
+        return -ENOTDIR;
+
+    delete[] work_dir;
+    work_dir = dir->get_absolute_path();
 
     return 0;
 }

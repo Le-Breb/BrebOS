@@ -208,9 +208,6 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
         case 18:
             realloc(p);
             break;
-        case 19:
-            getenv(p);
-            break;
         case 20:
             p->cpu_state.eax = Scheduler::execve(p, (const char*)p->cpu_state.edi, (int)p->cpu_state.esi,
                                                  (const char**)p->cpu_state.edx, false);
@@ -285,6 +282,12 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             p->cpu_state.eax = Scheduler::execve(p, (const char*)p->cpu_state.edi, (int)p->cpu_state.esi,
                                                  (const char**)p->cpu_state.edx, true);
             break;
+        case 43:
+            getcwd(p);
+            break;
+        case 44:
+            p->cpu_state.eax= chdir(p);
+            break;
         default:
             printf_error("Received unknown syscall id: 0x%x", cpu_state->eax);
             break;
@@ -321,25 +324,6 @@ void Syscall::ls(cpu_state_t* cpu_state)
     const char* path = (const char*)cpu_state->edi;
 
     cpu_state->eax = (uint)VFS::ls(path);
-}
-
-void Syscall::getenv(Process* p)
-{
-    char* env = Process::get_env((char*)p->cpu_state.edi);
-    if (env)
-    {
-        auto len = strlen(env);
-        auto user_env = (char*)p->malloc(len + 1);
-        if (!user_env)
-        {
-            p->cpu_state.eax = 0;
-            return;
-        }
-        strcpy(user_env, env);
-        p->cpu_state.eax = (uint)user_env;
-    }
-    else
-        p->cpu_state.eax = 0;
 }
 
 int Syscall::lseek(const Process* p)
@@ -514,6 +498,29 @@ int Syscall::pipe(Process* p)
     return p->pipe(pipefd);
 }
 
+void Syscall::getcwd(Process* p)
+{
+#define getcwd_ret_err(err) { p->cpu_state.eax = 0; p->cpu_state.edi = err; return; }
+
+    auto buf = (char*)p->cpu_state.edi;
+    auto size = (size_t)p->cpu_state.esi;
+
+    if (size == 0 || !buf)
+        getcwd_ret_err(EINVAL)
+    if (strlen(p->get_work_dir()) > size)
+        getcwd_ret_err(ERANGE)
+
+    strcpy(buf, p->get_work_dir());
+    p->cpu_state.eax = (int)buf;
+}
+
+int Syscall::chdir(Process* p)
+{
+    auto path = (const char*)p->cpu_state.edi;
+
+    return p->chdir(path);
+}
+
 __attribute__((no_instrument_function)) // May not return, which would mess up profiling data
 int Syscall::wait_pid(Process* p)
 {
@@ -521,7 +528,11 @@ int Syscall::wait_pid(Process* p)
 
     // Direct return, either error or child already terminated
     if (wait != 0)
+    {
+        if (wait > 0) // set wstatus. See newlib's wait.h
+            *(int*)p->cpu_state.esi = wait << 8;
         return wait;
+    }
 
     // Wait
     TRIGGER_TIMER_INTERRUPT

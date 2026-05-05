@@ -15,6 +15,7 @@ queue<pid_t, MAX_PROCESSES>* Scheduler::ready_queue{};
 queue<pid_t, MAX_PROCESSES>* Scheduler::waiting_queue{};
 Process* Scheduler::processes[MAX_PROCESSES] {};
 MinHeap<Scheduler::asleep_process>* Scheduler::sleeping_processes{};
+list<Scheduler::proc_waiting_for_read>* Scheduler::processes_waiting_for_read{};
 void* Scheduler::stack_switch_stack_top = nullptr;
 
 /**
@@ -49,6 +50,8 @@ Process* Scheduler::get_next_process()
             set_first_ready_process_asleep_waiting_process();
         else if (proc->is_sleeping())
             ready_queue->dequeue();
+        else if (proc->is_waiting_read())
+            set_first_ready_process_asleep_waiting_read();
         else
         {
             if (proc->exec_running())
@@ -97,7 +100,10 @@ void Scheduler::relinquish_first_ready_process()
     // Nobody is waiting for this process to terminate, thus it's a zombie
     // If it has been terminated because of exec, free it right away
     if (!processes[proc->ppid]->is_waiting_for_any_child_to_terminate && !proc->is_waited_by_parent && !(proc->flags & P_EXEC))
+    {
         proc->set_flag(P_ZOMBIE);
+        proc->pre_free();
+    }
     else // Someone is waiting for this process to end, thus we can actually end it
         free_terminated_process(*proc);
 }
@@ -109,6 +115,12 @@ void Scheduler::set_first_ready_process_asleep_waiting_key_press()
 }
 
 void Scheduler::set_first_ready_process_asleep_waiting_process()
+{
+    running_process = ready_queue->dequeue();
+    // Nothing else to do, the rest has already been done in register_process_wait
+}
+
+void Scheduler::set_first_ready_process_asleep_waiting_read()
 {
     running_process = ready_queue->dequeue();
     // Nothing else to do, the rest has already been done in register_process_wait
@@ -167,6 +179,43 @@ void Scheduler::resume_user_process(Process* p)
     signal_handling(p);
 
     Interrupts::resume_user_process_asm(&p->cpu_state, &p->stack_state);
+}
+
+void Scheduler::do_read_wait(pid_t process_pid, int fd, size_t n)
+{
+    processes_waiting_for_read->add({process_pid, fd, n, 0});
+    processes[process_pid]->set_flag(P_WAITING_READ);
+
+    TRIGGER_TIMER_INTERRUPT
+}
+
+void Scheduler::wake_up_read_waiting_processes(int write_fd, int read_fd, int count)
+{
+    if (write_fd == -1 || read_fd == -1)
+        irrecoverable_error("%s: write fd or read fd is -1", __FUNCTION__);
+
+    list<proc_waiting_for_read> to_be_resumed{};
+    for (auto& pwfr : *processes_waiting_for_read)
+    {
+        if (pwfr.fd != write_fd)
+            continue;
+
+        size_t remaining = pwfr.request - pwfr.read_so_far;
+        size_t c = min(remaining, (size_t)count);
+        pwfr.read_so_far += c;
+
+        if (pwfr.read_so_far == pwfr.request || !VFS::file_descriptors[read_fd]->should_wait_for_data_on_read())
+            to_be_resumed.add(pwfr);
+    }
+
+    // A second loop is required to remove entries so that we do not modify the list as we walk through it
+    for (const auto tbr : to_be_resumed)
+    {
+        processes_waiting_for_read->remove(tbr);
+        Process* proc = processes[tbr.pid];
+        proc->flags &= ~P_WAITING_READ;
+        ready_queue->enqueue(proc->pid);
+    }
 }
 
 [[noreturn]]
@@ -284,6 +333,7 @@ void Scheduler::init()
     ready_queue = new queue<pid_t, MAX_PROCESSES>();
     waiting_queue = new queue<pid_t, MAX_PROCESSES>();
     sleeping_processes = new MinHeap<asleep_process>(MAX_PROCESSES);
+    processes_waiting_for_read  = new list<proc_waiting_for_read>();
 
     set_process_ready(Memory::kernel_process);
 
@@ -294,6 +344,8 @@ void Scheduler::shutdown()
 {
     delete ready_queue;
     delete waiting_queue;
+    delete sleeping_processes;
+    delete processes_waiting_for_read;
 }
 
 pid_t Scheduler::get_running_process_pid()
@@ -417,9 +469,9 @@ void Scheduler::wake_up_process_parent(pid_t process_pid)
     // Resume process, unless it's the current process, in which case it is already in the ready queue
     if (ppid != curr_pid)
         ready_queue->enqueue(ppid);
-    // waitpid return value
+    // waitpid return value. Refer to newlib's wait.h
     if (auto wstatus_addr = (int*)waiting_process->cpu_state.esi)
-        waiting_process->values_to_write.add({wstatus_addr, processes[process_pid]->ret_val});
+        waiting_process->values_to_write.add({wstatus_addr, processes[process_pid]->ret_val << 8});
     // Clear flag
     waiting_process->flags &= ~P_WAITING_PROCESS;
     // Set return value
@@ -473,7 +525,7 @@ void Scheduler::free_terminated_process(Process& p)
     // because of an exec. In such case, the resuming of waiting processes is delegated to the termination of the
     // exec replacement process.
     pid_t pid = p.pid;
-    if (!(p.flags & P_EXEC))
+    if (!p.exec_running())
     {
         if (p.is_waited_by_parent || processes[p.ppid]->is_waiting_for_any_child_to_terminate)
         {
@@ -481,18 +533,17 @@ void Scheduler::free_terminated_process(Process& p)
             p.is_waited_by_parent = processes[p.ppid]->is_waiting_for_any_child_to_terminate = false;
         }
 
+        // Make children orphans
+        for (auto& child_id : p.children)
+        {
+            auto child = processes[child_id];
+            child->ppid = child->pid; // No parent anymore
+        }
+        p.children.clear();
+
         release_pid(p.pid);
         processes[p.pid] = nullptr;
     }
-
-    // Make children processes orphans
-    for (auto& child_id : p.children)
-    {
-        auto child = processes[child_id];
-        child->ppid = child->pid; // No parent anymore
-        free_terminated_process(*child);
-    }
-    p.children.clear();
 
     delete &p;
 }
@@ -549,15 +600,15 @@ int Scheduler::register_process_wait(pid_t waiting_process, pid_t waited_for_pro
     if (!processes[waiting_process]->children.contains(waited_for_process))
         return -ECHILD;
 
+    // Register the wait
+    processes[waited_for_process]->is_waited_by_parent = true;
+
     // Waiting for a zombie, ie a process waiting for someone to wait for it -> free it and return immediately
     if (processes[waited_for_process]->flags & P_ZOMBIE)
     {
         free_terminated_process(*processes[waited_for_process]);
         return waited_for_process;
     }
-
-    // Register the wait and wait
-    processes[waited_for_process]->is_waited_by_parent = true; // Register the waiting process
 
     processes[waiting_process]->set_flag(P_WAITING_PROCESS);
     return 0;

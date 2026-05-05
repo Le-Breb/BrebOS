@@ -33,7 +33,12 @@ public:
     virtual int read(void* buf, uint count) = 0;
     virtual int lseek(int offset, int whence) = 0;
     virtual int write(void* buf, uint count) = 0;
-    virtual int fstat(struct stat* statbuf) = 0;;
+    virtual int fstat(struct stat* statbuf) = 0;
+
+    // When read returns 0, should we wait for new data ?
+    [[nodiscard]] virtual bool should_wait_for_data_on_read() const = 0;
+    [[nodiscard]] virtual int get_write_fd() const = 0;
+    [[nodiscard]] virtual int get_read_fd() const = 0;
 };
 
 class File : public FileInterface
@@ -46,6 +51,9 @@ public:
     int lseek(int offset, int whence) override;
     int write(void* buf, uint count) override;
     int fstat(struct stat* statbuf) override;
+    [[nodiscard]] bool should_wait_for_data_on_read() const override;
+    [[nodiscard]] int get_write_fd() const override;
+    [[nodiscard]] int get_read_fd() const override;
 };
 
 class TTY : public FileInterface
@@ -62,6 +70,9 @@ public:
     int lseek(int offset, int whence) override;
     int write(void* buf, uint count) override;
     int fstat(struct stat* statbuf) override;
+    [[nodiscard]] bool should_wait_for_data_on_read() const override;
+    [[nodiscard]] int get_write_fd() const override;
+    [[nodiscard]] int get_read_fd() const override;
 };
 
 class Pipe : public FileInterface
@@ -82,6 +93,9 @@ public:
     int lseek(int offset, int whence) override;
     int write(void* buf, uint count) override;
     int fstat(struct stat* statbuf) override;
+    [[nodiscard]] bool should_wait_for_data_on_read() const override;
+    [[nodiscard]] int get_write_fd() const override;
+    [[nodiscard]] int get_read_fd() const override;
 
     ~Pipe() override;
 

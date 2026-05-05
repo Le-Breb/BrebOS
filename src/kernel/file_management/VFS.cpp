@@ -145,7 +145,7 @@ char* VFS::get_absolute_path(const char* path)
 
 bool VFS::write_buf_to_file(const char* pathname, const void* buf, uint length)
 {
-	SharedPointer<Dentry> dentry = get_file_dentry(pathname, false);
+	SharedPointer<Dentry> dentry = get_file_dentry(pathname, false, nullptr);
 	if (!dentry)
 		if (!((dentry = touch(pathname))))
 			return false;
@@ -307,15 +307,11 @@ SharedPointer<Dentry> VFS::get_file_parent_dentry(const char* pathname, const ch
 	}
 
 	// Extract parent directory path
-	size_t path_length = strlen(pathname);
-	char* p = new char[path_length + 1]; // Path of parent directory
-	strcpy(p, pathname);
-	uint i = path_length - 1;
-	while (pathname[i] != '/')
-		i--;
-	memset(p + i + 1, 0, path_length - i);
-	// Extract file name
-	file_name = pathname + i + 1;
+	file_name = get_file_name(pathname);
+	const auto dir_len = file_name - pathname;
+	const auto p = new char[dir_len + 1];
+	p[dir_len] = '\0';
+	memcpy(p, pathname, dir_len);
 	if (!strlen(file_name))
 	{
 		printf_error("Empty file name");
@@ -334,10 +330,17 @@ SharedPointer<Dentry> VFS::get_file_parent_dentry(const char* pathname, const ch
 	return dentry;
 }
 
-SharedPointer<Dentry> VFS::get_file_dentry(const char* pathname, bool print_errors)
+SharedPointer<Dentry> VFS::get_file_dentry(const char* pathname, bool print_errors, const char* work_dir)
 {
+	const bool is_path_abs = pathname[0] == '/';
+	if (!pathname || (!is_path_abs && !work_dir))
+		return nullptr;
+
 	const char* file_name;
-	SharedPointer<Dentry> parent_dentry = get_file_parent_dentry(pathname, file_name);
+	const SharedPointer<Dentry> parent_dentry = is_path_abs ?
+		get_file_parent_dentry(pathname, file_name) : browse_to(work_dir, false);
+	if (!is_path_abs)
+		file_name = pathname;
 	if (!parent_dentry)
 		return nullptr;
 
@@ -407,7 +410,15 @@ int VFS::read(int fd, uint length, void* buf)
 	if (!f)
 		return -EBADF; // fd not open
 
-	return f->read(buf, length);
+	int r = f->read(buf, length);
+
+	if (r == 0 && f->should_wait_for_data_on_read())
+	{
+		Scheduler::do_read_wait(Scheduler::get_running_process_pid(), f->get_write_fd(), length);
+		return read(fd, length - r, (char*)buf + r);
+	}
+
+	return r;
 }
 
 int VFS::write(int fd, void* buf, uint count)
@@ -420,6 +431,9 @@ int VFS::write(int fd, void* buf, uint count)
 	if (status == -EPIPE)
 		Scheduler::get_running_process()->register_signal(SIGPIPE);
 
+	if (status > 0 && f->get_read_fd() != -1)
+		Scheduler::wake_up_read_waiting_processes(fd, f->get_read_fd(), status);
+
 	return status;
 }
 
@@ -431,22 +445,26 @@ int VFS::close(int fd)
 
 	if (f->rc == 0)
 	{
+		const int write_fd = f->get_write_fd();
+		const int read_fd = f->get_read_fd();
 		delete f;
 		file_descriptors[fd] = nullptr;
 		lowest_free_fd = min(lowest_free_fd, fd);
+		if (write_fd != -1 && read_fd != -1)
+			Scheduler::wake_up_read_waiting_processes(write_fd, read_fd, 0);
 	}
 
 	return 0; // Success
 }
 
-FileInterface* VFS::open_file(const char* pathname, int flags, int& err)
+FileInterface* VFS::open_file(const char* pathname, int flags, int& err, const char* work_dir)
 {
 #define open_file_leave_with_error(e) { lowest_free_fd=min((int)lowest_free_fd, system_fd); err = e; return nullptr;}
 	int system_fd = get_free_fd();
 	if (system_fd == -1)
 		open_file_leave_with_error(-ENFILE) // No free file descriptors
 
-	SharedPointer<Dentry> dentry = get_file_dentry(pathname, false);
+	SharedPointer<Dentry> dentry = get_file_dentry(pathname, false, work_dir);
 	if (!dentry)
 	{
 		if (flags & O_CREAT)
@@ -545,6 +563,18 @@ int VFS::get_free_fd()
 	}
 
 	return -1; // No free file descriptor
+}
+
+const char* VFS::get_file_name(const char* pathname)
+{
+	if (!pathname || pathname[0] != '/')
+		irrecoverable_error("Get file name expects absolute path, got '%s'", pathname);
+
+	auto len = strlen(pathname);
+	unsigned long i = len - 1;
+	for (; pathname[i] != '/'; i--) {};
+
+	return pathname + i + 1;
 }
 
 bool VFS::mount(FS* fs)

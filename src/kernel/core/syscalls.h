@@ -64,8 +64,6 @@ class Syscall
 
 	static int wait_pid(Process* p);
 
-	static void getenv(Process* p);
-
 	static int lseek(const Process* p);
 
 	/**
@@ -118,6 +116,10 @@ class Syscall
 	static int dup2(Process* p);
 
 	static int pipe(Process* p);
+
+	static void getcwd(Process* p);
+
+	static int chdir(Process* p);
 public:
 	/**
 	 * Handles a syscall

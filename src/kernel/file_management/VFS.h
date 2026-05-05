@@ -48,14 +48,15 @@ private:
 
 	static void free_unused_dentry_cache_entries();
 
-	static SharedPointer<Dentry> get_file_parent_dentry(const char* pathname, const char*& file_name);
-
-	static SharedPointer<Dentry> get_file_dentry(const char* pathname, bool print_errors = true);
+	static SharedPointer<Dentry> get_file_dentry(const char* pathname, bool print_errors, const char* work_dir);
 
 	static void ls_printer(const Dentry& dentry);
 
 	[[nodiscard]]
 	static int get_free_fd();
+
+	[[nodiscard]]
+	static const char* get_file_name(const char* pathname);
 public:
 	static void init();
 
@@ -66,6 +67,8 @@ public:
 	static bool mkdir(const char* pathname);
 
 	static char* get_absolute_path(const char* path);
+
+	static SharedPointer<Dentry> get_file_parent_dentry(const char* pathname, const char*& file_name);
 
 	/**
 	 * Writes a buffer to a file. If the file already exists, it is resized to length. If it doesn't exist, it is created.
@@ -132,9 +135,10 @@ public:
 	 * @param pathname path of the file to open
 	 * @param flags opening parameters
 	 * @param err error code to return in case of failure
+	 * @param work_dir working directory. Ignored if null
 	 * @return the file descriptor on success, nullptr if an error occurred
 	 */
-	static FileInterface* open_file(const char* pathname, int flags, int& err);
+	static FileInterface* open_file(const char* pathname, int flags, int& err, const char* work_dir);
 
 	/**
 	 * Opens a TTY

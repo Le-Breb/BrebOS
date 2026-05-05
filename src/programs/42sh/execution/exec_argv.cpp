@@ -28,12 +28,12 @@ static int run_execvp(char **args)
 static int (*get_bi_function(int id))(BI_PROTOTYPE)
 {
     // NULL for exit which is not called that way
+#pragma region k_adapted // Added pwd
     int (*bi_functions[256])(BI_PROTOTYPE) = { bi_exit,  bi_true,  bi_false,
                                                bi_echo,  bi_break, bi_continue,
-                                               bi_unset/*, bi_cd */};
-#ifdef IMPLEMENTED
-    // Just to notice that cd is not implemented
-#endif
+                                               bi_unset, bi_cd, bi_pwd };
+#pragma endregion
+
     return bi_functions[id];
 }
 
@@ -56,9 +56,11 @@ static int get_bi_id(char *name)
     // return an index to an array of functions
     // or -1 if name does not match
     // Exit MUST be the first in the list
+#pragma region k_adapted // Added pwd
     static char bi_names[256][256] = { "exit",  "true",     "false", "echo",
-                                "break", "continue", "unset", "cd" };
-    int bi_nb = 8;
+                                "break", "continue", "unset", "cd", "pwd" };
+    int bi_nb = 9;
+#pragma endregion
     int res = 0;
     while (res < bi_nb && strcmp(name, bi_names[res]))
     {

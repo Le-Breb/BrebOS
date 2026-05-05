@@ -16,5 +16,8 @@ int bi_break(BI_PROTOTYPE);
 int bi_continue(BI_PROTOTYPE);
 int bi_unset(BI_PROTOTYPE);
 int bi_cd(BI_PROTOTYPE);
+#pragma region k_adapted
+int bi_pwd(BI_PROTOTYPE);
+#pragma endregion
 
 #endif /* ! BUILTINS_H */

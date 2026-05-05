@@ -33,9 +33,19 @@ private:
 		}
 	};
 
+	struct proc_waiting_for_read
+	{
+		pid_t pid;
+		int fd;
+		size_t request, read_so_far;
+
+		bool operator==(const proc_waiting_for_read& other) const {return other.pid == pid && fd == other.fd; }
+	};
+
 	static pid_t running_process;
 	static queue<pid_t, MAX_PROCESSES>* ready_queue;
 	static queue<pid_t, MAX_PROCESSES>* waiting_queue;
+	static list<proc_waiting_for_read>* processes_waiting_for_read;
 	static Process* processes[MAX_PROCESSES];
 	static MinHeap<asleep_process>* sleeping_processes;
 
@@ -104,6 +114,8 @@ public:
 
 	static void set_first_ready_process_asleep_waiting_process();
 
+	static void set_first_ready_process_asleep_waiting_read();
+
 	static void relinquish_first_ready_process();
 
 	/**
@@ -133,6 +145,10 @@ public:
 
 	[[noreturn]]
 	static void resume_user_process(Process* p);
+
+	static void do_read_wait(pid_t process_pid, int fd, size_t n);
+
+	static void wake_up_read_waiting_processes(int write_fd, int read_fd, int count);
 };
 
 

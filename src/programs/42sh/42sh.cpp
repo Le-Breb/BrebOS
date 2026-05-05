@@ -6,9 +6,11 @@
 int exit_42sh(int ret_val, struct lexer *lexer, struct ast *ast,
               struct context *context)
 {
-    if (ret_val == 2 && !context->shall_exit)
-        fprintf(stderr,
-                "42sh: Usage: 42sh [OPTIONS] [SCRIPT] [ARGUMENTS ...]\n");
+#pragma region k_adapted // Removed cause it didn't make sense, showing this msg when programs were returning 2
+    // if (ret_val == 2 && !context->shall_exit)
+    //     fprintf(stderr,
+    //             "42sh: Usage: 42sh [OPTIONS] [SCRIPT] [ARGUMENTS ...]\n");
+#pragma endregion
 
     context_free(context);
     ast_free(ast);
@@ -35,6 +37,10 @@ int main(int argc, char **argv)
         if (status == PARSER_UNEXPECTED_TOKEN)
         {
             fprintf(stderr, "42sh: grammar error\n");
+#pragma region k_adapted // Added for better guidance for the user
+            fprintf(stderr,
+                    "42sh: Usage: 42sh [OPTIONS] [SCRIPT] [ARGUMENTS ...]\n");
+#pragma endregion
             return exit_42sh(GRAMMAR_ERROR_EXIT_CODE, lexer, ast, c);
         }
         exec_list(ast, c);

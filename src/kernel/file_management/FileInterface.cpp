@@ -115,6 +115,21 @@ int File::fstat(struct stat* statbuf)
     return 0;
 }
 
+bool File::should_wait_for_data_on_read() const
+{
+    return false;
+}
+
+int File::get_write_fd() const
+{
+    return -1;
+}
+
+int File::get_read_fd() const
+{
+    return -1;
+}
+
 TTY::TTY(int fd, int flags, Target target) : FileInterface(fd, flags, 0, FileType::TTY), target(target)
 {
 }
@@ -159,8 +174,23 @@ int TTY::fstat([[maybe_unused]] struct stat* statbuf)
     return 0;
 }
 
+bool TTY::should_wait_for_data_on_read() const
+{
+    return false; // Not handled for now
+}
+
+int TTY::get_write_fd() const
+{
+    return -1;
+}
+
+int TTY::get_read_fd() const
+{
+    return -1;
+}
+
 Pipe::Pipe(int rfd, int wrd, int flags, End end) : FileInterface(end == End::Read ? rfd : wrd, flags, 0, FileType::Pipe),
-    end(end)
+                                                   end(end)
 {
     if (end == Write)
     {
@@ -225,6 +255,23 @@ int Pipe::fstat(struct stat* statbuf)
     statbuf->st_ctime = 0;
 
     return 0;
+}
+
+bool Pipe::should_wait_for_data_on_read() const
+{
+    if (end == Write)
+        irrecoverable_error("%s: shouldn't be called on pipe write end", __FUNCTION__);
+    return other_end;
+}
+
+int Pipe::get_write_fd() const
+{
+    return end == Write ? fd : (other_end ? other_end->fd : -1);
+}
+
+int Pipe::get_read_fd() const
+{
+    return end == Read ? fd : (other_end ? other_end->fd : -1);
 }
 
 Pipe::~Pipe()

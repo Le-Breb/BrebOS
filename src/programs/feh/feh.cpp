@@ -121,7 +121,7 @@ ERROR_TYPE parse_and_display_image(const char* pathname)
     if (child_pid == 0)
     {
         const char* argv[] = {"cls", nullptr};
-        if (execve(argv[0], (char**)argv, nullptr) == -1)
+        if (execvp(argv[0], (char**)argv) == -1)
         {
             fprintf(stderr, "Exec failed\n");
             _exit(1);

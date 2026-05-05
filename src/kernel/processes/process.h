@@ -30,6 +30,8 @@ typedef int pid_t;
 #define P_SLEEPING 32
 // Process is about to be replaced because of an exec
 #define P_EXEC 64
+// Process is waiting for new data after calling read()
+#define P_WAITING_READ 128
 
 #define SEGFAULT_RET_VAL 255
 #define GPF_RET_VAL 254
@@ -52,12 +54,6 @@ class Process
 {
 	friend class Scheduler; // Scheduler managers processes, it needs complete access to do its stuff
 	friend class ELFLoader; // ELFLoader creates processes, it acts like the constructor, it initializes most fields
-
-	struct env_var
-	{
-		const char* name;
-		char* value;
-	};
 
 	struct address_val_pair
 	{
@@ -103,8 +99,11 @@ class Process
 	int ret_val{};
 
 	list<void*> allocations{};
+	char* work_dir;
 
 	Process* exec_replacement = nullptr; // Process which will replace this program after a call to execve
+
+	bool is_pre_freed = false;
 
 public:
 	file_descriptor* file_descriptors[MAX_FD_PER_PROCESS]{};
@@ -112,9 +111,6 @@ public:
 	// but its for POSIX compatibility
 	int lowest_free_fd = 3;
 private:
-
-	static list<env_var*> env_list; // Todo: make env var process specific
-
 	MinHeap<int> pending_signals{HIGHEST_SIGNAL + 1};
 	_sig_func_ptr signal_handlers[HIGHEST_SIGNAL + 1]{};
 	int signal_action[HIGHEST_SIGNAL + 1]{}; // Action for each signal
@@ -156,6 +152,9 @@ public:
 private:
 	/** Frees a terminated process */
 	~Process();
+
+	/** Frees the resources of the process (typically used for zombies to release most memory) **/
+	void pre_free();
 
 	Process(char* bin_path, uint num_pages, list<elf_dependence>* elf_dep_list, Memory::page_table_t* page_tables,
 		Memory::pdt_t* pdt, stack_state_t* stack_state, uint priority, pid_t pid,
@@ -206,6 +205,8 @@ public:
 	 */
 	void set_flag(uint flag);
 
+	[[nodiscard]] const char* get_work_dir() const;
+
 	/** Checks whether the program is terminated */
 	[[nodiscard]] bool is_terminated() const;
 
@@ -214,6 +215,9 @@ public:
 
 	/** Checks whether the program is waiting for another program to terminate */
 	[[nodiscard]] bool is_waiting_program() const;
+
+	/** Checks whether the program is waiting for new data after a call to read() **/
+	[[nodiscard]] bool is_waiting_read() const;
 
 	[[nodiscard]] bool is_sleeping() const;
 
@@ -232,10 +236,6 @@ public:
 	uint get_symbol_runtime_address_at_runtime(uint dep_id, const char* symbol_name) const;
 
 	static void init();
-
-	static char* get_env(const char* name);
-
-	static void set_env(const char* name, const char* value);
 
 	pid_t fork();
 
@@ -270,7 +270,7 @@ public:
 	 * @param count how many bytes to read
 	 * @return number of bytes read on success, -2 if fd not open, -3 if not a regular file, -4 if IO error
 	 */
-	int read(int fd, void* buf, size_t count) const;
+	int read(int fd, void* buf, size_t count);
 
 	int write(int fd, uint count, void* buf) const;
 
@@ -305,6 +305,8 @@ public:
 	int dup2(int oldfd, int newfd);
 
 	int pipe(int pipefd[2]);
+
+	int chdir(const char* path);
 };
 
 #endif //INCLUDE_PROCESS_H

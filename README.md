@@ -113,6 +113,15 @@ As 42sh follows the Linux shell syntax, you can start a program simply by typing
 The kernel `$PATH` is filled with `/bin`, where all programs are. Hence, to start `/bin/a_program`, simply write
 `a_program`.
 
+> ⚠️ 42sh does NOT run in interactive mode (yet ?). This means each command you make is independent of one
+> another. Here's an example:
+> ```shell
+> $ pwd # /bin
+> $ cd /a_dir
+> $ pwd #/bin
+> $ cd /a_dir; pwd # a_dir <- this works as 42sh is invocated only once
+```
+
 ### Running your own programs inside BrebOS (How cool is this !? ◝(ᵔᗜᵔ)◜)
 
 BrebOS can run C++ programs that *you* write, provided they respect the following conditions:
@@ -120,10 +129,13 @@ BrebOS can run C++ programs that *you* write, provided they respect the followin
 - Your program cannot use `dynamic_cast`, nor exceptions. They require additional support which i did not setup.
 - Most of the standard libc is  available. If something is not available, you will have a compile error, indicating an undefined reference or undeclared function. You can also include `<ksyscalls.h>` in your programs, which you can find at `src/libc`. This is a small OS specific library which provides handy syscalls.
 - The STL is not available.
+- The signature of `main` MUST contain argc and argv. This works in all scenarios:
+```c++
+int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)){/*...*/}
+```
 - Any other C++ feature (supposedly) works!
 
 To add your program, simply follow the following steps:
-
 - Copy your source files under `BrebOS/src/programs/your_awesome_program_name` <br>
   That's all! Yep, you've read well, there's nothing else you have to do! The Makefile will handle the compilation of
   your program and will add it at `/bin` in BrebOS' disk. <br>
@@ -214,8 +226,8 @@ running locally, which is automatically started when executing `make run`.
     - redirections
     - pipeline
     - command substitution
-    - the following features are implemented within 42sh but BrebOS lacks support for them to work:
-        - variables
+    - variables
+        
 ### Bootloader
 Hand made bootloader, that:
 - enables A20 line

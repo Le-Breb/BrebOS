@@ -1,7 +1,8 @@
-#ifdef IMPLEMENTED
 #include "headers.h"
 
-#define PATH_MAX 4096 // Including null-byte
+#pragma region k_adapted
+#define PATH_MAX 512 // 4096 // Including null-byte
+#pragma endregion
 
 #define CLEAN(__ARG, __CURPATH, __PATH, __CUR_DIR, __BOOL)                     \
     do                                                                         \
@@ -75,7 +76,7 @@ static void step_7(char **curpath, char **args, char **arg)
     if (!pwd)
         return;
 
-    char *new_curpath = calloc(PATH_MAX, sizeof(char));
+    char *new_curpath = (char*)calloc(PATH_MAX, sizeof(char));
     new_curpath = getcwd(new_curpath, PATH_MAX);
     size_t len = strlen(pwd);
     if (len > 0 && pwd[len - 1] != '/')
@@ -110,7 +111,7 @@ static void canonicalize_curpath(char *stack[PATH_MAX], size_t stack_size,
 static char is_valid_dir(char *stack[PATH_MAX], size_t stack_size,
                          char *curpath)
 {
-    char *path = calloc(PATH_MAX, sizeof(char));
+    char *path = (char*)calloc(PATH_MAX, sizeof(char));
     canonicalize_curpath(stack, stack_size, &path, curpath);
 
     struct stat buf;
@@ -128,7 +129,7 @@ static char *canonicalize_path(char *curpath)
     if (!curpath || strlen(curpath) == 0)
         return NULL;
 
-    char *path = calloc(PATH_MAX, sizeof(char));
+    char *path = (char*)calloc(PATH_MAX, sizeof(char));
     char *token;
     char *stack[PATH_MAX];
     size_t stack_size = 0;
@@ -155,7 +156,7 @@ static char *canonicalize_path(char *curpath)
             }
             else if (stack_size == 0)
             {
-                stack[stack_size++] = "..";
+                stack[stack_size++] = (char*)"..";
             }
         }
         else
@@ -174,7 +175,7 @@ static char *canonicalize_path(char *curpath)
 static int cd_hyphen(void)
 {
     char *curpath = getenv("OLDPWD");
-    char *pwd = calloc(PATH_MAX, sizeof(char));
+    char *pwd = (char*)calloc(PATH_MAX, sizeof(char));
     pwd = getcwd(pwd, PATH_MAX);
     if (!curpath)
     {
@@ -199,8 +200,8 @@ int bi_cd(BI_PROTOTYPE)
     if (!step_1(&arg, c))
         return 0;
 
-    char *curpath = calloc(PATH_MAX, sizeof(char));
-    char *pwd = calloc(PATH_MAX, sizeof(char));
+    char *curpath = (char*)calloc(PATH_MAX, sizeof(char));
+    char *pwd = (char*)calloc(PATH_MAX, sizeof(char));
     step_2(&arg, c);
 
     if (*arg == '-')
@@ -239,5 +240,3 @@ Lstep_7:
 Lerror:
     CLEAN(arg, curpath, path, pwd, 1);
 }
-
-#endif
