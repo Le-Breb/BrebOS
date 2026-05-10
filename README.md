@@ -120,7 +120,7 @@ The kernel `$PATH` is filled with `/bin`, where all programs are. Hence, to star
 > $ cd /a_dir
 > $ pwd #/bin
 > $ cd /a_dir; pwd # a_dir <- this works as 42sh is invocated only once
-```
+> ```
 
 ### Running your own programs inside BrebOS (How cool is this !? ◝(ᵔᗜᵔ)◜)
 
