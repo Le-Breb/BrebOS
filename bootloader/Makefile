@@ -1,7 +1,7 @@
 NASM = nasm
-CC = i686-elf-gcc
-LD = i686-elf-ld
-OBJCOPY = i686-elf-objcopy
+CC = i686-brebos-gcc
+LD = i686-brebos-ld
+OBJCOPY = i686-brebos-objcopy
 BUILD_DIR=build
 
 CFLAGS = -m32 -ffreestanding -Wall -Wextra
@@ -37,7 +37,7 @@ $(BUILD_DIR)/%.o: %.s
 all: bootloader.bin bootloader2.bin
 
 bootloader.bin: bootloader.s
-	@mkdir -p $(dir $@)
+	@mkdir -p $(BUILD_DIR)
 	$(NASM) -f bin bootloader.s -o $(BUILD_DIR)/bootloader.bin
 
 bootloader2.elf: $(CPP_OBJ) $(ASM_OBJ)
