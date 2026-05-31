@@ -14,8 +14,8 @@ WHITE=\033[0;37m
 RESET=\033[0m
 
 export BREBOS=$(CURDIR)
-export TOOLCHAIN_DIR := $(BREBOS)/mlibc/toolchain
-export SYSROOT_DIR := $(BREBOS)/mlibc/mlibc/sysroot
+export TOOLCHAIN_DIR := $(BREBOS)/toolchain
+export SYSROOT_DIR := $(BREBOS)/sysroot
 
 export PATH := $(TOOLCHAIN_DIR)/usr/bin:$(PATH)
 
@@ -60,8 +60,8 @@ endif
 CC_PATH=$(TOOLCHAIN_DIR)/usr/bin/$(CC)
 libgcc=$(shell $(CC_PATH) $(CFLAGS) -print-libgcc-file-name)
 CRTI_OBJ=$(GCC_BUILD_DIR)/crti.o
-CRTBEGIN_OBJ:=$(shell $(CC_PATH)/$(CC) $(CFLAGS) -print-file-name=crtbegin.o)
-CRTEND_OBJ:=$(shell $(CC_PATH)/$(CC) $(CFLAGS) -print-file-name=crtend.o)
+CRTBEGIN_OBJ:=$(shell $(CC_PATH) $(CFLAGS) -print-file-name=crtbegin.o)
+CRTEND_OBJ:=$(shell $(CC_PATH) $(CFLAGS) -print-file-name=crtend.o)
 CRTN_OBJ=$(GCC_BUILD_DIR)/crtn.o
 OBJ_LIST=$(CRTI_OBJ) $(CRTBEGIN_OBJ) $(OBJECTS) $(CRTEND_OBJ) $(CRTN_OBJ)
 INTERNAL_OBJS=$(CRTI_OBJ) $(OBJECTS) $(CRTN_OBJ)
@@ -118,7 +118,7 @@ $(libk): $(libk_sources)
 	+$(MAKE) -C $(SRC_DIR)/libk
 
 mlibc:
-	cd $(BREBOS)/mlibc/mlibc && \
+	cd $(BREBOS)/mlibc && \
 	DESTDIR=$(SYSROOT_DIR) ninja -C build install
 
 $(programs): $(programs_sources) $(libk) $(libdynlk) mlibc
