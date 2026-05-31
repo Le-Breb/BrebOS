@@ -74,14 +74,30 @@ binutils_setup_and_build()
     DESTDIR="$TOOLCHAIN_DIR" make install
 }
 
+autoconf_setup_and_build()
+{
+    cyan_echo "autoconf setup and build"
+    cd "$TOOLCHAIN_SOURCES_DIR"
+
+    wget https://ftp.gnu.org/gnu/autoconf/autoconf-2.69.tar.gz
+    tar -xf autoconf-2.69.tar.gz
+
+    cd autoconf-2.69/
+    mkdir build && cd build
+    ../configure --prefix="$(pwd)/../install"
+    make -j"$(NUM_JOBS)"
+    make install
+}
+
 gcc_setup_and_build()
 {
     cyan_echo "GCC setup and build"
     cd "$TOOLCHAIN_SOURCES_DIR"
 
     export LD_LIBRARY_PATH="$TOOLCHAIN_DIR/usr/x86_64-pc-linux-gnu/i686-brebos/lib:${LD_LIBRARY_PATH}"
-    export PATH="$TOOLCHAIN_DIR"/usr/bin:$PATH
+    export PATH="$TOOLCHAIN_DIR/usr/bin:${PATH}"
     export LD_LIBRARY_PATH="$TOOLCHAIN_DIR/usr/lib:${LD_LIBRARY_PATH}"
+    export PATH="$TOOLCHAIN_SOURCES_DIR/autoconf-2.69/install/bin:$PATH"
     
     wget https://ftp.gnu.org/gnu/gcc/gcc-15.1.0/gcc-15.1.0.tar.gz
 
@@ -91,10 +107,12 @@ gcc_setup_and_build()
     cyan_echo "Configuring GCC"
     cd ./gcc-15.1.0
     cp -r "$BREBOS"/src/gcc-config/. ./
+    cd libstdc++-v3
+    autoconf
+    cd -
 
     cyan_echo "Building GCC"
-    mkdir build
-    cd build
+    mkdir build && cd build
     ../configure \
         --target=i686-brebos \
         --prefix=/usr \
@@ -104,10 +122,9 @@ gcc_setup_and_build()
         --enable-host-shared \
         --disable-multilib
     make all-gcc -j "$NUM_JOBS"
-
     make all-target-libgcc -j "$NUM_JOBS"
-    #make all-target-libstdc++-v3 -j "$num_jobs"
-    DESTDIR="$TOOLCHAIN_DIR" make install-gcc install-target-libgcc -j"$NUM_JOBS"
+    make all-target-libstdc++-v3 -j "$NUM_JOBS"
+    DESTDIR="$TOOLCHAIN_DIR" make install-gcc install-target-libgcc install-target-libstdc++-v3 -j"$NUM_JOBS"
 }
 
 mlibc_build()
@@ -129,5 +146,6 @@ mlibc_build()
 mlibc_config
 mlibc_first_headers_install
 binutils_setup_and_build
+autoconf_setup_and_build
 gcc_setup_and_build
 mlibc_build
