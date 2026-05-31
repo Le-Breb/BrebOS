@@ -26,7 +26,7 @@ mlibc_config()
     cyan_echo "mlibc configuration"
     cd "$BREBOS"
 
-    #git clone https://github.com/managarm/mlibc
+    git clone https://github.com/managarm/mlibc
     cd mlibc
     cp "$MLIBC_CONFIG"/brebos-cross.txt ./
     ln -s "$MLIBC_CONFIG"/sysdeps/brebos ./sysdeps/brebos
@@ -57,7 +57,7 @@ binutils_setup_and_build()
     cyan_echo "binutils setup and build"
     cd "$TOOLCHAIN_SOURCES_DIR"
 
-    #wget https://ftp.gnu.org/gnu/binutils/binutils-2.45.1.tar.xz
+    wget https://ftp.gnu.org/gnu/binutils/binutils-2.45.1.tar.xz
     tar xf binutils-2.45.1.tar.xz
     cd binutils-2.45.1
     cp -r "$BREBOS"/src/binutils-config/* ./
@@ -83,7 +83,7 @@ gcc_setup_and_build()
     export PATH="$TOOLCHAIN_DIR"/usr/bin:$PATH
     export LD_LIBRARY_PATH="$TOOLCHAIN_DIR/usr/lib:${LD_LIBRARY_PATH}"
     
-    #wget https://ftp.gnu.org/gnu/gcc/gcc-15.1.0/gcc-15.1.0.tar.gz
+    wget https://ftp.gnu.org/gnu/gcc/gcc-15.1.0/gcc-15.1.0.tar.gz
 
     cyan_echo "Extracting GCC"
     tar xf gcc-15.1.0.tar.gz
