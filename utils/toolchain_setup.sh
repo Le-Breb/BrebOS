@@ -107,9 +107,6 @@ gcc_setup_and_build()
     cyan_echo "Configuring GCC"
     cd ./gcc-15.1.0
     cp -r "$BREBOS"/src/gcc-config/. ./
-    cd libstdc++-v3
-    autoconf
-    cd -
 
     cyan_echo "Building GCC"
     mkdir build && cd build
