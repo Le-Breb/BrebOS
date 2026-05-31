@@ -36,6 +36,7 @@ mlibc_config()
             -e 's/sysdeps\/demo/sysdeps\/brebos/g' \
             -e 's/demo-sysdeps/brebos-sysdeps/g' \
             meson.build
+    sed -i 's|__ensure_fail(#assertion, __FILE__, __LINE__, __func__)|__ensure_fail(#assertion, __PRETTY_FUNCTION__, __LINE__, __func__)|' options/internal/include/bits/ensure.h
 }
 
 mlibc_first_headers_install()
@@ -97,7 +98,6 @@ gcc_setup_and_build()
     export LD_LIBRARY_PATH="$TOOLCHAIN_DIR/usr/x86_64-pc-linux-gnu/i686-brebos/lib:${LD_LIBRARY_PATH}"
     export PATH="$TOOLCHAIN_DIR/usr/bin:${PATH}"
     export LD_LIBRARY_PATH="$TOOLCHAIN_DIR/usr/lib:${LD_LIBRARY_PATH}"
-    export PATH="$TOOLCHAIN_SOURCES_DIR/autoconf-2.69/install/bin:$PATH"
     
     wget https://ftp.gnu.org/gnu/gcc/gcc-15.1.0/gcc-15.1.0.tar.gz
 
@@ -123,8 +123,25 @@ gcc_setup_and_build()
         --disable-multilib
     make all-gcc -j "$NUM_JOBS"
     make all-target-libgcc -j "$NUM_JOBS"
+    DESTDIR="$TOOLCHAIN_DIR" make install-gcc install-target-libgcc -j"$NUM_JOBS"
+}
+
+libstdcpp_build()
+{
+    cyan_echo "libstdc++-v3 build"
+    cd "$TOOLCHAIN_SOURCES_DIR"
+
+    export LD_LIBRARY_PATH="$TOOLCHAIN_DIR/usr/x86_64-pc-linux-gnu/i686-brebos/lib:${LD_LIBRARY_PATH}"
+    export PATH="$TOOLCHAIN_DIR/usr/bin:${PATH}"
+    export LD_LIBRARY_PATH="$TOOLCHAIN_DIR/usr/lib:${LD_LIBRARY_PATH}"
+    export PATH="$TOOLCHAIN_SOURCES_DIR/autoconf-2.69/install/bin:$PATH"
+
+    cd ./gcc-15.1.0/libstdc++-v3
+    autoconf
+    cd ../build
+
     make all-target-libstdc++-v3 -j "$NUM_JOBS"
-    DESTDIR="$TOOLCHAIN_DIR" make install-gcc install-target-libgcc install-target-libstdc++-v3 -j"$NUM_JOBS"
+    DESTDIR="$TOOLCHAIN_DIR" make install-target-libstdc++-v3
 }
 
 mlibc_build()
@@ -146,6 +163,7 @@ mlibc_build()
 mlibc_config
 mlibc_first_headers_install
 binutils_setup_and_build
-autoconf_setup_and_build
 gcc_setup_and_build
 mlibc_build
+autoconf_setup_and_build
+libstdcpp_build
