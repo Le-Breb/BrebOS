@@ -10,11 +10,6 @@ CFLAGS = -fno-stack-protector -Wall -Wextra -Werror -c -fno-exceptions \
 		 -fno-rtti -MMD -MP -g
 AS = nasm
 ASFLAGS = -f elf -F dwarf
-#LDFLAGS = -T ../link_program.ld
-LDFLAGS = -L../../libk/build/ -lk \
-  -Wl,-dynamic-linker,/dynlk \
-  -g \
-  -static-libgcc
 ifdef RELEASE
 CFLAGS += -O3
 ASFLAGS += -O3
@@ -24,7 +19,7 @@ ASFLAGS += -O0
 endif
 BUILD_DIR=build
 CPPFLAGS= -I../../libk -I./
-LIBK_PATH := ../../libk/build/libk.so
+LIBK_PATH := ../../libk/build/libk.a
 
 all: ../build/$(EXEC_NAME)
 
@@ -38,7 +33,7 @@ $(LIBK_PATH):
 	+make -C ../../libk
 
 ../build/$(EXEC_NAME): $(BUILD_DIR)/.dir_timestamp $(OBJECTS) $(LIBK_PATH) ../start_program.o
-	$(CC) -o ../build/$(EXEC_NAME) $(OBJECTS) $(LDFLAGS)
+	$(CC) -o ../build/$(EXEC_NAME) $(OBJECTS) $(LDFLAGS) $(LIBK_PATH)
 
 $(BUILD_DIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)

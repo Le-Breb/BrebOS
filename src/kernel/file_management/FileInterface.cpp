@@ -3,9 +3,9 @@
 #include "kstring.h"
 #include "superblock.h"
 #include "../utils/comparison.h"
-#include "sys/errno.h"
+#include <errno.h>
 #include "../core/fb.h"
-#include "sys/_default_fcntl.h"
+#include <fcntl.h>
 #include "../core/memory.h"
 
 FileInterface::FileInterface(int fd, int flags, uint offset, FileType type) : fd(fd), flags(flags), offset(offset), type(type)

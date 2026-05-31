@@ -8,11 +8,10 @@
 #include "../utils/list.h"
 #include "../file_management/VFS.h"
 #include <kstddef.h>
+#include <abi-bits/signal.h>
 
 #include "stdarg.h"
 #include "../utils/min_heap.h"
-
-typedef int pid_t;
 
 // Process is ready to be executed
 #define P_READY 0
@@ -47,6 +46,13 @@ typedef int pid_t;
 #define SIGDISP_STOP 3
 #define SIGDISP_CONT 4
 #define SIGDISP_HLDR 5
+
+#define PROCESS_STACK_SIZE 0x80000 // 512 KiB
+static_assert((PROCESS_STACK_SIZE % PAGE_SIZE) == 0, "PROCESS_STACK_SIZE must be a multiple of STACK_SIZE");
+#define PROCESS_STACK_N_PAGES (PROCESS_STACK_SIZE / PAGE_SIZE)
+#define PROCESS_SYSCALL_STACK_SIZE 0x2000
+static_assert((PROCESS_SYSCALL_STACK_SIZE % PAGE_SIZE) == 0, "PROCESS_SYSCALL_STACK_SIZE must be a multiple of STACK_SIZE");
+#define PROCESS_SYSCALL_STACK_N_PAGES (PROCESS_SYSCALL_STACK_SIZE / PAGE_SIZE)
 
 class Scheduler;
 
@@ -112,12 +118,13 @@ public:
 	int lowest_free_fd = 3;
 private:
 	MinHeap<int> pending_signals{HIGHEST_SIGNAL + 1};
-	_sig_func_ptr signal_handlers[HIGHEST_SIGNAL + 1]{};
+	__sighandler signal_handlers[HIGHEST_SIGNAL + 1]{};
 	int signal_action[HIGHEST_SIGNAL + 1]{}; // Action for each signal
 	static int signal_default_action[HIGHEST_SIGNAL + 1]; // Default action for each signal
 	cpu_state_t sig_saved_cpu_state{};
 	stack_state_t sig_saved_stack_state{};
 	Elf32_Addr sig_ret = ELF32_ADDR_ERR;
+	struct sigaction oldact{ {nullptr}, (unsigned long)-1, {}, {}};
 
 	void copy_page_to_other_process(const Process* other, uint page_id, uint mapping_page_id) const;
 
@@ -141,6 +148,7 @@ public:
 
 	Memory::memory_header mem_base{.s = {&mem_base, 0}};
 	Memory::memory_header* freep = &mem_base; // list of memory blocks allocated by the process
+	void* tls_base = nullptr;
 
 	// Those fields have to be first for alignment constraints
 	// Process page tables. Process can use all virtual addresses below the kernel virtual location at pde 768
@@ -158,7 +166,7 @@ private:
 
 	Process(char* bin_path, uint num_pages, list<elf_dependence>* elf_dep_list, Memory::page_table_t* page_tables,
 		Memory::pdt_t* pdt, stack_state_t* stack_state, uint priority, pid_t pid,
-		pid_t ppid, Elf32_Addr k_stack_top, Elf32_Addr sig_ret);
+		pid_t ppid, Elf32_Addr k_stack_top);
 
 	/**
 	 * Loads a flat binary in memory
@@ -247,8 +255,6 @@ public:
 	 */
 	void update_pte(uint pte, uint val, bool update_cache) const;
 
-	void* sbrk(int increment);
-
 	/**
 	 * Transfer various data to proc, which is set as exec replacement
 	 * @param proc process that whill replace this process
@@ -259,9 +265,10 @@ public:
 	 * Opens a file
 	 * @param pathname path of the file to open
 	 * @param flags opening parameters
+	 * @param mode mode bits used when a file is created
 	 * @return file identifier on success, -2 if system-wide fd limit is reached, -3 if bad fd, -4 if process fd limit reached
 	 */
-	int open(const char* pathname, int flags);
+	int open(const char* pathname, int flags, mode_t mode);
 
 	/**
 	 * Reads data from a file descriptor
@@ -270,7 +277,7 @@ public:
 	 * @param count how many bytes to read
 	 * @return number of bytes read on success, -2 if fd not open, -3 if not a regular file, -4 if IO error
 	 */
-	int read(int fd, void* buf, size_t count);
+	int read(int fd, void* buf, size_t count) const;
 
 	int write(int fd, uint count, void* buf) const;
 
@@ -292,7 +299,7 @@ public:
 
 	int register_signal(int signal);
 
-	_sig_func_ptr register_signal_handler(int signal, _sig_func_ptr handler);
+	__sighandler register_signal_handler(int signal, __sighandler handler);
 
 	void signal_context_save();
 
@@ -307,6 +314,10 @@ public:
 	int pipe(int pipefd[2]);
 
 	int chdir(const char* path);
+
+	int isatty(int fd) const;
+
+	int sigaction(int signum, const struct sigaction* act, struct sigaction* old_act);
 };
 
 #endif //INCLUDE_PROCESS_H

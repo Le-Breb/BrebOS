@@ -728,7 +728,7 @@ case ${target} in
   gas=yes
   gnu_ld=yes
   default_use_cxa_atexit=yes
-  use_gcc_stdint=wrap
+  use_gcc_stdint=provide
   ;;
 *-*-darwin*)
   tmake_file="t-darwin "
@@ -1193,6 +1193,12 @@ case ${target} in
 esac
 
 case ${target} in
+i[34567]86-*-brebos*)
+    tm_file="${tm_file} i386/unix.h i386/att.h elfos.h glibc-stdint.h i386/i386elf.h gnu-user.h brebos.h"
+    ;;
+x86_64-*-brebos*)
+    tm_file="${tm_file} i386/unix.h i386/att.h elfos.h glibc-stdint.h i386/i386elf.h i386/x86-64.h gnu-user.h brebos.h"
+    ;;
 aarch64*-*-elf | aarch64*-*-fuchsia* | aarch64*-*-rtems*)
 	tm_file="${tm_file} elfos.h newlib-stdint.h"
 	tm_file="${tm_file} aarch64/aarch64-elf.h aarch64/aarch64-errata.h aarch64/aarch64-elf-raw.h"
@@ -1700,12 +1706,6 @@ bpf-*-*)
         extra_objs="btfext-out.o core-builtins.o"
         target_gtfiles="$target_gtfiles \$(srcdir)/config/bpf/btfext-out.cc \$(srcdir)/config/bpf/core-builtins.cc"
         ;;
-i[34567]86-*-brebos*)
-    tm_file="${tm_file} i386/unix.h i386/att.h elfos.h glibc-stdint.h i386/i386elf.h brebos.h"
-    ;;
-x86_64-*-brebos*)
-    tm_file="${tm_file} i386/unix.h i386/att.h elfos.h glibc-stdint.h i386/i386elf.h i386/x86-64.h brebos.h"
-    ;;
 cris-*-elf | cris-*-none)
 	tm_file="elfos.h newlib-stdint.h ${tm_file}"
 	tmake_file="cris/t-cris cris/t-elfmulti"

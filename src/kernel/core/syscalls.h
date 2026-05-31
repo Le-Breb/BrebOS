@@ -3,8 +3,7 @@
 
 #include "interrupts.h"
 #include "../processes/process.h"
-#include <sys/stat.h>
-
+#include <signal.h>
 
 class Syscall
 {
@@ -105,7 +104,7 @@ class Syscall
 
 	static int kill(const Process* p);
 
-	static _sig_func_ptr signal(Process* p);
+	static __sighandler signal(Process* p);
 
 	static void signal_return(Process* p);
 
@@ -120,6 +119,13 @@ class Syscall
 	static void getcwd(Process* p);
 
 	static int chdir(Process* p);
+
+	static uint tcbset(Process* p);
+
+	static int isatty(const Process* process);
+
+	static int sigaction(Process* p);
+
 public:
 	/**
 	 * Handles a syscall

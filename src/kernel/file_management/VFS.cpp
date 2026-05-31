@@ -6,8 +6,8 @@
 #include "../core/fb.h"
 #include "../processes/scheduler.h"
 #include "../utils/comparison.h"
-#include "sys/errno.h"
-#include "sys/_default_fcntl.h"
+#include <errno.h>
+#include <fcntl.h>
 
 uint VFS::lowest_free_dentry = 0;
 SharedPointer<Dentry>* VFS::dentries[MAX_DENTRIES] = {nullptr};
@@ -457,12 +457,25 @@ int VFS::close(int fd)
 	return 0; // Success
 }
 
-FileInterface* VFS::open_file(const char* pathname, int flags, int& err, const char* work_dir)
+FileInterface* VFS::open_file(const char* pathname, int flags, mode_t mode, int& err, const char* work_dir)
 {
 #define open_file_leave_with_error(e) { lowest_free_fd=min((int)lowest_free_fd, system_fd); err = e; return nullptr;}
+	constexpr int supported_flags = O_RDONLY | O_RDWR | O_WRONLY | O_TRUNC | O_CREAT | O_SYNC | O_APPEND;
+
 	int system_fd = get_free_fd();
 	if (system_fd == -1)
 		open_file_leave_with_error(-ENFILE) // No free file descriptors
+
+	if (const int flags_check = flags & ~supported_flags)
+	{
+		printf_warn("Open called with the following unsupported flags: 0x%x", flags_check);
+		open_file_leave_with_error(-EINVAL);
+	}
+
+	if ((flags & O_CREAT || flags & O_TMPFILE) && mode != 0777)
+		printf_warn("Open called on '%s' with the following unsupported mode: 0%o. File will be created, "
+			  "but with 0777 mode", pathname, mode);
+
 
 	SharedPointer<Dentry> dentry = get_file_dentry(pathname, false, work_dir);
 	if (!dentry)
@@ -547,6 +560,20 @@ int VFS::pipe(int pipefd[2])
 	file_descriptors[wfd] = pipes[1];
 
 	return 0;
+}
+
+int VFS::isatty(int fd)
+{
+	if (fd >= MAX_FD)
+		return -EBADF;
+	const auto& sys_fd = file_descriptors[fd];
+	if (sys_fd == nullptr)
+		return -EBADF;
+
+	if (sys_fd->type == FileInterface::TTY)
+		return 0;
+
+	return -ENOTTY;
 }
 
 int VFS::get_free_fd()

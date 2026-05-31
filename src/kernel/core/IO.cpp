@@ -16,11 +16,11 @@ void IO::insl(uint port, void* buffer, uint quads)
 	);
 
 	// Perform the I/O operation
-	for (size_t i = 0; i < quads; ++i) {
-		asm volatile(
-			"inl %[port], %[value]"  // Read from port and store into buffer
-			: [value] "=a"(buf[i])   // Output: store result in buf[i]
-			: [port] "Nd"(port)      // Input: port number
+	for (uint i = 0; i < quads; ++i) {
+		asm volatile (
+		"inl %w1, %0"				// Read from port and store into buffer
+		: "=a"(buf[i])				// Output: store result in buf[i]
+			: "Nd"(port)			// Input: port number
 		);
 	}
 

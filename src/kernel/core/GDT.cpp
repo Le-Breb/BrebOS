@@ -45,13 +45,23 @@ void GDT::set_tss_kernel_stack(uint esp0)
 	tss.esp0 = esp0;
 }
 
+void GDT::set_tls(void* tls)
+{
+	uint base = (uint)tls;
+	gdt[TLS_ENTRY].base_low = (base & 0xFFFF); // NOLINT(*-narrowing-conversions)
+	gdt[TLS_ENTRY].base_middle = (base >> 16) & 0xFF; // NOLINT(*-narrowing-conversions)
+	gdt[TLS_ENTRY].base_high = (base >> 24) & 0xFF; // NOLINT(*-narrowing-conversions)
+
+	__asm__ volatile("mov %0, %%gs" : : "r"(TLS_ENTRY * 8 + 3));
+}
+
 void GDT::init()
 {
 	// Set up the GDT descriptor
 	gdt_descriptor.size = (sizeof(struct gdt_entry) * GDT_ENTRIES) - 1;
 	gdt_descriptor.address = (void*) gdt;
 
-	// Set up the GDT entries
+	// Set up the GDT entries - When adding an entry, don't forget to update GDT_ENTRIES
 	// Null segment
 	set_entry(0, 0, 0, 0, 0);
 
@@ -69,6 +79,8 @@ void GDT::init()
 
 	// TSS
 	setup_tss(5, 0x10, 0x00);
+
+	set_entry(TLS_ENTRY, 0, 0xFFFFFFFF, (char) U_DATA_SEGMENT_ACCESS, (char) GRANULARITY);
 
 	// Load the GDT
 	load_asm();

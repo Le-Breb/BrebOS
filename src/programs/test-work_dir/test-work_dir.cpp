@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <string.h>
-#include "sys/unistd.h"
+#include <unistd.h>
 #include "sys/wait.h"
 
 // Runs cd and pwd in 42sh and checks if result is correct

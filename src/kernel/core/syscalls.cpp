@@ -5,11 +5,12 @@
 #include "PIC.h"
 #include "../file_management/VFS.h"
 #include "fb.h"
+#include "GDT.h"
 #include "stdarg.h"
 #include "../file_management/superblock.h"
 #include "../network/DNS.h"
 #include "../network/HTTP.h"
-#include "sys/errno.h"
+#include <errno.h>
 
 void Syscall::start_process(Process* p)
 {
@@ -208,6 +209,9 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
         case 18:
             realloc(p);
             break;
+        case 19:
+            p->cpu_state.eax = tcbset(p);
+            break;
         case 20:
             p->cpu_state.eax = Scheduler::execve(p, (const char*)p->cpu_state.edi, (int)p->cpu_state.esi,
                                                  (const char**)p->cpu_state.edx, false);
@@ -229,9 +233,6 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             break;
         case 26:
             p->cpu_state.eax = write(p);
-            break;
-        case 27:
-            p->cpu_state.eax = (uint)p->sbrk((int)p->cpu_state.edi);
             break;
         case 28:
             p->cpu_state.eax = p->fork();
@@ -287,6 +288,15 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             break;
         case 44:
             p->cpu_state.eax= chdir(p);
+            break;
+        case 46:
+            p->cpu_state.eax = isatty(p);
+            break;
+        case 47:
+            p->cpu_state.eax = sigaction(p);
+            break;
+        case 400: // for dbg purposes
+            printf_info("%d", p->cpu_state.edi);
             break;
         default:
             printf_error("Received unknown syscall id: 0x%x", cpu_state->eax);
@@ -403,8 +413,9 @@ int Syscall::open(Process* p)
 {
     const char* pathname = (const char*)p->cpu_state.edi;
     int flags = (int)p->cpu_state.esi;
+    mode_t mode = (int)p->cpu_state.edx;
 
-    return p->open(pathname, flags);
+    return p->open(pathname, flags, mode);
 }
 
 int Syscall::read(Process* p)
@@ -454,10 +465,10 @@ int Syscall::kill(const Process* p)
     return proc->register_signal(signal);
 }
 
-_sig_func_ptr Syscall::signal(Process* p)
+__sighandler Syscall::signal(Process* p)
 {
     int signal = (int)p->cpu_state.edi;
-    auto handler = (_sig_func_ptr)p->cpu_state.esi;
+    auto handler = (__sighandler)p->cpu_state.esi;
 
     return p->register_signal_handler(signal, handler);
 }
@@ -519,6 +530,30 @@ int Syscall::chdir(Process* p)
     auto path = (const char*)p->cpu_state.edi;
 
     return p->chdir(path);
+}
+
+uint Syscall::tcbset(Process* p)
+{
+    void* addr = (void*)p->cpu_state.edi;
+    p->tls_base = addr;
+    GDT::set_tls(addr);
+
+    return TLS_ENTRY;
+}
+
+int Syscall::isatty(const Process* process)
+{
+    int fd = process->cpu_state.edi;
+    return process->isatty(fd);
+}
+
+int Syscall::sigaction(Process* p)
+{
+    int signum = p->cpu_state.edi;
+    const auto* act = (const struct sigaction*)p->cpu_state.esi;
+    auto* old_act = (struct sigaction*)p->cpu_state.edx;
+
+    return p->sigaction(signum, act, old_act);
 }
 
 __attribute__((no_instrument_function)) // May not return, which would mess up profiling data

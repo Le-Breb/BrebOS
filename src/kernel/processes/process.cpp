@@ -8,8 +8,8 @@
 #include "../core/fb.h"
 #include "../file_management/VFS.h"
 #include "../utils/comparison.h"
-#include "sys/errno.h"
-#include "sys/_default_fcntl.h"
+#include "errno.h"
+#include <fcntl.h>
 
 int Process::signal_default_action[HIGHEST_SIGNAL + 1] = {};
 
@@ -110,12 +110,11 @@ void Process::pre_free()
 }
 
 Process::Process(char* bin_path, uint num_pages, list<elf_dependence>* elf_dep_list, Memory::page_table_t* page_tables,
-                 Memory::pdt_t* pdt, stack_state_t* stack_state, uint priority, pid_t pid, pid_t ppid, Elf32_Addr k_stack_top,
-                 Elf32_Addr sig_ret) :
+                 Memory::pdt_t* pdt, stack_state_t* stack_state, uint priority, pid_t pid, pid_t ppid, Elf32_Addr k_stack_top) :
     quantum(0), priority(priority),
     num_pages(num_pages),
     pid(pid), ppid(ppid), k_stack_top(k_stack_top), flags(P_READY),
-    sig_ret(sig_ret), lowest_free_pe(num_pages),
+    lowest_free_pe(num_pages),
     bin_path(bin_path),
     elf_dep_list(elf_dep_list),
     page_tables(page_tables),
@@ -271,9 +270,8 @@ void Process::init()
     signal_default_action[SIGQUIT] = SIGDISP_CORE;
     signal_default_action[SIGILL] = SIGDISP_CORE;
     signal_default_action[SIGTRAP] = SIGDISP_CORE;
-    signal_default_action[SIGIOT] = SIGDISP_CORE;
     signal_default_action[SIGABRT] = SIGDISP_CORE;
-    signal_default_action[SIGEMT] = SIGDISP_TERM;
+    signal_default_action[SIGBUS] = SIGDISP_TERM;
     signal_default_action[SIGFPE] = SIGDISP_CORE;
     signal_default_action[SIGKILL] = SIGDISP_TERM;
 }
@@ -331,7 +329,7 @@ pid_t Process::fork()
 
     // Creat child process
     auto child = new Process(strdup(bin_path), num_pages, dep_list, child_page_tables, child_pdt, &stack_state, priority, child_pid,
-        pid, k_stack_top, sig_ret);
+        pid, k_stack_top);
 
     // Copy PCB
     child->cpu_state = cpu_state;
@@ -339,16 +337,32 @@ pid_t Process::fork()
     child->k_cpu_state = k_cpu_state;
     child->quantum = quantum;
     child->flags = flags & ~P_SYSCALL_INTERRUPTED;
+    child->tls_base = tls_base;
 
     // Duplicate page table entries
-    uint used_pages = ADDR_PAGE(program_break + PAGE_SIZE);
-    uint mapping_page = used_pages; // Free page that will be used to map the child pages in the current address space
-    for (uint i = 0; i < used_pages; i++)
-        copy_page_to_other_process_shared(child, i);
+    uint mapping_page = ADDR_PAGE(KERNEL_VIRTUAL_BASE) - PROCESS_N_STACKS_PAGES - 1; // Free page that will be used to map the child pages in the current address space
+    if (page_tables[mapping_page / PT_ENTRIES].entries[mapping_page % PT_ENTRIES])
+        irrecoverable_error("%s: mapping mage is not empty", __func__);
+
+    uint page_id_off = 0;
+    for (uint i = 0; i < 768 - (PROCESS_N_STACKS_PAGES + PT_ENTRIES - 1) / PT_ENTRIES; i++)
+    {
+        if (pdt->entries[i])
+        {
+            for (uint j = 0; j < PT_ENTRIES; j++)
+            {
+                if (page_tables[i].entries[j])
+                    copy_page_to_other_process_shared(child, page_id_off + j);
+            }
+        }
+        page_id_off += PT_ENTRIES;
+    }
 
     // Duplicate stacks - do not use COW for stacks, because they are not shared
-    copy_page_to_other_process(child, ADDR_PAGE(KERNEL_VIRTUAL_BASE - PAGE_SIZE), mapping_page);
-    copy_page_to_other_process(child, ADDR_PAGE(KERNEL_VIRTUAL_BASE - PAGE_SIZE * 2), mapping_page);
+    for (int i = 0; i <= PROCESS_STACK_N_PAGES; i++) // First copy the process stack
+        copy_page_to_other_process(child, ADDR_PAGE(KERNEL_VIRTUAL_BASE - PAGE_SIZE * (i + 1)), mapping_page);
+    for (int i = 0; i <= PROCESS_SYSCALL_STACK_N_PAGES; i++) // Next proceed with syscall stack
+        copy_page_to_other_process(child, ADDR_PAGE(KERNEL_VIRTUAL_BASE - PAGE_SIZE * (PROCESS_STACK_N_PAGES + i + 1)), mapping_page);
 
     // Duplicate PDT entries - This MUST be done after copying the pages, because page tables are lazily allocated.
     // If we do it before, the page tables would not be actually allocated yet, thus PHYS_ADDR would return 0
@@ -418,55 +432,6 @@ void Process::update_pte(uint pte, uint val, bool update_cache) const
     }
 }
 
-void* Process::sbrk(int increment)
-{
-    if (increment < 0 && ((uint)-increment > program_break || increment + program_break < PAGE_SIZE * num_pages))
-    {
-        printf_error("Trying to deallocate too much memory");
-        return nullptr;
-    }
-
-    if (program_break + increment > KERNEL_VIRTUAL_BASE - PAGE_SIZE)
-    {
-        printf_error("Trying to allocate too much memory");
-        return nullptr;
-    }
-
-    uint new_program_break = program_break + increment;
-    uint program_break_page_id = ADDR_PAGE(program_break);
-    uint new_program_break_page_id = ADDR_PAGE(new_program_break);
-
-    if (increment < 0)
-    {
-        // Free unused pages
-        for (uint i = new_program_break_page_id + 1; i < program_break_page_id; i++)
-            Memory::free_page(i << 12, this);
-    }
-    else
-    {
-        // Check if page on which current program break lays is allocated, allocates it if it's not the case
-        if (!PTE(page_tables, program_break_page_id))
-        {
-            uint frame = Memory::get_free_frame();
-            Memory::allocate_page_user<false>(frame, Memory::get_free_pe());
-            update_pte(program_break_page_id, FRAME_ID_ADDR(frame) | PAGE_PRESENT | PAGE_USER | PAGE_WRITE, true);
-        }
-        // Allocate necessary pages above current program break
-        for (uint i = program_break_page_id + 1; i <= new_program_break_page_id; i++)
-        {
-            uint frame = Memory::get_free_frame();
-            Memory::allocate_page_user<false>(frame, Memory::get_free_pe());
-            update_pte(i, FRAME_ID_ADDR(frame) | PAGE_PRESENT | PAGE_USER | PAGE_WRITE, true);
-        }
-    }
-
-    // Update program break
-    auto ret = program_break;
-    program_break = new_program_break;
-
-    return (void*)ret;
-}
-
 void Process::execve_transfer(Process* proc)
 {
     proc->flags = flags & ~P_SYSCALL_INTERRUPTED;
@@ -506,21 +471,14 @@ void Process::execve_transfer(Process* proc)
     }
 }
 
-int Process::open(const char* pathname, int flags)
+int Process::open(const char* pathname, int flags, mode_t mode)
 {
-    constexpr int supported_flags = O_RDONLY | O_RDWR | O_WRONLY | O_TRUNC | O_CREAT | O_SYNC | O_APPEND;
-    if (const int flags_check = flags & ~supported_flags)
-    {
-        printf_warn("Open called with the following unsupported flags: 0x%x", flags_check);
-        return -EINVAL;
-    }
-
     int fd = get_free_fd();
     if (fd == -1)
         return -EMFILE; // No more file descriptors available for current process
 
     int err;
-    if (auto sys_fd = VFS::open_file(pathname, flags, err, work_dir))
+    if (auto sys_fd = VFS::open_file(pathname, flags, mode, err, work_dir))
     {
         // OK
         file_descriptors[fd] = new file_descriptor {fd, sys_fd->fd};
@@ -532,7 +490,7 @@ int Process::open(const char* pathname, int flags)
     return err;
 }
 
-int Process::read(int fd, void* buf, size_t count)
+int Process::read(int fd, void* buf, size_t count) const
 {
     auto sys_fd = proc_to_sys_fd(fd);
     if (sys_fd == -1)
@@ -562,7 +520,7 @@ int Process::fstat(int fd, struct stat* statbuf) const
 int Process::stat(const char* pathname, struct stat* statbuf) const
 {
     int open_err;
-    FileInterface* sys_fd = VFS::open_file(pathname, O_RDONLY, open_err, work_dir);
+    FileInterface* sys_fd = VFS::open_file(pathname, O_RDONLY, 0, open_err, work_dir);
     if (sys_fd == nullptr)
         return -open_err;
     int res = VFS::fstat(sys_fd->fd, statbuf);
@@ -624,10 +582,10 @@ int Process::register_signal(int signal)
     return 0;
 }
 
-_sig_func_ptr Process::register_signal_handler(int signal, _sig_func_ptr handler)
+__sighandler Process::register_signal_handler(int signal, __sighandler handler)
 {
     if (signal != SIGQUIT) // Cannot register handler for SIGKILL, so for now the only signal that can be registered is SIGQUIT
-        return (_sig_func_ptr)-EINVAL;
+        return (__sighandler)-EINVAL;
 
     auto prev = signal_handlers[signal];
     if (handler == SIG_IGN)
@@ -761,6 +719,65 @@ int Process::chdir(const char* path)
 
     delete[] work_dir;
     work_dir = dir->get_absolute_path();
+
+    return 0;
+}
+
+int Process::isatty(int fd) const
+{
+    if (fd >= MAX_FD_PER_PROCESS)
+        return -EBADF;
+    const auto& proc_fd = file_descriptors[fd];
+    if (proc_fd == nullptr)
+        return -EBADF;
+
+    return VFS::isatty(proc_fd->sys_fd);
+}
+
+int Process::sigaction(int signum, const struct sigaction* act, struct sigaction* old_act)
+{
+    // Ensure there are no flags
+    constexpr auto supported_flags = SA_RESTORER;
+    if ((act->sa_flags & ~supported_flags) != 0)
+    {
+        printf_warn("%s: sa_flags contains the (yet) following unsupported bits: '0x%x'", __func__, (int)(act->sa_flags & ~supported_flags));
+        return -EINVAL;
+    }
+    // Ensure mask is empty
+    bool mask_is_zeroed = true;
+    for (uint i = 0; i < sizeof(act->sa_mask); ++i)
+    {
+        if (((char*)&act->sa_mask)[i] != '\0')
+        {
+            mask_is_zeroed = false;
+            break;
+        }
+    }
+    if (!mask_is_zeroed)
+    {
+        printf_warn("%s: sa_mask not empty, not supported yet", __func__);
+        return -EINVAL;
+    }
+
+    // Register signal new action
+    auto prev = register_signal_handler(signum, act->sa_handler);
+
+    if ((int)prev < 0)
+        return (int)prev;
+
+    if (sig_ret != ELF32_ADDR_ERR && sig_ret != (Elf32_Addr)act->sa_restorer)
+        irrecoverable_error("%s: provided sa_restorer (0x%x) is different from a previously sa_restorer (0x%x)", __func__, (uint)act->sa_restorer, sig_ret);
+    if (act->sa_flags & SA_RESTORER)
+        sig_ret = (Elf32_Addr)act->sa_restorer;
+
+    if (oldact.sa_flags == (unsigned long)-1) // If oldact hasn't been initialized (eg first call og sigaction)
+    {
+        oldact.sa_handler = prev;
+        oldact.sa_restorer = (void (*)())sig_ret;
+        oldact.sa_flags = SA_RESTORER;
+    }
+    *old_act = oldact;
+    oldact = *act;
 
     return 0;
 }

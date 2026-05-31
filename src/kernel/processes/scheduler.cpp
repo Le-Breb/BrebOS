@@ -7,7 +7,7 @@
 #include "../core/PIC.h"
 #include "../core/fb.h"
 #include "../file_management/VFS.h"
-#include "sys/errno.h"
+#include <errno.h>
 
 uint Scheduler::pid_pool = 0;
 pid_t Scheduler::running_process = MAX_PROCESSES;
@@ -130,6 +130,7 @@ void Scheduler::resume_process(Process* p)
 {
     // Set TSS esp0 to point to the syscall handler stack (i.e. tell the CPU where is syscall handler stack)
     GDT::set_tss_kernel_stack(p->k_stack_top);
+    GDT::set_tls(p->tls_base); // Set process TLS address base in GDT TLS entry
 
     // Use process' address space
     Interrupts::change_pdt_asm(PHYS_ADDR(Memory::page_tables, (uint) p->pdt));
@@ -148,8 +149,8 @@ void Scheduler::resume_process(Process* p)
         p->flags &= ~P_SYSCALL_INTERRUPTED;
         Interrupts::resume_syscall_handler_asm(&p->k_cpu_state, &p->k_stack_state);
     }
-    else
-        resume_user_process(p);
+
+    resume_user_process(p);
 }
 
 int Scheduler::execve(Process* p, const char* path, int argc, const char** argv, bool use_path_if_no_beginning_slash)
@@ -442,7 +443,7 @@ void Scheduler::create_kernel_init_process(void* process_host_mem, const uint lo
     // Now we can properly construct the process
     stack_state_t dummy_stack_state{};
     auto k = new Process(nullptr, 0, nullptr, Memory::page_tables, Memory::pdt, &dummy_stack_state,
-                         1, pid, pid, ELF32_ADDR_ERR, ELF32_ADDR_ERR);
+                         1, pid, pid, ELF32_ADDR_ERR);
 
     // Transfer allocation information from dummy process to actual process
     k->lowest_free_pe = kernel->lowest_free_pe;
@@ -497,21 +498,16 @@ void Scheduler::signal_handling(Process* p)
     if (p->signal_action[signal] != SIGDISP_HLDR)
         irrecoverable_error("Signal %d is not handled by a signal handler", signal);
 
-    if (p->sig_ret == ELF32_ADDR_ERR)
-        irrecoverable_error("Trying to handle a signal although sig_ret is not set."
-                            "This means that the process does not have a valid signal handler return address, "
-                            "which is required to handle signals. PID: %d", p->pid);
-
-    // ReSharper disable once CppDFANullDereference
-    Elf32_Addr sig_ret= p->sig_ret + p->elf_dep_list->get(0)->runtime_load_address;
-
     // Save saved context
     p->signal_context_save();
 
+    if (p->sig_ret == ELF32_ADDR_ERR)
+        irrecoverable_error("%s: trying to return from a signal handler but signal return address is not set", __func__);
+
     // Setup new context, by sig_ret (the return address) to the stack and the signal handler address to eip
     p->stack_state.esp &= ~0b11; // ABI stack alignment: align to 4 bytes
-    p->stack_state.esp -= sizeof(sig_ret) + sizeof(signal); // Reserve space on the stack
-    *((Elf32_Addr*)p->stack_state.esp) = sig_ret; // Push return address to the stack
+    p->stack_state.esp -= sizeof(p->sig_ret) + sizeof(signal); // Reserve space on the stack
+    *((Elf32_Addr*)p->stack_state.esp) = p->sig_ret; // Push return address to the stack
     ((uint*)p->stack_state.esp)[1] = signal; // Push signal number to the stack, as argument for the signal handler
     p->stack_state.eip = (uint)p->signal_handlers[signal];
 }
@@ -638,7 +634,7 @@ void Scheduler::start_kernel_process(void* eip)
 
     // Create process
     auto p = new Process(nullptr, 0, nullptr, Memory::page_tables, Memory::pdt, &stack_state,
-                         2, pid, pid, k_stack_top, ELF32_ADDR_ERR);
+                         2, pid, pid, k_stack_top);
 
     // Setup process to mimic kernel_process
     p->lowest_free_pe = Memory::kernel_process->lowest_free_pe;

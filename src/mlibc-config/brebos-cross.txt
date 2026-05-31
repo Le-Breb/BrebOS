@@ -1,0 +1,13 @@
+[binaries]
+c = 'i686-brebos-gcc'              # or your cross-compiler C compiler
+cpp = 'i686-brebos-g++'            # your cross-compiler C++ compiler
+ar = 'i686-brebos-ar'
+strip = 'i686-brebos-strip'
+ld = 'i686-brebos-ld'
+
+[host_machine]
+system = 'brebos'
+cpu_family = 'x86'
+cpu = 'i686'
+endian = 'little'
+

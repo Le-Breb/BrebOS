@@ -78,8 +78,8 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure point
     Network::run();
 
     // Set terminal process ready
-    const char* argv[2] = { "terminal", nullptr };
-    Scheduler::exec("terminal", 0, 0, argv);
+    const char* argv[2] = { "/bin/terminal", nullptr };
+    Scheduler::exec("terminal", 0, 1, argv);
 
     // This makes the kernel initialization process end itself, thus ending kernel initialization
     Scheduler::stop_kernel_init_process();

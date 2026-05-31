@@ -22,7 +22,8 @@
 #define U_DATA_SEGMENT_ACCESS (PL3 | DATA_SEGMENT)
 #define TSS_SEGMENT_ACCESS (PRESENT | PL3 | EXECUTE | ACCESSED)
 
-#define GDT_ENTRIES 6
+#define GDT_ENTRIES 7
+#define TLS_ENTRY 6
 
 //https://wiki.osdev.org/Global_Descriptor_Table
 
@@ -133,6 +134,12 @@ public:
 	 * @param esp0 Stack pointer
 	 */
 	static void set_tss_kernel_stack(uint esp0);
+
+	/**
+	 * Sets TLS base address
+	 * @param tls TLS base address
+	 */
+	static void set_tls(void* tls);
 };
 
 #endif /* INCLUDE_OS_GDT_H */

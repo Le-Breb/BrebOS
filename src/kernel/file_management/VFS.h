@@ -134,11 +134,12 @@ public:
 	 * Opens a file
 	 * @param pathname path of the file to open
 	 * @param flags opening parameters
+	 * @param mode mode bits used when creating a file
 	 * @param err error code to return in case of failure
 	 * @param work_dir working directory. Ignored if null
 	 * @return the file descriptor on success, nullptr if an error occurred
 	 */
-	static FileInterface* open_file(const char* pathname, int flags, int& err, const char* work_dir);
+	static FileInterface* open_file(const char* pathname, int flags, mode_t mode, int& err, const char* work_dir);
 
 	/**
 	 * Opens a TTY
@@ -173,6 +174,13 @@ public:
 	 * @return 0 on success, -errno on error
 	 */
 	static int pipe(int pipefd[2]);
+
+	/**
+	 * Checks whether a file descriptor designates a a TTY
+	 * @param fd file descriptor to check
+	 * @return 0 if fd is a TTY, -errno otherwise
+	 */
+	static int isatty(int fd);
 };
 
 

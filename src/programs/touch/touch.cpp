@@ -1,10 +1,14 @@
 #include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 bool touch(const char* path)
 {
-    bool success;
-    __asm__ volatile("int $0x80" : "=a"(success): "a"(11), "D"(path));
-    return success;
+    int fd = open(path, O_RDWR | O_CREAT, 0777);
+    if (fd == -1)
+        return false;
+    close(fd);
+    return true;
 }
 
 int main(int argc, char** argv)

@@ -1,8 +1,10 @@
 #ifndef HEADERS_H
 #define HEADERS_H
 
-#define _POSIX_C_SOURCE 200809L
 #pragma region k_adapted
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
 //#define NULL 0
 #pragma endregion
 

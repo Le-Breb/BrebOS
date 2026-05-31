@@ -2,7 +2,7 @@
 #include "core.h"
 
 #include "headers.h"
-#include "sys/cdefs.h"
+// #include "sys/cdefs.h" // Header does not exist in mlibc. Not guarded by k_adapted as include is not needed
 
 static struct IO_ctx ctx;
 

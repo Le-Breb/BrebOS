@@ -13,12 +13,17 @@ CYAN=\033[0;36m
 WHITE=\033[0;37m
 RESET=\033[0m
 
+export BREBOS=$(CURDIR)
+export TOOLCHAIN_DIR := $(BREBOS)/mlibc/toolchain
+export SYSROOT_DIR := $(BREBOS)/mlibc/mlibc/sysroot
+
+export PATH := $(TOOLCHAIN_DIR)/usr/bin:$(PATH)
+
+export LD_LIBRARY_PATH := \
+	$(TOOLCHAIN_DIR)/usr/lib:$(TOOLCHAIN_DIR)/usr/x86_64-pc-linux-gnu/i686-brebos/lib:$(LD_LIBRARY_PATH)
+
 BUILD_DIR=build
 SRC_DIR=src
-SYSROOT=./sysroot
-NEWLIB_INCLUDE_DIR=$(SYSROOT)/usr/include/
-TOOLCHAIN_DIR=./toolchain
-GCC_INCLUDE_DIR=$(TOOLCHAIN_DIR)/gcc/lib/gcc/i686-brebos/15.1.0/include
 LIBC_BUILD_DIR=$(SRC_DIR)/libc/build
 LIBK_BUILD_DIR=$(SRC_DIR)/libk/build
 LIBDYNLK_BUILD_DIR=$(SRC_DIR)/libdynlk/build
@@ -52,9 +57,8 @@ ifdef PROFILING
 	CFLAGS += -finstrument-functions -DPROFILING
 endif
 
-CC_PATH=$(CURDIR)/toolchain/gcc/bin
-CC_PATH2=$(CURDIR)/tools/gcc-build/bin
-libgcc=$(shell $(CC_PATH)/$(CC) $(CFLAGS) -print-libgcc-file-name)
+CC_PATH=$(TOOLCHAIN_DIR)/usr/bin/$(CC)
+libgcc=$(shell $(CC_PATH) $(CFLAGS) -print-libgcc-file-name)
 CRTI_OBJ=$(GCC_BUILD_DIR)/crti.o
 CRTBEGIN_OBJ:=$(shell $(CC_PATH)/$(CC) $(CFLAGS) -print-file-name=crtbegin.o)
 CRTEND_OBJ:=$(shell $(CC_PATH)/$(CC) $(CFLAGS) -print-file-name=crtend.o)
@@ -84,14 +88,9 @@ GRUB_TIMEOUT=0
 FONT_FILE=Lat15-VGA16.psf
 FONT_OBJ= $(BUILD_DIR)/$(FONT_FILE:%.psf=%.o)
 
-all:
-	@PATH=$(CC_PATH):$(CC_PATH2):$(PATH) $(MAKE) all_
+.PHONY: libc libk libdynlk programs bootloader mlibc
 
-run:
-	@PATH=$(CC_PATH):$(CC_PATH2):$(PATH) $(MAKE) run_
-
-all_: init $(OS_ISO) compilation_ended
-.PHONY: libc libk libdynlk programs bootloader
+all: init $(OS_ISO) compilation_ended
 
 init:
 	@echo "$(CYAN)Compiling$(WHITE)"
@@ -118,7 +117,11 @@ $(libc): $(libc_sources)
 $(libk): $(libk_sources)
 	+$(MAKE) -C $(SRC_DIR)/libk
 
-$(programs): $(programs_sources) $(libk) $(libdynlk)
+mlibc:
+	cd $(BREBOS)/mlibc/mlibc && \
+	DESTDIR=$(SYSROOT_DIR) ninja -C build install
+
+$(programs): $(programs_sources) $(libk) $(libdynlk) mlibc
 	+$(MAKE) -C $(SRC_DIR)/programs
 
 $(KERNEL_BUILD_DIR)/%.o: $(SRC_DIR)/kernel/%.cpp
@@ -192,7 +195,7 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(libdynlk) $(programs) bootloader
 bootloader:
 	+$(MAKE) -C bootloader
 
-run_: $(OS_ISO)
+run: $(OS_ISO)
 	@#	bochs -f bochsrc.txt -q
 	@mdeltree -i disk_image.img ::/downloads/ # make sure downloads folder is cleanup up
 	@mmd -i disk_image.img ::/downloads # Recreate it

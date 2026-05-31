@@ -12,6 +12,54 @@
 #define LIBDYNLK_PATH "/bin/libdynlk.so"
 #define LIBK_PATH "/bin/libk.so"
 
+#define AT_NULL 0
+#define AT_IGNORE 1
+#define AT_EXECFD 2
+#define AT_PHDR 3
+#define AT_PHENT 4
+#define AT_PHNUM 5
+#define AT_PAGESZ 6
+#define AT_BASE 7
+#define AT_FLAGS 8
+#define AT_ENTRY 9
+#define AT_NOTELF 10
+#define AT_UID 11
+#define AT_EUID 12
+#define AT_GID 13
+#define AT_EGID 14
+#define AT_PLATFORM 15
+#define AT_HWCAP 16
+#define AT_CLKTCK 17
+#define AT_SECURE 23
+#define AT_BASE_PLATFORM 24
+#define AT_RANDOM 25
+#define AT_HWCAP2 26
+#define AT_EXECFN 31
+
+#define PROCESS_N_STACKS_PAGES (PROCESS_STACK_N_PAGES + PROCESS_SYSCALL_STACK_N_PAGES)
+
+typedef struct auxv_t
+{
+    int a_type;
+
+    union
+    {
+        long a_val;
+        void* a_ptr;
+        void (*a_fnc)();
+    };
+
+    auxv_t(int type, long val)
+        : a_type(type), a_val(val) {}
+
+    auxv_t(int type, void* ptr)
+        : a_type(type), a_ptr(ptr) {}
+
+    auxv_t(int type, void (*fn)())
+        : a_type(type), a_fnc(fn) {}
+
+} auxv_t;
+
 struct init_fini_info
 {
     list<Elf32_Addr> init_array;
@@ -70,11 +118,11 @@ private:
      * @param bytes_ptr pointer to bytes to copy
      * @param n num bytes to copy
      * @param h PT_LOAD segment header
-     * @param lib_runtime_load_address runtime load address of the library
+     * @param elf_runtime_load_address runtime load address of the library
      * @param copied_bytes counter of bytes processed in current segment
      */
     void
-    copy_elf_subsegment_to_address_space(const void* bytes_ptr, uint n, const Elf32_Phdr* h, uint lib_runtime_load_address,
+    copy_elf_subsegment_to_address_space(const void* bytes_ptr, uint n, const Elf32_Phdr* h, uint elf_runtime_load_address,
                                          uint& copied_bytes) const;
 
     /**
@@ -124,12 +172,9 @@ private:
      * @param stack_top_v_addr Virtual address of process stack top in kernel address space
      * @param argc number of arguments
      * @param argv argument list
-     * @param init_array init array. Shall contain _init at index 0 if it exists
-     * @param fini_array fini array. Shall contain _fini at index 0 if it exists
      * @return ESP in process address space ready to be used
      */
-    static size_t write_args_to_stack(size_t stack_top_v_addr, int argc, const char** argv, const list<Elf32_Addr>
-                                      & init_array, const list<Elf32_Addr>& fini_array);
+    size_t write_args_to_stack(size_t stack_top_v_addr, int argc, const char** argv) const;
 
     /**
      * Process setup last phase: once the main ELF has been loaded, this function executes the remaining setup actions:
@@ -165,6 +210,12 @@ private:
     void unmap_new_process_from_current_process() const;
 
     void setup_pdt();
+
+    char* write_auxv(char* esp, const char* bin_path) const;
+
+    void load_phdr();
+
+    static void write_to_stack(char*& stack_top, const void* content, size_t size);
 public:
     /**
      * Create a process from an ELF loaded in memory

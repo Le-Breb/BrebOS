@@ -53,9 +53,10 @@ void Interrupts::page_fault_handler(const stack_state_t* stack_state)
 
 	// Fault is an error, display debug info and kill process
 	uint err = stack_state->error_code;
+	Process* running_process = Scheduler::get_running_process();
 
 	printf_error("Page fault at address 0x%x caused by instruction at 0x%x", addr, stack_state->eip);
-	printf("Faulty program: %s\n", Scheduler::get_running_process()->bin_path);
+	printf("Faulty program: %s\n", running_process->bin_path ? running_process->bin_path : "KERNEL");
 	printf(err & 1 ? "Page is present but page protection was violated\n" : "Page is not present\n");
 	printf("Fault was caused by a %s access\n", write_access ? "write" : "read");
 	printf("Fault occurred in %s\n", err & 4 ? "userland" : "kernel land");
@@ -66,7 +67,10 @@ void Interrupts::page_fault_handler(const stack_state_t* stack_state)
 	//printf("SGX: %s\n", err & 32768 ? "True" : "False");
 
 	FB::flush();
-	Scheduler::get_running_process()->terminate(SEGFAULT_RET_VAL);
+	if (running_process->bin_path)
+		running_process->terminate(SEGFAULT_RET_VAL);
+	else
+		irrecoverable_error("Segfault occurred in kernel");
 }
 
 void Interrupts::gpf_handler(const stack_state* stack_state)

@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <sys/wait.h>
 #include <ksyscalls.h>
-#include <fcntl.h>
+#include <sys/types.h>
 #include <ksyscalls.h>
 
 #define STB_IMAGE_IMPLEMENTATION
