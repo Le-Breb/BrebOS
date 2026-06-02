@@ -5,10 +5,18 @@
 extern "C" void __dlapi_enter(uintptr_t *);
 
 extern char **environ;
+extern "C" void _init(void);
+extern "C" void _fini(void);
 
 extern "C" void __mlibc_entry(uintptr_t *entry_stack, int (*main_fn)(int argc, char *argv[], char *env[])) {
     __dlapi_enter(entry_stack);
 
+    // mlibc (surpisingly) does not call _init, so I do it manually here
+    // maybe calling _init and _fini manualy will cause them to be called twice when linking dynmically if that makes
+    // mlibc call them...
+    _init();
     auto result = main_fn(mlibc::entry_stack.argc, mlibc::entry_stack.argv, environ);
+    _fini();
+
     exit(result);
 }

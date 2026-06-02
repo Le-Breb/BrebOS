@@ -5,9 +5,9 @@
 EXEC_NAME=$(shell basename $(CURDIR))
 SRC = $(shell find -name '*.cpp')
 OBJECTS= $(SRC:%.cpp=$(BUILD_DIR)/%.o)
-CC = i686-brebos-gcc
-CFLAGS = -fno-stack-protector -Wall -Wextra -Werror -c -fno-exceptions \
-		 -fno-rtti -MMD -MP -g
+CC = i686-brebos-g++
+CFLAGS = -fno-stack-protector -Wall -Wextra -Werror -c \
+		 -MMD -MP -g
 AS = nasm
 ASFLAGS = -f elf -F dwarf
 ifdef RELEASE
@@ -35,7 +35,8 @@ $(LIBK_PATH):
 ../build/$(EXEC_NAME): $(BUILD_DIR)/.dir_timestamp $(OBJECTS) $(LIBK_PATH) ../start_program.o
 	$(CC) -o ../build/$(EXEC_NAME) $(OBJECTS) $(LDFLAGS) $(LIBK_PATH)
 
-$(BUILD_DIR)/%.o: %.cpp
+# libc.a dependency added so that programs are automatically rebuilt when libc is rebuilt
+$(BUILD_DIR)/%.o: %.cpp $(SYSROOT_DIR)/usr/lib/libc.a
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
 $(BUILD_DIR)/%.o: %.s

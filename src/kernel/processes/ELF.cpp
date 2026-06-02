@@ -114,6 +114,20 @@ ELF* ELF::is_valid(uint start_address, ELF_type expected_type)
         is_valid_exit_err
     }
 
+    // Check that program headers types are supported
+    constexpr Elf32_Word supported_phdr_types[] = {PT_LOAD, PT_INTERP, PT_TLS, PT_GNU_EH_FRAME, PT_GNU_STACK};
+    for (int k = 0; k < elf->global_hdr.e_phnum; ++k)
+    {
+        Elf32_Phdr* h = &elf->prog_hdrs[k];
+
+        bool supported = false;
+        for (const auto supported_type : supported_phdr_types)
+            if (supported_type == h->p_type)
+                {supported = true; break;}
+        if (!supported)
+            is_valid_exit_err
+    }
+
     // Check that no read-only page overlaps with a write-allowed page
     uint elf_num_pages = elf->num_pages();
     bool* ro_pages = (bool*)calloc(elf_num_pages, sizeof(bool));

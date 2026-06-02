@@ -36,8 +36,8 @@
 #define GPF_RET_VAL 254
 #define INIT_ERR_RET_VAL 253
 
-// Do not forget to update signal validity check in register_sinal and below func when adding a new signal and signal default action
-// in init
+// Can be increased up to <= sizeof(sigset_t) * 8.
+// Do not forget to update @signal_default_action initialization accordingly if you increase that value
 #define HIGHEST_SIGNAL 9
 
 #define SIGDISP_TERM 0
@@ -117,14 +117,13 @@ public:
 	// but its for POSIX compatibility
 	int lowest_free_fd = 3;
 private:
-	MinHeap<int> pending_signals{HIGHEST_SIGNAL + 1};
-	__sighandler signal_handlers[HIGHEST_SIGNAL + 1]{};
-	int signal_action[HIGHEST_SIGNAL + 1]{}; // Action for each signal
+	__sighandler signal_action[HIGHEST_SIGNAL + 1]{}; // Action for each signal
 	static int signal_default_action[HIGHEST_SIGNAL + 1]; // Default action for each signal
 	cpu_state_t sig_saved_cpu_state{};
 	stack_state_t sig_saved_stack_state{};
-	Elf32_Addr sig_ret = ELF32_ADDR_ERR;
-	struct sigaction oldact{ {nullptr}, (unsigned long)-1, {}, {}};
+	struct sigaction* oldact[HIGHEST_SIGNAL + 1]{};
+	sigset_t pending_signals{};
+	sigset_t blocked_signals{};
 
 	void copy_page_to_other_process(const Process* other, uint page_id, uint mapping_page_id) const;
 
@@ -295,9 +294,10 @@ public:
 	[[nodiscard]]
 	int lseek(int fd, int offset, int whence) const;
 
+	[[nodiscard]]
 	int proc_to_sys_fd(int fd) const;
 
-	int register_signal(int signal);
+	int kill(int signal);
 
 	__sighandler register_signal_handler(int signal, __sighandler handler);
 
@@ -315,9 +315,12 @@ public:
 
 	int chdir(const char* path);
 
+	[[nodiscard]]
 	int isatty(int fd) const;
 
 	int sigaction(int signum, const struct sigaction* act, struct sigaction* old_act);
+
+	int sigprogmask(int how, const sigset_t* set, sigset_t* oldset);
 };
 
 #endif //INCLUDE_PROCESS_H

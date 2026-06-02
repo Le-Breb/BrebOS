@@ -265,8 +265,13 @@ int SysdepImpl<Sigaction>::operator()(int sig,
 
 int SysdepImpl<Sigprocmask>::operator()(int how,
         const sigset_t *set, sigset_t *retrieve) {
-    (void)how; (void)set; (void)retrieve;
-    STUB();
+    int ret;
+    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(45), "D"(how), "S"(set), "d"(retrieve));
+
+    if (ret < 0)
+        return -ret;
+
+    return 0;
 }
 
 int SysdepImpl<Stat>::operator()(mlibc::fsfd_target fsfdt,
@@ -778,6 +783,11 @@ int SysdepImpl<Readlink>::operator()(char const*, void*, unsigned long, int*)
 }
 
 int SysdepImpl<Waitid>::operator()(idtype_t, unsigned int, siginfo_t*, int)
+{
+    STUB();
+}
+
+int SysdepImpl<ClockGetres>::operator()(int, long*, long*)
 {
     STUB();
 }

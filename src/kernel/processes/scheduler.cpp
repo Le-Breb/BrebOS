@@ -483,33 +483,58 @@ void Scheduler::wake_up_process_parent(pid_t process_pid)
 
 void Scheduler::signal_handling(Process* p)
 {
-    if (p->pending_signals.empty())
-        return;
-
-    int signal = p->pending_signals.delete_min();
-
-    if (p->signal_action[signal] == SIGDISP_IGN)
+    for (int signal = 0; signal < HIGHEST_SIGNAL; ++signal)
     {
-        // Signal is ignored, proceed to next signal
-        signal_handling(p);
+        const int sig_grp_id = signal / ((int)sizeof(unsigned long) * 8);
+        const int sig_grp_off = 1 << (signal % (sizeof(unsigned long) * 8));
+        const bool signal_is_pending = p->pending_signals.__sig[sig_grp_id] & sig_grp_off;
+        const bool signal_is_blocked = p->blocked_signals.__sig[sig_grp_id] & sig_grp_off;
+        if (!signal_is_pending || signal_is_blocked)
+            continue;
+
+        if (p->signal_action[signal] == SIG_IGN)
+            continue;
+
+        if (p->signal_action[signal] == SIG_DFL)
+        {
+            switch (Process::signal_default_action[signal])
+            {
+                case SIGDISP_CORE: case SIGDISP_TERM:
+                    irrecoverable_error("%s: signal %d is about to sent. Its disposition is CORE or TERM. Signal"
+                                        "shouldn't have arrived up here, as CORE or TERM should have been performed on"
+                                        "program registration", __PRETTY_FUNCTION__, signal);
+                case SIGDISP_STOP: case SIGDISP_CONT:
+                    irrecoverable_error("%s: signal %d is about to be sent. Its disposition is STOP or CONT,"
+                                        "this is not supported yet", __PRETTY_FUNCTION__, signal);
+                case SIGDISP_IGN:
+                    continue;
+                default:
+                    irrecoverable_error("%s: signal %d is about to be sent. Its disposition is %d, which is"
+                                        "not among expected values", __PRETTY_FUNCTION__, signal, Process::signal_default_action[signal]);
+            }
+        }
+
+        // Save saved context
+        p->signal_context_save();
+
+        Elf32_Addr sig_ret = ELF32_ADDR_ERR;
+        if (p->oldact[signal]->sa_flags & SA_RESTORER)
+            sig_ret = (Elf32_Addr)p->oldact[signal]->sa_restorer;
+        else
+            irrecoverable_error("%s: trying to return from a signal which did not provide a return address", __func__);
+
+        // Setup new context, by sig_ret (the return address) to the stack and the signal handler address to eip
+        p->stack_state.esp &= ~0b11; // ABI stack alignment: align to 4 bytes
+        p->stack_state.esp -= sizeof(sig_ret) + sizeof(signal); // Reserve space on the stack
+        *((Elf32_Addr*)p->stack_state.esp) = sig_ret; // Push return address to the stack
+        ((uint*)p->stack_state.esp)[1] = signal; // Push signal number to the stack, as argument for the signal handler
+        p->stack_state.eip = (uint)p->signal_action[signal];
+
+        // Unmark signal as pending
+        p->pending_signals.__sig[sig_grp_id] &= ~sig_grp_off;
+
         return;
     }
-
-    if (p->signal_action[signal] != SIGDISP_HLDR)
-        irrecoverable_error("Signal %d is not handled by a signal handler", signal);
-
-    // Save saved context
-    p->signal_context_save();
-
-    if (p->sig_ret == ELF32_ADDR_ERR)
-        irrecoverable_error("%s: trying to return from a signal handler but signal return address is not set", __func__);
-
-    // Setup new context, by sig_ret (the return address) to the stack and the signal handler address to eip
-    p->stack_state.esp &= ~0b11; // ABI stack alignment: align to 4 bytes
-    p->stack_state.esp -= sizeof(p->sig_ret) + sizeof(signal); // Reserve space on the stack
-    *((Elf32_Addr*)p->stack_state.esp) = p->sig_ret; // Push return address to the stack
-    ((uint*)p->stack_state.esp)[1] = signal; // Push signal number to the stack, as argument for the signal handler
-    p->stack_state.eip = (uint)p->signal_handlers[signal];
 }
 
 void Scheduler::free_terminated_process(Process& p)

@@ -429,7 +429,7 @@ int VFS::write(int fd, void* buf, uint count)
 
 	int status = f->write(buf, count);
 	if (status == -EPIPE)
-		Scheduler::get_running_process()->register_signal(SIGPIPE);
+		Scheduler::get_running_process()->kill(SIGPIPE);
 
 	if (status > 0 && f->get_read_fd() != -1)
 		Scheduler::wake_up_read_waiting_processes(fd, f->get_read_fd(), status);

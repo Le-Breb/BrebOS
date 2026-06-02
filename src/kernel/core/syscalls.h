@@ -126,6 +126,8 @@ class Syscall
 
 	static int sigaction(Process* p);
 
+	static int sigprocmask(Process* p);
+
 public:
 	/**
 	 * Handles a syscall

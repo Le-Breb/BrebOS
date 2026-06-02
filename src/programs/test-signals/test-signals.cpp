@@ -8,7 +8,6 @@ void handler(int sig)
 
 int main() {
     signal(SIGQUIT, handler);
-    printf("%d\n", raise(SIGILL));
     printf("%d\n", raise(SIGQUIT));
     signal(SIGQUIT, SIG_DFL);
     printf("%d\n", raise(SIGQUIT));

@@ -98,6 +98,9 @@ void Process::pre_free()
         close(file_desc->fd);
     }
 
+    for (const auto& sa : oldact)
+        delete sa;
+
     if (children.size() && !exec_running())
         irrecoverable_error("Freeing a process that has children");
 
@@ -138,6 +141,9 @@ Process::Process(char* bin_path, uint num_pages, list<elf_dependence>* elf_dep_l
 
     [[maybe_unused]] const char* file_name;
     work_dir = bin_path ? VFS::get_file_parent_dentry(bin_path, file_name)->get_absolute_path() : nullptr;
+
+    for (int i = 0; i < HIGHEST_SIGNAL; i++)
+        signal_action[i] = SIG_DFL;
 }
 
 int Process::get_free_fd()
@@ -563,40 +569,37 @@ int Process::proc_to_sys_fd(int fd) const
     return -1;
 }
 
-int Process::register_signal(int signal)
+int Process::kill(int signal)
 {
-    if (signal != SIGKILL && signal && signal != SIGQUIT)
+    if (signal > HIGHEST_SIGNAL)
     {
-        printf_warn("Signal %d is not supported yet, ignoring it", signal);
+        printf_warn("%s: Signal %d is not supported yet, ignoring it", __PRETTY_FUNCTION__, signal);
         return -EINVAL;
     }
-    if (signal_action[signal] == SIGDISP_TERM || signal_action[signal] == SIGDISP_CORE)
+    const auto default_action = signal_default_action[signal];
+    const bool default_act_is_core = default_action == SIGDISP_CORE;
+    const bool default_act_is_term = default_action == SIGDISP_TERM;
+    if (signal_action[signal] == SIG_DFL && (default_act_is_core || default_act_is_term))
     {
+        printf_warn("Process %d (%s) received signal %s. Exiting.", pid, bin_path, default_act_is_core ? "CORE" : "TERM");
         terminate(128 + signal);
         TRIGGER_TIMER_INTERRUPT
         return 0;
     }
-    if (!pending_signals.contains(signal))
-        pending_signals.insert(signal);
+    pending_signals.__sig[signal / (8  * sizeof(unsigned long))] |= 1 << (signal % (8 * sizeof(unsigned long)));
 
     return 0;
 }
 
 __sighandler Process::register_signal_handler(int signal, __sighandler handler)
 {
-    if (signal != SIGQUIT) // Cannot register handler for SIGKILL, so for now the only signal that can be registered is SIGQUIT
-        return (__sighandler)-EINVAL;
-
-    auto prev = signal_handlers[signal];
+    auto prev = signal_action[signal];
     if (handler == SIG_IGN)
-        signal_action[signal] = SIGDISP_IGN;
+        signal_action[signal] = SIG_IGN;
     else if (handler == SIG_DFL)
-        signal_action[signal] = signal_default_action[signal];
+        signal_action[signal] = SIG_DFL;
     else
-    {
-        signal_handlers[signal] = handler;
-        signal_action[signal] = SIGDISP_HLDR;
-    }
+        signal_action[signal] = handler;
 
     return prev;
 }
@@ -736,6 +739,12 @@ int Process::isatty(int fd) const
 
 int Process::sigaction(int signum, const struct sigaction* act, struct sigaction* old_act)
 {
+    if (signum > HIGHEST_SIGNAL)
+    {
+        printf_warn("%s: Signal not supported (signum (%d) > HIGHEST_SIGNAL (%d))",  __PRETTY_FUNCTION__, signum, HIGHEST_SIGNAL);
+        return -EINVAL;
+    }
+
     // Ensure there are no flags
     constexpr auto supported_flags = SA_RESTORER;
     if ((act->sa_flags & ~supported_flags) != 0)
@@ -765,19 +774,62 @@ int Process::sigaction(int signum, const struct sigaction* act, struct sigaction
     if ((int)prev < 0)
         return (int)prev;
 
-    if (sig_ret != ELF32_ADDR_ERR && sig_ret != (Elf32_Addr)act->sa_restorer)
-        irrecoverable_error("%s: provided sa_restorer (0x%x) is different from a previously sa_restorer (0x%x)", __func__, (uint)act->sa_restorer, sig_ret);
-    if (act->sa_flags & SA_RESTORER)
-        sig_ret = (Elf32_Addr)act->sa_restorer;
 
-    if (oldact.sa_flags == (unsigned long)-1) // If oldact hasn't been initialized (eg first call og sigaction)
+    struct sigaction* sig_old_act = oldact[signum];
+    if (!oldact[signum]) // If no oldact for current signal, build one
     {
-        oldact.sa_handler = prev;
-        oldact.sa_restorer = (void (*)())sig_ret;
-        oldact.sa_flags = SA_RESTORER;
+        oldact[signum] = new struct sigaction();
+        sig_old_act = oldact[signum];
+        sig_old_act->sa_handler = prev;
+        sig_old_act->sa_restorer = nullptr;
+        sig_old_act->sa_flags = SA_RESTORER;
     }
-    *old_act = oldact;
-    oldact = *act;
+    *old_act = *sig_old_act;
+    *oldact[signum] = *act;
+
+    return 0;
+}
+
+int Process::sigprogmask(int how, const sigset_t* set, sigset_t* oldset)
+{
+    switch (how)
+    {
+        case SIG_SETMASK:
+        {
+            if (!set)
+                return -EFAULT;
+            if (oldset)
+                *oldset = blocked_signals;
+            blocked_signals = *set;
+            break;
+        }
+        case SIG_BLOCK:
+        {
+            if (!set)
+                return -EFAULT;
+            if (oldset)
+                *oldset = blocked_signals;
+            uint i = 0;
+            for (const auto& m :  set->__sig)
+                blocked_signals.__sig[i++] |= m;
+            break;
+        }
+        case SIG_UNBLOCK:
+        {
+            if (!set)
+                return -EFAULT;
+            if (oldset)
+                *oldset = blocked_signals;
+            uint i = 0;
+            for (const auto& m :  set->__sig)
+                blocked_signals.__sig[i++] &= ~m;
+            break;
+        }
+        default:
+        {
+            return -EINVAL;
+        }
+    }
 
     return 0;
 }

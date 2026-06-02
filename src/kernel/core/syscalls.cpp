@@ -289,14 +289,14 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
         case 44:
             p->cpu_state.eax= chdir(p);
             break;
+        case 45:
+            p->cpu_state.eax = sigprocmask(p);;
+            break;
         case 46:
             p->cpu_state.eax = isatty(p);
             break;
         case 47:
             p->cpu_state.eax = sigaction(p);
-            break;
-        case 400: // for dbg purposes
-            printf_info("%d", p->cpu_state.edi);
             break;
         default:
             printf_error("Received unknown syscall id: 0x%x", cpu_state->eax);
@@ -462,7 +462,7 @@ int Syscall::kill(const Process* p)
     if (!proc)
         return -ESRCH; // No such process
 
-    return proc->register_signal(signal);
+    return proc->kill(signal);
 }
 
 __sighandler Syscall::signal(Process* p)
@@ -554,6 +554,15 @@ int Syscall::sigaction(Process* p)
     auto* old_act = (struct sigaction*)p->cpu_state.edx;
 
     return p->sigaction(signum, act, old_act);
+}
+
+int Syscall::sigprocmask(Process* p)
+{
+    int how = p->cpu_state.edi;
+    const auto* set = (const sigset_t*)p->cpu_state.esi;
+    auto* oldset = (sigset_t*)p->cpu_state.edx;
+
+    return p->sigprogmask(how, set, oldset);
 }
 
 __attribute__((no_instrument_function)) // May not return, which would mess up profiling data
