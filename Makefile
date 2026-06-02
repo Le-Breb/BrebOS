@@ -148,7 +148,7 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(libdynlk) $(programs) bootloader
 
 	@echo "$(CYAN)Creating disk$(WHITE)"
 	@#qemu-img create -f raw disk_image.img 1M
-	@dd if=/dev/zero of=disk_image.img bs=1M count=35 # Can't go a lot lower than that, otherwise drive would be interpreted as FAT16
+	@dd if=/dev/zero of=disk_image.img bs=1M count=50 # Can't go a lot lower than 35, otherwise drive would be interpreted as FAT16
 	@#Install FAT32 on it
 	@mkfs.vfat -F 32 -v disk_image.img
 	@#cp disk_image.img2 disk_image.img
