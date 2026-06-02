@@ -47,6 +47,7 @@ determination ended up creating *BrebOS* :D!
 
 Make sure you have the following packages installed on you machine:
 - **make** | Build system
+- **ninja-build** | Build system
 - **nasm** | ASM compiler
 - **gcc** | C compiler
 - **g++** | C++ compiler
@@ -54,9 +55,9 @@ Make sure you have the following packages installed on you machine:
 - **xorriso** | ISO manipulator
 - **qemu-system-i386** | Emulator
 - **dnsmasq** | DHCP server
-- **libgmp3-dev** | GCC build dependance
-- **libmpc-dev** | GCC build dependance
-- **libmpfr-dev** | GCC build dependance
+- **libgmp3-dev** | GCC build dependence
+- **libmpc-dev** | GCC build dependence
+- **libmpfr-dev** | GCC build dependence
 
 The package names are the ones that I use on Ubuntu with `apt`. I guess most package names are similar on different package managers as those are very common packages, but it's up to you to find the correct package names to be used with your package manager. For GCC build dependances, you can find more information [here](https://wiki.osdev.org/GCC_Cross-Compiler#Installing_Dependencies)
 
@@ -64,13 +65,17 @@ The package names are the ones that I use on Ubuntu with `apt`. I guess most pac
 
 Run (inside the repo)
 ```sh
-./utils/gcc_setup.sh && ./utils/newlib_setup.sh && ./utils/brebos_gcc_setup.sh
+./utils/toolchain_setup.sh
 ```
 
-⚠️This takes a long time (~18min on my machine). You only need to run this once.⚠️ <br>
+⚠️This takes a while (~8min on my machine). You only need to run this once.⚠️ <br>
 ℹ️ This does not install anything globally on your machine, everything is downloaded and built in the repo. ℹ️<br>
 
-This installs a cross compiler which targets 32bits architecture, then it installs the libc used by userland programs, and finally it configures then rebuild the compiler so that it becomes a hosted compiler, specifically set up for BrebOs (a hosted compiler knows the target OS, what libc to use and other nice stuff).
+That script builds installs:
+- `mlibc`: a c standard library
+- `libstdc++-v3` : a c++ standard library
+- `i686-brebos-gcc`: a hosted compiler, aware of Brebos, mlibc and libstdc++ internals
+- `binutils` and `autoconf` : required for building gcc and libstdc++-v3  
 
 Now you can build the project itself:
 ```sh
@@ -84,9 +89,6 @@ RELEASE=1 make run
 ```
 
 ℹ️ This will ask for elevated privileges, which are required for setting up NAT. ℹ️
-
-
-Note: To date, running `git pull` may break stuff, because newlib is not included in the build system, thus you would update kernel code which could rely on non-updated newlib code. As for now, if u want the latest udpate, please re-clone the repo and rerun everything (i'm sorry, I'll fix that one day).
 
 ## What can I do with BrebOS ❓
 
@@ -105,7 +107,7 @@ Here is the list of the main commands (you can view the entire list by browsing 
 | `mkdir <path/dir_name>`      | Creates the directory `dir_name` at `path`.                                                    |
 | `touch <dir_path/file_name>` | Creates the file `file_name` at `dir_path`.                                                    |
 | `wget [OPTIONS] <endpoint>`                 | Downloads stuff with `HTTP GET` |
-| `cat <path>`                 | Prints the content of the file at `path`. Output is formatted according to the file extension. |
+| `cat <path>`                 | Prints the content of the file at `path`.  |
 | `cls`                | Clears the screen.                                                                              |
 | `feh <path>`                | Displays an image on the screen, before clearing it.                                                                              |
 
@@ -126,14 +128,9 @@ The kernel `$PATH` is filled with `/bin`, where all programs are. Hence, to star
 
 BrebOS can run C++ programs that *you* write, provided they respect the following conditions:
 
-- Your program cannot use `dynamic_cast`, nor exceptions. They require additional support which i did not setup.
-- Most of the standard libc is  available. If something is not available, you will have a compile error, indicating an undefined reference or undeclared function. You can also include `<ksyscalls.h>` in your programs, which you can find at `src/libc`. This is a small OS specific library which provides handy syscalls.
-- The STL is not available.
-- The signature of `main` MUST contain argc and argv. This works in all scenarios:
-```c++
-int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)){/*...*/}
-```
-- Any other C++ feature (supposedly) works!
+- Most of the standard libc is available. If something is not available, you will have a link error, indicating an undefined reference or undeclared function. You can also include `<ksyscalls.h>` in your programs, which you can find at `src/libc`. This is a small OS specific library which provides handy syscalls.
+- The STL (C++ standard library) is available.
+- Any C++ feature (normally) works, including RTTI and exceptions!
 
 To add your program, simply follow the following steps:
 - Copy your source files under `BrebOS/src/programs/your_awesome_program_name` <br>
@@ -160,7 +157,7 @@ running locally, which is automatically started when executing `make run`.
     - FAT32 support
     - VFS which abstracts hardware/file_system specific details and provide a unified interface within the kernel.
 - **Network stack 🖧**
-    - E1000 ethernet card driver (mainly taken from [here](https://wiki.osdev.org/Intel_Ethernet_i217))
+    - E1000 Ethernet card driver (mainly taken from [here](https://wiki.osdev.org/Intel_Ethernet_i217))
     - Ethernet
     - IPV4
     - UDP
@@ -184,29 +181,34 @@ running locally, which is automatically started when executing `make run`.
 - **Preemptive scheduling ✋**
 - **Syscalls 📞**
     - 'man page'-ish 🖹
-      - execve
-      - fork
+      - execve/fork
       - malloc/free/realloc
-      - open/read/write/close/lseek
-      - stat
-      - get_pid
-      - wait_pid
+      - open/read/write/close/lseek/fcntl/dup/dup2/pipe
+      - stat/fstat
+      - getcwd/chdir
+      - kill/sigaction/sigprocmask
+      - get_pid/wait_pid
       - mkdir/touch
+      - tcbset
     - custom 🎨
       - terminate_process
+      - get_screen_dimensions
       - get_key
       - shutdown
-      - runtime dynamic linker
+      - runtime dynamic linker for lazy symbol resolution
       - ls
       - clear_screen
       - wget
       - feh
 - **ELF support </>**
-    - ELF loading and execution (ELf processing, address space setup, global/local static variables handling)
-    - Dynamic loader (relocations)
-    - Dynamic libraries support
-    - Lazy binding support (addresses of functions within dynamic libraries are resolved at runtime by `dynlk`, the OS'
-      dynamic linker)
+    - ELF loading and execution (ELF parsing, address space setup)
+    - ABI conforming stack layout
+    - mlibc
+      - libc
+      - statically linked
+      - relocations
+      - _init, _fini, init_array and fini_array handling
+    - libstdc++-v3 (c++ standard library)
     - OS specific library, which programs are dynamically linked to
 - **42sh (Shell) 👨🏻‍💻**
     - command lists/compound lists
@@ -223,6 +225,7 @@ running locally, which is automatically started when executing `make run`.
         - echo
         - continue
         - break
+        - pwd
     - redirections
     - pipeline
     - command substitution
@@ -242,17 +245,16 @@ Hand made bootloader, that:
 ### Misc ✚
 
 - PS2 Keyboard driver ⌨
-- Hosted cross compiler
-- Newlib integration
+- Hosted cross-compiler
 
 ### Roadmap 🛣️
 
-Those are things I'm willing to do. To not mistake it with things *I will* do.
+Those are things I'm willing to do. Do not mistake it with things *I will* do.
 
+- **busybox port**
+- **robust TCP stack**
 - **Multithreading**
 - **Multi core**
-- **C++ RTTI and exceptions support**
-
 - **Drivers** <br>
   Add various real-life hardware drivers to be able to fully use BrebOS on real machines.
   For now, the kernel only works with the specific hardware emulated by QEMU. Especially, a USB driver would be
