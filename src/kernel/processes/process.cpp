@@ -636,19 +636,17 @@ int Process::fcntl(int fd, int op, va_list arg) const
             flags &= flags_mask;
             VFS::file_descriptors[sys_fd]->flags &= ~flags_mask;
             VFS::file_descriptors[sys_fd]->flags |= flags;
-            break;
+            return 0;
         }
         case F_SETFD:
         {
             int flags = va_arg(arg, int);
             file_descriptors[fd]->clo_exec = flags & FD_CLOEXEC;
-            break;
+            return 0;
         }
         default:
             return -EINVAL; // op not supported
     }
-
-    __builtin_unreachable();
 }
 
 int Process::dup(int oldfd)
