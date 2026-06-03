@@ -163,7 +163,7 @@ int Scheduler::execve(Process* p, const char* path, int argc, const char** argv,
 
     TRIGGER_TIMER_INTERRUPT;
 
-    __builtin_unreachable();
+    irrecoverable_error("%s: unreachable called has been reached!", __PRETTY_FUNCTION__);
 }
 
 Process* Scheduler::get_process(pid_t pid)
@@ -241,7 +241,7 @@ void Scheduler::schedule()
             __asm__ volatile("hlt"); // Halt
         }
 
-        __builtin_unreachable();
+        irrecoverable_error("%s: unreachable called has been reached!", __PRETTY_FUNCTION__);
     }
 
     if (!p) // Although theoretically impossible, this happens sometimes, I'd like to know why

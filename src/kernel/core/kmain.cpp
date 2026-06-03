@@ -30,11 +30,11 @@ extern "C" bool fpu_init_asm_();
 //Todo: Process R_386_PC32 relocations in order to rewrite libdynlk' Makefile without ld
 //Todo: Fix waitpid return value so that it is usable with macros such as WEXITSTATUS
 //Todo: Fast kernel memory pool: constantly allocated memory region with super-fast allocator for tmp operations
-//Todo: Include newlib build in Makefile
 //Todo: Syscall concurrent safety (that's a goddamn huge task)
 //Todo: Check if userland programs can manipulate kernel space addresses througout syscalls (ex: write(1, KERNEL_VIRTUAL_ADDRESS_BASE), 10)
 //Todo: Set proper wstatus values (signals, core dumps...). See 'man 2 wait'
 //Todo: run 42sh in interactive mode (so that $PWD is preserved across commands)
+//Todo: Remplacer els builtin_unreachable par des irrecoverable error pour les catch au cas où ils arrivent
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {
     // Get why this fails

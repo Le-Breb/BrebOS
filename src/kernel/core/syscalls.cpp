@@ -41,7 +41,7 @@ void Syscall::get_pid()
     TRIGGER_TIMER_INTERRUPT
 
     // We will never resume the code here
-    __builtin_unreachable();
+    irrecoverable_error("%s: unreachable called has been reached!", __PRETTY_FUNCTION__);
 }
 
 void Syscall::malloc(Process* p)
