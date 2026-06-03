@@ -251,6 +251,8 @@ Hand made bootloader, that:
 
 Those are things I'm willing to do. Do not mistake it with things *I will* do.
 
+- **(bring back)** dynamic linking support
+- **add a driver for a faster drive type**, as the majority of program lifetimes are occupied by IO operations
 - **busybox port**
 - **robust TCP stack**
 - **Multithreading**
