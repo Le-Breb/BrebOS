@@ -5,7 +5,10 @@
 /* Default arguments you want when running your
    i686-brebos-gcc/x86_64-brebos-gcc toolchain */
 #undef LIB_SPEC
-#define LIB_SPEC "-lc %{shared:-shared} %{static:-static} %{!shared: %{!static: %{rdynamic:-export-dynamic}}}"
+#define LIB_SPEC "-lc"
+
+#undef LINK_SPEC
+#define LINK_SPEC "%{shared:-shared} %{static:-static} %{!shared: %{!static: %{rdynamic:-export-dynamic}}} %{!dynamic-linker:-dynamic-linker /usr/lib/ld.so}"
 
 /* Files that are linked before user code.
    The %s tells GCC to look for these files in the library directory. */
