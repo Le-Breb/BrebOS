@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <mlibc/debug.hpp>
+#include <sys/statvfs.h>
 
 #define STUB()                                                         \
     ({                                                                 \
@@ -788,6 +789,400 @@ int SysdepImpl<Waitid>::operator()(idtype_t, unsigned int, siginfo_t*, int)
 }
 
 int SysdepImpl<ClockGetres>::operator()(int, long*, long*)
+{
+    STUB();
+}
+int SysdepImpl<Accept>::operator()(int, int*, sockaddr*, unsigned int*, int)
+{
+    STUB();
+}
+
+int SysdepImpl<BeforeCancellableSyscall>::operator()(__ucontext*)
+{
+    STUB();
+}
+
+int SysdepImpl<Bind>::operator()(int, sockaddr const*, unsigned int)
+{
+    STUB();
+}
+
+int SysdepImpl<Connect>::operator()(int, sockaddr const*, unsigned int)
+{
+    STUB();
+}
+
+int SysdepImpl<Flock>::operator()(int, int)
+{
+    STUB();
+}
+
+int SysdepImpl<Fstatvfs>::operator()(int, struct statvfs*)
+{
+    STUB();
+}
+
+int SysdepImpl<GetMaxPriority>::operator()(int, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<GetMinPriority>::operator()(int, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<GetParam>::operator()(int, sched_param*)
+{
+    STUB();
+}
+
+int SysdepImpl<GetPriority>::operator()(int, unsigned int, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<GetRlimit>::operator()(int, rlimit*)
+{
+    STUB();
+}
+
+int SysdepImpl<GetRusage>::operator()(int, rusage*)
+{
+    STUB();
+}
+
+int SysdepImpl<GetSchedparam>::operator()(void*, int*, sched_param*)
+{
+    STUB();
+}
+
+int SysdepImpl<GetScheduler>::operator()(int, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<GetSockopt>::operator()(int, int, int, void*, unsigned int*)
+{
+    STUB();
+}
+
+int SysdepImpl<IfIndextoname>::operator()(unsigned int, char*)
+{
+    STUB();
+}
+
+int SysdepImpl<IfNametoindex>::operator()(char const*, unsigned int*)
+{
+    STUB();
+}
+
+int SysdepImpl<InetConfigured>::operator()(bool*, bool*)
+{
+    STUB();
+}
+
+int SysdepImpl<Listen>::operator()(int, int)
+{
+    STUB();
+}
+
+int SysdepImpl<Mlockall>::operator()(int)
+{
+    STUB();
+}
+
+int SysdepImpl<Mlock>::operator()(void const*, unsigned long)
+{
+    STUB();
+}
+
+int SysdepImpl<MqGetAttr>::operator()(int, mq_attr*)
+{
+    STUB();
+}
+
+int SysdepImpl<MqOpen>::operator()(char const*, int, unsigned int, mq_attr*, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<MqReceive>::operator()(int, char*, unsigned long, unsigned int*)
+{
+    STUB();
+}
+
+int SysdepImpl<MqSetAttr>::operator()(int, mq_attr const*, mq_attr*)
+{
+    STUB();
+}
+
+int SysdepImpl<MqUnlink>::operator()(char const*)
+{
+    STUB();
+}
+
+int SysdepImpl<Msgctl>::operator()(int, int, msqid64_ds*)
+{
+    STUB();
+}
+
+int SysdepImpl<Msgget>::operator()(int, int, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<Msgrcv>::operator()(int, void*, unsigned long, long, int, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<MsgRecv>::operator()(int, msghdr*, int, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<MsgSend>::operator()(int, msghdr const*, int, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<Msgsnd>::operator()(int, void const*, unsigned long, int)
+{
+    STUB();
+}
+
+int SysdepImpl<Msync>::operator()(void*, unsigned long, int)
+{
+    STUB();
+}
+
+int SysdepImpl<Munlockall>::operator()()
+{
+    STUB();
+}
+
+int SysdepImpl<Munlock>::operator()(void const*, unsigned long)
+{
+    STUB();
+}
+
+int SysdepImpl<OpenDir>::operator()(char const*, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<Peername>::operator()(int, sockaddr*, unsigned int, unsigned int*)
+{
+    STUB();
+}
+
+int SysdepImpl<Poll>::operator()(pollfd*, unsigned long, int, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<PosixMadvise>::operator()(void*, unsigned long, int)
+{
+    STUB();
+}
+
+int SysdepImpl<Ppoll>::operator()(pollfd*, unsigned long, timespec const*, sigset_t const*, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<Pselect>::operator()(int, fd_set*, fd_set*, fd_set*, timespec const*, sigset_t const*, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<Ptsname>::operator()(int, char*, unsigned long)
+{
+    STUB();
+}
+
+int SysdepImpl<ReadEntries>::operator()(int, void*, unsigned long, unsigned long*)
+{
+    STUB();
+}
+
+int SysdepImpl<Readv>::operator()(int, iovec const*, int, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<Recvfrom>::operator()(int, void*, unsigned long, int, sockaddr*, unsigned int*, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<Semctl>::operator()(int, int, int, void*, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<Semget>::operator()(int, int, int, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<Sendto>::operator()(int, void const*, unsigned long, int, sockaddr const*, unsigned int, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<SetGroups>::operator()(unsigned long, unsigned int const*)
+{
+    STUB();
+}
+
+int SysdepImpl<SetParam>::operator()(int, sched_param const*)
+{
+    STUB();
+}
+
+int SysdepImpl<SetPriority>::operator()(int, unsigned int, int)
+{
+    STUB();
+}
+
+int SysdepImpl<SetRlimit>::operator()(int, rlimit const*)
+{
+    STUB();
+}
+
+int SysdepImpl<SetSchedparam>::operator()(void*, int, sched_param const*)
+{
+    STUB();
+}
+
+int SysdepImpl<SetScheduler>::operator()(int, int, sched_param const*)
+{
+    STUB();
+}
+
+int SysdepImpl<SetSockopt>::operator()(int, int, int, void const*, unsigned int)
+{
+    STUB();
+}
+
+int SysdepImpl<Shmat>::operator()(void**, int, void const*, int)
+{
+    STUB();
+}
+
+int SysdepImpl<Shmctl>::operator()(int*, int, int, shmid_ds*)
+{
+    STUB();
+}
+
+int SysdepImpl<Shmdt>::operator()(void const*)
+{
+    STUB();
+}
+
+int SysdepImpl<Shmget>::operator()(int*, int, unsigned long, int)
+{
+    STUB();
+}
+
+int SysdepImpl<Shutdown>::operator()(int, int)
+{
+    STUB();
+}
+
+int SysdepImpl<Sigaltstack>::operator()(__stack const*, __stack*)
+{
+    STUB();
+}
+
+int SysdepImpl<Sigpending>::operator()(sigset_t*)
+{
+    STUB();
+}
+
+int SysdepImpl<Sigqueue>::operator()(int, int, sigval)
+{
+    STUB();
+}
+
+int SysdepImpl<Sigsuspend>::operator()(sigset_t const*)
+{
+    STUB();
+}
+
+int SysdepImpl<Sigtimedwait>::operator()(sigset_t const*, siginfo_t*, timespec const*, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<Sockatmark>::operator()(int, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<Socket>::operator()(int, int, int, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<Socketpair>::operator()(int, int, int, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<Sockname>::operator()(int, sockaddr*, unsigned int, unsigned int*)
+{
+    STUB();
+}
+
+int SysdepImpl<Statvfs>::operator()(char const*, struct statvfs*)
+{
+    STUB();
+}
+
+int SysdepImpl<Tgkill>::operator()(int, int, int)
+{
+    STUB();
+}
+
+int SysdepImpl<ThreadGetname>::operator()(void*, char*, unsigned long)
+{
+    STUB();
+}
+
+int SysdepImpl<ThreadSetname>::operator()(void*, char const*)
+{
+    STUB();
+}
+
+int SysdepImpl<TimerGetoverrun>::operator()(void*, int*)
+{
+    STUB();
+}
+
+int SysdepImpl<Times>::operator()(tms*, long*)
+{
+    STUB();
+}
+
+int SysdepImpl<Uname>::operator()(utsname*)
+{
+    STUB();
+}
+
+int SysdepImpl<Unlockpt>::operator()(int)
+{
+    STUB();
+}
+
+int SysdepImpl<Writev>::operator()(int, iovec const*, int, int*)
+{
+    STUB();
+}
+
+void SysdepImpl<Yield>::operator()()
 {
     STUB();
 }

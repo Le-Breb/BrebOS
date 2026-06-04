@@ -73,6 +73,7 @@ endif
 
 rtld_sources += files(
 	'syscalls.cpp',
+	'signals.S',
 )
 rtld_include_dirs += include_directories('include')
 

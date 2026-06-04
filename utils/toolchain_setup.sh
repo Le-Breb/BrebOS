@@ -151,7 +151,7 @@ mlibc_build()
                 --buildtype=release \
                 --cross-file=brebos-cross.txt \
                 --prefix=/usr \
-                -Ddefault_library=static \
+                -Ddefault_library=both \
                 -Dno_headers=true \
                 build
     DESTDIR="$SYSROOT_DIR" ninja -C build install
