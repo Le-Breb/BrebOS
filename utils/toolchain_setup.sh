@@ -139,6 +139,10 @@ libstdcpp_build()
 
     make all-target-libstdc++-v3 -j "$NUM_JOBS"
     DESTDIR="$TOOLCHAIN_DIR" make install-target-libstdc++-v3
+
+    # Strip debug symbols out of libstdc++, otherwise it produces massive ELFs when linked against
+    cp "$TOOLCHAIN_DIR/usr/i686-brebos/lib/libstdc++.a" "$TOOLCHAIN_DIR/usr/i686-brebos/lib/libstdc++.a.dbg"
+    i686-brebos-strip "$TOOLCHAIN_DIR/usr/i686-brebos/lib/libstdc++.a" --strip-debug
 }
 
 mlibc_build()
