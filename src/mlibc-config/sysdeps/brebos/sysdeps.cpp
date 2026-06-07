@@ -154,7 +154,6 @@ int SysdepImpl<Execve>::operator()(const char *path,
   int argc = 0;
   for (char* const* argv2 = argv; *argv2; argv2++, argc++){};
 
-  int ret;
   do_syscall(20, path, argc, argv, envp);
 
   return ENOMEM;
