@@ -203,13 +203,10 @@ running locally, which is automatically started when executing `make run`.
 - **ELF support </>**
     - ELF loading and execution (ELF parsing, address space setup)
     - ABI conforming stack layout
-    - mlibc
-      - libc
-      - statically linked
-      - relocations
-      - _init, _fini, init_array and fini_array handling
+    - mlibc (libc)
+    - dynamically linked programs support
     - libstdc++-v3 (c++ standard library)
-    - OS specific library, which programs are dynamically linked to
+    - OS specific library (not mandatory) that provides handy syscalls wrappers
 - **42sh (Shell) 👨🏻‍💻**
     - command lists/compound lists
     - if/else
@@ -251,7 +248,6 @@ Hand made bootloader, that:
 
 Those are things I'm willing to do. Do not mistake it with things *I will* do.
 
-- **(bring back)** dynamic linking support
 - **add a driver for a faster drive type**, as the majority of program lifetimes are occupied by IO operations
 - **busybox port**
 - **robust TCP stack**
