@@ -182,7 +182,7 @@ running locally, which is automatically started when executing `make run`.
 - **Syscalls 📞**
     - 'man page'-ish 🖹
       - execve/fork
-      - malloc/free/realloc
+      - malloc/free/realloc/mmap/mprotect
       - open/read/write/close/lseek/fcntl/dup/dup2/pipe
       - stat/fstat
       - getcwd/chdir
