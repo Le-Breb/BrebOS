@@ -109,7 +109,6 @@ Here is the list of the main commands (you can view the entire list by browsing 
 | `wget [OPTIONS] <endpoint>`                 | Downloads stuff with `HTTP GET` |
 | `cat <path>`                 | Prints the content of the file at `path`.  |
 | `cls`                | Clears the screen.                                                                              |
-| `feh <path>`                | Displays an image on the screen, before clearing it.                                                                              |
 
 As 42sh follows the Linux shell syntax, you can start a program simply by typing `<program_path> [argv1] [argv2] ...`.
 The kernel `$PATH` is filled with `/bin`, where all programs are. Hence, to start `/bin/a_program`, simply write
@@ -199,7 +198,6 @@ running locally, which is automatically started when executing `make run`.
       - ls
       - clear_screen
       - wget
-      - feh
 - **ELF support </>**
     - ELF loading and execution (ELF parsing, address space setup)
     - ABI conforming stack layout
