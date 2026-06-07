@@ -2,7 +2,9 @@ venv/
 .idea/
 *.o
 *.d
-newlib-build/
 sysroot/
-toolchain/
-tools/
+toolchain
+toolchain_sources/
+*.dir_timestamp
+build/
+src/programs/*/Makefile
