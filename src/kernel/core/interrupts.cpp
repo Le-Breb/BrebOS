@@ -68,7 +68,10 @@ void Interrupts::page_fault_handler(const stack_state_t* stack_state)
 
 	FB::flush();
 	if (running_process->bin_path)
-		running_process->terminate(SEGFAULT_RET_VAL);
+	{
+		running_process->kill(SIGSEGV);
+		TRIGGER_TIMER_INTERRUPT
+	}
 	else
 		irrecoverable_error("Segfault occurred in kernel");
 }
@@ -131,6 +134,9 @@ void interrupt_handler(uint kesp, cpu_state_t cpu_state, uint interrupt, stack_s
 	{
 		case 0x01:
 			Interrupts::debug_handler(&cpu_state, &stack_state);
+			break;
+		case 0x06:
+			Interrupts::invalid_opcode(&stack_state);
 			break;
 		case 0x20:
 			Interrupts::interrupt_timer(kesp, &cpu_state, &stack_state);
@@ -228,5 +234,18 @@ void Interrupts::debug_handler([[maybe_unused]] const cpu_state_t* cpu_state, co
 	}
 
 	printf_info("Breakpoint %u reached at 0x%x", bp, stack_state->eip);
+}
+
+void Interrupts::invalid_opcode(const stack_state_t* stack_state)
+{
+	const auto running_process = Scheduler::get_running_process();
+	if (const char* bin_path = running_process->bin_path; bin_path)
+	{
+		printf_error("Invalid opcode at address 0x%x by program '%s'. Aborting", stack_state->eip, bin_path);
+		running_process->kill(SIGKILL);
+		TRIGGER_TIMER_INTERRUPT
+		irrecoverable_error("%s: unreachable code reached!", __PRETTY_FUNCTION__);
+	}
+	irrecoverable_error("Invalid opcode at address 0x%x in kernel", stack_state->eip);
 }
 

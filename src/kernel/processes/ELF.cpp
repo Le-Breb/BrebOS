@@ -1,6 +1,7 @@
 #include "ELF.h"
 #include <kstring.h>
 #include "../core/fb.h"
+#include "../file_management/VFS.h"
 
 #define is_valid_exit_err {delete elf; return nullptr;}
 
@@ -81,33 +82,6 @@ ELF* ELF::is_valid(uint start_address, ELF_type expected_type)
         }
     }
 
-    for (size_t i = 0; i < elf->num_plt_relocs; i++)
-        if (auto reloc_type = ELF32_R_TYPE(elf->plt_relocs[i].r_info); reloc_type != R_386_JMP_SLOT)
-        {
-            printf_error("Unsupported PLT relocation type: %u. Aborting", reloc_type);
-            is_valid_exit_err
-        }
-    for (size_t i = 0; i < elf->num_dyn_relocs; i++)
-        if (auto reloc_type = ELF32_R_TYPE(elf->dyn_relocs[i].r_info); reloc_type != R_386_RELATIVE && reloc_type !=
-            R_386_GLOB_DAT && reloc_type != R_386_32)
-        {
-            if (reloc_type == R_386_PC32)
-            {
-                uint symbol_id = ELF32_R_SYM(elf->dyn_relocs[i].r_info);
-                Elf32_Sym* symbol = &elf->dynsym[symbol_id];
-
-                // Weak symbols that are not yet defined are not an issue
-                if (ELF32_ST_BIND(symbol->st_info) != STB_WEAK || symbol->st_shndx != 0)
-                {
-                    printf_error("unsupported R_396_PC32 relocation");
-                    is_valid_exit_err
-                }
-                continue;
-            }
-            printf_error("Unsupported dyn relocation type: %u. Aborting", reloc_type);
-            is_valid_exit_err
-        }
-
     if (elf->global_hdr.e_phnum == 0)
     {
         printf_error("No program header");
@@ -115,7 +89,7 @@ ELF* ELF::is_valid(uint start_address, ELF_type expected_type)
     }
 
     // Check that program headers types are supported
-    constexpr Elf32_Word supported_phdr_types[] = {PT_LOAD, PT_INTERP, PT_TLS, PT_GNU_EH_FRAME, PT_GNU_STACK};
+    constexpr Elf32_Word supported_phdr_types[] = {PT_LOAD, PT_INTERP, PT_TLS, PT_GNU_EH_FRAME, PT_GNU_STACK, PT_DYNAMIC, PT_PHDR};
     for (int k = 0; k < elf->global_hdr.e_phnum; ++k)
     {
         Elf32_Phdr* h = &elf->prog_hdrs[k];
@@ -178,9 +152,9 @@ ELF* ELF::is_valid(uint start_address, ELF_type expected_type)
         is_valid_exit_err
     }
 
-    if (strcmp(elf->interpreter_name, OS_INTERPR) != 0)
+    if (!VFS::browse_to(elf->interpreter_name, true, false))
     {
-        printf_error("Unsupported interpreter: %s", elf->interpreter_name);
+        printf_error("Missing interpreter: %s", elf->interpreter_name);
         is_valid_exit_err
     }
 
@@ -188,28 +162,6 @@ ELF* ELF::is_valid(uint start_address, ELF_type expected_type)
     {
         printf_error("No GOT");
         is_valid_exit_err
-    }
-
-    // Get needed lib name and check it is not missing
-    char* lib_name = elf->lib_name;
-    if (strcmp(lib_name, OS_LIB) != 0)
-    {
-        printf_error("Missing library: %s", lib_name);
-        is_valid_exit_err
-    }
-
-    // Ensure dynamic symbols are supported
-    uint dynsym_num_entries = elf->dynsym_hdr->sh_size / elf->dynsym_hdr->sh_entsize;
-    for (uint i = 1; i < dynsym_num_entries; ++i) // First entry has to be null, we skip it
-    {
-        Elf32_Sym* dd = elf->dynsym + i;
-        //printf("%s\n", &dyn_str_table[dd->st_name]);
-        uint type = ELF32_ST_TYPE(dd->st_info);
-        if (type != STT_FUNC && type != STT_NOTYPE) // _init and _fini have type STT_NOTYPE
-        {
-            printf_error("Unsupported symbol type: %u", type);
-            is_valid_exit_err
-        }
     }
 
     return elf;
@@ -306,6 +258,19 @@ ELF::ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr,
         break;
     }
 
+    for (int k = 0; k < this->global_hdr.e_phnum; ++k)
+    {
+        Elf32_Phdr* h = &prog_hdrs[k];
+        if (h->p_type != PT_DYNAMIC)
+            continue;
+
+        Elf32_Dyn* dyns = (Elf32_Dyn*)(start_address + h->p_offset);
+        while (dyns->d_tag != DT_NULL)
+        {
+            dyns++;
+        }
+    }
+
     // Copy interpreter path
     interpreter_name = nullptr;
     for (int k = 0; k < this->global_hdr.e_phnum; ++k)
@@ -350,40 +315,6 @@ ELF::ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr,
         break;
     }
 
-    // Copy plt relocation entries
-    plt_relocs = nullptr;
-    num_plt_relocs = 0;
-    for (int k = 0; k < elf32Ehdr->e_shnum; ++k)
-    {
-        Elf32_Shdr* h = (Elf32_Shdr*)((uint)elf32Shdr + elf32Ehdr->e_shentsize * k);
-        if (h->sh_type != SHT_REL || strcmp(".rel.plt", &shstrtab[h->sh_name]) != 0)
-            continue;
-        Elf32_Rel* r = (Elf32_Rel*)(start_address + h->sh_offset);
-        uint num_entries = h->sh_size / h->sh_entsize;
-        num_plt_relocs = num_entries;
-        plt_relocs = new Elf32_Rel[num_entries];
-        for (uint i = 0; i < num_entries; i++)
-            plt_relocs[i] = *r++;
-        break;
-    }
-
-    // Copy dyn relocation entries
-    dyn_relocs = nullptr;
-    num_dyn_relocs = 0;
-    for (int k = 0; k < elf32Ehdr->e_shnum; ++k)
-    {
-        Elf32_Shdr* h = (Elf32_Shdr*)((uint)elf32Shdr + elf32Ehdr->e_shentsize * k);
-        if (h->sh_type != SHT_REL || strcmp(".rel.dyn", &shstrtab[h->sh_name]) != 0)
-            continue;
-        Elf32_Rel* r = (Elf32_Rel*)(start_address + h->sh_offset);
-        uint num_entries = h->sh_size / h->sh_entsize;
-        num_dyn_relocs = num_entries;
-        dyn_relocs = new Elf32_Rel[num_entries];
-        for (uint i = 0; i < num_entries; i++)
-            dyn_relocs[i] = *r++;
-        break;
-    }
-
     // Copy dynsym header and dynsym strtab
     dynsym_hdr = nullptr;
     dynsym_strtab = nullptr;
@@ -416,21 +347,12 @@ ELF::ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr,
 
     // In order to know whether base address should be retrieved from values, refer to Figure 2-10: Dynamic Array Tags
     // in http://www.skyfree.org/linux/references/ELF_Format.pdf
-    uint lib_name_idx = (uint)-1; // lib name string table index
-    uint base_addr = base_address();
-    char* dyn_str_table = nullptr; // string table
     if (dyn_table)
     {
         for (Elf32_Dyn* d = dyn_table; d->d_tag != DT_NULL; d++)
         {
             switch (d->d_tag)
             {
-                case DT_STRTAB:
-                    dyn_str_table = (char*)(start_address + d->d_un.d_ptr - base_addr);
-                    break;
-                case DT_NEEDED:
-                    lib_name_idx = d->d_un.d_val;
-                    break;
                 case DT_PLTGOT:
                     runtime_got_addr = d->d_un.d_val;
                     break;
@@ -443,14 +365,6 @@ ELF::ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr,
                     break;
             }
         }
-    }
-
-    if (lib_name_idx != (uint)-1)
-    {
-        lib_name = &dyn_str_table[lib_name_idx];
-        auto cpy = new char[strlen(lib_name) + 1];
-        strcpy(cpy, lib_name);
-        lib_name = cpy;
     }
 }
 
@@ -486,7 +400,6 @@ ELF::~ELF()
     delete[] dyn_relocs;
     delete dynsym_hdr;
     delete[] dynsym;
-    delete[] lib_name;
     delete[] strtab;
     delete[] symtab;
     delete symtab_hdr;

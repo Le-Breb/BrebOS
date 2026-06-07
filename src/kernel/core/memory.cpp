@@ -2,11 +2,11 @@
 
 #include "fb.h"
 #include <kstring.h>
-
 #include <stdint.h>
-#include "../file_management/VFS.h"
+#include <sys/mman.h>
 #include "../processes/scheduler.h"
 #include "../utils/comparison.h"
+#include "abi-bits/errno.h"
 
 namespace Memory
 {
@@ -31,10 +31,10 @@ namespace Memory
 
     uint* stack_top_ptr = (uint*)stack_top;
 
-    template void Memory::allocate_page_user<false>(uint);
-    template void Memory::allocate_page_user<false>(uint, uint);
-    template void Memory::allocate_page<false>(uint);
-    template void Memory::allocate_page<false>(uint, uint);
+    template void Memory::allocate_page_user<false>(uint, bool write);
+    template void Memory::allocate_page_user<false>(uint, uint, bool write);
+    template void Memory::allocate_page<false>(uint, bool write);
+    template void Memory::allocate_page<false>(uint, uint, bool write);
 
     /** Tries to allocate a contiguous block of memory
      * @param num_pages_requested Size of the block in bytes
@@ -326,7 +326,7 @@ namespace Memory
         for (size_t i = 0; i < n_pages; i++)
         {
             uint fr = get_free_frame();
-            allocate_page<false>(fr, lowest_free_pte);
+            allocate_page<false>(fr, lowest_free_pte, true);
             while (PTE(page_tables, lowest_free_pte))
                 lowest_free_pte++;
         }
@@ -377,7 +377,7 @@ namespace Memory
             irrecoverable_error("Are u kidding me ?");
 
         // Allocate a page to get access to the multiboot struct size
-        Memory::allocate_page<false>(base, page_id);
+        Memory::allocate_page<false>(base, page_id, true);
         uint page_addr = page_id << 12;
         uint tmp_v_addr = page_addr + (uaddr & (PAGE_SIZE - 1));
         auto total_size= ((multiboot_info_t*)tmp_v_addr)->total_size; // Get size
@@ -392,9 +392,26 @@ namespace Memory
         return v_minfo;
     }
 
-    uint get_contiguous_pages(uint n, const Process* process)
+    uint get_contiguous_pages(uint n, const Process* process, const alloc_params* alloc_params)
     {
-        uint b = process->lowest_free_pe;
+        if (alloc_params && alloc_params->mandatory_hint)
+        {
+            if ((Elf32_Addr)alloc_params->hint & (PAGE_SIZE - 1))
+                irrecoverable_error("%s: alloc_params->hint is not page aligned (0x%x)", __func__, (Elf32_Addr)alloc_params->hint);
+            uint b = ADDR_PAGE((Elf32_Addr)alloc_params->hint);
+            uint pte = b;
+            if (pte + n > PDT_ENTRIES * PT_ENTRIES)
+                return (uint)-1;
+
+            uint target = pte + n;
+            for (; !(PTE_USED(process->page_tables, pte)) && pte != target; pte++) {}
+
+            return pte == target ? b : (uint)-1;
+        }
+
+        Elf32_Addr hint = alloc_params ? ADDR_PAGE((Elf32_Addr)alloc_params->hint) : 0;
+        uint b = max(process->lowest_free_pe, hint);
+
         while (true)
         {
             // Maximum possibly free memory is too small to fulfill request
@@ -426,33 +443,92 @@ namespace Memory
         return (frame_to_page[frame_id] << 12) + (phys_addr & (PAGE_SIZE - 1));
     }
 
+    int mprotect(void* addr, size_t len, int prot, const Process* process)
+    {
+        const auto uaddr = (Elf32_Addr)addr;
+        if (uaddr & (PAGE_SIZE - 1))
+            return -EINVAL;
+
+        constexpr int supported_flags = PROT_READ | PROT_WRITE | PROT_EXEC;
+        if (prot & ~supported_flags)
+        {
+            printf_warn("mprotect called with the following unsupported flags: 0x%x. Failing.", prot & ~supported_flags);
+            return -EINVAL;
+        }
+
+        // Check address range is valid within the process address space
+        const auto num_pages = ADDR_PAGE(len + PAGE_SIZE - 1);
+        bool range_is_valid = true;
+        for (uint id = 0; id < num_pages; id++)
+        {
+            uint page_id = ADDR_PAGE(uaddr + id);
+            uint pte = PTE(process->page_tables, page_id);
+            if (!(pte & PAGE_PRESENT || pte & PAGE_LAZY_ZERO))
+            {
+                if (pte & PAGE_COW || pte & PAGE_SHRO)
+                    irrecoverable_error("mprotect: address range covers a COW or SHRO page, this is not supported yet");
+                range_is_valid = false;
+                break;
+            }
+        }
+        if (!range_is_valid)
+            return -ENOMEM; // Strange error code imo, but that is what the man page says
+
+        // For now the only flag that can be affected by mprotect is PAGE_WRITE
+        const uint new_flags = prot & PROT_WRITE ? PAGE_WRITE : 0;
+
+        // Apply new flags
+        for (uint id = 0; id < num_pages; id++)
+        {
+            constexpr uint flags_mask = ~PAGE_WRITE;
+
+            uint page_id = ADDR_PAGE(uaddr + id);
+            uint pte = PTE(process->page_tables, page_id);
+            pte &= flags_mask;
+            pte |= new_flags;
+            process->update_pte(page_id, pte, true);
+        }
+
+        return 0;
+    }
+
     template<bool lazy_zero>
-    void* sbrk(uint num_pages_requested, Process* process)
+    void* sbrk(uint num_pages_requested, Process* process, const alloc_params* alloc_params = nullptr)
     {
         // Memory full
         if (lowest_free_frame == PT_ENTRIES * PDT_ENTRIES)
             return nullptr;
 
-        uint b = get_contiguous_pages(num_pages_requested, process);
+        uint b = get_contiguous_pages(num_pages_requested, process, alloc_params);
         if (b == (uint)-1)
             return nullptr;
         uint e = b + num_pages_requested; /* block end page index + 1*/
 
         // Allocate pages
+        if (constexpr int supported_flags = PAGE_USER | PAGE_WRITE; alloc_params && alloc_params->flags & ~supported_flags)
+            irrecoverable_error("sbrk: Unsupported allocation flags: 0x%x", alloc_params->flags & ~supported_flags);
+        const bool write = alloc_params ? alloc_params->flags & PAGE_WRITE : true;
+
         if (process->pdt == pdt) // Kernel process
         {
+            if (alloc_params && alloc_params->flags & PAGE_USER)
+                irrecoverable_error("Allocating pages for kernel with PAGE_USER permissions. This is not"
+                                    "an 'irrecoverable error', but this happening is really weird so it's likely"
+                                    "that something's wrong");
             for (uint i = b; i < e; ++i)
-                allocate_page<lazy_zero>(i);
+                allocate_page<lazy_zero>(i, write);
         }
         else
         {
+            if (alloc_params && !(alloc_params->flags & PAGE_USER))
+                irrecoverable_error("sbrk: allocating pages for user process without PAGE_USER flag");
             if constexpr (!lazy_zero)
             {
                 // Allocate both in process and kernel page tables
                 for (uint i = b; i < e; ++i)
                 {
                     auto sys_pe = get_free_pe();
-                    allocate_page_user<lazy_zero>(sys_pe);
+                    allocate_page_user<lazy_zero>(sys_pe, write);
                     process->update_pte(i, PTE(page_tables, sys_pe), true);
                 }
             }
@@ -475,7 +551,7 @@ namespace Memory
             n = N_ALLOC;
 
         uint requested_byte_size = n * sizeof(memory_header);
-        auto num_pages_requested = (requested_byte_size + PAGE_SIZE - 1) >> 12;;
+        auto num_pages_requested = (requested_byte_size + PAGE_SIZE - 1) >> 12;
         auto* h = (memory_header*)sbrk<lazy_zero>(num_pages_requested, process);
 
         if ((int*)h == nullptr)
@@ -568,10 +644,11 @@ namespace Memory
     }
 
     template<bool lazy_zero>
-    void allocate_page(uint frame_id, uint page_id)
+    void allocate_page(uint frame_id, uint page_id, bool write)
     {
         // Write PTE
-        PTE(page_tables, page_id) = FRAME_ID_ADDR(frame_id) | (lazy_zero ? PAGE_LAZY_ZERO : PAGE_PRESENT) | PAGE_WRITE;
+        const int flags = (lazy_zero ? PAGE_LAZY_ZERO : PAGE_PRESENT) | (write ? PAGE_WRITE : 0);
+        PTE(page_tables, page_id) = FRAME_ID_ADDR(frame_id) | flags;
         __asm__ volatile("invlpg (%0)" : : "r" (frame_id << 12));
 
         if constexpr (!lazy_zero)
@@ -579,12 +656,12 @@ namespace Memory
     }
 
     template<bool lazy_zero>
-    void allocate_page(uint page_id)
+    void allocate_page(uint page_id, bool write)
     {
         uint frame = 0;
         if constexpr (!lazy_zero)
             frame = get_free_frame();
-        allocate_page<lazy_zero>(frame, page_id);
+        allocate_page<lazy_zero>(frame, page_id, write);
     }
 
     void free_page(uint address, const Process* process)
@@ -638,20 +715,20 @@ namespace Memory
     }
 
     template<bool lazy_zero>
-    void allocate_page_user(uint frame_id, uint page_id)
+    void allocate_page_user(uint frame_id, uint page_id, bool write)
     {
-        allocate_page<lazy_zero>(frame_id, page_id);
+        allocate_page<lazy_zero>(frame_id, page_id, write);
         PTE(page_tables, page_id) |= PAGE_USER;
         // Todo: invalidate cache correctly
     }
 
     template<bool lazy_zero>
-    void allocate_page_user(uint page_id)
+    void allocate_page_user(uint page_id, bool write)
     {
         uint frame = 0;
         if constexpr (!lazy_zero)
             frame = get_free_frame();
-        allocate_page_user<lazy_zero>(frame, page_id);
+        allocate_page_user<lazy_zero>(frame, page_id, write);
     }
 
     void* malloca(uint size)
@@ -698,15 +775,54 @@ namespace Memory
         return stack_top_ptr;
     }
 
-    void* mmap(int prot, const char* path, uint offset, size_t length)
+    constexpr int mmap_prot_to_page_flags(int prot, bool user)
     {
-        if (prot)
-        {
-            printf_error("Prot not supported yet");
-            return nullptr;
-        }
+        int page_flags = user ? PAGE_USER : 0;
+        if (prot & PROT_WRITE)
+            page_flags |= PAGE_WRITE;
+        return page_flags;
+    }
 
-        return VFS::load_file(path, offset, length);
+    void* mmap(void* hint, size_t size, int prot, int flags, [[maybe_unused]] int fd, off_t offset, int& err, Process* process)
+    {
+#define mmap_ret_err(error) {err = error; return nullptr;}
+#define mmap_ret_err_with_warnv(error, msg, ...) {printf_warn(msg, __VA_ARGS__); err = error; return nullptr;}
+#define mmap_ret_err_with_warn(error, msg) {printf_warn(msg); err = error; return nullptr;}
+
+        constexpr int supported_flags = MAP_ANON | MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED;
+        if (flags & ~supported_flags)
+            mmap_ret_err_with_warnv(EINVAL, "mmap called with the following unsupported flags: 0x%x", flags & ~supported_flags)
+
+        if (!((flags & MAP_PRIVATE) | (flags & MAP_SHARED)))
+            mmap_ret_err(EINVAL)  // According to man page
+        if ((Elf32_Addr)hint & (PAGE_SIZE - 1) || size & (PAGE_SIZE - 1) || offset & (PAGE_SIZE - 1))
+            mmap_ret_err(EINVAL); // According to man page
+
+        // When memory mapped files will be implemented, don't forget to handle EACCES error or mprotect (cf man page)
+
+        // At that point we know that flags contain MAP_PRIVATE, so this case only is handled here for now
+        // Beware that changing code above may require adding more conditional logic below
+
+        // ReSharper disable once CppIdenticalOperandsInBinaryExpression
+        if (!((flags & MAP_ANONYMOUS) | (flags & MAP_ANON)))
+            mmap_ret_err_with_warn(EINVAL, "mmap called with MAP PRIVATE without MAP_ANONYMOUS or MAP_ANON. This is not"
+                        "supported yet")
+
+        if (prot == 0)
+            mmap_ret_err_with_warn(EINVAL, "mmap called with prot == 0. I don't know how to implement that, returning failure")
+
+        // At that point we know we have ANONYMOUS and MAP_PRIVATE
+        const int page_flags = mmap_prot_to_page_flags(prot, true);
+
+        alloc_params alloc_params{page_flags, hint, (bool)(flags & MAP_FIXED)};
+        void* window = sbrk<false>(ADDR_PAGE(size + PAGE_SIZE - 1), process, &alloc_params);
+        if (flags & MAP_FIXED && window != hint)
+            irrecoverable_error("%s: MP_FIXED set, but returned window does not match hit", __func__);
+        allocation allocation = {(uintptr_t)window, (uintptr_t)window + size, prot, flags | (process->page_tables == page_tables ? 0 : PAGE_USER)};
+        process->register_allocation(allocation);
+        if (!window)
+            mmap_ret_err(ENOMEM);
+        return window;
     }
 
     bool identity_map(uint addr, uint size)
@@ -723,7 +839,7 @@ namespace Memory
         page_id = ADDR_PAGE(addr);
         for (uint i = 0; i < num_pages; ++i)
         {
-            allocate_page<false>(page_id, page_id);
+            allocate_page<false>(page_id, page_id, true);
             page_id++;
         }
 
@@ -766,7 +882,7 @@ namespace Memory
             return nullptr;
 
         for (uint i = 0; i < num_pages; ++i)
-            allocate_page<false>(frame_beg + i, page_beg + i);
+            allocate_page<false>(frame_beg + i, page_beg + i, true);
 
         return (void*)(page_beg << 12);
     }
@@ -780,7 +896,7 @@ namespace Memory
 
         uint sys_pe = get_free_pe_user(); // Get sys PTE id
         uint frame = get_free_frame(); // Get frame id
-        Memory::allocate_page_user<false>(frame, sys_pe); // Allocate page in kernel address space
+        Memory::allocate_page_user<false>(frame, sys_pe, true); // Allocate page in kernel address space
         auto pte_flags = ((PTE(pt, page_id) & 0x7FF) & ~PAGE_COW) | PAGE_WRITE; // Flags to use for new page
         uint mapping_pe = get_contiguous_pages(1, current_process); // Get a free pe
 
@@ -910,7 +1026,7 @@ namespace Memory
             }
 
             for (uint i = 0; i < n_pages; i++)
-                allocate_page<false>(frame_base + i, b + i);
+                allocate_page<false>(frame_base + i, b + i, true);
 
             return (void*)((b << 12) + (physical_address & (PAGE_SIZE - 1)));
         }

@@ -5,6 +5,9 @@
 #include <kstddef.h>
 #include <stddef.h>
 
+#include "kstring.h"
+#include "bits/off_t.h"
+
 #define PAGE_SIZE		4096
 #define PAGE_PRESENT	0x1
 #define PAGE_WRITE		0x2
@@ -75,10 +78,25 @@ namespace Memory
 		Align x; /* force alignment of blocks */
 	} memory_header;
 
+	struct allocation
+	{
+		uintptr_t start, end;
+		int prot, flags;
+
+		bool operator==(const allocation& other) const {return !memcmp(this, &other, sizeof(*this));}
+	};
+
 	typedef struct
 	{
 		uint start_addr, size;
 	} GRUB_module;
+
+	struct alloc_params
+	{
+		int flags;
+		void* hint;
+		bool mandatory_hint;
+	};
 
 	extern "C" void boot_page_directory();
 
@@ -104,8 +122,6 @@ namespace Memory
 	void init(const multiboot_info_t* minfo);
 
 	multiboot_info_t* register_multiboot_info(const multiboot_info_t* minfo);
-
-	void* mmap(size_t length, [[maybe_unused]] int prot, char* path, [[maybe_unused]] uint offset);
 
 	/**
 	 * Allocate page-aligned memory
@@ -138,23 +154,25 @@ namespace Memory
 	 *
 	 * @param frame_id Frame id
 	 * @param page_id Page id
+	 * @param write whether page should be writable
 	 */
 	template<bool lazy_zero>
-	void allocate_page(uint frame_id, uint page_id);
+	void allocate_page(uint frame_id, uint page_id, bool write);
 
 	template<bool lazy_zero>
-	void allocate_page(uint page_id);
+	void allocate_page(uint page_id, bool write);
 
 	/** Allocate a page with user permissions
 	 *
 	 * @param frame_id Frame id
 	 * @param page_id Page id
+	 * @param write whether page should be writable
 	 */
 	template<bool lazy_zero>
-	void allocate_page_user(uint frame_id, uint page_id);
+	void allocate_page_user(uint frame_id, uint page_id, bool write);
 
 	template<bool lazy_zero>
-	void allocate_page_user(uint page_id);
+	void allocate_page_user(uint page_id, bool write);
 
 	/**
 	 * Free a page
@@ -176,7 +194,7 @@ namespace Memory
 	/** Get pointer to top of kernel stack */
 	uint* get_stack_top_ptr();
 
-	void* mmap(int prot, const char* path, uint offset = 0, size_t length = 0);
+	void* mmap(void* hint, size_t size, int prot, int flags, int fd, off_t offset, int& err, Process* process);
 
 	/** Attempts to identity map a memory region. Returns success status **/
 	bool identity_map(uint addr, uint size);
@@ -204,9 +222,10 @@ namespace Memory
 	 *
 	 * @param n number of pages requested
 	 * @param process process owning the relevant address space
+	 * @param alloc_params optional allocation parameters
 	 * @return the first page entry id of a contiguous block of n pages, or -1 if no such block exists
 	 */
-	uint get_contiguous_pages(uint n, const Process* process);
+	uint get_contiguous_pages(uint n, const Process* process, const alloc_params* alloc_params = nullptr);
 
 	/**
 	 * Translates a physical address to a virtual address
@@ -214,6 +233,8 @@ namespace Memory
 	 * @return the corresponding virtual address if the provided physical address is mapped, (uint)-1 otherwise
 	 */
 	uint phys_to_virt_addr(uint phys_addr);
+
+	int mprotect(void* addr, size_t len, int prot, const Process* process);
 }
 
 class Process;

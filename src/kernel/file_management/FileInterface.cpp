@@ -56,7 +56,7 @@ int File::lseek(int offset, int whence)
     }
 
     // Apply the new offset
-    offset = new_offset;
+    this->offset = new_offset;
 
     return new_offset;
 }

@@ -7,8 +7,8 @@ SRC = $(shell find -name '*.cpp')
 OBJECTS= $(SRC:%.cpp=$(BUILD_DIR)/%.o)
 CC = i686-brebos-g++
 CFLAGS = -fno-stack-protector -Wall -Wextra -Werror -c \
-		 -MMD -MP -g -static
-LDFLAGS = -static
+		 -MMD -MP -g
+LDFLAGS =
 AS = nasm
 ASFLAGS = -f elf -F dwarf
 ifdef RELEASE

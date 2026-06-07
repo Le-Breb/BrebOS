@@ -71,16 +71,19 @@ if not headers_only
 	)
 endif
 
+rtld_dso_sources += files (
+  'sysdeps.cpp',
+  'do_syscall.cpp'
+)
 rtld_sources += files(
-	'syscalls.cpp',
-	'signals.S',
 )
 rtld_include_dirs += include_directories('include')
 
 libc_sources += files(
 	'signals.S',
 	'entry.cpp',
-	'syscalls.cpp',
+	'sysdeps.cpp',
+	'do_syscall.cpp'
 )
 libc_include_dirs += include_directories('include')
 

@@ -68,7 +68,7 @@ public:
 
 	static char* get_absolute_path(const char* path);
 
-	static SharedPointer<Dentry> get_file_parent_dentry(const char* pathname, const char*& file_name);
+	static SharedPointer<Dentry> get_file_parent_dentry(const char* pathname, const char*& file_name, bool print_errors = true);
 
 	/**
 	 * Writes a buffer to a file. If the file already exists, it is resized to length. If it doesn't exist, it is created.
@@ -97,9 +97,10 @@ public:
 	 * Browses file system to the folder located at path
 	 * @param path path to browse to
 	 * @param use_path_if_no_starting_slash whether to look for program in path entries if path does not start with '/'
+	 * @param print_errors whether the kernel should print errors when path is not found
 	 * @return Dentry of folder at path, nullptr if something went wront
 	 */
-	static SharedPointer<Dentry> browse_to(const char* path, bool use_path_if_no_starting_slash = true);
+	static SharedPointer<Dentry> browse_to(const char* path, bool use_path_if_no_starting_slash = true, bool print_errors = true);
 
 	static void* load_file(const char* path, uint offset = 0, uint length = 0);
 

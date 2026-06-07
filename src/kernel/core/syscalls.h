@@ -8,13 +8,6 @@
 class Syscall
 {
 	/**
-	 * Starts a GRUB module as a child of current process
-	 * @param p CPU state
-	 * @param stack_state Stack state
-	 */
-	static void start_process(Process* p);
-
-	/**
 	 * Returns current process' PID  */
 	static void get_pid();
 
@@ -128,6 +121,11 @@ class Syscall
 
 	static int sigprocmask(Process* p);
 
+	static int mmap(Process* p);
+
+	static int mprotect(Process* p);
+
+	static int execve(Process* p, bool use_path_if_no_heading_slash);
 public:
 	/**
 	 * Handles a syscall

@@ -29,6 +29,8 @@ public:
 
 		E& operator*() const { return n->value; }
 
+		E* operator->() const {return &n->value;}
+
 		Iterator& operator++() { n = n->next; return *this; }
 
 		bool operator!=(const Iterator& other) const {

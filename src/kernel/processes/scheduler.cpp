@@ -153,10 +153,10 @@ void Scheduler::resume_process(Process* p)
     resume_user_process(p);
 }
 
-int Scheduler::execve(Process* p, const char* path, int argc, const char** argv, bool use_path_if_no_beginning_slash)
+int Scheduler::execve(Process* p, const char* path, int argc, const char** argv, const char** envp, bool use_path_if_no_beginning_slash)
 {
     Process* proc;
-    if (!((proc = load_process(path, p->pid, p->ppid, argc, argv, use_path_if_no_beginning_slash))))
+    if (!((proc = load_process(path, p->pid, p->ppid, argc, argv, envp, use_path_if_no_beginning_slash))))
         return -1;
     p->execve_transfer(proc);
     p->set_flag(P_EXEC);
@@ -276,7 +276,7 @@ void Scheduler::start_module([[maybe_unused]] uint module, [[maybe_unused]] pid_
     set_process_ready(proc);*/
 }
 
-int Scheduler::exec(const char* path, pid_t ppid, int argc, const char** argv)
+int Scheduler::exec(const char* path, pid_t ppid, int argc, const char** argv, const char** envp)
 {
     pid_t pid = get_free_pid();
     if (pid == MAX_PROCESSES)
@@ -286,7 +286,7 @@ int Scheduler::exec(const char* path, pid_t ppid, int argc, const char** argv)
     }
 
     Process* proc;
-    if (!((proc = load_process(path, pid, ppid, argc, argv, true))))
+    if (!((proc = load_process(path, pid, ppid, argc, argv, envp, true))))
         return -1;
 
     processes[proc->pid] = proc;
@@ -326,7 +326,7 @@ void Scheduler::init()
     Process::init();
 
     uint stack_switch_pe = Memory::get_free_pe();
-    Memory::allocate_page<false>(stack_switch_pe);
+    Memory::allocate_page<false>(stack_switch_pe, true);
     stack_switch_stack_top = (void*)((stack_switch_pe << 12) + PAGE_SIZE - sizeof(uint)); // Stack top is at the end of the page
 
     // Those have to be pointers because they cannot be instantiated at program start since dynamic memory allocation
@@ -405,7 +405,7 @@ void Scheduler::check_for_processes_to_wake_up()
     }
 }
 
-Process* Scheduler::load_process(const char* path, pid_t pid, pid_t ppid, int argc, const char** argv, bool use_path_if_no_beginning_slash)
+Process* Scheduler::load_process(const char* path, pid_t pid, pid_t ppid, int argc, const char** argv, const char** envp, bool use_path_if_no_beginning_slash)
 {
     if (ready_queue->full())
     {
@@ -417,7 +417,7 @@ Process* Scheduler::load_process(const char* path, pid_t pid, pid_t ppid, int ar
     if (!file)
         return nullptr;
 
-    return ELFLoader::setup_elf_process(pid, ppid, argc, argv, file, 1);
+    return ELFLoader::setup_elf_process(pid, ppid, argc, argv, envp, file, 1);
 }
 
 void Scheduler::create_kernel_init_process(void* process_host_mem, const uint lowest_free_pe, Process** kernel_process)
@@ -483,12 +483,18 @@ void Scheduler::wake_up_process_parent(pid_t process_pid)
 
 void Scheduler::signal_handling(Process* p)
 {
-    for (int signal = 0; signal < HIGHEST_SIGNAL; ++signal)
+    const auto context = p->signals_contexts.peek();
+    if (!context)
+        irrecoverable_error("%s: process blocked signals stack is empty", __PRETTY_FUNCTION__);
+    const auto& blocked_signals = context->blocked_mask;
+
+    for (int signal = 0; signal <= HIGHEST_SIGNAL; ++signal)
     {
-        const int sig_grp_id = signal / ((int)sizeof(unsigned long) * 8);
-        const int sig_grp_off = 1 << (signal % (sizeof(unsigned long) * 8));
+        const auto signo = signal - 1;
+        const int sig_grp_id = signo / ((int)sizeof(unsigned long) * 8);
+        const int sig_grp_off = 1 << (signo % (sizeof(unsigned long) * 8));
         const bool signal_is_pending = p->pending_signals.__sig[sig_grp_id] & sig_grp_off;
-        const bool signal_is_blocked = p->blocked_signals.__sig[sig_grp_id] & sig_grp_off;
+        const bool signal_is_blocked = blocked_signals.__sig[sig_grp_id] & sig_grp_off;
         if (!signal_is_pending || signal_is_blocked)
             continue;
 
@@ -515,7 +521,7 @@ void Scheduler::signal_handling(Process* p)
         }
 
         // Save saved context
-        p->signal_context_save();
+        p->signal_context_save(signal);
 
         Elf32_Addr sig_ret = ELF32_ADDR_ERR;
         if (p->oldact[signal]->sa_flags & SA_RESTORER)
@@ -654,7 +660,7 @@ void Scheduler::start_kernel_process(void* eip)
     // Allocate stack page
     auto stack_top_page_id = Memory::get_free_pe();
     uint k_stack_top = (stack_top_page_id << 12) + PAGE_SIZE - 4;
-    Memory::allocate_page<false>(stack_top_page_id);
+    Memory::allocate_page<false>(stack_top_page_id, true);
     stack_state_t stack_state{};
 
     // Create process

@@ -215,9 +215,7 @@ void Socket::close_all_connections()
         connection_open = false;
         for (const auto& socket : sockets)
         {
-            connection_open = connection_open || (socket->state != TCP::State::CLOSED);
-            if (socket->state != TCP::State::ESTABLISHED)
-                continue;
+            connection_open = connection_open || (socket->state >= TCP::State::ESTABLISHED && socket->state != TCP::State::CLOSED);
             TCP::send_fin_ack(socket);
         }
     }

@@ -350,7 +350,7 @@ typedef struct
 #define PT_SHLIB    5        /* Reserved */
 #define PT_PHDR        6        /* Entry for header table itself */
 #define PT_TLS        7        /* Thread-local storage segment */
-#define    PT_NUM        8        /* Number of defined types */
+#define PT_NUM        8        /* Number of defined types */
 #define PT_LOOS        0x60000000    /* Start of OS-specific */
 #define PT_GNU_EH_FRAME    0x6474e550    /* GCC .eh_frame_hdr segment */
 #define PT_GNU_STACK    0x6474e551    /* Indicates stack executability */

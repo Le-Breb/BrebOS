@@ -297,7 +297,7 @@ void VFS::free_unused_dentry_cache_entries()
 	}
 }
 
-SharedPointer<Dentry> VFS::get_file_parent_dentry(const char* pathname, const char*& file_name)
+SharedPointer<Dentry> VFS::get_file_parent_dentry(const char* pathname, const char*& file_name, bool print_errors)
 {
 	// Basic path checks
 	if (!pathname || pathname[0] != '/' || !strcmp(pathname, "/"))
@@ -319,10 +319,11 @@ SharedPointer<Dentry> VFS::get_file_parent_dentry(const char* pathname, const ch
 		return nullptr;
 	}
 
-	SharedPointer<Dentry> dentry = browse_to(p);
+	SharedPointer<Dentry> dentry = browse_to(p, true, print_errors);
 	if (!dentry || dentry->inode->type != Inode::Dir)
 	{
-		printf_error("%s no such/not a directory", pathname);
+		if (print_errors)
+			printf_error("%s no such/not a directory", pathname);
 		return nullptr;
 	}
 	delete[] p;
@@ -338,7 +339,7 @@ SharedPointer<Dentry> VFS::get_file_dentry(const char* pathname, bool print_erro
 
 	const char* file_name;
 	const SharedPointer<Dentry> parent_dentry = is_path_abs ?
-		get_file_parent_dentry(pathname, file_name) : browse_to(work_dir, false);
+		get_file_parent_dentry(pathname, file_name, print_errors) : browse_to(work_dir, false, print_errors);
 	if (!is_path_abs)
 		file_name = pathname;
 	if (!parent_dentry)
@@ -347,7 +348,7 @@ SharedPointer<Dentry> VFS::get_file_dentry(const char* pathname, bool print_erro
 	return browse_to(file_name, parent_dentry, print_errors);
 }
 
-SharedPointer<Dentry> VFS::browse_to(const char* path, bool use_path_if_no_starting_slash)
+SharedPointer<Dentry> VFS::browse_to(const char* path, bool use_path_if_no_starting_slash, bool print_errors)
 {
 	if (path[0] == '\0')
 	{
@@ -355,14 +356,14 @@ SharedPointer<Dentry> VFS::browse_to(const char* path, bool use_path_if_no_start
 		return nullptr;
 	}
 	if (path[0] == '/')
-		return browse_to(path, *dentries[0]);
+		return browse_to(path, *dentries[0], print_errors);
 
 	if (!use_path_if_no_starting_slash)
 		return nullptr;
 
 	for (uint i = 0; i < num_path; ++i)
 	{
-		SharedPointer<Dentry> d = browse_to(path, *VFS::path[i]);
+		SharedPointer<Dentry> d = browse_to(path, *VFS::path[i], print_errors);
 		if (d)
 			return d;
 	}

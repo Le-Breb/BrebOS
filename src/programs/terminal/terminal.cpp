@@ -4,6 +4,8 @@
 #include <sys/wait.h>
 #include <ksyscalls.h>
 
+extern char** environ;
+
 #define MAX_CMD_LEN 100
 
 #define DIGIT(c) (c >= '0' && c <= '9')
@@ -42,7 +44,7 @@ void exec(const char** argv)
 	}
 	if (child_pid == 0)
 	{
-		if (execve(argv[0], (char**)argv, 0) == -1)
+		if (execve(argv[0], (char**)argv, environ) == -1)
 		{
 			fprintf(stderr, "Execve failed\n");
 			_exit(1);

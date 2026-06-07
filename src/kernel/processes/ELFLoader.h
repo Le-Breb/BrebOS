@@ -60,24 +60,11 @@ typedef struct auxv_t
 
 } auxv_t;
 
-struct init_fini_info
-{
-    list<Elf32_Addr> init_array;
-    list<Elf32_Addr> fini_array;
-
-    init_fini_info()
-    {
-        init_array = list<Elf32_Addr>();
-        fini_array = list<Elf32_Addr>();
-    }
-};
-
 class ELFLoader
 {
     friend class Process;
 private:
     Process* current_process;
-    init_fini_info init_fini;
     list<elf_dependence>* elf_dep_list;
     uint num_pages = 0;
     Memory::page_table_t* page_tables;
@@ -126,14 +113,6 @@ private:
                                          uint& copied_bytes) const;
 
     /**
-     * Collects _init, _fini addresses, as well as init_array and fini_array entries
-     *
-     * @param elf ELF to process
-     * @param runtime_load_address load address of the ELF at runtime
-     */
-    void register_elf_init_and_fini(const ELF* elf, uint runtime_load_address);
-
-    /**
      * Load ELF file code and data into a process' address space and maps it
      * @param file ELF to load
      * @param expected_type
@@ -144,13 +123,6 @@ private:
     ELF* load_elf(void* buf, ELF_type expected_type);
 
     ELF* load_libdynlk();
-
-    /**
-     * Process relocations of an ELF.
-     * @param elf elf with relocations to process
-     * @param elf_runtime_load_address where the elf is loaded at runtime
-     */
-    void apply_relocations(ELF* elf, uint elf_runtime_load_address) const;
 
     /**
      * Maps the segments of an ELF into the process' virtual address space
@@ -165,24 +137,26 @@ private:
      *
      * @return program's process
      */
-    Process* build_process(int argc, const char** argv, pid_t pid, pid_t ppid, const SharedPointer<Dentry>& file, uint);
+    Process* build_process(int argc, const char** argv, pid_t pid, pid_t ppid, const char** envp, const SharedPointer<Dentry>& file, uint);
 
     /**
      * Writes argc, argv array pointer, argv pointer array and argv contents to stack
      * @param stack_top_v_addr Virtual address of process stack top in kernel address space
      * @param argc number of arguments
      * @param argv argument list
+     * @param envp environment pointers
      * @return ESP in process address space ready to be used
      */
-    size_t write_args_to_stack(size_t stack_top_v_addr, int argc, const char** argv) const;
+    size_t write_args_to_stack(size_t stack_top_v_addr, int argc, const char** argv, const char** envp) const;
 
     /**
      * Process setup last phase: once the main ELF has been loaded, this function executes the remaining setup actions:
      * setup process PDT, page tables, pid, ppid, segment selectors, priority, registers and stack
      * @param argc num args
      * @param argv args
+     * @param envp environment pointers
      */
-    Elf32_Addr finalize_process_setup(int argc, const char** argv);
+    Elf32_Addr finalize_process_setup(int argc, const char** argv, const char** envp);
 
     /**
      * Converts an address in runtime address space to an address in current address space
@@ -203,17 +177,15 @@ private:
 
     Elf32_Addr get_libdynlk_runtime_address();
 
-    void setup_stacks(Elf32_Addr& k_stack_top, Elf32_Addr& p_stack_top_v_addr) const;
+    void allocate_stacks(Elf32_Addr& k_stack_top, Elf32_Addr& p_stack_top_v_addr) const;
 
-    void setup_pcb(uint p_stack_top_v_addr, int argc, const char** argv);
+    void setup_pcb(uint p_stack_top_v_addr, int argc, const char** argv, const char** envp);
 
     void unmap_new_process_from_current_process() const;
 
     void setup_pdt();
 
-    char* write_auxv(char* esp, const char* bin_path) const;
-
-    void load_phdr();
+    char* write_auxv(char* esp, void* argv0_runtime_addr, void* random_runtime_addr) const;
 
     static void write_to_stack(char*& stack_top, const void* content, size_t size);
 public:
@@ -223,12 +195,13 @@ public:
      * @param ppid parent process ID
      * @param argc num args
      * @param argv args
+     * @param envp environment pointers
      * @param file process main ELF' path
      * @param priority process priority
      * @return process, nullptr if an error occurred
      */
     static Process* setup_elf_process(pid_t pid, pid_t ppid, int argc, const char** argv,
-                                      const SharedPointer<Dentry>& file, uint priority);
+                                      const char** envp, const SharedPointer<Dentry>& file, uint priority);
 };
 
 

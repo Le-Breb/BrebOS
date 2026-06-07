@@ -8,21 +8,9 @@
 #include "GDT.h"
 #include "stdarg.h"
 #include "../file_management/superblock.h"
-#include "../network/DNS.h"
 #include "../network/HTTP.h"
 #include <errno.h>
-
-void Syscall::start_process(Process* p)
-{
-    // Load child process and set it ready
-    auto cpu = &p->cpu_state;
-    cpu->eax = Scheduler::exec((char*)cpu->edi, Scheduler::get_running_process_pid(), (int)cpu->esi,
-                    (const char**)cpu->edx);
-
-    // Register child on success
-    if (cpu->eax != (uint)-1)
-        p->children.add(cpu->eax);
-}
+#include <bits/wint_t.h>
 
 void Syscall::get_pid()
 {
@@ -125,7 +113,7 @@ void Syscall::dynlk(const cpu_state_t* cpu_state)
     void* symbol_addr = (void*)p->get_symbol_runtime_address_at_runtime(dep_id, symbol_name);
     if (symbol_addr == nullptr)
     {
-        printf_error("Symbol %s not found", symbol_name);
+        printf_error("%s: Symbol %s not found", __func__, symbol_name);
         return;
     }
 
@@ -159,11 +147,6 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             terminate_process(p, (int)cpu_state->edi);
         case 2:
             FB::write((char*)cpu_state->esi);
-            break;
-        case 3:
-            PIC::disable_preemptive_scheduling(); // Is it necessary ? Isn't timer interrupt disabled when this runs ?
-            start_process(p);
-            PIC::enable_preemptive_scheduling();
             break;
         case 4:
             get_key();
@@ -213,8 +196,7 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             p->cpu_state.eax = tcbset(p);
             break;
         case 20:
-            p->cpu_state.eax = Scheduler::execve(p, (const char*)p->cpu_state.edi, (int)p->cpu_state.esi,
-                                                 (const char**)p->cpu_state.edx, false);
+            p->cpu_state.eax = execve(p, false);
             break;
         case 21:
             feh(p);
@@ -280,8 +262,7 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             p->cpu_state.eax = pipe(p);
             break;
         case 42: // Execvp
-            p->cpu_state.eax = Scheduler::execve(p, (const char*)p->cpu_state.edi, (int)p->cpu_state.esi,
-                                                 (const char**)p->cpu_state.edx, true);
+            p->cpu_state.eax = execve(p, true);
             break;
         case 43:
             getcwd(p);
@@ -297,6 +278,16 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             break;
         case 47:
             p->cpu_state.eax = sigaction(p);
+            break;
+    	case 48:
+    		p->cpu_state.eax = mmap(p);;
+    		break;
+    	case 49:
+    		p->cpu_state.eax = mprotect(p);
+    		break;
+    	case 400: // dbg
+    		FB::flush();
+            printf_info("%d | 0x%x", p->cpu_state.edi, p->cpu_state.edi);
             break;
         default:
             printf_error("Received unknown syscall id: 0x%x", cpu_state->eax);
@@ -563,6 +554,42 @@ int Syscall::sigprocmask(Process* p)
     auto* oldset = (sigset_t*)p->cpu_state.edx;
 
     return p->sigprogmask(how, set, oldset);
+}
+
+int Syscall::mmap(Process* p)
+{
+	void* hint = (void*)p->cpu_state.ebx;
+	size_t size = p->cpu_state.ecx;
+	int prot = (int)p->cpu_state.edx;
+	int flags = (int)p->cpu_state.esi;
+	int fd = (int)p->cpu_state.edi;
+	off_t offset  = p->cpu_state.ebp;
+
+	int err = 0;
+	const void* window = Memory::mmap(hint, size, prot, flags, fd, offset, err, p);
+
+	if (!window)
+		return -err;
+	return (int)window;
+}
+
+int Syscall::mprotect(Process* p)
+{
+	void* addr = (void*)p->cpu_state.ebx;
+	size_t len = p->cpu_state.ecx;
+	int prot = (int)p->cpu_state.edx;
+
+	return Memory::mprotect(addr, len, prot, p);
+}
+
+int Syscall::execve(Process* p, bool use_path_if_no_heading_slash)
+{
+    const auto path = (char*)p->cpu_state.ebx;
+    const auto argc = (int)p->cpu_state.ecx;
+    const auto argv = (const char**)p->cpu_state.edx;
+    const auto envp = (const char**)p->cpu_state.esi;
+
+    return Scheduler::execve(p, path, argc, argv, envp, use_path_if_no_heading_slash);
 }
 
 __attribute__((no_instrument_function)) // May not return, which would mess up profiling data

@@ -144,6 +144,8 @@ Process::Process(char* bin_path, uint num_pages, list<elf_dependence>* elf_dep_l
 
     for (int i = 0; i < HIGHEST_SIGNAL; i++)
         signal_action[i] = SIG_DFL;
+
+    signals_contexts.push({{}, {}, sigset_t{}}); // By default, no signal is blocked
 }
 
 int Process::get_free_fd()
@@ -277,9 +279,12 @@ void Process::init()
     signal_default_action[SIGILL] = SIGDISP_CORE;
     signal_default_action[SIGTRAP] = SIGDISP_CORE;
     signal_default_action[SIGABRT] = SIGDISP_CORE;
-    signal_default_action[SIGBUS] = SIGDISP_TERM;
+    signal_default_action[SIGBUS] = SIGDISP_CORE;
     signal_default_action[SIGFPE] = SIGDISP_CORE;
     signal_default_action[SIGKILL] = SIGDISP_TERM;
+    signal_default_action[SIGUSR1] = SIGDISP_TERM;
+    signal_default_action[SIGSEGV] = SIGDISP_CORE;
+    signal_default_action[SIGUSR2] = SIGDISP_TERM;
 }
 
 void Process::copy_page_to_other_process(const Process* other, uint page_id, uint mapping_page_id) const
@@ -290,7 +295,7 @@ void Process::copy_page_to_other_process(const Process* other, uint page_id, uin
     // Allocate a page in kernel address space
     uint sys_pe = Memory::get_free_pe_user(); // Get sys PTE id
     uint frame = Memory::get_free_frame();
-    Memory::allocate_page_user<false>(frame, sys_pe); // Allocate page in kernel address space
+    Memory::allocate_page_user<false>(frame, sys_pe, true); // Allocate page in kernel address space
 
     // Register page in child address space
     auto pte_flags = PTE(page_tables, page_id) & 0x7FF;
@@ -477,6 +482,27 @@ void Process::execve_transfer(Process* proc)
     }
 }
 
+void Process::register_allocation(const Memory::allocation& allocation)
+{
+    mmap_allocations.add(allocation);
+    allocations.add((void*)allocation.start);
+}
+
+bool Process::deallocate(void* addr, Memory::allocation& alloc)
+{
+    for (auto it = mmap_allocations.begin(); it != mmap_allocations.end(); ++it)
+    {
+        if (it->start == (uintptr_t)addr)
+        {
+            mmap_allocations.remove(*it);
+            alloc = *it;
+            return true;
+        }
+    }
+
+    return false;
+}
+
 int Process::open(const char* pathname, int flags, mode_t mode)
 {
     int fd = get_free_fd();
@@ -569,8 +595,37 @@ int Process::proc_to_sys_fd(int fd) const
     return -1;
 }
 
+constexpr const char* sig_names[] = {
+    "SIGUNUSED",
+    "SIGHUP",
+    "SIGINT",
+    "SIGQUIT",
+    "SIGILL",
+    "SIGTRAP",
+    "SIGABRT",
+    "SIGBUS",
+    "SIGFPE",
+    "SIGKILL",
+    "SIGUSR1",
+    "SIGSEGV",
+    "SIGUSR2",
+};
+
+constexpr const char* sig_to_sig_name(int sig)
+{
+    if (sig >= 0 && sig < (int)(sizeof(sig_names) / sizeof(sig_names[0])))
+        return sig_names[sig];
+    return "UNKNOWN";
+}
+
 int Process::kill(int signal)
 {
+    if (signal == SIGCANCEL)
+    {
+        printf_warn("%s: Signal SIGCANCEL is not supported yet, failing", __PRETTY_FUNCTION__);
+        kill(SIGQUIT);
+        return -1;
+    }
     if (signal > HIGHEST_SIGNAL)
     {
         printf_warn("%s: Signal %d is not supported yet, ignoring it", __PRETTY_FUNCTION__, signal);
@@ -581,12 +636,13 @@ int Process::kill(int signal)
     const bool default_act_is_term = default_action == SIGDISP_TERM;
     if (signal_action[signal] == SIG_DFL && (default_act_is_core || default_act_is_term))
     {
-        printf_warn("Process %d (%s) received signal %s. Exiting.", pid, bin_path, default_act_is_core ? "CORE" : "TERM");
+        printf_warn("Process %d (%s) received signal %s. Exiting.", pid, bin_path, sig_names[signal]);
         terminate(128 + signal);
         TRIGGER_TIMER_INTERRUPT
         return 0;
     }
-    pending_signals.__sig[signal / (8  * sizeof(unsigned long))] |= 1 << (signal % (8 * sizeof(unsigned long)));
+    const auto signo = signal - 1;
+    pending_signals.__sig[signo / (8  * sizeof(unsigned long))] |= 1 << (signo % (8 * sizeof(unsigned long)));
 
     return 0;
 }
@@ -604,18 +660,23 @@ __sighandler Process::register_signal_handler(int signal, __sighandler handler)
     return prev;
 }
 
-void Process::signal_context_save()
+void Process::signal_context_save(int signal)
 {
-    sig_saved_cpu_state = cpu_state;
-    sig_saved_stack_state = stack_state;
+    if (!signals_contexts.push({cpu_state, stack_state, oldact[signal]->sa_mask}))
+    {
+        printf_warn("%s: maximum number of concurrent signals reached", __PRETTY_FUNCTION__);
+        kill(SIGQUIT);
+    }
 }
 
 void Process::signal_context_restore()
 {
-    cpu_state = sig_saved_cpu_state;
-    stack_state = sig_saved_stack_state;
-    sig_saved_cpu_state = {};
-    sig_saved_stack_state = {};
+    const auto context = signals_contexts.pop();
+
+    if (!context)
+        irrecoverable_error("%s: no signal context to restore", __PRETTY_FUNCTION__);
+    cpu_state = context->cpu_state;
+    stack_state = context->stack_state;
 }
 
 int Process::fcntl(int fd, int op, va_list arg) const
@@ -739,6 +800,15 @@ int Process::sigaction(int signum, const struct sigaction* act, struct sigaction
 {
     if (signum > HIGHEST_SIGNAL)
     {
+        if (signum == SIGCANCEL)
+        {
+            if (old_act)
+                irrecoverable_error("%s: SIGCANCEL with non-null old_act is not supported", __func__);
+            // Silently skip the request
+            // For now that signal is not supported, but this returns avoid early failures
+            // An error is raised in @kill if the signal is actually used though
+            return 0;
+        }
         printf_warn("%s: Signal not supported (signum (%d) > HIGHEST_SIGNAL (%d))",  __PRETTY_FUNCTION__, signum, HIGHEST_SIGNAL);
         return -EINVAL;
     }
@@ -751,15 +821,8 @@ int Process::sigaction(int signum, const struct sigaction* act, struct sigaction
         return -EINVAL;
     }
     // Ensure mask is empty
-    bool mask_is_zeroed = true;
-    for (uint i = 0; i < sizeof(act->sa_mask); ++i)
-    {
-        if (((char*)&act->sa_mask)[i] != '\0')
-        {
-            mask_is_zeroed = false;
-            break;
-        }
-    }
+    const bool mask_is_zeroed = *(char*)&act->sa_mask == '\0' &&
+        !memcmp(&act->sa_mask, (char*)(&act->sa_mask) + 1, sizeof(act->sa_mask) - 1);
     if (!mask_is_zeroed)
     {
         printf_warn("%s: sa_mask not empty, not supported yet", __func__);
@@ -790,15 +853,20 @@ int Process::sigaction(int signum, const struct sigaction* act, struct sigaction
 
 int Process::sigprogmask(int how, const sigset_t* set, sigset_t* oldset)
 {
+    auto context = signals_contexts.peek();
+    if (!context)
+        irrecoverable_error("sigprocmask: no current signal context");
+
     switch (how)
     {
         case SIG_SETMASK:
         {
             if (!set)
                 return -EFAULT;
+
+            context->blocked_mask = *set;
             if (oldset)
-                *oldset = blocked_signals;
-            blocked_signals = *set;
+                *oldset = context->blocked_mask;
             break;
         }
         case SIG_BLOCK:
@@ -806,10 +874,10 @@ int Process::sigprogmask(int how, const sigset_t* set, sigset_t* oldset)
             if (!set)
                 return -EFAULT;
             if (oldset)
-                *oldset = blocked_signals;
+                *oldset = context->blocked_mask;
             uint i = 0;
             for (const auto& m :  set->__sig)
-                blocked_signals.__sig[i++] |= m;
+                context->blocked_mask.__sig[i++] |= m;
             break;
         }
         case SIG_UNBLOCK:
@@ -817,10 +885,10 @@ int Process::sigprogmask(int how, const sigset_t* set, sigset_t* oldset)
             if (!set)
                 return -EFAULT;
             if (oldset)
-                *oldset = blocked_signals;
+                *oldset = context->blocked_mask;
             uint i = 0;
             for (const auto& m :  set->__sig)
-                blocked_signals.__sig[i++] &= ~m;
+                context->blocked_mask.__sig[i++] &= ~m;
             break;
         }
         default:

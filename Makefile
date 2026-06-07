@@ -157,6 +157,11 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(libdynlk) $(programs) bootloader
 	@mmd -i disk_image.img ::/fold2
 	@mmd -i disk_image.img ::/bin
 	@mmd -i disk_image.img ::/downloads
+	@mmd -i disk_image.img ::/usr
+	@mmd -i disk_image.img ::/usr/lib
+	@mcopy -i disk_image.img ./sysroot/usr/lib/ld.so ::/usr/lib
+	@mcopy -i disk_image.img ./sysroot/usr/lib/libc.so ::/usr/lib
+	@mcopy -i disk_image.img ./sysroot/usr/lib/libm.so ::/usr/lib
 	#@mcopy -i disk_image.img $(LIBC_BUILD_DIR)/libc.so ::/bin
 	@mcopy -i disk_image.img $(LIBK_BUILD_DIR)/libk.so ::/bin
 	@mcopy -i disk_image.img $(LIBDYNLK_BUILD_DIR)/libdynlk.so ::/bin

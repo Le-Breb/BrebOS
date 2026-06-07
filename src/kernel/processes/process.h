@@ -12,6 +12,7 @@
 
 #include "stdarg.h"
 #include "../utils/min_heap.h"
+#include "../utils/Stack.h"
 
 // Process is ready to be executed
 #define P_READY 0
@@ -38,7 +39,9 @@
 
 // Can be increased up to <= sizeof(sigset_t) * 8.
 // Do not forget to update @signal_default_action initialization accordingly if you increase that value
-#define HIGHEST_SIGNAL 9
+// Do not forget to update @sig_names too
+#define HIGHEST_SIGNAL 12
+#define MAX_CONCURRENT_SIGNAL_HANDLERS 10
 
 #define SIGDISP_TERM 0
 #define SIGDISP_IGN  1
@@ -119,11 +122,15 @@ public:
 private:
 	__sighandler signal_action[HIGHEST_SIGNAL + 1]{}; // Action for each signal
 	static int signal_default_action[HIGHEST_SIGNAL + 1]; // Default action for each signal
-	cpu_state_t sig_saved_cpu_state{};
-	stack_state_t sig_saved_stack_state{};
+	struct signal_ctx
+	{
+		cpu_state_t cpu_state;
+		stack_state_t stack_state;
+		sigset_t blocked_mask;
+	};
+	Stack<signal_ctx> signals_contexts{MAX_CONCURRENT_SIGNAL_HANDLERS};
 	struct sigaction* oldact[HIGHEST_SIGNAL + 1]{};
 	sigset_t pending_signals{};
-	sigset_t blocked_signals{};
 
 	void copy_page_to_other_process(const Process* other, uint page_id, uint mapping_page_id) const;
 
@@ -145,6 +152,7 @@ public:
 	list<pid_t> children{};
 	list<address_val_pair> values_to_write{}; // list of values that need to be written in process address space
 
+	list<Memory::allocation> mmap_allocations{};
 	Memory::memory_header mem_base{.s = {&mem_base, 0}};
 	Memory::memory_header* freep = &mem_base; // list of memory blocks allocated by the process
 	void* tls_base = nullptr;
@@ -260,6 +268,10 @@ public:
 	 */
 	void execve_transfer(Process* proc);
 
+	void register_allocation(const Memory::allocation& allocation);
+
+	bool deallocate(void* addr, Memory::allocation& alloc);
+
 	/**
 	 * Opens a file
 	 * @param pathname path of the file to open
@@ -301,7 +313,7 @@ public:
 
 	__sighandler register_signal_handler(int signal, __sighandler handler);
 
-	void signal_context_save();
+	void signal_context_save(int signal);
 
 	void signal_context_restore();
 

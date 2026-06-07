@@ -5,9 +5,6 @@
 #include <kstddef.h>
 #include <kstring.h>
 
-#define OS_INTERPR ("/dynlk") // OS default interpreter, used to run dynamically linked programs
-#define OS_LIB ("libk.so") // OS lib for syscalls not found in traditional libc (aka newlib)
-
 enum ELF_type
 {
 	Executable,
@@ -40,7 +37,6 @@ public:
 	const char* shstrtab = nullptr;
 	size_t num_plt_relocs;
 	size_t num_dyn_relocs;
-	char* lib_name = nullptr;
     Elf32_Addr runtime_got_addr = ELF32_ADDR_ERR;
     Elf32_Addr hash_table_runtime_address = ELF32_ADDR_ERR;
 

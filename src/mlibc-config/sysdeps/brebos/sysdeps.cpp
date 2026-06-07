@@ -1,9 +1,9 @@
-#include <mlibc/sysdeps.hpp>
+#include "cxx-syscall.h"
 #include <bits/ensure.h>
-#include <stdint.h>
-#include <stdio.h>
 #include <errno.h>
 #include <mlibc/debug.hpp>
+#include <mlibc/sysdeps.hpp>
+#include <stdio.h>
 #include <sys/statvfs.h>
 
 #define STUB()                                                         \
@@ -33,63 +33,55 @@ int SysdepImpl<Open>::operator()(const char *pathname, int flags, mode_t mode, i
     if (!(flags & O_CREAT || flags & O_TMPFILE))
         mode = 0;
 
-    int ret;
+    sc_result_t ret;
     __asm__ volatile("int $0x80" : "=a"(ret) : "a"(30), "D"(pathname), "S"(flags), "d"(mode));
 
-  if (ret >= 0)
-  {
-      *fd = ret;
-      return 0;
-  }
+	if (const int e = sc_error(ret); e)
+		return e;
 
-  return -ret;
+	*fd = sc_int_result<int>(ret);
+	return 0;
 }
 
 int SysdepImpl<Read>::operator()(int fd, void *buf, size_t count, ssize_t *bytes_read) {
-  int r;
-  __asm__ volatile("int $0x80" : "=a"(r) : "a"(31), "D"(fd), "S"(buf), "d"(count));
+  sc_result_t ret;
+  __asm__ volatile("int $0x80" : "=a"(ret) : "a"(31), "D"(fd), "S"(buf), "d"(count));
 
-  if (r >= 0)
-  {
-      *bytes_read = (ssize_t)r;
-      return 0;
-  }
+	if (const int e = sc_error(ret); e)
+		return e;
 
-  return -r;
+	*bytes_read = sc_int_result<ssize_t>(ret);
+	return 0;
 }
 
 int SysdepImpl<Write>::operator()(int fd, const void *buf, size_t count, ssize_t *bytes_written) {
-    int ret;
+    sc_result_t ret;
     __asm__ volatile("int $0x80" : "=a"(ret) : "a"(26), "D"(fd), "S"((int)buf), "d"(count));
 
-    if (ret >= 0)
-    {
-        *bytes_written = (ssize_t)ret;
-        return 0;
-    }
+	if (const int e = sc_error(ret); e)
+		return e;
 
-    return -ret;
+	*bytes_written = sc_int_result<ssize_t>(ret);
+	return 0;
 }
 
 int SysdepImpl<Seek>::operator()(int fd, off_t offset, int whence, off_t *new_offset) {
-    int noffset;
-    __asm__ volatile("int $0x80" : "=a"(noffset) : "a"(33), "D"(fd), "S"((int)offset), "d"(whence));
+    sc_result_t ret;
+    __asm__ volatile("int $0x80" : "=a"(ret) : "a"(33), "D"(fd), "S"((int)offset), "d"(whence));
 
-  if (noffset >= 0)
-  {
-     *new_offset = noffset;
-     return 0;
-  }
+	if (const int e = sc_error(ret); e)
+		return e;
 
-  return -noffset;
+	*new_offset = sc_int_result<off_t>(ret);
+	return 0;
 }
 
 int SysdepImpl<Close>::operator()(int fd) {
-    int ret;
+    sc_result_t ret;
     __asm__ volatile("int $0x80" : "=a"(ret) : "a"(32), "D"(fd));
 
-    if (ret < 0)
-        return -ret;
+	if (const int e = sc_error(ret); e)
+		return e;
     return 0;
 }
 
@@ -129,9 +121,12 @@ int SysdepImpl<AnonFree>::operator()(void *pointer, [[maybe_unused]] size_t size
 
 int SysdepImpl<VmMap>::operator()(void *hint, size_t size, int prot, int flags,
                                   int fd, off_t offset, void **window) {
-    (void)hint; (void)size; (void)prot; (void)flags;
-    (void)fd; (void)offset; (void)window;
-    STUB();
+	const auto ret = do_syscall(48, hint, size, prot, flags, fd, offset);
+	if (const int e = sc_error(ret); e)
+		return e;
+
+	*window = sc_ptr_result<void>(ret);
+	return 0;
 }
 
 int SysdepImpl<VmUnmap>::operator()(void *pointer, size_t size) {
@@ -156,14 +151,11 @@ int SysdepImpl<Clone>::operator()(void *entry, int *tid_out, void *user_arg) {
 
 int SysdepImpl<Execve>::operator()(const char *path,
         char *const *argv, char *const *envp) {
-  if (*envp != nullptr)
-      mlibc::infoLogger() << "Execve called with ignored non null envp\n" << frg::endlog;
-
   int argc = 0;
   for (char* const* argv2 = argv; *argv2; argv2++, argc++){};
 
   int ret;
-  __asm__ volatile("int $0x80" : "=a"(ret) : "a"(20), "D"(path), "S"(argc), "d"(argv));
+  do_syscall(20, path, argc, argv, envp);
 
   return ENOMEM;
 }
@@ -189,30 +181,29 @@ pid_t SysdepImpl<FutexTid>::operator()() {
 }
 
 pid_t SysdepImpl<GetPid>::operator()() {
-    int pid;
-    __asm__ volatile("int $0x80" : "=a"(pid) : "a"(5));
-    return pid;
+    sc_result_t ret;
+    __asm__ volatile("int $0x80" : "=a"(ret) : "a"(5));
+    return sc_int_result<pid_t>(ret);
 }
 
 int SysdepImpl<Isatty>::operator()(int fd) {
-    int ret;
+    sc_result_t ret;
     __asm__ volatile("int $0x80" : "=a"(ret) : "a"(46), "D"(fd));
 
-    __ensure(ret <= 0);
+	if (const int e = sc_error(ret); e)
+		return e;
 
-    if (ret < 0)
-        return -ret;
-    return ret;
+	return 0;
 }
 
 int SysdepImpl<Kill>::operator()(int pid, int sig) {
-    int ret;
+    sc_result_t ret;
     __asm__ volatile("int $0x80" : "=a"(ret) : "a"(35), "D"(pid), "S"(sig));
 
-    if (ret == 0)
-        return 0;
+	if (const int e = sc_error(ret); e)
+		return e;
 
-    return -ret;
+    return 0;
 }
 
 int SysdepImpl<PrepareStack>::operator()(void **stack, void *entry,
@@ -239,14 +230,13 @@ int SysdepImpl<Rmdir>::operator()(const char *path) {
     STUB();
 }
 
+#if !MLIBC_BUILDING_RTLD
+
 extern "C" void __sig_return(void);
 int SysdepImpl<Sigaction>::operator()(int sig,
         const struct sigaction *act, struct sigaction *oldact) {
     if (!act)
         return EFAULT;
-
-    if (act->sa_flags & SA_SIGINFO)
-        mlibc::panicLogger() << "sigaction called with act->sa_sflags with SA_SIGINFO set, which is not supported yet\n" << frg::endlog;
 
     // Set restorer address (cf. linux x86 implem)
     struct sigaction kact = *act;
@@ -255,24 +245,26 @@ int SysdepImpl<Sigaction>::operator()(int sig,
 
     // mlibc::infoLogger() << "act flags: " << frg::hex_fmt{act->sa_flags} << ", kact flags: " << frg::hex_fmt{kact.sa_flags} << "\n" << frg::endlog;
 
-    int ret;
+    sc_result_t ret;
     __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(47), "D"(sig), "S"(&kact), "d"(oldact) : "memory");
 
-    if (ret == 0)
-        return 0;
+	if (const int e = sc_error(ret); e)
+		return e;
 
-    return -ret;
+	return 0;
 }
+
+#endif
 
 int SysdepImpl<Sigprocmask>::operator()(int how,
         const sigset_t *set, sigset_t *retrieve) {
-    int ret;
+    sc_result_t ret;
     __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(45), "D"(how), "S"(set), "d"(retrieve));
 
-    if (ret < 0)
-        return -ret;
+	if (const int e = sc_error(ret); e)
+		return e;
 
-    return 0;
+	return 0;
 }
 
 int SysdepImpl<Stat>::operator()(mlibc::fsfd_target fsfdt,
@@ -297,8 +289,10 @@ int SysdepImpl<Unlinkat>::operator()(int fd,
 
 int SysdepImpl<VmProtect>::operator()(void *pointer,
         unsigned long size, int prot) {
-    (void)pointer; (void)size; (void)prot;
-    STUB();
+	auto ret = do_syscall(49, pointer, size, prot);
+	if (const int e = sc_error(ret); e)
+		return e;
+	return 0;
 }
 
 int SysdepImpl<Waitpid>::operator()(int pid, int *status,
@@ -309,14 +303,14 @@ int SysdepImpl<Waitpid>::operator()(int pid, int *status,
     if (flags)
         mlibc::panicLogger() << "waitpid called with non-null flags (" << frg::hex_fmt{flags} << ", this is not supported yet\n" << frg::endlog;
 
-    int ret;
+    sc_result_t ret;
     __asm__ volatile("int $0x80" : "=a"(ret) : "a"(14), "D"(pid), "S"(status));
 
-    if (ret < 0)
-        return -ret;
+	if (const int e = sc_error(ret); e)
+		return e;
 
-    *ret_pid = ret;
-    return 0;
+	*ret_pid = sc_int_result<int>(ret);
+	return 0;
 }
 
 int SysdepImpl<Access>::operator()(const char *path, int mode) {
@@ -325,13 +319,13 @@ int SysdepImpl<Access>::operator()(const char *path, int mode) {
 }
 
 int SysdepImpl<Chdir>::operator()(const char *path) {
-    int ret;
+    sc_result_t ret;
     __asm__ volatile("int $0x80" : "=a"(ret): "a"(44), "D"(path));
 
-    if (ret < 0)
-        return -ret;
+	if (const int e = sc_error(ret); e)
+		return e;
 
-    return 0;
+	return 0;
 }
 
 int SysdepImpl<Chmod>::operator()(const char *pathname, mode_t mode) {
@@ -348,16 +342,14 @@ int SysdepImpl<Dup>::operator()(int fd, int flags, int *newfd) {
     if (flags)
         mlibc::panicLogger() << "dup called with non-zero flags, this is not supported yet\n" << frg::endlog;
 
-    int ret;
+    sc_result_t ret;
     __asm__ volatile("int $0x80" : "=a"(ret) : "a"(40), "D"(fd));
 
-    if (ret >= 0)
-    {
-        *newfd = ret;
-        return 0;
-    }
+	if (const int e = sc_error(ret); e)
+		return e;
 
-    return ret;
+	*newfd = sc_int_result<int>(ret);
+	return 0;
 }
 
 int SysdepImpl<Dup2>::operator()(int fd, int flags, int newfd) {
@@ -365,14 +357,13 @@ int SysdepImpl<Dup2>::operator()(int fd, int flags, int newfd) {
         mlibc::panicLogger() << "Dup2 called with non-zero flags (probably due to a call to dup3. This is not supported yet\n" << frg::endlog;
 
 
-    int ret;
-
+    sc_result_t ret;
     __asm__ volatile("int $0x80" : "=a"(ret) : "a"(39), "D"(fd), "S"(newfd));
 
-    if (ret < 0)
-        return -ret;
+	if (const int e = sc_error(ret); e)
+		return e;
 
-    return 0;
+	return 0;
 }
 
 int SysdepImpl<Faccessat>::operator()(int dirfd, const char *pathname, int mode, int flags) {
@@ -411,17 +402,14 @@ int SysdepImpl<Fchownat>::operator()(int dirfd, const char *pathname, uid_t owne
 }
 
 int SysdepImpl<Fcntl>::operator()(int fd, int request, va_list args, int *result) {
-    int ret;
+    sc_result_t ret;
     __asm__ volatile("int $0x80" : "=a"(ret) : "a"(38), "D"(fd), "S"(request), "d"(args));
 
-    if (ret >= 0)
-    {
-        *result = ret;
-        return 0;
-    }
+	if (const int e = sc_error(ret); e)
+		return e;
 
-
-    return -ret;
+	*result = sc_int_result<int>(ret);
+	return 0;
 }
 
 int SysdepImpl<Fdatasync>::operator()(int fd) {
@@ -580,14 +568,13 @@ int SysdepImpl<Pipe>::operator()(int *fds, int flags) {
     if (flags)
         mlibc::panicLogger() << "pipe2 not supported yet\n" << frg::endlog;
 
-    int ret;
-
+    sc_result_t ret;
     __asm__ volatile("int $0x80" : "=a"(ret) : "a"(41), "D"(fds));
 
-    if (ret >= 0)
-        return ret;
+	if (const int e = sc_error(ret); e)
+		return e;
 
-    return -ret;
+	return 0;
 }
 
 int SysdepImpl<Renameat>::operator()(int olddirfd, const char *old_path, int newdirfd, const char *new_path) {

@@ -36,7 +36,6 @@ mlibc_config()
             -e 's/sysdeps\/demo/sysdeps\/brebos/g' \
             -e 's/demo-sysdeps/brebos-sysdeps/g' \
             meson.build
-    sed -i 's|__ensure_fail(#assertion, __FILE__, __LINE__, __func__)|__ensure_fail(#assertion, __PRETTY_FUNCTION__, __LINE__, __func__)|' options/internal/include/bits/ensure.h
 }
 
 mlibc_first_headers_install()

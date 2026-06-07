@@ -95,6 +95,8 @@ public:
 	static void dynamic_interrupt_dispatcher(uint interrupt, cpu_state_t* cpu_state, stack_state_t* stack_state);
 
 	static void debug_handler(const cpu_state_t* cpu_state, const stack_state_t* stack_state);
+
+	static void invalid_opcode(const stack_state_t* stack_state);
 };
 
 #endif /* INCLUDE_INTERRUPTS_H */
