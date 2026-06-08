@@ -32,7 +32,6 @@ extern "C" bool fpu_init_asm_();
 //Todo: Set proper wstatus values (signals, core dumps...). See 'man 2 wait'
 //Todo: run 42sh in interactive mode (so that $PWD is preserved across commands)
 //Todo: add a list remove method that takes an iterator as parameter
-//Todo: Try to add gdb debugging support for userland programs
 //Todo: compile and link libstdc++ dynamically
 //Todo: pass every syscall to Linux parameter passing convention
 //Todo: unify mlibc and brebos syscalls numbers (via header file)
@@ -40,7 +39,6 @@ extern "C" bool fpu_init_asm_();
 // Todo: Some TERM or CORE signals should be catchable by processes. For example, SIGTERM simply asks processes
 // to shut down, and OS terminates them only after a while if the process does not do it by itself
 // Todo: implement Process::mmap_allocations using RB tree
-// Todo: preload libc.so, lm.so and ld.so to accelerate process loading
 // Todo: Update toolchain so that dynlk is registered automatically as a dependence of dynamically linked programs
 // Todo: Proper address space management system for ELFLoader
 // Todo: Load ELF dependencies when loading an ELF to GDB, to be able to debug ld or libc for example
