@@ -512,7 +512,7 @@ namespace Memory
         if (process->pdt == pdt) // Kernel process
         {
             if (alloc_params && alloc_params->flags & PAGE_USER)
-                irrecoverable_error("Allocating pages for kernel with PAGE_USER permissions. This is not"
+                irrecoverable_error("Allocating pages for kernel with PAGE_USER permissions. This is not "
                                     "an 'irrecoverable error', but this happening is really weird so it's likely"
                                     "that something's wrong");
             for (uint i = b; i < e; ++i)
@@ -812,7 +812,7 @@ namespace Memory
             mmap_ret_err_with_warn(EINVAL, "mmap called with prot == 0. I don't know how to implement that, returning failure")
 
         // At that point we know we have ANONYMOUS and MAP_PRIVATE
-        const int page_flags = mmap_prot_to_page_flags(prot, true);
+        const int page_flags = mmap_prot_to_page_flags(prot, process->page_tables != kernel_process->page_tables);
 
         alloc_params alloc_params{page_flags, hint, (bool)(flags & MAP_FIXED)};
         void* window = sbrk<false>(ADDR_PAGE(size + PAGE_SIZE - 1), process, &alloc_params);
