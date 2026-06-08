@@ -12,6 +12,8 @@
 #include <errno.h>
 #include <bits/wint_t.h>
 
+#include "../misc/GDB.h"
+
 void Syscall::get_pid()
 {
     Process* running_process = Scheduler::get_running_process();
@@ -148,6 +150,14 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
         case 2:
             FB::write((char*)cpu_state->esi);
             break;
+        case 3:
+        {
+            if (const bool load = (bool)p->cpu_state.edx; load)
+                GDB::get_instance()->load_elf((const char*)cpu_state->esi);
+            else
+                GDB::get_instance()->unload_elf((const char*)cpu_state->esi);
+            break;
+        }
         case 4:
             get_key();
             break;
@@ -285,6 +295,9 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
     	case 49:
     		p->cpu_state.eax = mprotect(p);
     		break;
+        case 50:
+            GDB::get_instance()->unload_elf((const char*)p->cpu_state.edx);
+            break;
     	case 400: // dbg
     		FB::flush();
             printf_info("%d | 0x%x", p->cpu_state.edi, p->cpu_state.edi);

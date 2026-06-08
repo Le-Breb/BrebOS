@@ -1,0 +1,54 @@
+import gdb
+import subprocess as sp
+
+struct_addr = "0xD0000000"
+
+class ProcessLoadedBreakpoint(gdb.Breakpoint):
+    def stop(self):
+        path = gdb.parse_and_eval(
+            f"((struct GDB::process_info*){struct_addr})->path"
+        ).string()
+
+        base = int(gdb.parse_and_eval(
+            f"((struct GDB::process_info*){struct_addr})->base_address"
+        ))
+
+        print(f"Loading ELF: {path} at {hex(base)}")
+
+        gdb.execute(
+            f"add-symbol-file {path} {hex(base)}",
+            to_string=True
+        )
+
+        return False  # continue automatically
+
+class UnloadProcessBreakpoint(gdb.Breakpoint):
+    def stop(self):
+        path = gdb.parse_and_eval(
+            f"((struct GDB::process_info*){struct_addr})->path"
+        ).string()
+
+        base = int(gdb.parse_and_eval(
+            f"((struct GDB::process_info*){struct_addr})->base_address"
+        ))
+
+        print(f"Unloading ELF {path} at {hex(base)}")
+
+        gdb.execute(
+            f"remove-symbol-file -a {hex(base)}",
+            to_string=True
+        )
+
+        return False # Continue
+
+def get_symbol_address(name):
+    sym = gdb.parse_and_eval(name)
+    return int(sym.address)
+
+## Setting a bp to __gdb_process_loaded causes the bp to be triggered twice for no reason
+## Setting it to the symbol address does not
+load_addr = get_symbol_address("__gdb_load_process")
+ProcessLoadedBreakpoint(f"*{load_addr}")
+
+unload_addr = get_symbol_address("__gdb_unload_process")
+UnloadProcessBreakpoint(f"*{unload_addr}")

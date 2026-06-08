@@ -43,6 +43,7 @@ extern "C" bool fpu_init_asm_();
 // Todo: preload libc.so, lm.so and ld.so to accelerate process loading
 // Todo: Update toolchain so that dynlk is registered automatically as a dependence of dynamically linked programs
 // Todo: Proper address space management system for ELFLoader
+// Todo: Load ELF dependencies when loading an ELF to GDB, to be able to debug ld or libc for example
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {
     // Get why this fails
