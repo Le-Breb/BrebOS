@@ -141,7 +141,7 @@ FAT_drive::FAT_drive(unsigned char id, fat_BS_t* bs, uint major) : FS(ATA_SECTOR
 
     if (bs->sectors_per_cluster != 1)
         printf_error("FAT driver only supports 1 sector per cluster, current value: %d.\n"
-                     "(drive ID: %d). Drive accesses could misbehave.", id, bs->sectors_per_cluster);
+                     "(drive ID: %d). Drive accesses could misbehave.", bs->sectors_per_cluster, id);
 
     if (bs->bytes_per_sector != ATA_SECTOR_SIZE)
         printf_error("FAT driver only supports %d bytes per sector, current value: %d.\n"
