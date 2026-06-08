@@ -16,7 +16,7 @@ public:
 
 private:
 	[[nodiscard]]
-	size_t absolute_path_length(bool is_last) const;
+	size_t absolute_path_length() const;
 
 	[[nodiscard]]
 	char* write_name(char* str, bool is_last) const;
