@@ -25,7 +25,9 @@ int File::read(void* buf, uint count)
     if (dentry->inode->type != Inode::File)
         return -EINVAL; // Not a regular file
 
-    if (!dentry->inode->superblock->get_fs()->load_file_to_buf(buf, dentry->name, dentry->parent, offset, l,
+    if (preload_read(buf, offset, count, dentry))
+        loaded_bytes = count;
+    else if (!dentry->inode->superblock->get_fs()->load_file_to_buf(buf, dentry->name, dentry->parent, offset, l,
                                                                         loaded_bytes))
         return -EIO; // IO error
 
@@ -128,6 +130,38 @@ int File::get_write_fd() const
 int File::get_read_fd() const
 {
     return -1;
+}
+
+void* File::libc_preload = nullptr;
+void* File::libm_preload = nullptr;
+void* File::ld_preload = nullptr;
+const bool File::enable_preload = true;
+File::preload File::preloads_list[] = {
+    {"/usr/lib/libc.so", nullptr},
+    {"/usr/lib/libm.so", nullptr},
+    {"/bin/libdynlk.so", nullptr},
+    {"/usr/lib/ld.so", nullptr},
+    {"/bin/42sh", nullptr}
+};
+
+bool File::preload_read(void* buf, uint offset, uint count, SharedPointer<Dentry> dentry)
+{
+    if constexpr (!enable_preload)
+        return false;
+
+    char* abs_path = dentry->get_absolute_path();
+    for (const auto& [path, data] : preloads_list)
+    {
+        if (!strcmp(path, abs_path))
+        {
+            memcpy(buf, (char*)data + offset, count);
+            free(abs_path);
+            return true;
+        }
+    }
+
+    free(abs_path);
+    return false;
 }
 
 TTY::TTY(int fd, int flags, Target target) : FileInterface(fd, flags, 0, FileType::TTY), target(target)

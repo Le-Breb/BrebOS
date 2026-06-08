@@ -4,10 +4,11 @@
 #include "../file_management/VFS.h"
 #include <kstring.h>
 #include "scheduler.h"
+#include "abi-bits/fcntl.h"
 
 ELFLoader::ELFLoader(): current_process(Scheduler::get_running_process()), elf_dep_list(new list<elf_dependence>),
-page_tables((Memory::page_table_t*)Memory::calloca(768, sizeof(Memory::page_table_t))),
-pdt((Memory::pdt_t*)Memory::malloca(sizeof(Memory::pdt_t)))
+                        page_tables((Memory::page_table_t*)Memory::calloca(768, sizeof(Memory::page_table_t))),
+                        pdt((Memory::pdt_t*)Memory::malloca(sizeof(Memory::pdt_t)))
 {
 }
 
@@ -357,12 +358,19 @@ char* ELFLoader::write_auxv(char* esp, void* const argv0_runtime_addr, void* con
 
 ELF* ELFLoader::load_elf(const SharedPointer<Dentry>& file, ELF_type expected_type)
 {
-    auto buf = VFS::load_file(file);
-    if (!buf)
+    const auto proc = Scheduler::get_running_process();
+    const int fd = proc->open(file->get_absolute_path(), O_RDONLY, 0777);
+    if (fd < 0)
         return nullptr;
+    const auto buf = new char[file->inode->size];
+    if (proc->read(fd, buf, file->inode->size) < 0) // Read file with read (and not VFS::load_file) to benefit from preload
+    {
+        proc->close(fd);
+        return nullptr;
+    }
 
-    auto elf = load_elf(buf, expected_type);
-    delete[] (char*)buf;
+    const auto elf = load_elf(buf, expected_type);
+    delete[] buf;
 
     return elf;
 }

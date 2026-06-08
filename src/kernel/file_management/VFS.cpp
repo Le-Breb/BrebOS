@@ -48,6 +48,16 @@ void VFS::init()
 
 	if (!add_to_path("/bin"))
 		printf_error("Failed to add /bin to path");
+
+	if (File::enable_preload)
+	{
+		// Preload files
+		for (auto& [path, data] : File::preloads_list)
+		{
+			auto file = get_file_dentry(path, true, "/");
+			data = load_file(file);
+		}
+	}
 }
 
 SharedPointer<Dentry> VFS::touch(const char* pathname)
