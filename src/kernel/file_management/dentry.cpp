@@ -2,7 +2,7 @@
 #include <kstring.h>
 
 Dentry::Dentry(const SharedPointer<Inode>& inode, const SharedPointer<Dentry>& parent, const char* name) : inode(inode),
-	parent(parent), name(new char[strlen(name) + 1])
+                                                                                                           parent(parent), name(new char[strlen(name) + 1])
 {
 	strcpy((char*)this->name, name);
 }
@@ -14,17 +14,17 @@ Dentry::~Dentry()
 
 char* Dentry::get_absolute_path() const
 {
-	auto* abs_name = new char[absolute_path_length(true) + 1];
+	auto* abs_name = new char[absolute_path_length()];
 	abs_name[0] = '\0';
 	[[maybe_unused]] auto _ = write_name(abs_name, true);
 
 	return abs_name;
 }
 
-size_t Dentry::absolute_path_length(bool is_last) const
+size_t Dentry::absolute_path_length() const
 {
 	// +1 for the '/' separator
-	return strlen(name) + (parent ? parent->absolute_path_length(is_last) + !is_last : 0);
+	return strlen(name) + 1 + (parent ? parent->absolute_path_length() : 0);
 }
 
 char* Dentry::write_name(char* str, bool is_last) const
