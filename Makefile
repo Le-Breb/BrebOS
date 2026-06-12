@@ -164,6 +164,7 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(libdynlk) $(programs) bootloader
 	@mcopy -i disk_image.img ./sysroot/usr/lib/libm.so ::/usr/lib
 	@mcopy -i disk_image.img ./toolchain/usr/i686-brebos/lib/libgcc_s.so.1 ::/usr/lib
 	@mcopy -i disk_image.img ./toolchain/usr/i686-brebos/lib/libstdc++.so.6 ::/usr/lib
+	@mcopy -i disk_image.img ./src/libk/build/libk.so ::/usr/lib
 	#@mcopy -i disk_image.img $(LIBC_BUILD_DIR)/libc.so ::/bin
 	@mcopy -i disk_image.img $(LIBK_BUILD_DIR)/libk.so ::/bin
 	@mcopy -i disk_image.img $(LIBDYNLK_BUILD_DIR)/libdynlk.so ::/bin
