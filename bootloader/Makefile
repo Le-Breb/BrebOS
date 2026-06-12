@@ -24,7 +24,7 @@ ASM_SRC=stage2-entry.s io.s
 CPP_OBJ=$(patsubst %.cpp, $(BUILD_DIR)/%.o, $(CPP_SRC))
 ASM_OBJ=$(patsubst %.s, $(BUILD_DIR)/%.o, $(ASM_SRC))
 
-all: bootloader.bin bootloader2.bin
+all: $(BUILD_DIR)/bootloader.bin $(BUILD_DIR)/bootloader2.bin
 
 $(BUILD_DIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)
@@ -34,16 +34,14 @@ $(BUILD_DIR)/%.o: %.s
 	@mkdir -p $(dir $@)
 	$(NASM) $(ASFLAGS) $< -o $@
 
-all: bootloader.bin bootloader2.bin
-
-bootloader.bin: bootloader.s
+$(BUILD_DIR)/bootloader.bin: bootloader.s
 	@mkdir -p $(BUILD_DIR)
 	$(NASM) -f bin bootloader.s -o $(BUILD_DIR)/bootloader.bin
 
-bootloader2.elf: $(CPP_OBJ) $(ASM_OBJ)
+$(BUILD_DIR)/bootloader2.elf: $(CPP_OBJ) $(ASM_OBJ)
 	$(LD) $(LDFLAGS) -T link.ld $(CPP_OBJ) $(ASM_OBJ) -o $(BUILD_DIR)/bootloader2.elf
 
-bootloader2.bin: bootloader2.elf
+$(BUILD_DIR)/bootloader2.bin: $(BUILD_DIR)/bootloader2.elf
 	$(OBJCOPY) -O binary $(BUILD_DIR)/bootloader2.elf $(BUILD_DIR)/bootloader2.bin
 
 clean:
