@@ -141,10 +141,12 @@ File::preload File::preloads_list[] = {
     {"/usr/lib/libm.so", nullptr},
     {"/bin/libdynlk.so", nullptr},
     {"/usr/lib/ld.so", nullptr},
-    {"/bin/42sh", nullptr}
+    {"/bin/42sh", nullptr},
+    {"/usr/lib/libgcc_s.so.1", nullptr},
+    {"/usr/lib/libstdc++.so.6", nullptr}
 };
 
-bool File::preload_read(void* buf, uint offset, uint count, SharedPointer<Dentry> dentry)
+bool File::preload_read(void* buf, uint offset, uint count, const SharedPointer<Dentry>& dentry)
 {
     if constexpr (!enable_preload)
         return false;
@@ -154,7 +156,7 @@ bool File::preload_read(void* buf, uint offset, uint count, SharedPointer<Dentry
     {
         if (!strcmp(path, abs_path))
         {
-            memcpy(buf, (char*)data + offset, count);
+            memcpy(buf, static_cast<char*>(data) + offset, count);
             free(abs_path);
             return true;
         }

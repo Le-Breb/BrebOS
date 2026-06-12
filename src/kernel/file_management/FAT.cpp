@@ -45,7 +45,7 @@ char* LongDirEntry::get_uglily_converted_utf8_name() const
 {
     char* n1 = utf16_to_utf8_cautionless_cast(name1, 10);
     char* n2 = strlen(n1) < 5 ? nullptr : utf16_to_utf8_cautionless_cast(name2, 12);
-    char* n3 = (n2 && strlen(n2) < 6) ? nullptr : utf16_to_utf8_cautionless_cast(name3, 4);
+    char* n3 = (!n2 || strlen(n2) < 6) ? nullptr : utf16_to_utf8_cautionless_cast(name3, 4);
 
     char* full_name = new char[10 + 12 + 4 + 1];
     memset(full_name, 0, 10 + 12 + 4 + 1);
@@ -368,17 +368,35 @@ uint FAT_drive::get_child_dir_entry_id(const SharedPointer<Dentry>& parent_dentr
             return ENTRY_NOT_FOUND;
 
         bool found_in_lfn = false;
+        char* whole_name = nullptr;
         while (ctx.dir_entry_id * sizeof(DirEntry) < ATA_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free())
         {
             if (found_in_lfn) // File name matched in previous entry which is a fln entry referring to the current entry
                 return ctx.dir_entry_id;
             bool lfn = entries[ctx.dir_entry_id].is_LFN();
+            if (!lfn)
+            {
+                free(whole_name); // Delete LFN constructed name
+                whole_name = nullptr;
+            }
             char* entry_name = lfn
                                    ? ((LongDirEntry*)&entries[ctx.dir_entry_id])->get_uglily_converted_utf8_name()
                                    : entries[ctx.dir_entry_id].get_name();
+            if (lfn && whole_name)
+            {
+                whole_name = static_cast<char*>(realloc(whole_name, strlen(whole_name) + strlen(entry_name) + 1));
+                whole_name = strcat(entry_name, whole_name);
+            }
+            else
+                whole_name = entry_name;
 
-            bool match = !strcmp(entry_name, name);
-            delete[] entry_name;
+            const bool match = !strcmp(whole_name, name);
+
+            if (!lfn)
+            {
+                free(whole_name); // Delete 8.3 name
+                whole_name = nullptr;
+            }
             if (match)
             {
                 found_in_lfn = lfn;

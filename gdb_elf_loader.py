@@ -52,3 +52,15 @@ ProcessLoadedBreakpoint(f"*{load_addr}")
 
 unload_addr = get_symbol_address("__gdb_unload_process")
 UnloadProcessBreakpoint(f"*{unload_addr}")
+
+# Get .text base address of an ELF
+def get_txt_ba(elf_path):
+    import subprocess as sp
+
+    out = sp.run(["readelf", "-SW", elf_path], capture_output=True)
+    t = out.stdout.decode()
+    tt = t.split('\n')
+    tt2 = [ttt for ttt in tt if "text" in ttt][0].split()[4]
+    off = int(tt2, 16)
+
+    return off

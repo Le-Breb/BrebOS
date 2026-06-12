@@ -10,6 +10,7 @@ extern "C" void _init(void) __attribute__((weak));
 extern "C" void _fini(void) __attribute__((weak));
 
 size_t __hwcap;
+extern "C" const char _DYNAMIC[] __attribute__((weak));
 
 extern "C" void __mlibc_entry(uintptr_t *entry_stack, int (*main_fn)(int argc, char *argv[], char *env[])) {
     __dlapi_enter(entry_stack);
@@ -18,11 +19,12 @@ extern "C" void __mlibc_entry(uintptr_t *entry_stack, int (*main_fn)(int argc, c
     // so I do it manually here
     // However those symbols do not exist when building mlibc dynamically, so
     // they're defined weak and only called when they exist
-    if (_init)
+    const bool is_static = (_DYNAMIC == nullptr);;
+    if (_init && is_static)
         _init();
     __hwcap = getauxval(AT_HWCAP);
     auto result = main_fn(mlibc::entry_stack.argc, mlibc::entry_stack.argv, environ);
-    if (_fini)
+    if (_fini && is_static)
         _fini();
 
     exit(result);

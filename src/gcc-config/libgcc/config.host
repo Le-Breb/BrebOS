@@ -657,7 +657,7 @@ bpf-*-*)
 	;;
 i[34567]86-*-brebos*)
 	extra_parts="$extra_parts crti.o crtbegin.o crtend.o crtn.o crtbeginS.o crtendS.o"
-	tmake_file="$tmake_file i386/t-crtstuff t-crtstuff-pic t-libgcc-pic"
+	tmake_file="$tmake_file i386/t-crtstuff t-crtstuff-pic t-libgcc-pic t-slibgcc t-slibgcc-elf-ver t-slibgcc-libgcc t-slibgcc-nolc-override t-brebos"
 	;;
 x86_64-*-brebos*)
 	extra_parts="$extra_parts crti.o crtbegin.o crtend.o crtn.o crtbeginS.o crtendS.o"

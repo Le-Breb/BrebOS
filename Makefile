@@ -150,7 +150,7 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(libdynlk) $(programs) bootloader
 	@#qemu-img create -f raw disk_image.img 1M
 	@dd if=/dev/zero of=disk_image.img bs=1M count=50 # Can't go a lot lower than 35, otherwise drive would be interpreted as FAT16
 	@#Install FAT32 on it
-	@mkfs.vfat -F 32 -v disk_image.img
+	@mkfs.vfat -F 32 -v disk_image.img -s 1 # FAT 32, one sector per cluster (as the driver only supports that for now)
 	@#cp disk_image.img2 disk_image.img
 	@echo "$(CYAN)Populating disk$(WHITE)"
 	@mmd -i disk_image.img ::/fold
@@ -162,6 +162,8 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(libdynlk) $(programs) bootloader
 	@mcopy -i disk_image.img ./sysroot/usr/lib/ld.so ::/usr/lib
 	@mcopy -i disk_image.img ./sysroot/usr/lib/libc.so ::/usr/lib
 	@mcopy -i disk_image.img ./sysroot/usr/lib/libm.so ::/usr/lib
+	@mcopy -i disk_image.img ./toolchain/usr/i686-brebos/lib/libgcc_s.so.1 ::/usr/lib
+	@mcopy -i disk_image.img ./toolchain/usr/i686-brebos/lib/libstdc++.so.6 ::/usr/lib
 	#@mcopy -i disk_image.img $(LIBC_BUILD_DIR)/libc.so ::/bin
 	@mcopy -i disk_image.img $(LIBK_BUILD_DIR)/libk.so ::/bin
 	@mcopy -i disk_image.img $(LIBDYNLK_BUILD_DIR)/libdynlk.so ::/bin

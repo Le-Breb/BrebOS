@@ -55,7 +55,7 @@ class File : public FileInterface
      * @param dentry file dentry
      * @return whether a read using preloaded data has been done
      */
-    static bool preload_read(void* buf, uint offset, uint count, SharedPointer<Dentry> dentry);
+    static bool preload_read(void* buf, uint offset, uint count, const SharedPointer<Dentry>& dentry);
 public:
     File(int fd, int flags, uint offset, const SharedPointer<Dentry>& dentry);
     int read(void* buf, uint count) override;
@@ -72,7 +72,7 @@ public:
         void* data;
     };
     static const bool enable_preload;
-    static preload preloads_list[5];
+    static preload preloads_list[7];
     SharedPointer<Dentry> dentry;
 };
 

@@ -31,8 +31,6 @@ extern "C" bool fpu_init_asm_();
 //Todo: Check if userland programs can manipulate kernel space addresses througout syscalls (ex: write(1, KERNEL_VIRTUAL_ADDRESS_BASE), 10)
 //Todo: Set proper wstatus values (signals, core dumps...). See 'man 2 wait'
 //Todo: run 42sh in interactive mode (so that $PWD is preserved across commands)
-//Todo: add a list remove method that takes an iterator as parameter
-//Todo: compile and link libstdc++ dynamically
 //Todo: pass every syscall to Linux parameter passing convention
 //Todo: unify mlibc and brebos syscalls numbers (via header file)
 //Todo: unify allocation methods (mmap and malloc) + use uniformly flags and prot across the whole memory code
@@ -41,7 +39,8 @@ extern "C" bool fpu_init_asm_();
 // Todo: implement Process::mmap_allocations using RB tree
 // Todo: Update toolchain so that dynlk is registered automatically as a dependence of dynamically linked programs
 // Todo: Proper address space management system for ELFLoader
-// Todo: Load ELF dependencies when loading an ELF to GDB, to be able to debug ld or libc for example
+// Todo: add support for ELF versioning sections
+// Todo: memory mapped files, to reduce disk solliciation
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {
     // Get why this fails

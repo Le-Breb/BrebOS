@@ -136,6 +136,15 @@ libstdcpp_build()
     autoconf
     cd ../build
 
+    # Add brebos* to the three linux* case patterns in libstdc++-v3/configure (allows libstdc++-v3.so to be built)
+    sed -i \
+        's/linux\* | k\*bsd\*-gnu | kopensolaris\*-gnu | uclinuxfdpiceabi)/linux* | k*bsd*-gnu | kopensolaris*-gnu | uclinuxfdpiceabi | brebos*)/g' \
+        "$TOOLCHAIN_SOURCES_DIR/gcc-15.1.0/libstdc++-v3/configure"
+
+    sed -i \
+        's/linux\* | k\*bsd\*-gnu | kopensolaris\*-gnu | gnu\* | uclinuxfdpiceabi)/linux* | k*bsd*-gnu | kopensolaris*-gnu | gnu* | uclinuxfdpiceabi | brebos*)/g' \
+        "$TOOLCHAIN_SOURCES_DIR/gcc-15.1.0/libstdc++-v3/configure"
+
     make all-target-libstdc++-v3 -j "$NUM_JOBS"
     DESTDIR="$TOOLCHAIN_DIR" make install-target-libstdc++-v3
 
