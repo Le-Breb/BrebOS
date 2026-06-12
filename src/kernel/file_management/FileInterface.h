@@ -72,7 +72,7 @@ public:
         void* data;
     };
     static const bool enable_preload;
-    static preload preloads_list[7];
+    static preload preloads_list[8];
     SharedPointer<Dentry> dentry;
 };
 

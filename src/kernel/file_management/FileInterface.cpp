@@ -138,6 +138,7 @@ void* File::ld_preload = nullptr;
 const bool File::enable_preload = true;
 File::preload File::preloads_list[] = {
     {"/usr/lib/libc.so", nullptr},
+    {"/usr/lib/libk.so", nullptr},
     {"/usr/lib/libm.so", nullptr},
     {"/bin/libdynlk.so", nullptr},
     {"/usr/lib/ld.so", nullptr},
