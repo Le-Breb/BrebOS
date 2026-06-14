@@ -176,7 +176,7 @@ Elf32_Addr ELFLoader::get_libdynlk_runtime_address()
     // Find and return libdynlk runtime entry point
     const Elf32_Sym* s = libdynlk_elf->get_dynamic_symbol("lib_main", libdynlk_load_addr, allocations);
     return libdynlk_runtime_entry_point =
-        s == nullptr ? ELF32_ADDR_ERR : libdynlk_load_addr * PAGE_SIZE + s->st_value;
+        s == nullptr ? ELF32_ADDR_ERR : libdynlk_load_addr + s->st_value;
 }
 
 void ELFLoader::allocate_stacks()
