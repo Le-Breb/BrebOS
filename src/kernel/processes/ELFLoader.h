@@ -102,19 +102,6 @@ private:
     ELF* load_lib(const char* path, void* lib_dynlk_runtime_entry_point, Elf32_Addr& runtime_load_address);*/
 
     /**
-     * Load part of an ELF segment into the process address space and maps it.
-     *
-     * @param bytes_ptr pointer to bytes to copy
-     * @param n num bytes to copy
-     * @param h PT_LOAD segment header
-     * @param elf_runtime_load_address runtime load address of the library
-     * @param copied_bytes counter of bytes processed in current segment
-     */
-    void
-    copy_elf_subsegment_to_address_space(const void* bytes_ptr, uint n, const Elf32_Phdr* h, uint elf_runtime_load_address,
-                                         uint& copied_bytes) const;
-
-    /**
      * Load ELF file code and data into a process' address space and maps it
      * @param file ELF to load
      * @param expected_type

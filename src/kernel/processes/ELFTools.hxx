@@ -18,7 +18,7 @@ Lptr<ptr_underlying_type>::Lptr(ptr runtime_ptr, const list<alloc>* address_spac
 template <typename ptr_underlying_type>
 Lptr<ptr_underlying_type>& Lptr<ptr_underlying_type>::operator=(Elf32_Addr runtime_addr)
 {
-    p_runtime_ptr = static_cast<ptr>(runtime_addr);
+    p_runtime_ptr = reinterpret_cast<ptr>(runtime_addr);
     return *this;
 }
 
