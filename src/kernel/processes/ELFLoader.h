@@ -4,9 +4,9 @@
 #include <kstddef.h>
 
 #include "ELF.h"
+#include "ELFTools.h"
 #include "ELF_defines.h"
 #include "process.h"
-#include "scheduler.h"
 #include "../file_management/dentry.h"
 
 #define LIBDYNLK_PATH "/bin/libdynlk.so"
@@ -76,6 +76,15 @@ private:
     ELFLoader();
     ~ELFLoader();
 
+    list<ELFTools::alloc> allocations;
+
+    template<typename ptr_inner_type>
+    [[nodiscard]]
+    ELFTools::Lptr<ptr_inner_type> new_lptr(Elf32_Addr runtime_address) const;
+    template<typename ptr_inner_type>
+    [[nodiscard]]
+    ELFTools::Lptr<ptr_inner_type> new_lptr(ptr_inner_type runtime_address) const;
+
     /**
     * Sets up a dynamically linked process
     * @param elf process' main ELF
@@ -91,13 +100,6 @@ private:
     * @return libdynlk runtime entry point address
     #1#
     ELF* load_lib(const char* path, void* lib_dynlk_runtime_entry_point, Elf32_Addr& runtime_load_address);*/
-
-    /**
-     * Allocate space for libydnlk and add it to a process' address space
-     * @param elf library elf
-     * @return boolean indicating success state
-     */
-    bool alloc_elf_memory(const ELF& elf);
 
     /**
      * Load part of an ELF segment into the process address space and maps it.
@@ -130,7 +132,7 @@ private:
      * @param load_elf ELF to map
      * @param runtime_load_address runtime load address of the lib
      */
-    void map_elf(const ELF* load_elf, Elf32_Addr runtime_load_address) const;
+    void map_elf(const ELF* load_elf, Elf32_Addr runtime_load_address);
 
     /**
      * Create a process to run an ELF executable
@@ -141,13 +143,12 @@ private:
 
     /**
      * Writes argc, argv array pointer, argv pointer array and argv contents to stack
-     * @param stack_top_v_addr Virtual address of process stack top in kernel address space
      * @param argc number of arguments
      * @param argv argument list
      * @param envp environment pointers
      * @return ESP in process address space ready to be used
      */
-    size_t write_args_to_stack(size_t stack_top_v_addr, int argc, const char** argv, const char** envp) const;
+    void* write_args_to_stack(int argc, const char** argv, const char** envp) const;
 
     /**
      * Process setup last phase: once the main ELF has been loaded, this function executes the remaining setup actions:
@@ -156,20 +157,7 @@ private:
      * @param argv args
      * @param envp environment pointers
      */
-    Elf32_Addr finalize_process_setup(int argc, const char** argv, const char** envp);
-
-    /**
-     * Converts an address in runtime address space to an address in current address space
-     * @param runtime_address address in runtime address space
-     * @return corresponding load address
-     */
-    [[nodiscard]] Elf32_Addr runtime_address_to_load_address(Elf32_Addr runtime_address) const;
-
-    /**
-     * Offsets the memory mapping of the loaded ELF by offset pages to the left
-     * @param offset mapping offset
-     */
-    void offset_memory_mapping(uint offset) const;
+    void finalize_process_setup(int argc, const char** argv, const char** envp);
 
     void load_elf_code(const ELF* elf, uint load_address, uint runtime_load_address) const;
 
@@ -177,17 +165,15 @@ private:
 
     Elf32_Addr get_libdynlk_runtime_address();
 
-    void allocate_stacks(Elf32_Addr& k_stack_top, Elf32_Addr& p_stack_top_v_addr) const;
+    void allocate_stacks();
 
-    void setup_pcb(uint p_stack_top_v_addr, int argc, const char** argv, const char** envp);
-
-    void unmap_new_process_from_current_process() const;
+    void setup_pcb(int argc, const char** argv, const char** envp);
 
     void setup_pdt();
 
-    char* write_auxv(char* esp, void* argv0_runtime_addr, void* random_runtime_addr) const;
+    ELFTools::Lptr<char> write_auxv(const ELFTools::Lptr<char>& stack_top, void* argv0_runtime_addr, void* random_runtime_addr) const;
 
-    static void write_to_stack(char*& stack_top, const void* content, size_t size);
+    static void write_to_stack(ELFTools::Lptr<char>& stack_top, const void* content, size_t size);
 public:
     /**
      * Create a process from an ELF loaded in memory

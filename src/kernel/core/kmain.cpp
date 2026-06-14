@@ -40,7 +40,7 @@ extern "C" bool fpu_init_asm_();
 // Todo: Update toolchain so that dynlk is registered automatically as a dependence of dynamically linked programs
 // Todo: Proper address space management system for ELFLoader
 // Todo: add support for ELF versioning sections
-// Todo: memory mapped files, to reduce disk solliciation
+// Todo: memory mapped files, to reduce disk sollicitation
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {
     // Get why this fails

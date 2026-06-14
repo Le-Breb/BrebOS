@@ -3,8 +3,12 @@
 #include "../core/fb.h"
 #include "../file_management/VFS.h"
 #include <kstring.h>
+
 #include "scheduler.h"
 #include "abi-bits/fcntl.h"
+#include "abi-bits/vm-flags.h"
+
+using namespace ELFTools;
 
 ELFLoader::ELFLoader(): current_process(Scheduler::get_running_process()), elf_dep_list(new list<elf_dependence>),
                         page_tables((Memory::page_table_t*)Memory::calloca(768, sizeof(Memory::page_table_t))),
@@ -23,6 +27,19 @@ ELFLoader::~ELFLoader()
     delete elf_dep_list;
     Memory::freea(page_tables);
     Memory::freea(pdt);
+}
+
+template <typename ptr_inner_type>
+Lptr<ptr_inner_type> ELFLoader::new_lptr(Elf32_Addr runtime_address) const
+{
+    const auto pptr = static_cast<ptr_inner_type*>(reinterpret_cast<void*>(runtime_address));
+    return Lptr<ptr_inner_type>(pptr, &allocations);
+}
+
+template <typename ptr_inner_type>
+Lptr<ptr_inner_type> ELFLoader::new_lptr(ptr_inner_type runtime_address) const
+{
+    return Lptr<ptr_inner_type>(runtime_address, &allocations);
 }
 
 ELF* ELFLoader::load_libdynlk()
@@ -56,76 +73,66 @@ bool ELFLoader::dynamic_loading(const ELF* elf)
     return true;
 }
 
-bool ELFLoader::alloc_elf_memory(const ELF& elf)
-{
-    // Num pages lib  code spans over
-    uint lib_num_code_pages = elf.num_pages();
-
-    offset_memory_mapping(lib_num_code_pages);
-
-    // Allocate lib code pages
-    for (int i = 0; i < elf.global_hdr.e_phnum; ++i)
-    {
-        Elf32_Phdr* h = &elf.prog_hdrs[i];
-        if (h->p_type != PT_LOAD && h->p_type != PT_PHDR)
-            continue;
-
-        uint num_segment_pages = (h->p_memsz + PAGE_SIZE - 1) >> 12;
-        for (size_t j = 0; j < num_segment_pages; ++j)
-        {
-            uint runtime_page_id = (h->p_vaddr >> 12) + j;
-            uint pte_id = num_pages + runtime_page_id;
-            if (PTE(page_tables, pte_id))
-                continue;
-            uint pe = Memory::get_free_pe_user(); // Get PTE id
-            Memory::allocate_page_user<false>(pe, true); // Allocate page in kernel address space
-
-            // Map page in current process' address space
-            uint page_id = (768 * PT_ENTRIES - PROCESS_N_STACKS_PAGES - lib_num_code_pages + runtime_page_id);
-            current_process->update_pte(page_id, PTE(Memory::page_tables, pe), true);
-        }
-    }
-    num_pages += lib_num_code_pages;
-
-    return true;
-}
-
 void
 ELFLoader::copy_elf_subsegment_to_address_space(const void* bytes_ptr, uint n, const Elf32_Phdr* h,
                                                 uint elf_runtime_load_address,
                                                 uint& copied_bytes) const
 {
     auto runtime_address = elf_runtime_load_address + (h->p_vaddr + copied_bytes);
-    auto dest_addr = runtime_address_to_load_address(runtime_address);
-    memcpy((void*)dest_addr, bytes_ptr, n);
+    Lptr run_addr = new_lptr<void>(runtime_address);
+    run_addr.memcpy(bytes_ptr, n);
 
     // Update counter
     copied_bytes += n;
 }
 
-void ELFLoader::map_elf(const ELF* load_elf, Elf32_Addr runtime_load_address) const
+void ELFLoader::map_elf(const ELF* load_elf, Elf32_Addr runtime_load_address)
 {
     for (int k = 0; k < load_elf->global_hdr.e_phnum; ++k)
     {
-        Elf32_Phdr* h = &load_elf->prog_hdrs[k];
-        if (h->p_type != PT_LOAD && h->p_type != PT_PHDR)
+        const Elf32_Phdr* h = &load_elf->prog_hdrs[k];
+        if (h->p_type != PT_LOAD)
             continue;
-        uint num_pages = (h->p_memsz + PAGE_SIZE - 1) >> 12;
+        uint segment_num_pages = ADDR_PAGE(h->p_memsz + PAGE_SIZE - 1);
 
         // Map code
-        for (uint i = 0; i < num_pages; i++)
-        {
-            Elf32_Addr runtime_address = runtime_load_address + h->p_vaddr + i * PAGE_SIZE;
-            uint page_id = runtime_address_to_load_address(runtime_address) >> 12;
-            uint pde = ADDR_PDE(runtime_address);
-            uint pte = ADDR_PTE(runtime_address);
-            page_tables[pde].entries[pte] = PTE(current_process->page_tables, page_id);
+        Elf32_Addr runtime_address = runtime_load_address + h->p_vaddr;
+        uint runtime_page_id = ADDR_PAGE(runtime_address);
 
-            // Check if page should have write permissions, and remove the permission if it's not the case
-            if (!(h->p_flags & PF_W))
-                page_tables[pde].entries[pte] &= ~PAGE_WRITE;
+        // Allocate page in kernel address space
+        int err;
+        auto load_addr = (Elf32_Addr)
+        Memory::mmap((void*)KERNEL_VIRTUAL_BASE,  segment_num_pages * PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, 0, 0, err, Memory::kernel_process);
+        if (!load_addr)
+            irrecoverable_error("%s: mmap failed", __func__);
+
+        // Map it in process address space
+        for (uint i = 0; i < segment_num_pages; i++)
+        {
+            if (PTE(page_tables, runtime_page_id + i))
+                irrecoverable_error("%s: address space overlap detected", __func__);
+            PTE(page_tables, runtime_page_id + i) = PTE(Memory::page_tables, ADDR_PAGE(load_addr) + i) | PAGE_USER;
         }
+
+        // Check if page should have write permissions, and remove the permission if it's not the case
+        const bool write = h->p_flags & PF_W;
+        if (!write)
+            for (uint i = 0; i < segment_num_pages; i++)
+                PTE(page_tables, runtime_page_id + i) &= ~PAGE_WRITE;
+
+        // Register allocation
+        const auto runtime_addr_base_page = runtime_page_id << 12;
+        allocations.add({
+            {
+                runtime_addr_base_page,
+                runtime_addr_base_page + segment_num_pages * PAGE_SIZE,
+                PROT_READ | (write ? PROT_WRITE : 0),
+                MAP_PRIVATE | MAP_ANON
+            },
+            load_addr
+        });
     }
+    num_pages += load_elf->num_pages();
 }
 
 void ELFLoader::load_elf_code(const ELF* elf, uint load_address, uint runtime_load_address) const
@@ -134,7 +141,7 @@ void ELFLoader::load_elf_code(const ELF* elf, uint load_address, uint runtime_lo
     for (int k = 0; k < elf->global_hdr.e_phnum; ++k)
     {
         Elf32_Phdr* h = &elf->prog_hdrs[k];
-        if (h->p_type != PT_LOAD && h->p_type != PT_PHDR)
+        if (h->p_type != PT_LOAD)
             continue;
 
         uint copied_bytes = 0;
@@ -167,15 +174,15 @@ void ELFLoader::load_elf_code(const ELF* elf, uint load_address, uint runtime_lo
         if (h->p_memsz > h->p_filesz)
         {
             auto runtime_address = runtime_load_address + (h->p_vaddr + h->p_filesz);
-            auto dest_addr = runtime_address_to_load_address(runtime_address);
-            memset((void*)dest_addr, 0, h->p_memsz - h->p_filesz);
+            auto dest_addr = new_lptr<void>(runtime_address);
+            dest_addr.memset(0, h->p_memsz - h->p_filesz);
         }
     }
 }
 
 void ELFLoader::setup_elf_got(const ELF* elf, uint elf_runtime_load_address) const
 {
-    if (libdynlk_runtime_entry_point == ELF32_ADDR_ERR)
+    if (elf->runtime_got_addr == ELF32_ADDR_ERR)
         return;
 
     auto got_runtime_addr = elf_runtime_load_address + elf->runtime_got_addr;
@@ -183,9 +190,10 @@ void ELFLoader::setup_elf_got(const ELF* elf, uint elf_runtime_load_address) con
     //printf("%s GOT: 0x%x\n", path, got_runtime_addr);
 
     // Write GOT entries 1 and 2 (unique ID and libdynlk runtime entry point)
-    auto got_load_addr = (Elf32_Addr*)runtime_address_to_load_address(got_runtime_addr);
-    *(void**)(got_load_addr + 1) = (void*)elf;
-    *(void**)(got_load_addr + 2) = (void*)libdynlk_runtime_entry_point;
+    auto got_load_addr_ptr = new_lptr<Elf32_Addr>(got_runtime_addr);
+
+    got_load_addr_ptr.memcpy(&elf, sizeof(void*));
+    (++got_load_addr_ptr).memcpy(&libdynlk_runtime_entry_point, sizeof(void*));
 }
 
 Elf32_Addr ELFLoader::get_libdynlk_runtime_address()
@@ -193,61 +201,54 @@ Elf32_Addr ELFLoader::get_libdynlk_runtime_address()
     if (libdynlk_runtime_entry_point != ELF32_ADDR_ERR)
         return libdynlk_runtime_entry_point;
 
-    uint proc_num_pages = num_pages;
+    const uint libdynlk_load_addr = num_pages << 12;
     ELF* libdynlk_elf;
     if (!((libdynlk_elf = load_libdynlk())))
         return -1;
 
     // Find and return libdynlk runtime entry point
-    uint libdynlk_load_address = runtime_address_to_load_address(proc_num_pages << 12);
-    Elf32_Sym* s = libdynlk_elf->get_dynamic_symbol("lib_main", libdynlk_load_address);
+    const Elf32_Sym* s = libdynlk_elf->get_dynamic_symbol("lib_main", libdynlk_load_addr, allocations);
     return libdynlk_runtime_entry_point =
-        s == nullptr ? ELF32_ADDR_ERR : proc_num_pages * PAGE_SIZE + s->st_value;
+        s == nullptr ? ELF32_ADDR_ERR : libdynlk_load_addr * PAGE_SIZE + s->st_value;
 }
 
-void ELFLoader::allocate_stacks(Elf32_Addr& k_stack_top, Elf32_Addr& p_stack_top_v_addr) const
+void ELFLoader::allocate_stacks()
 {
+    int err;
+    constexpr int prot = PROT_READ | PROT_WRITE;
+    constexpr int flags = MAP_ANONYMOUS | MAP_PRIVATE;
+
     // Allocate process stack pages
+    void* stack_load_address =
+            Memory::mmap((void*)KERNEL_VIRTUAL_BASE, PROCESS_STACK_SIZE, prot, flags, 0, 0, err, Memory::kernel_process);
+    if (!stack_load_address)
+        irrecoverable_error("%s: mmap failed", __func__);
+    // Map them in process address space
+    constexpr uint stack_start_page_id = 768 * PT_ENTRIES - PROCESS_STACK_N_PAGES;
     for (int i = 0; i < PROCESS_STACK_N_PAGES; i++)
     {
-        uint p_stack_pe_id = Memory::get_free_pe_user();
-        Memory::allocate_page_user<false>(p_stack_pe_id, true);
-
-        // Map it in current process' address space below first code page
-        uint p_stack_page_id = 768 * PT_ENTRIES - (PROCESS_N_STACKS_PAGES + num_pages) - PROCESS_STACK_N_PAGES + i;
-        uint p_stack_pde = p_stack_page_id / PT_ENTRIES;
-        uint p_stack_pte = p_stack_page_id % PT_ENTRIES;
-        current_process->page_tables[p_stack_pde].entries[p_stack_pte] = PTE(Memory::page_tables, p_stack_pe_id);
-        INVALIDATE_PAGE(p_stack_pde, p_stack_pte);
-
-        // Map it in destination process' address space
-        uint dest_page_id = 768 * PT_ENTRIES - PROCESS_STACK_N_PAGES + i;
-        uint dest_pde = dest_page_id / PT_ENTRIES;
-        uint dest_pte = dest_page_id % PT_ENTRIES;
-        if (page_tables[dest_pde].entries[dest_pte] != 0)
+        uint dest_page_id = stack_start_page_id + i;
+        if (PTE(page_tables, dest_page_id) != 0)
             irrecoverable_error("%s: Process kernel stack page entry is not empty", __FUNCTION__);
-        page_tables[dest_pde].entries[dest_pte] = PTE(Memory::page_tables, p_stack_pe_id);
+        PTE(page_tables, dest_page_id) = PTE(Memory::page_tables, ADDR_PAGE((uint)stack_load_address) + i) | PAGE_USER;
     }
+    allocations.add({{stack_start_page_id << 12, (stack_start_page_id + PROCESS_STACK_N_PAGES) << 12, prot, flags}, (Elf32_Addr)stack_load_address});
 
-    // Compute stack top
-    p_stack_top_v_addr = (768 * PT_ENTRIES - (PROCESS_N_STACKS_PAGES + num_pages)) << 12;
-
+    // Allocate syscall stack pages
+    void* kstack_load_address =
+            Memory::mmap((void*)KERNEL_VIRTUAL_BASE, PROCESS_SYSCALL_STACK_SIZE, prot, flags, 0, 0, err, Memory::kernel_process);
+    if (!kstack_load_address)
+        irrecoverable_error("%s: mmap failed", __func__);
     // Allocate syscall handler stack pages
+    uint kstack_start_page_id = 768 * PT_ENTRIES - PROCESS_STACK_N_PAGES - PROCESS_SYSCALL_STACK_N_PAGES;
     for (int i = 0; i < PROCESS_SYSCALL_STACK_N_PAGES; i++)
     {
-        uint k_stack_pe = Memory::get_free_pe_user();
-        Memory::allocate_page<false>(k_stack_pe, true);
-
-        // Map it in destination process' address space
-        uint dest_page_id = 768 * PT_ENTRIES - PROCESS_STACK_N_PAGES - PROCESS_SYSCALL_STACK_N_PAGES + i;
-        uint dest_pde = dest_page_id / PT_ENTRIES;
-        uint dest_pte = dest_page_id % PT_ENTRIES;
-        if (page_tables[dest_pde].entries[dest_pte] != 0)
+        uint kstack_dest_page_id = kstack_start_page_id + i;
+        if (PTE(page_tables, kstack_dest_page_id) != 0)
             irrecoverable_error("%s: Process kernel stack page entry is not empty", __FUNCTION__);
-        page_tables[dest_pde].entries[dest_pte] = PTE(Memory::page_tables, k_stack_pe);
+        PTE(page_tables, kstack_dest_page_id) = PTE(Memory::page_tables, ADDR_PAGE((uint)kstack_load_address));
     }
-
-    k_stack_top = ((768 * PT_ENTRIES - PROCESS_STACK_N_PAGES) << 12) - sizeof(int);
+    allocations.add({{kstack_start_page_id << 12, (kstack_start_page_id + PROCESS_SYSCALL_STACK_N_PAGES) << 12, prot, flags}, (Elf32_Addr)kstack_load_address});
 
     // Update relevant PDT entries
     for (int i = 0; i < (PROCESS_N_STACKS_PAGES + PT_ENTRIES - 1) / PT_ENTRIES; i++)
@@ -255,9 +256,9 @@ void ELFLoader::allocate_stacks(Elf32_Addr& k_stack_top, Elf32_Addr& p_stack_top
                 PAGE_PRESENT;
 }
 
-void ELFLoader::setup_pcb(uint p_stack_top_v_addr, int argc, const char** argv, const char** envp)
+void ELFLoader::setup_pcb(int argc, const char** argv, const char** envp)
 {
-    // elf_dep_list[0] = main, [1] = dynlk, [2] = interpeter (it'd be great to write a proper system to manage that...)
+    // elf_dep_list[0] = main, [1] = dynlk, [2] = interpreter (it'd be great to write a proper system to manage that...)
     const auto main_elf = elf_dep_list->get(0)->elf;
     const auto interp_elf_dep = elf_dep_list->get(2);
     const Elf32_Addr entry_point = main_elf->interpreter_name
@@ -266,21 +267,9 @@ void ELFLoader::setup_pcb(uint p_stack_top_v_addr, int argc, const char** argv, 
     stack_state.eip = entry_point;
     stack_state.ss = 0x20 | 0x03;
     stack_state.cs = 0x18 | 0x03;
-    stack_state.esp = write_args_to_stack(p_stack_top_v_addr, argc, argv, envp);
+    stack_state.esp = (size_t)write_args_to_stack(argc, argv, envp);
     stack_state.eflags = 0x200;
     stack_state.error_code = 0;
-}
-
-void ELFLoader::unmap_new_process_from_current_process() const
-{
-    for (size_t i = 0; i < num_pages + PROCESS_STACK_N_PAGES; i++) // unmapping ELF + process stack
-    {
-        uint page_id = 767 * PT_ENTRIES + PT_ENTRIES - PROCESS_N_STACKS_PAGES - 1 - i;
-        uint pde = page_id / PT_ENTRIES;
-        uint pte = page_id % PT_ENTRIES;
-        current_process->page_tables[pde].entries[pte] = 0;
-        INVALIDATE_PAGE(pde, pte);
-    }
 }
 
 void ELFLoader::setup_pdt()
@@ -308,27 +297,24 @@ uint64_t rdtsc()
     return ((uint64_t)hi << 32) | lo;
 }
 
-char* ELFLoader::write_auxv(char* esp, void* const argv0_runtime_addr, void* const random_runtime_addr) const
+Lptr<char> ELFLoader::write_auxv(const Lptr<char>& stack_top, void* const argv0_runtime_addr,
+                                            void* const random_runtime_addr) const
 {
     const ELF& elf = *elf_dep_list->get(0)->elf;
+    auto lt = stack_top.convert_to<auxv_t>();
 
     // The last entry is AT_NULL to indicate the end of the vector
-    esp -= sizeof(auxv_t);
-    *(auxv_t*)esp = {AT_NULL, (long)0};
+    (--lt).write(auxv_t{AT_NULL, (long)0});
 
-    esp -= sizeof(auxv_t);
-    *(auxv_t*)esp = {AT_PAGESZ, PAGE_SIZE};
+    (--lt).write(auxv_t{AT_PAGESZ, PAGE_SIZE});
 
-    esp -= sizeof(auxv_t);
-    *(auxv_t*)esp = {AT_SECURE, (long)0};
+    (--lt).write(auxv_t{AT_SECURE, (long)0});
 
-    esp -= sizeof(auxv_t);
-    *(auxv_t*)esp = {AT_RANDOM,  random_runtime_addr};
+    (--lt).write(auxv_t{AT_RANDOM,  random_runtime_addr});
 
     if (const bool has_interpreter = elf.interpreter_name; !has_interpreter)
-        return esp;
+        return lt.convert_to<char>();
 
-    esp -= sizeof(auxv_t);
     Elf32_Addr phdr_runtime_addr = ELF32_ADDR_ERR;
     for (int i = 0; i < elf.global_hdr.e_phnum; ++i)
     {
@@ -339,21 +325,17 @@ char* ELFLoader::write_auxv(char* esp, void* const argv0_runtime_addr, void* con
     }
     if (phdr_runtime_addr == ELF32_ADDR_ERR)
         irrecoverable_error("%s: no PHDR found in program", __func__);
-    *(auxv_t*)esp = {AT_PHDR, (long)phdr_runtime_addr};
+    (--lt).write(auxv_t{AT_PHDR, (long)phdr_runtime_addr});
 
-    esp -= sizeof(auxv_t);
-    *(auxv_t*)esp = {AT_PHENT, elf.global_hdr.e_phentsize};
+    (--lt).write(auxv_t{AT_PHENT, elf.global_hdr.e_phentsize});
 
-    esp -= sizeof(auxv_t);
-    *(auxv_t*)esp = {AT_PHNUM, elf.global_hdr.e_phnum};
+    (--lt).write(auxv_t{AT_PHNUM, elf.global_hdr.e_phnum});
 
-    esp -= sizeof(auxv_t);
-    *(auxv_t*)esp = {AT_EXECFN, argv0_runtime_addr};
+    (--lt).write(auxv_t{AT_EXECFN, argv0_runtime_addr});
 
-    esp -= sizeof(auxv_t);
-    *(auxv_t*)esp = {AT_ENTRY, (long)elf.global_hdr.e_entry};
+    (--lt).write(auxv_t{AT_ENTRY, (long)elf.global_hdr.e_entry});
 
-    return esp;
+    return lt.convert_to<char>();
 }
 
 ELF* ELFLoader::load_elf(const SharedPointer<Dentry>& file, ELF_type expected_type)
@@ -385,7 +367,6 @@ ELF* ELFLoader::load_elf(void* buf, ELF_type expected_type)
     uint runtime_load_addr = num_pages * PAGE_SIZE;
     elf_dep_list->add({elf, runtime_load_addr});
 
-    alloc_elf_memory(*elf);
     map_elf(elf, runtime_load_addr);
     load_elf_code(elf, load_address, runtime_load_addr);
     if (!dynamic_loading(elf))
@@ -401,56 +382,24 @@ Process* ELFLoader::build_process(int argc, const char** argv, pid_t pid, pid_t 
     if (!load_elf(file, Executable))
         return nullptr;
 
-    auto k_stack_top = finalize_process_setup(argc, argv, envp);
+    finalize_process_setup(argc, argv, envp);
+    constexpr auto k_stack_top = ((768 * PT_ENTRIES - PROCESS_STACK_N_PAGES) << 12) - sizeof(int);
 
     used = true;
     return new Process(file->get_absolute_path(), num_pages, elf_dep_list, page_tables, pdt, &stack_state, priority, pid, ppid, k_stack_top);
 }
 
-void ELFLoader::write_to_stack(char*& stack_top, const void* content, size_t size)
+void ELFLoader::write_to_stack(Lptr<char>& stack_top, const void* content, size_t size)
 {
     stack_top -= size;
-    memcpy(stack_top, content, size);
+    stack_top.memcpy(content, size);
 }
 
-Elf32_Addr ELFLoader::finalize_process_setup(int argc, const char** argv, const char** envp)
+void ELFLoader::finalize_process_setup(int argc, const char** argv, const char** envp)
 {
-    Elf32_Addr k_stack_top, p_stack_top_v_addr;
-
     setup_pdt();
-    allocate_stacks(k_stack_top, p_stack_top_v_addr);
-    setup_pcb(p_stack_top_v_addr, argc, argv, envp);
-    unmap_new_process_from_current_process();
-
-    return k_stack_top;
-}
-
-Elf32_Addr ELFLoader::runtime_address_to_load_address(Elf32_Addr runtime_address) const
-{
-    uint page_sub = PROCESS_N_STACKS_PAGES + num_pages - (runtime_address >> 12);
-    uint pde = (767 - page_sub / PT_ENTRIES);
-    uint pte = PT_ENTRIES - page_sub % PT_ENTRIES;
-    uint off = runtime_address % PAGE_SIZE;
-
-    return VIRT_ADDR(pde, pte, off);
-}
-
-void ELFLoader::offset_memory_mapping(uint offset) const
-{
-    // Offset pages
-    for (size_t i = 0; i < num_pages; i++)
-    {
-        uint page_id = 768 * PT_ENTRIES - PROCESS_N_STACKS_PAGES - num_pages + i;
-        uint new_page_id = page_id - offset;
-
-        current_process->update_pte(new_page_id, PTE(current_process->page_tables, page_id), true);
-    }
-    // Zero out 'offset' pages on the right
-    for (size_t i = 0; i < offset; i++)
-    {
-        uint page_id = 768 * PT_ENTRIES - PROCESS_N_STACKS_PAGES - offset + i;
-        current_process->update_pte(page_id, 0, true);
-    }
+    allocate_stacks();
+    setup_pcb(argc, argv, envp);
 }
 
 Process* ELFLoader::setup_elf_process(pid_t pid, pid_t ppid, int argc, const char** argv,
@@ -462,10 +411,12 @@ Process* ELFLoader::setup_elf_process(pid_t pid, pid_t ppid, int argc, const cha
     return proc;
 }
 
-size_t ELFLoader::write_args_to_stack(size_t stack_top_v_addr, int argc, const char** argv, const char** envp) const
+void* ELFLoader::write_args_to_stack(int argc, const char** argv, const char** envp) const
 {
     // CF https://uclibc.org/docs/psABI-i386.pdf section 2.11
-    char* stack_top = (char*)stack_top_v_addr;
+    constexpr uintptr_t stack_end_runtime_addr = KERNEL_VIRTUAL_BASE - sizeof(int);
+    auto stack_top = new_lptr<char>(stack_end_runtime_addr);
+
     constexpr char nulls[4]{};
 
     if (argc != 0 && argv[argc - 1] == nullptr)
@@ -474,12 +425,12 @@ size_t ELFLoader::write_args_to_stack(size_t stack_top_v_addr, int argc, const c
     // Write argv contents and argv array
     for (int i = argc - 1; i >= 0; i--)
         write_to_stack(stack_top, argv[i], strlen(argv[i]) + 1);
-    const auto argv0_runtime_addr = (void*)(KERNEL_VIRTUAL_BASE - (stack_top_v_addr - (uint)stack_top));
+    void* const argv0_runtime_addr = stack_top.get_runtime_ptr();
 
     // Write envp content
     int envpc = 0;
     for (; envp[envpc]; envpc++){};
-    const auto last_envp_trailing_address = (void*)(KERNEL_VIRTUAL_BASE - (stack_top_v_addr - (uint)stack_top));
+    void* const last_envp_trailing_address = stack_top.get_runtime_ptr();
     for (int envp_idx = envpc - 1; envp_idx >= 0; envp_idx--)
         write_to_stack(stack_top, envp[envp_idx], strlen(envp[envp_idx]) + 1);
 
@@ -495,7 +446,7 @@ size_t ELFLoader::write_args_to_stack(size_t stack_top_v_addr, int argc, const c
         }
     }
     write_to_stack(stack_top, random, sizeof(random));
-    const auto random_runtime_addr = (void*)(KERNEL_VIRTUAL_BASE - (stack_top_v_addr - (uint)stack_top));
+    void* const random_runtime_addr = stack_top.get_runtime_ptr();
 
     // auxv
     stack_top = write_auxv(stack_top, argv0_runtime_addr, random_runtime_addr);
@@ -515,7 +466,7 @@ size_t ELFLoader::write_args_to_stack(size_t stack_top_v_addr, int argc, const c
     write_to_stack(stack_top, nulls, sizeof(nulls));
 
     // Argv
-    char* argv_ptr = (char*)KERNEL_VIRTUAL_BASE;
+    char* argv_ptr = (char*)stack_end_runtime_addr;
     for (int i = argc - 1; i >= 0; i--)
     {
         argv_ptr -= strlen(argv[i]) + 1;
@@ -524,6 +475,5 @@ size_t ELFLoader::write_args_to_stack(size_t stack_top_v_addr, int argc, const c
 
     // argc
     write_to_stack(stack_top, &argc, sizeof(argc));
-
-    return KERNEL_VIRTUAL_BASE - (stack_top_v_addr - (uint)stack_top);
+    return stack_top.get_runtime_ptr();
 }

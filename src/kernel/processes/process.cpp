@@ -263,7 +263,7 @@ uint Process::get_symbol_runtime_address_at_runtime(uint dep_id, const char* sym
     for (int i = dep_id; i < elf_dep_list->size(); i++)
     {
         auto dep = elf_dep_list->get(i);
-        auto s = dep->elf->get_dynamic_symbol(symbol_name, dep->runtime_load_address);
+        auto s = dep->elf->get_dynamic_symbol_at_runtime(symbol_name, dep->runtime_load_address);
         if (s && s->st_shndx && ELF32_ST_BIND(s->st_info) == STB_GLOBAL)
             return dep->runtime_load_address + s->st_value;
     }

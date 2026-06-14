@@ -697,10 +697,11 @@ namespace Memory
             // Current process is kernel process, so index computation is straightforward
             sys_page_id = pde * PT_ENTRIES + pte;
             frame_id = PHYS_ADDR(page_tables, address) >> 12;
+            frame_rc[frame_id]--; // Decrement rc. For user processes this is done in udpate_pte
         }
 
         uint rc = frame_rc[frame_id];
-        if (rc > 1) // Frame is still used, do not free it
+        if (rc >= 1) // Frame is still used, do not free it
             return;
 
         // Write PTE in kernel global memory mapping
@@ -719,7 +720,6 @@ namespace Memory
     {
         allocate_page<lazy_zero>(frame_id, page_id, write);
         PTE(page_tables, page_id) |= PAGE_USER;
-        // Todo: invalidate cache correctly
     }
 
     template<bool lazy_zero>
@@ -813,6 +813,13 @@ namespace Memory
 
         // At that point we know we have ANONYMOUS and MAP_PRIVATE
         const int page_flags = mmap_prot_to_page_flags(prot, process->page_tables != kernel_process->page_tables);
+
+        // If hint is KERNEL_VIRTUAL_BASE, then there is obviously no free memory below kernel_process->lowest_free_pe << 12
+        // So hint is set to that value to avoid useless searching
+        // Note that passing KERNEL_VIRUTAL_BASE as hint is a way to force mmap to allocate in higher half, thus making
+        // the allocation accessible from any address space
+        if (hint == (void*)KERNEL_VIRTUAL_BASE)
+            hint = (void*)(kernel_process->lowest_free_pe << 12);
 
         alloc_params alloc_params{page_flags, hint, (bool)(flags & MAP_FIXED)};
         void* window = sbrk<false>(ADDR_PAGE(size + PAGE_SIZE - 1), process, &alloc_params);

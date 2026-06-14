@@ -56,7 +56,7 @@ public:
 	 * @param load_address where is the ELF loaded
 	 * @return symbol, NULL if error occurred
 	 */
-	Elf32_Sym* get_dynamic_symbol(const char* symbol_name, Elf32_Addr load_address) const;
+	Elf32_Sym* get_dynamic_symbol_at_runtime(const char* symbol_name, Elf32_Addr load_address) const;
 
 	/**
 	 * Checks whether an ELF file is valid and supported

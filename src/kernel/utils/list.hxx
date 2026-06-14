@@ -10,8 +10,7 @@ list<T>::Node::Node() {
 }
 
 template<class T>
-list<T>::Node::Node(T val) {
-    value = val;
+list<T>::Node::Node(T val) : value(val) {
     next = nullptr;
 }
 

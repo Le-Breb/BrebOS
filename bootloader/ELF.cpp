@@ -190,7 +190,7 @@ uint ELF::get_highest_runtime_addr() const
     return highest_addr;
 }
 
-Elf32_Sym* ELF::get_dynamic_symbol(const char* symbol_name, Elf32_Addr load_address) const
+Elf32_Sym* ELF::get_dynamic_symbol_at_runtime(const char* symbol_name, Elf32_Addr load_address) const
 {
     // If there is not hash table available, linearly search for the symbol
     if (hash_table_runtime_address == ELF32_ADDR_ERR)

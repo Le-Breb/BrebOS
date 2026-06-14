@@ -5,6 +5,8 @@
 #include <kstddef.h>
 #include <kstring.h>
 
+#include "ELFTools.h"
+
 enum ELF_type
 {
 	Executable,
@@ -56,7 +58,16 @@ public:
 	 * @param load_address where is the ELF loaded
 	 * @return symbol, NULL if error occurred
 	 */
-	Elf32_Sym* get_dynamic_symbol(const char* symbol_name, Elf32_Addr load_address) const;
+	Elf32_Sym* get_dynamic_symbol_at_runtime(const char* symbol_name, Elf32_Addr load_address) const;
+
+	/**
+	 * Get a symbol of an ELF file
+	 * @param symbol_name name of the symbol we look for
+	 * @param load_address where is the ELF loaded
+	 * @param allocations mapping of runtime to load time addresses
+	 * @return symbol, NULL if error occurred
+	 */
+	Elf32_Sym* get_dynamic_symbol(const char* symbol_name, Elf32_Addr load_address, const list<ELFTools::alloc>& allocations) const;
 
 	Elf32_Sym* get_symbol(const char* symbol_name) const;
 
