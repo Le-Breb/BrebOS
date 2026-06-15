@@ -183,10 +183,16 @@ void Process::release_fd(int fd)
 }
 
 
-void Process::terminate(int ret_val)
+void Process::terminate_with_value(int ret_val)
 {
     flags |= P_TERMINATED;
-    this->ret_val = ret_val;
+    this->ret_status = (ret_val & 0xFF) << 8; // Cf. wait.h
+}
+
+void Process::terminate_with_signal(int ret_sig)
+{
+    flags |= P_TERMINATED;
+    this->ret_status = ret_sig & 0x7F; // Cf. wait.h
 }
 
 void* Process::malloc(uint n)
@@ -659,7 +665,7 @@ int Process::kill(int signal)
     if (signal_action[signal] == SIG_DFL && (default_act_is_core || default_act_is_term))
     {
         printf_warn("Process %d (%s) received signal %s. Exiting.", pid, bin_path, sig_names[signal]);
-        terminate(128 + signal);
+        terminate_with_signal(signal);
         TRIGGER_TIMER_INTERRUPT
         return 0;
     }

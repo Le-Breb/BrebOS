@@ -470,9 +470,9 @@ void Scheduler::wake_up_process_parent(pid_t process_pid)
     // Resume process, unless it's the current process, in which case it is already in the ready queue
     if (ppid != curr_pid)
         ready_queue->enqueue(ppid);
-    // waitpid return value. Refer to newlib's wait.h
+    // waitpid return value.
     if (auto wstatus_addr = (int*)waiting_process->cpu_state.esi)
-        waiting_process->values_to_write.add({wstatus_addr, processes[process_pid]->ret_val << 8});
+        waiting_process->values_to_write.add({wstatus_addr, processes[process_pid]->ret_status});
     // Clear flag
     waiting_process->flags &= ~P_WAITING_PROCESS;
     // Set return value

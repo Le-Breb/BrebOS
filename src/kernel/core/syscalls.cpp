@@ -13,6 +13,7 @@
 #include <bits/wint_t.h>
 
 #include "../misc/GDB.h"
+#include "abi-bits/wait.h"
 
 void Syscall::get_pid()
 {
@@ -23,7 +24,7 @@ void Syscall::get_pid()
 
 [[noreturn]] void Syscall::terminate_process(Process* p, int ret_val)
 {
-    p->terminate(ret_val);
+    p->terminate_with_value(ret_val);
 
     // We definitely do not want to continue as next step is to resume the process we just terminated !
     // Instead, we manually raise a timer interrupt which will schedule another process
@@ -613,7 +614,7 @@ int Syscall::wait_pid(Process* p)
     // Direct return, either error or child already terminated
     if (wait != 0)
     {
-        if (wait > 0) // set wstatus. See newlib's wait.h
+        if (wait > 0) // set wstatus. Cf. wait.h
             *(int*)p->cpu_state.esi = wait << 8;
         return wait;
     }

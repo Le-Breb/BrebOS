@@ -33,9 +33,7 @@
 // Process is waiting for new data after calling read()
 #define P_WAITING_READ 128
 
-#define SEGFAULT_RET_VAL 255
-#define GPF_RET_VAL 254
-#define INIT_ERR_RET_VAL 253
+#define INIT_ERR_RET_VAL 127
 
 // Can be increased up to <= sizeof(sigset_t) * 8.
 // Do not forget to update @signal_default_action initialization accordingly if you increase that value
@@ -105,7 +103,7 @@ class Process
 	uint k_stack_top; // Top of syscall handlers' stack
 	uint flags; // Process state
 
-	int ret_val{};
+	int ret_status{};
 
 	list<void*> allocations{};
 	char* work_dir;
@@ -193,9 +191,14 @@ public:
 	[[nodiscard]] pid_t get_pid() const;
 
 	/**
-	 * Terminates a process
+	 * Terminates a process that exited normally
 	 */
-	void terminate(int ret_val);
+	void terminate_with_value(int ret_val);
+
+	/**
+	 * Terminates a process that exited because of a signal
+	 */
+	void terminate_with_signal(int ret_sig);
 
 	/**
 	 * Contiguous heap memory allocator

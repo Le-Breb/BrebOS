@@ -23,12 +23,10 @@ extern "C" bool fpu_init_asm_();
 
 //Todo: Advanced memory freeing (do something when free_pages do not manage to have free_bytes < FREE_THRESHOLD)
 //Todo: Use higher precision timer
-//Todo: Free ELFs after programs termination
-//Todo: Fix waitpid return value so that it is usable with macros such as WEXITSTATUS
+//Todo: Free ELFs after programs termination (currently fork does not copy ELFs, which causes double free if we delete ELFs in ~Process)
 //Todo: Fast kernel memory pool: constantly allocated memory region with super-fast allocator for tmp operations
 //Todo: Syscall concurrent safety (that's a goddamn huge task)
 //Todo: Check if userland programs can manipulate kernel space addresses througout syscalls (ex: write(1, KERNEL_VIRTUAL_ADDRESS_BASE), 10)
-//Todo: Set proper wstatus values (signals, core dumps...). See 'man 2 wait'
 //Todo: run 42sh in interactive mode (so that $PWD is preserved across commands)
 //Todo: pass every syscall to Linux parameter passing convention
 //Todo: unify mlibc and brebos syscalls numbers (via header file)

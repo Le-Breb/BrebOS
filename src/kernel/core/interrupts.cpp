@@ -81,7 +81,7 @@ void Interrupts::gpf_handler(const stack_state* stack_state)
 	printf_error("General protection fault");
 	printf("Segment selector: %x\n", stack_state->error_code);
 
-	Scheduler::get_running_process()->terminate(GPF_RET_VAL);
+	Scheduler::get_running_process()->terminate_with_signal(SIGSEGV);
 }
 
 [[noreturn]]
