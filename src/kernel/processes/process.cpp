@@ -87,8 +87,21 @@ void Process::pre_free()
     }
 
     // Clear memory leaks
-    // for (const auto alloc : allocations)
-    //     free(alloc);
+    if (!exec_running())
+    {
+        if (Scheduler::get_process(pid) != this)
+        {
+            if (allocations.size())
+                irrecoverable_error("Pre freeing a process after it was removed from Scheduler::processes."
+                                    "See comment for details");
+            // When this code runs, the process may be removed from Scheduler::processes
+            // Freeing allocations could potentially trigger page faults. Page fault modify page_tables.
+            // In order to get page_tables, page fault handler logic will call Scheduler::get_running_process()
+            // This will then return either null or another process, leading to crash or undefined behavior
+            // Thus, allocations must be cleared in a place where we know that process in still in Scheduler::processes
+        }
+        free_leaks();
+    }
 
     // Close open file descriptors
     for (const auto& file_desc : file_descriptors)
@@ -197,10 +210,10 @@ void* Process::calloc(size_t nmemb, size_t size)
 void* Process::realloc(void* ptr, size_t size)
 {
     auto alloc = ::realloc(ptr, size, this);
-    if (alloc == ptr)
-        return alloc;
-    if (alloc)
-        allocations.add(alloc);
+
+    // Realloc either returns the same ptr, either calls process->malloc so there is no new allocation to register
+    // if (alloc)
+    //     allocations.add(alloc);
 
     return alloc;
 }
@@ -482,10 +495,9 @@ void Process::execve_transfer(Process* proc)
     }
 }
 
-void Process::register_allocation(const Memory::allocation& allocation)
+void Process::register_mmap_allocation(const Memory::allocation& allocation)
 {
     mmap_allocations.add(allocation);
-    allocations.add((void*)allocation.start);
 }
 
 bool Process::deallocate(void* addr, Memory::allocation& alloc)
@@ -501,6 +513,16 @@ bool Process::deallocate(void* addr, Memory::allocation& alloc)
     }
 
     return false;
+}
+
+void Process::free_leaks()
+{
+    const auto allocs = allocations; // Make a copy to avoid modifying while iterating
+    for (const auto& alloc : allocs)
+        free(alloc);
+
+    if (allocations.size())
+        irrecoverable_error("%s: process allocations not empty after freeing all its entries", __func__);
 }
 
 int Process::open(const char* pathname, int flags, mode_t mode)

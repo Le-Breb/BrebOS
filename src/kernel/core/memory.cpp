@@ -826,7 +826,7 @@ namespace Memory
         if (flags & MAP_FIXED && window != hint)
             irrecoverable_error("%s: MP_FIXED set, but returned window does not match hit", __func__);
         allocation allocation = {(uintptr_t)window, (uintptr_t)window + size, prot, flags | (process->page_tables == page_tables ? 0 : PAGE_USER)};
-        process->register_allocation(allocation);
+        process->register_mmap_allocation(allocation);
         if (!window)
             mmap_ret_err(ENOMEM);
         return window;
@@ -1233,7 +1233,7 @@ void* realloc(void* ptr, size_t size, Process* process)
         return malloc<false>(size, process);
     if (!size) // realloc with size 0 = free
     {
-        free(ptr, process);
+        process->free(ptr);
         return nullptr;
     }
 
@@ -1267,13 +1267,13 @@ void* realloc(void* ptr, size_t size, Process* process)
     }
 
     // We have no choice left but to copy data in a newly allocated buffer and free original data
-    void* new_mem = malloc<false>(size, process);
+    void* new_mem = process->malloc(size);
 
     if (!new_mem)
         return ptr; // If realloc fails, the man page indicates it should return the unchanged original buffer
 
     memcpy(new_mem, ptr, block_content_byte_size);
-    free(ptr, process);
+    process->free(ptr);
 
     return new_mem;
 }

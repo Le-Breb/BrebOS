@@ -268,9 +268,11 @@ public:
 	 */
 	void execve_transfer(Process* proc);
 
-	void register_allocation(const Memory::allocation& allocation);
+	void register_mmap_allocation(const Memory::allocation& allocation);
 
 	bool deallocate(void* addr, Memory::allocation& alloc);
+
+	void free_leaks();
 
 	/**
 	 * Opens a file

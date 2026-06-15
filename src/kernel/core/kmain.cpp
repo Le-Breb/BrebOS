@@ -24,7 +24,6 @@ extern "C" bool fpu_init_asm_();
 //Todo: Advanced memory freeing (do something when free_pages do not manage to have free_bytes < FREE_THRESHOLD)
 //Todo: Use higher precision timer
 //Todo: Free ELFs after programs termination
-//Todo: Handle userland memory leaks
 //Todo: Fix waitpid return value so that it is usable with macros such as WEXITSTATUS
 //Todo: Fast kernel memory pool: constantly allocated memory region with super-fast allocator for tmp operations
 //Todo: Syscall concurrent safety (that's a goddamn huge task)
@@ -33,7 +32,7 @@ extern "C" bool fpu_init_asm_();
 //Todo: run 42sh in interactive mode (so that $PWD is preserved across commands)
 //Todo: pass every syscall to Linux parameter passing convention
 //Todo: unify mlibc and brebos syscalls numbers (via header file)
-//Todo: unify allocation methods (mmap and malloc) + use uniformly flags and prot across the whole memory code
+//Todo: unify allocation methods (mmap and malloc) (for now memory header kill LAZY_ZERO benefits) + use uniformly flags and prot across the whole memory code
 // Todo: Some TERM or CORE signals should be catchable by processes. For example, SIGTERM simply asks processes
 // to shut down, and OS terminates them only after a while if the process does not do it by itself
 // Todo: implement Process::mmap_allocations using RB tree
