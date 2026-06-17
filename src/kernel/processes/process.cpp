@@ -499,6 +499,11 @@ void Process::execve_transfer(Process* proc)
         if (proc->file_descriptors[i] == nullptr)
             proc->lowest_free_fd = i;
     }
+
+    // Clear memory leaks
+    for (const auto& alloc : list(allocations))
+        free(alloc);
+    allocations.clear();
 }
 
 void Process::register_mmap_allocation(const Memory::allocation& allocation)
