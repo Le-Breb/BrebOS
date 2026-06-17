@@ -117,22 +117,19 @@ void Process::pre_free()
     if (children.size() && !exec_running())
         irrecoverable_error("Freeing a process that has children");
 
-    delete elf_dep_list;
-
     Memory::freea(page_tables);
     Memory::freea(pdt);
 
     is_pre_freed = true;
 }
 
-Process::Process(char* bin_path, uint num_pages, list<elf_dependence>* elf_dep_list, Memory::page_table_t* page_tables,
+Process::Process(char* bin_path, uint num_pages, Memory::page_table_t* page_tables,
                  Memory::pdt_t* pdt, stack_state_t* stack_state, uint priority, pid_t pid, pid_t ppid, Elf32_Addr k_stack_top) :
     quantum(0), priority(priority),
     num_pages(num_pages),
     pid(pid), ppid(ppid), k_stack_top(k_stack_top), flags(P_READY),
     lowest_free_pe(num_pages),
     bin_path(bin_path),
-    elf_dep_list(elf_dep_list),
     page_tables(page_tables),
     pdt(pdt),
     program_break(num_pages * PAGE_SIZE)
@@ -278,19 +275,6 @@ bool Process::exec_running() const
     return flags & P_EXEC;
 }
 
-uint Process::get_symbol_runtime_address_at_runtime(uint dep_id, const char* symbol_name) const
-{
-    for (int i = dep_id; i < elf_dep_list->size(); i++)
-    {
-        auto dep = elf_dep_list->get(i);
-        auto s = dep->elf->get_dynamic_symbol_at_runtime(symbol_name, dep->runtime_load_address);
-        if (s && s->st_shndx && ELF32_ST_BIND(s->st_info) == STB_GLOBAL)
-            return dep->runtime_load_address + s->st_value;
-    }
-
-    return 0x00;
-}
-
 void Process::init()
 {
     signal_default_action[SIGHUP] = SIGDISP_TERM;
@@ -353,13 +337,8 @@ pid_t Process::fork()
     auto child_page_tables = (Memory::page_table_t*)Memory::calloca(768, sizeof(Memory::page_table_t));
     auto child_pdt = (Memory::pdt_t*)Memory::malloca(sizeof(Memory::pdt_t));
 
-    // Duplicate dependency list
-    auto dep_list = new list<elf_dependence>{};
-    for (const auto& dep : *elf_dep_list)
-        dep_list->add(dep);
-
     // Creat child process
-    auto child = new Process(strdup(bin_path), num_pages, dep_list, child_page_tables, child_pdt, &stack_state, priority, child_pid,
+    auto child = new Process(strdup(bin_path), num_pages, child_page_tables, child_pdt, &stack_state, priority, child_pid,
         pid, k_stack_top);
 
     // Copy PCB

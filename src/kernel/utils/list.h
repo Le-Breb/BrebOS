@@ -12,11 +12,18 @@ private:
 
 		Node();
 
-		explicit Node(E val);
+		explicit Node(const E& val);
 	};
 
     Node *head;
     int s;
+
+	/**
+	 * Appends the specified element to the end of this list.
+	 *
+	 * @param newNode - the node to add
+	 */
+	void add(Node* newNode);
 
 public:
 
@@ -43,12 +50,19 @@ public:
 
     list();
 
-    /**
-     * Appends the specified element to the end of this list.
-     *
-     * @param e - the element to add
-     */
-    void add(E e);
+	/**
+	 * Appends the specified element to the end of this list.
+	 *
+	 * @param e - the element to add
+	 */
+	void add(const E& e);
+
+	/**
+	 * Appends the specified element to the end of this list.
+	 *
+	 * @param e - the element to add
+	 */
+	void add(const E&& e);
 
     /**
      * Inserts the specified element at the specified position in this list.

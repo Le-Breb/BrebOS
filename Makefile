@@ -26,7 +26,6 @@ BUILD_DIR=build
 SRC_DIR=src
 LIBC_BUILD_DIR=$(SRC_DIR)/libc/build
 LIBK_BUILD_DIR=$(SRC_DIR)/libk/build
-LIBDYNLK_BUILD_DIR=$(SRC_DIR)/libdynlk/build
 GCC_BUILD_DIR=$(SRC_DIR)/gcc/build
 KERNEL_BUILD_DIR=$(SRC_DIR)/kernel/build
 PROGRAMS_BUILD_DIR=$(SRC_DIR)/programs/build
@@ -69,12 +68,10 @@ programs=$(PROGRAMS_BUILD_DIR)
 CPPFLAGS=-I$(SRC_DIR)/libc
 libc=$(LIBC_BUILD_DIR)/libc.a
 libk=$(LIBC_BUILD_DIR)/libk.a
-libdynlk=$(LIBDYNLK_BUILD_DIR)/libdynlk.o
 
 programs_sources=$(shell find $(SRC_DIR)/programs -type f -name '*.cpp') $(SRC_DIR)/programs/start_program.s
 libc_sources=$(shell find $(SRC_DIR)/libc -type f -name '*.cpp')
 libk_sources=$(shell find $(SRC_DIR)/libk -type f -name '*.cpp')
-libdynlk_sources=$(shell find $(SRC_DIR)/libdynlk -type f -name '*.cpp')
 
 LD=ld
 
@@ -88,7 +85,7 @@ GRUB_TIMEOUT=0
 FONT_FILE=Lat15-VGA16.psf
 FONT_OBJ= $(BUILD_DIR)/$(FONT_FILE:%.psf=%.o)
 
-.PHONY: libc libk libdynlk programs bootloader mlibc
+.PHONY: libc libk programs bootloader mlibc
 
 all: init $(OS_ISO) compilation_ended
 
@@ -108,9 +105,6 @@ $(BUILD_DIR)/.dir_timestamp:
 	@touch $(BUILD_DIR)/.dir_timestamp
 	@mkdir -p $(KERNEL_BUILD_DIR)
 
-$(libdynlk): $(libdynlk_sources)
-	+$(MAKE) -C $(SRC_DIR)/libdynlk
-
 $(libc): $(libc_sources)
 	+$(MAKE) -C $(SRC_DIR)/libc
 
@@ -121,7 +115,7 @@ mlibc:
 	cd $(BREBOS)/mlibc && \
 	DESTDIR=$(SYSROOT_DIR) ninja -C build install
 
-$(programs): $(programs_sources) $(libk) $(libdynlk) mlibc
+$(programs): $(programs_sources) $(libk) mlibc
 	+$(MAKE) -C $(SRC_DIR)/programs
 
 $(KERNEL_BUILD_DIR)/%.o: $(SRC_DIR)/kernel/%.cpp
@@ -139,7 +133,7 @@ $(FONT_OBJ): $(FONT_FILE)
 $(BUILD_DIR)/kernel.elf: $(BUILD_DIR)/.dir_timestamp $(FONT_OBJ) $(INTERNAL_OBJS) $(libc) $(gcc)
 	i686-brebos-ld $(LDFLAGS) $(OBJ_LIST) $(libc) $(FONT_OBJ) -o $(BUILD_DIR)/kernel.elf $(libgcc)
 
-$(OS_ISO): $(BUILD_DIR)/kernel.elf $(libdynlk) $(programs) bootloader
+$(OS_ISO): $(BUILD_DIR)/kernel.elf $(programs) bootloader
 	@#Create directories
 	@mkdir -p isodir
 	@mkdir -p isodir/boot
@@ -167,7 +161,6 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(libdynlk) $(programs) bootloader
 	@mcopy -i disk_image.img ./src/libk/build/libk.so ::/usr/lib
 	#@mcopy -i disk_image.img $(LIBC_BUILD_DIR)/libc.so ::/bin
 	@mcopy -i disk_image.img $(LIBK_BUILD_DIR)/libk.so ::/bin
-	@mcopy -i disk_image.img $(LIBDYNLK_BUILD_DIR)/libdynlk.so ::/bin
 	@echo "this is a text file :D" | mcopy -i disk_image.img - ::/"text-file.txt"
 	@for prog in $(shell find $(SRC_DIR)/programs/build -type f ! -name "*.*"); do \
     		mcopy -i disk_image.img $$prog ::/bin; \
@@ -184,7 +177,6 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(libdynlk) $(programs) bootloader
 	@echo "	multiboot2 /boot/$(OUT_BIN)" >> grub.cfg
 	@#echo "	module /modules/shell" >> grub.cfg
 	@#echo "	module /modules/program2" >> grub.cfg
-	@#echo "	module /modules/libdynlk.so" >> grub.cfg
 	@#echo "	module /modules/libkapi.so" >> grub.cfg
 	@echo } >> grub.cfg
 
@@ -230,7 +222,6 @@ clean:
 	rm -rf *.o $(OUT_BIN) $(OS_ISO) isodir $(BUILD_DIR) $(KERNEL_BUILD_DIR) grub.cfg
 	$(MAKE) -C $(SRC_DIR)/libc clean
 	$(MAKE) -C $(SRC_DIR)/libk clean
-	$(MAKE) -C $(SRC_DIR)/libdynlk clean
 	$(MAKE) -C $(SRC_DIR)/gcc/ clean
 	$(MAKE) -C $(SRC_DIR)/programs/ clean
 	$(MAKE) -C bootloader clean

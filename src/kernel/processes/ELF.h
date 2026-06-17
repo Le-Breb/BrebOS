@@ -16,18 +16,13 @@ enum ELF_type
 
 class ELF
 {
-private:
 	ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr, uint start_address);
-
-	[[nodiscard]]
-	static unsigned long hash(const unsigned char *name);
 
 public:
 	Elf32_Ehdr global_hdr;
 	Elf32_Phdr* prog_hdrs = nullptr;
 	Elf32_Shdr* section_hdrs = nullptr;
 	Elf32_Dyn* dyn_table = nullptr;
-	Elf32_Rel* plt_relocs = nullptr;
 	Elf32_Rel* dyn_relocs = nullptr;
 	Elf32_Sym* dynsym = nullptr;
 	Elf32_Shdr* dynsym_hdr = nullptr;
@@ -37,7 +32,6 @@ public:
 	const char* dynsym_strtab = nullptr;
 	const char* strtab = nullptr;
 	const char* shstrtab = nullptr;
-	size_t num_plt_relocs;
 	size_t num_dyn_relocs;
     Elf32_Addr runtime_got_addr = ELF32_ADDR_ERR;
     Elf32_Addr hash_table_runtime_address = ELF32_ADDR_ERR;
@@ -51,14 +45,6 @@ public:
 	 * @return highest runtime address
 	 */
 	[[nodiscard]] uint get_highest_runtime_addr() const;
-
-	/**
-	 * Get a symbol of an ELF file
-	 * @param symbol_name name of the symbol we look for
-	 * @param load_address where is the ELF loaded
-	 * @return symbol, NULL if error occurred
-	 */
-	Elf32_Sym* get_dynamic_symbol_at_runtime(const char* symbol_name, Elf32_Addr load_address) const;
 
 	/**
 	 * Get a symbol of an ELF file
@@ -82,12 +68,6 @@ public:
 	[[nodiscard]] size_t base_address() const;
 
 	[[nodiscard]] size_t num_pages() const;
-};
-
-struct elf_dependence
-{
-	ELF* elf;
-	Elf32_Addr runtime_load_address;
 };
 
 #endif //INCLUDE_ELF_H

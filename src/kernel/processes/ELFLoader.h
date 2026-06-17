@@ -9,9 +9,6 @@
 #include "process.h"
 #include "../file_management/dentry.h"
 
-#define LIBDYNLK_PATH "/bin/libdynlk.so"
-#define LIBK_PATH "/bin/libk.so"
-
 #define AT_NULL 0
 #define AT_IGNORE 1
 #define AT_EXECFD 2
@@ -64,6 +61,12 @@ class ELFLoader
 {
     friend class Process;
 private:
+    struct elf_dependence
+    {
+        ELF* elf;
+        Elf32_Addr runtime_load_address;
+    };
+
     Process* current_process;
     list<elf_dependence>* elf_dep_list;
     uint num_pages = 0;
@@ -71,7 +74,6 @@ private:
     Memory::pdt_t* pdt;
     stack_state_t stack_state{};
     bool used = false;
-    Elf32_Addr libdynlk_runtime_entry_point = ELF32_ADDR_ERR;
 
     ELFLoader();
     ~ELFLoader();
@@ -92,15 +94,6 @@ private:
     */
     bool dynamic_loading(const ELF* elf);
 
-    /*/**
-    * Load a lib in a process' address soace
-    * @param path GRUB modules
-    * @param lib_dynlk_runtime_entry_point
-    * @param runtime_load_address address where lib is loaded in runtime address space
-    * @return libdynlk runtime entry point address
-    #1#
-    ELF* load_lib(const char* path, void* lib_dynlk_runtime_entry_point, Elf32_Addr& runtime_load_address);*/
-
     /**
      * Load ELF file code and data into a process' address space and maps it
      * @param file ELF to load
@@ -110,8 +103,6 @@ private:
     ELF* load_elf(const SharedPointer<Dentry>& file, ELF_type expected_type);
 
     ELF* load_elf(void* buf, ELF_type expected_type);
-
-    ELF* load_libdynlk();
 
     /**
      * Maps the segments of an ELF into the process' virtual address space
@@ -147,10 +138,6 @@ private:
     void finalize_process_setup(int argc, const char** argv, const char** envp);
 
     void load_elf_code(const ELF* elf, uint load_address, uint runtime_load_address) const;
-
-    void setup_elf_got(const ELF* elf, uint elf_runtime_load_address) const;
-
-    Elf32_Addr get_libdynlk_runtime_address();
 
     void allocate_stacks();
 

@@ -7,6 +7,9 @@
 
 namespace ELFTools
 {
+    [[nodiscard]]
+    inline unsigned long hash(const unsigned char *name);
+
     struct alloc
     {
         Memory::allocation alloc_; // Allocation in process

@@ -23,10 +23,9 @@ extern "C" bool fpu_init_asm_();
 
 //Todo: Advanced memory freeing (do something when free_pages do not manage to have free_bytes < FREE_THRESHOLD)
 //Todo: Use higher precision timer
-//Todo: Free ELFs after programs termination (currently fork does not copy ELFs, which causes double free if we delete ELFs in ~Process)
 //Todo: Fast kernel memory pool: constantly allocated memory region with super-fast allocator for tmp operations
 //Todo: Syscall concurrent safety (that's a goddamn huge task)
-//Todo: Check if userland programs can manipulate kernel space addresses througout syscalls (ex: write(1, KERNEL_VIRTUAL_ADDRESS_BASE), 10)
+//Todo: Sanitize syscalls inputs (address ranges and permissions, value ranges)
 //Todo: run 42sh in interactive mode (so that $PWD is preserved across commands)
 //Todo: pass every syscall to Linux parameter passing convention
 //Todo: unify mlibc and brebos syscalls numbers (via header file)
@@ -35,7 +34,6 @@ extern "C" bool fpu_init_asm_();
 // to shut down, and OS terminates them only after a while if the process does not do it by itself
 // Todo: implement Process::mmap_allocations using RB tree
 // Todo: add support for ELF versioning sections
-// Todo: memory mapped files, to reduce disk sollicitation
 // Todo: Investigate how vDSO could be implemented (mlibc has code related to that isn't it ?)
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {

@@ -55,78 +55,6 @@ void Syscall::realloc(Process* p)
     p->cpu_state.eax = (uint)p->realloc((void*)p->cpu_state.edi, (size_t)p->cpu_state.esi);
 }
 
-void Syscall::dynlk(const cpu_state_t* cpu_state)
-{
-    // Get calling process and verify its identity is as expected
-    Process* p = Scheduler::get_running_process();
-
-    // Find the ELF from which the call is from
-    int dep_id = 0;
-    elf_dependence* dep = nullptr;
-    for (dep_id = 0; dep_id < p->elf_dep_list->size(); dep_id++)
-    {
-        dep = p->elf_dep_list->get(dep_id);
-        if ((uint)dep->elf == cpu_state->esi)
-            break;
-    }
-    if (dep == nullptr)
-    {
-        printf_error("dynlk met unknown ELF");
-        terminate_process(p, INIT_ERR_RET_VAL);
-    }
-    ELF* elf = dep->elf;
-
-    // Get relocation table
-    Elf32_Rel* reloc_table = elf->plt_relocs;
-    if (reloc_table == nullptr)
-    {
-        printf_error("no reloc table");
-        terminate_process(p, INIT_ERR_RET_VAL);
-    }
-
-    // Check required symbol's relocation
-    auto* rel = (Elf32_Rel*)((uint)reloc_table + cpu_state->edi);
-    uint symbol_id = ELF32_R_SYM(rel->r_info);
-    uint type = ELF32_R_TYPE(rel->r_info);
-    if (type != R_386_JMP_SLOT)
-    {
-        printf_error("Unhandled relocation type: %d", type);
-        terminate_process(p, INIT_ERR_RET_VAL);
-    }
-
-    // Get dynsym and its string table
-    Elf32_Shdr* dynsym_hdr = elf->dynsym_hdr;
-    if (dynsym_hdr == nullptr)
-    {
-        printf_error("Where tf is dynsym ?");
-        terminate_process(p, INIT_ERR_RET_VAL);
-    }
-
-    // Check symbol index makes sense
-    uint dynsym_num_entries = dynsym_hdr->sh_size / dynsym_hdr->sh_entsize;
-    if (symbol_id + 1 > dynsym_num_entries)
-        printf_error("Required symbol has index %d while symtab only contains %d entries", symbol_id,
-                     dynsym_num_entries);
-
-    // Get symbol name
-    Elf32_Sym* s = &elf->dynsym[symbol_id];
-    const char* symbol_name = &elf->dynsym_strtab[s->st_name];
-
-    // Find symbol
-    void* symbol_addr = (void*)p->get_symbol_runtime_address_at_runtime(dep_id, symbol_name);
-    if (symbol_addr == nullptr)
-    {
-        printf_error("%s: Symbol %s not found", __func__, symbol_name);
-        return;
-    }
-
-    // Compute symbol's GOT entry address
-    uint got_entry_addr = rel->r_offset + dep->runtime_load_address;
-
-    *(void**)got_entry_addr = symbol_addr; // Write symbol address to GOT
-    Scheduler::get_running_process()->cpu_state.eax = (uint)symbol_addr; // Return symbol address to userland dynlk
-}
-
 __attribute__((no_instrument_function)) // May not return, which would mess up profiling data
 void Syscall::get_key()
 {
@@ -167,9 +95,6 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             break;
         case 6:
             System::shutdown();
-        case 7:
-            dynlk(&p->cpu_state);
-            break;
         case 8:
             malloc(p);
             break;

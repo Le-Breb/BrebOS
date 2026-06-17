@@ -10,6 +10,20 @@ typedef unsigned int uint;
 
 namespace ELFTools
 {
+inline unsigned long hash(const unsigned char* name)
+{
+    unsigned long h = 0, g;
+    while (*name)
+    {
+        h = (h << 4) + *name++;
+        if ((g = (h & 0xf0000000)))
+            h ^= g >> 24 ;
+        h &= ~g ;
+    }
+
+    return h ;
+}
+
     template <typename ptr_underlying_type>
 Lptr<ptr_underlying_type>::Lptr(ptr runtime_ptr, const list<alloc>* address_space_manager) : p_runtime_ptr(runtime_ptr), allocations(address_space_manager)
 {

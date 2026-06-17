@@ -140,7 +140,6 @@ public:
 	uint free_bytes = 0;
 
 	char* bin_path = nullptr;
-	list<elf_dependence>* elf_dep_list;
 	cpu_state_t cpu_state{}; // Registers
 	cpu_state_t k_cpu_state{}; // Syscall handler registers
 	stack_state_t stack_state{}; // Execution context
@@ -170,7 +169,7 @@ private:
 	/** Frees the resources of the process (typically used for zombies to release most memory) **/
 	void pre_free();
 
-	Process(char* bin_path, uint num_pages, list<elf_dependence>* elf_dep_list, Memory::page_table_t* page_tables,
+	Process(char* bin_path, uint num_pages, Memory::page_table_t* page_tables,
 		Memory::pdt_t* pdt, stack_state_t* stack_state, uint priority, pid_t pid,
 		pid_t ppid, Elf32_Addr k_stack_top);
 
@@ -241,18 +240,6 @@ public:
 	[[nodiscard]] bool is_sleeping() const;
 
 	[[nodiscard]] bool exec_running() const;
-
-	/**
-	* Computes the runtime address of a symbol referenced by an ELF.
-	* Works in conjunction with dynlk to resolve symbol addresses at runtime for lazy binding.
-	* Search the symbol in the list containing the ELF and its dependencies.
-	* @param dep_id id of the elf in elf_dep_list
-	* @param symbol_name name of the symbol
-	* @return runtime address of the symbol, 0x00 if not found
-	* @warning As its name suggests, this function should only be called during runtime of the ELF represented by this
-	* process (because of the usage of the ELF runtime load address)
-	*/
-	uint get_symbol_runtime_address_at_runtime(uint dep_id, const char* symbol_name) const;
 
 	static void init();
 

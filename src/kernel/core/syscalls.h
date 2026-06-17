@@ -42,8 +42,6 @@ class Syscall
 
 	static void get_key();
 
-	static void dynlk(const cpu_state_t* cpu_state);
-
 	static void mkdir(cpu_state_t* cpu_state);
 
 	static void touch(cpu_state_t* cpu_state);

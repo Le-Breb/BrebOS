@@ -198,36 +198,6 @@ uint ELF::get_highest_runtime_addr() const
     return highest_addr;
 }
 
-Elf32_Sym* ELF::get_dynamic_symbol_at_runtime(const char* symbol_name, Elf32_Addr load_address) const
-{
-    // If there is no hash table available, linearly search for the symbol
-    if (hash_table_runtime_address == ELF32_ADDR_ERR)
-    {
-        uint lib_dynsym_num_entries = dynsym_hdr->sh_size / dynsym_hdr->sh_entsize;
-        for (uint i = 1; i < lib_dynsym_num_entries; i++)
-        {
-            if (strcmp(&dynsym_strtab[dynsym[i].st_name], symbol_name) == 0)
-                return &dynsym[i];
-        }
-    }
-    else // Otherwise, make fast lookup during the hash table
-    {
-        auto h = hash((const unsigned char*)symbol_name);
-        uint* hash_table = (uint*)(load_address + hash_table_runtime_address);
-        uint nbucket = *hash_table;
-        uint* buckets = hash_table + 2;
-        uint* chain = buckets + nbucket;
-        uint y = buckets[h % nbucket];
-
-        while (y != STN_UNDEF && strcmp(&dynsym_strtab[dynsym[y].st_name], symbol_name) != 0)
-            y = chain[y];
-
-        return y == STN_UNDEF ? nullptr : &dynsym[y];
-    }
-
-    return nullptr;
-}
-
 Elf32_Sym* ELF::get_dynamic_symbol(const char* symbol_name, Elf32_Addr load_address, const list<alloc>& allocations) const
 {
     // If there is no hash table available, linearly search for the symbol
@@ -412,20 +382,6 @@ ELF::ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr,
     }
 }
 
-unsigned long ELF::hash(const unsigned char* name)
-{
-    unsigned long h = 0, g;
-    while (*name)
-    {
-        h = (h << 4) + *name++;
-        if ((g = (h & 0xf0000000)))
-            h ^= g >> 24 ;
-        h &= ~g ;
-    }
-
-    return h ;
-}
-
 ELF::ELF(uint start_address)
     : ELF((Elf32_Ehdr*)start_address,
           (Elf32_Phdr*)(start_address + ((Elf32_Ehdr*)start_address)->e_phoff),
@@ -440,7 +396,6 @@ ELF::~ELF()
     delete[] section_hdrs;
     delete[] dyn_table;
     delete[] interpreter_name;
-    delete[] plt_relocs;
     delete[] dyn_relocs;
     delete dynsym_hdr;
     delete[] dynsym;

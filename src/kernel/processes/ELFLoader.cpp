@@ -18,13 +18,16 @@ ELFLoader::ELFLoader(): current_process(Scheduler::get_running_process()), elf_d
 
 ELFLoader::~ELFLoader()
 {
+    // Free stuff not transferred to process
+    for (auto i = 0; i < elf_dep_list->size(); i++)
+        delete elf_dep_list->get(i)->elf;
+    delete elf_dep_list;
+
     if (used)
         return;
 
-    for (auto i = 0; i < elf_dep_list->size(); i++)
-        delete elf_dep_list->get(i)->elf;
+    // Process creation failed, so free stuff that should've been transferred to process
 
-    delete elf_dep_list;
     Memory::freea(page_tables);
     Memory::freea(pdt);
 }
@@ -42,32 +45,14 @@ Lptr<ptr_inner_type> ELFLoader::new_lptr(ptr_inner_type runtime_address) const
     return Lptr<ptr_inner_type>(runtime_address, &allocations);
 }
 
-ELF* ELFLoader::load_libdynlk()
-{
-    auto libdynlk_file = VFS::browse_to(LIBDYNLK_PATH);
-    ELF* libdynlk;
-    if (!((libdynlk = load_elf(libdynlk_file, SharedObject))))
-        return nullptr;
-
-    return libdynlk;
-}
-
 bool ELFLoader::dynamic_loading(const ELF* elf)
 {
     if (elf->interpreter_name == nullptr)
         return true;
 
-    // Get libdynlk entry point
-    void* libdynlk_entry_point = (void*)get_libdynlk_runtime_address();
-    if (libdynlk_entry_point == nullptr)
-    {
-        printf_error("Error while loading libdynlk");
-        return false;
-    }
-
-    // Load lib
-    auto lib = VFS::browse_to(elf->interpreter_name);
-    if (!load_elf(lib, SharedObject))
+    // Load interpreter
+    auto interpreter = VFS::browse_to(elf->interpreter_name);
+    if (!load_elf(interpreter, SharedObject))
         return false;
 
     return true;
@@ -147,38 +132,6 @@ void ELFLoader::load_elf_code(const ELF* elf, uint load_address, uint runtime_lo
     }
 }
 
-void ELFLoader::setup_elf_got(const ELF* elf, uint elf_runtime_load_address) const
-{
-    if (elf->runtime_got_addr == ELF32_ADDR_ERR)
-        return;
-
-    auto got_runtime_addr = elf_runtime_load_address + elf->runtime_got_addr;
-
-    //printf("%s GOT: 0x%x\n", path, got_runtime_addr);
-
-    // Write GOT entries 1 and 2 (unique ID and libdynlk runtime entry point)
-    auto got_load_addr_ptr = new_lptr<Elf32_Addr>(got_runtime_addr);
-
-    got_load_addr_ptr.memcpy(&elf, sizeof(void*));
-    (++got_load_addr_ptr).memcpy(&libdynlk_runtime_entry_point, sizeof(void*));
-}
-
-Elf32_Addr ELFLoader::get_libdynlk_runtime_address()
-{
-    if (libdynlk_runtime_entry_point != ELF32_ADDR_ERR)
-        return libdynlk_runtime_entry_point;
-
-    const uint libdynlk_load_addr = num_pages << 12;
-    ELF* libdynlk_elf;
-    if (!((libdynlk_elf = load_libdynlk())))
-        return -1;
-
-    // Find and return libdynlk runtime entry point
-    const Elf32_Sym* s = libdynlk_elf->get_dynamic_symbol("lib_main", libdynlk_load_addr, allocations);
-    return libdynlk_runtime_entry_point =
-        s == nullptr ? ELF32_ADDR_ERR : libdynlk_load_addr + s->st_value;
-}
-
 void ELFLoader::allocate_stacks()
 {
     int err;
@@ -225,9 +178,9 @@ void ELFLoader::allocate_stacks()
 
 void ELFLoader::setup_pcb(int argc, const char** argv, const char** envp)
 {
-    // elf_dep_list[0] = main, [1] = dynlk, [2] = interpreter (it'd be great to write a proper system to manage that...)
+    // elf_dep_list[0] = main, [1] = interpreter (it'd be great to write a proper system to manage that...)
     const auto main_elf = elf_dep_list->get(0)->elf;
-    const auto interp_elf_dep = elf_dep_list->get(2);
+    const auto interp_elf_dep = elf_dep_list->get(1);
     const Elf32_Addr entry_point = main_elf->interpreter_name
         ? interp_elf_dep->elf->global_hdr.e_entry + interp_elf_dep->runtime_load_address
         : main_elf->global_hdr.e_entry;
@@ -332,13 +285,13 @@ ELF* ELFLoader::load_elf(void* buf, ELF_type expected_type)
 
     uint load_address = (uint)buf;
     uint runtime_load_addr = num_pages * PAGE_SIZE;
-    elf_dep_list->add({elf, runtime_load_addr});
+    const auto dep = elf_dependence({elf, runtime_load_addr});
+    elf_dep_list->add(dep);
 
     map_elf(elf, runtime_load_addr);
     load_elf_code(elf, load_address, runtime_load_addr);
     if (!dynamic_loading(elf))
         return nullptr;
-    setup_elf_got(elf, runtime_load_addr);
 
     return elf;
 }
@@ -353,7 +306,7 @@ Process* ELFLoader::build_process(int argc, const char** argv, pid_t pid, pid_t 
     constexpr auto k_stack_top = ((768 * PT_ENTRIES - PROCESS_STACK_N_PAGES) << 12) - sizeof(int);
 
     used = true;
-    return new Process(file->get_absolute_path(), num_pages, elf_dep_list, page_tables, pdt, &stack_state, priority, pid, ppid, k_stack_top);
+    return new Process(file->get_absolute_path(), num_pages, page_tables, pdt, &stack_state, priority, pid, ppid, k_stack_top);
 }
 
 void ELFLoader::write_to_stack(Lptr<char>& stack_top, const void* content, size_t size)

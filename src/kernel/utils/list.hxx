@@ -10,8 +10,34 @@ list<T>::Node::Node() {
 }
 
 template<class T>
-list<T>::Node::Node(T val) : value(val) {
+list<T>::Node::Node(const T& val) : value(val) {
     next = nullptr;
+}
+
+template <class E>
+void list<E>::add(Node* newNode)
+{
+    if (head == nullptr)
+    {
+        head = newNode;
+        s++;
+        return;
+    }
+
+    Node* current = head;
+    Node* tmp;
+
+    do
+    {
+        tmp = current;
+        current = current->next;
+    }
+    while (current != nullptr);
+
+
+    tmp->next = newNode;
+
+    s++;
 }
 
 template <class E>
@@ -39,30 +65,17 @@ void list<E>::addFirst(E e)
 }
 
 template <class E>
-void list<E>::add(E e)
+void list<E>::add(const E& e)
 {
     auto* newNode = new Node(e);
-    if (head == nullptr)
-    {
-        head = newNode;
-        s++;
-        return;
-    }
+    add(newNode);
+}
 
-    Node* current = head;
-    Node* tmp;
-
-    do
-    {
-        tmp = current;
-        current = current->next;
-    }
-    while (current != nullptr);
-
-
-    tmp->next = newNode;
-
-    s++;
+template <class E>
+void list<E>::add(const E&& e)
+{
+    auto* newNode = new Node(e);
+    add(newNode);
 }
 
 template <class E>

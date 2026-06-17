@@ -140,7 +140,6 @@ File::preload File::preloads_list[] = {
     {"/usr/lib/libc.so", nullptr},
     {"/usr/lib/libk.so", nullptr},
     {"/usr/lib/libm.so", nullptr},
-    {"/bin/libdynlk.so", nullptr},
     {"/usr/lib/ld.so", nullptr},
     {"/bin/42sh", nullptr},
     {"/usr/lib/libgcc_s.so.1", nullptr},
