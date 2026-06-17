@@ -504,6 +504,24 @@ void Process::execve_transfer(Process* proc)
     for (const auto& alloc : list(allocations))
         free(alloc);
     allocations.clear();
+
+    // Copy work dir
+    free(proc->work_dir);
+    proc->work_dir = nullptr;
+    if (work_dir)
+        proc->work_dir = strdup(work_dir);
+
+    // Copy signal state
+    memcpy(proc->signal_action, signal_action, sizeof(signal_action));
+    proc->pending_signals = pending_signals;
+
+    // Reset custom signal handlers to default. Ignored or defaulted signals remain untouched (cf man 2 execve)
+    for (auto& sighandler : proc->signal_action)
+    {
+        if (sighandler != SIG_ERR && sighandler != SIG_DFL && sighandler != SIG_IGN)
+            sighandler = SIG_DFL;
+    }
+
 }
 
 void Process::register_mmap_allocation(const Memory::allocation& allocation)
