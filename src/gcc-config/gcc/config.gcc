@@ -1195,6 +1195,7 @@ esac
 case ${target} in
 i[34567]86-*-brebos*)
     tm_file="${tm_file} i386/unix.h i386/att.h elfos.h glibc-stdint.h i386/i386elf.h gnu-user.h brebos.h"
+    tmake_file="${tmake_file} t-slibgcc"
     ;;
 x86_64-*-brebos*)
     tm_file="${tm_file} i386/unix.h i386/att.h elfos.h glibc-stdint.h i386/i386elf.h i386/x86-64.h gnu-user.h brebos.h"
