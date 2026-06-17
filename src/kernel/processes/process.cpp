@@ -159,6 +159,7 @@ Process::Process(char* bin_path, uint num_pages, list<elf_dependence>* elf_dep_l
         signal_action[i] = SIG_DFL;
 
     signals_contexts.push({{}, {}, sigset_t{}}); // By default, no signal is blocked
+    signal_top_level_block_mask = &signals_contexts.peek()->blocked_mask;
 }
 
 int Process::get_free_fd()
@@ -426,6 +427,16 @@ pid_t Process::fork()
     }
     child->lowest_free_fd = lowest_free_fd;
 
+    // Copy signal state
+    memcpy(child->signal_action, signal_action, sizeof(signal_action));
+    child->pending_signals = {}; // Reset pending signals (cf. man 2 fork)
+    child->signals_contexts.peek()->blocked_mask = *signal_top_level_block_mask;
+    for (int i = 0 ; i < HIGHEST_SIGNAL + 1; i++)
+    {
+        if (oldact[i])
+            child->oldact[i] = new struct sigaction(*oldact[i]);
+    }
+
     Scheduler::set_process_ready(child);
 
     children.add(child->pid);
@@ -514,6 +525,12 @@ void Process::execve_transfer(Process* proc)
     // Copy signal state
     memcpy(proc->signal_action, signal_action, sizeof(signal_action));
     proc->pending_signals = pending_signals;
+    proc->signals_contexts.peek()->blocked_mask = *signal_top_level_block_mask;
+    for (int i = 0 ; i < HIGHEST_SIGNAL + 1; i++)
+    {
+        if (oldact[i])
+            proc->oldact[i] = new struct sigaction(*oldact[i]);
+    }
 
     // Reset custom signal handlers to default. Ignored or defaulted signals remain untouched (cf man 2 execve)
     for (auto& sighandler : proc->signal_action)
@@ -521,7 +538,6 @@ void Process::execve_transfer(Process* proc)
         if (sighandler != SIG_ERR && sighandler != SIG_DFL && sighandler != SIG_IGN)
             sighandler = SIG_DFL;
     }
-
 }
 
 void Process::register_mmap_allocation(const Memory::allocation& allocation)

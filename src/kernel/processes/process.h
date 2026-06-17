@@ -129,6 +129,7 @@ private:
 	Stack<signal_ctx> signals_contexts{MAX_CONCURRENT_SIGNAL_HANDLERS};
 	struct sigaction* oldact[HIGHEST_SIGNAL + 1]{};
 	sigset_t pending_signals{};
+	sigset_t* signal_top_level_block_mask = nullptr; // Ptr to signals_contexts[0].blocked_mask. Do not free
 
 	void copy_page_to_other_process(const Process* other, uint page_id, uint mapping_page_id) const;
 
