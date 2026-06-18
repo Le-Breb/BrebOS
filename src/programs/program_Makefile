@@ -36,8 +36,8 @@ $(LIBK_PATH):
 ../build/$(EXEC_NAME): $(BUILD_DIR)/.dir_timestamp $(OBJECTS) $(LIBK_PATH) ../start_program.o
 	$(CC) -o ../build/$(EXEC_NAME) $(OBJECTS) $(LDFLAGS) $(LIBK_PATH)
 
-# libc.a dependency added so that programs are automatically rebuilt when libc is rebuilt
-$(BUILD_DIR)/%.o: %.cpp $(SYSROOT_DIR)/usr/lib/libc.a
+# libc dependency added so that programs are automatically rebuilt when libc is rebuilt
+$(BUILD_DIR)/%.o: %.cpp $(SYSROOT_DIR)/usr/lib/libc.a $(SYSROOT_DIR)/usr/lib/libc.so
 	@mkdir -p $(dir $@)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
 $(BUILD_DIR)/%.o: %.s
