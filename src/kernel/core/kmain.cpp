@@ -35,6 +35,9 @@ extern "C" bool fpu_init_asm_();
 // Todo: implement Process::mmap_allocations using RB tree
 // Todo: add support for ELF versioning sections
 // Todo: Investigate how vDSO could be implemented (mlibc has code related to that isn't it ?)
+// Todo: Understand where did program loading delay came back from and get rid of it
+// (cf. 18/06/26 screenshots where the last known fast loading project was, where a pull introduced delay back,
+// and reverting the pull didn't remove the delay)
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {
     // Get why this fails
