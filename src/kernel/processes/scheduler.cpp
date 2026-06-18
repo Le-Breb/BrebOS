@@ -568,9 +568,6 @@ void Scheduler::free_terminated_process(Process& p)
         }
         p.children.clear();
 
-        // Free memory leaks. This must be done BEFORE removing process from processes list. Cf Process::pre_free comment
-        p.free_leaks();
-
         release_pid(p.pid);
         processes[p.pid] = nullptr;
     }

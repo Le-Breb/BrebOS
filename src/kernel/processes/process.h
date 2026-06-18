@@ -2,6 +2,7 @@
 #define INCLUDE_PROCESS_H
 
 #include <signal.h>
+#include "../utils/BST.h"
 #include "../core/memory.h"
 #include "../core/interrupts.h"
 #include "ELF.h"
@@ -150,7 +151,8 @@ public:
 	list<pid_t> children{};
 	list<address_val_pair> values_to_write{}; // list of values that need to be written in process address space
 
-	list<Memory::allocation> mmap_allocations{};
+	const BST<Memory::allocation>::compare_func_t mmap_cmp = [](const Memory::allocation& a, const Memory::allocation& b) {return a.start == b.start ? 0  : (a.start > b.start ? 1 : -1);};
+	BST<Memory::allocation> mmap_allocations{mmap_cmp};
 	Memory::memory_header mem_base{.s = {&mem_base, 0}};
 	Memory::memory_header* freep = &mem_base; // list of memory blocks allocated by the process
 	void* tls_base = nullptr;
@@ -261,9 +263,7 @@ public:
 
 	void register_mmap_allocation(const Memory::allocation& allocation);
 
-	bool deallocate(void* addr, Memory::allocation& alloc);
-
-	void free_leaks();
+	bool deallocate(const Memory::allocation& alloc);
 
 	/**
 	 * Opens a file
