@@ -139,11 +139,12 @@ void BST<T>::destroy_node(Node* node)
 {
     if (!node)
         return;
+
+    destroy_node(node->left);
+    Node* right = node->right;
     // Grab right and delete right away so that the last instruction is a recursive call. This allows the compiler to
     // perform tail call optimization
-    Node* right = node->right;
     delete node;
-    destroy_node(node->left);
     destroy_node(right);
 }
 
