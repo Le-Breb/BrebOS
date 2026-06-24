@@ -132,7 +132,7 @@ void Scheduler::resume_process(Process* p)
     GDT::set_tss_kernel_stack(p->k_stack_top); // Todo: update k_stack_top somehow ?
     GDT::set_tls(p->tls_base); // Set process TLS address base in GDT TLS entry
 
-    // Use process' address space // Todo: check if curr_pdt ~= process.pdt before changing it ?
+    // Use process' address space
     Interrupts::change_pdt_asm(PHYS_ADDR(Memory::page_tables, (uint) p->pdt));
 
     // Write some values in process' address space (likely syscall return values)

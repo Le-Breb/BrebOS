@@ -196,7 +196,12 @@ void Interrupts::resume_syscall_handler_asm(cpu_state_t* cpu_state, stack_state_
 
 void Interrupts::change_pdt_asm(uint pdt_phys_addr)
 {
-	change_pdt_asm_(pdt_phys_addr);
+	uint32_t current_pdt_phys_addr;
+	asm volatile("mov %%cr3, %0" : "=r"(current_pdt_phys_addr));
+
+	// Do not write to cr3 if its current value is the new one we want to write, to avoid a TLB flush
+	if (current_pdt_phys_addr != pdt_phys_addr)
+		change_pdt_asm_(pdt_phys_addr);
 }
 
 bool Interrupts::register_interrupt(uint interrupt_id, Interrupt_handler* handler)
