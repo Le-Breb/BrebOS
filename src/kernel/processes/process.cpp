@@ -79,12 +79,8 @@ void Process::pre_free()
     if (is_pre_freed)
         return;
 
-    // Free process code
-    for (uint i = 0; i < num_pages; ++i)
-    {
-        if (PTE(page_tables, i))
-            Memory::free_page(i * PAGE_SIZE, this);
-    }
+    // Todo: register PT_LOAD in memtree
+    memtree.free_all(this);
 
     // Close open file descriptors
     for (const auto& file_desc : file_descriptors)
@@ -163,6 +159,10 @@ void Process::release_fd(int fd)
     lowest_free_fd = min(lowest_free_fd, fd);
 }
 
+pid_t Process::get_pid() const
+{
+    return pid;
+}
 
 void Process::terminate_with_value(int ret_val)
 {
@@ -178,44 +178,49 @@ void Process::terminate_with_signal(int ret_sig)
 
 void* Process::malloc(uint n)
 {
-    auto alloc = ::malloc<false>(n, this);
-    if (alloc)
-        allocations.add(alloc);
-
-    return alloc;
+    return ::malloc(n, Memory::DEFAULT_U_PAGE_INFO, this);
 }
 
 void* Process::calloc(size_t nmemb, size_t size)
 {
-    auto alloc= ::calloc(nmemb, size, this);
-    if (alloc)
-        allocations.add(alloc);
-
-    return alloc;
+    Memory::page_info page_info = Memory::DEFAULT_U_PAGE_INFO;
+    page_info.policy &= ~PAGE_PRESENT;
+    page_info.policy |= PAGE_LAZY_ZERO;
+    return ::calloc(nmemb, size, page_info, this);
 }
 
 void* Process::realloc(void* ptr, size_t size)
 {
-    auto alloc = ::realloc(ptr, size, this);
-
-    // Realloc either returns the same ptr, either calls process->malloc so there is no new allocation to register
-    // if (alloc)
-    //     allocations.add(alloc);
-
-    return alloc;
+    // ReSharper disable once CppDFAMemoryLeak
+    switch (void* new_address; ::realloc(ptr, size, this, new_address))
+    {
+        case Memory::MemTree::ReallocState::OK:
+            return new_address;
+        case Memory::MemTree::ReallocState::NOMEM:
+            return nullptr;
+        case Memory::MemTree::ReallocState::FAILED:
+            printf_warn("realloc unexpectedly failed for process '%s' (PID %d). Exiting", bin_path, pid);
+            kill(SIGSEGV);
+            irrecoverable_error("%s: that should never have been reached", __PRETTY_FUNCTION__);
+    }
+    irrecoverable_error("%s: that should never have been reached", __PRETTY_FUNCTION__);
 }
 
 void Process::free(void* ptr)
 {
-    ::free(ptr, this);
-
-    if (ptr)
-        allocations.remove(ptr);
-}
-
-pid_t Process::get_pid() const
-{
-    return pid;
+    switch (::free(ptr, this))
+    {
+        case Memory::MemTree::FreeState::OK:
+            return;
+        case Memory::MemTree::FreeState::DOUBLE_FREE:
+            printf_warn("double free detected");
+            kill(SIGSEGV);
+            irrecoverable_error("%s: that should never have been reached", __PRETTY_FUNCTION__);
+        case Memory::MemTree::FreeState::NOT_FOUND:
+            printf_warn("free called on a pointer that has not been returned by a call to malloc or calloc");
+            kill(SIGSEGV);
+            irrecoverable_error("%s: that should never have been reached", __PRETTY_FUNCTION__);
+    }
 }
 
 void Process::set_flag(uint flag)
@@ -280,14 +285,14 @@ void Process::copy_page_to_other_process(const Process* other, uint page_id, uin
         return;
 
     // Allocate a page in kernel address space
-    uint sys_pe = Memory::get_free_pe_user(); // Get sys PTE id
-    uint frame = Memory::get_free_frame();
-    Memory::allocate_page_user<false>(frame, sys_pe, true); // Allocate page in kernel address space
+    const uint sys_pe = Memory::get_free_pe_user(); // Get sys PTE id
+    const uint frame = Memory::get_free_frame();
+    const int policy = PTE(page_tables, page_id) & 0x7FF;
+    Memory::allocate_page(frame, sys_pe, policy); // Allocate page in kernel address space
 
     // Register page in child address space
-    auto pte_flags = PTE(page_tables, page_id) & 0x7FF;
-    auto frame_val = frame << 12;
-    other->update_pte(page_id , frame_val | pte_flags, false);
+    const uint frame_val = frame << 12;
+    other->update_pte(page_id , frame_val | policy, false);
 
     // Map the new page in current process address space to be able to access it
     update_pte(mapping_page_id, PTE(Memory::page_tables, sys_pe), true);
@@ -322,7 +327,7 @@ pid_t Process::fork()
 
     // Creat child process
     auto child = new Process(strdup(bin_path), num_pages, child_page_tables, child_pdt, &stack_state, priority, child_pid,
-        pid, k_stack_top);
+                             pid, k_stack_top);
 
     // Copy PCB
     child->cpu_state = cpu_state;
@@ -474,7 +479,7 @@ void Process::execve_transfer(Process* proc)
     }
 
     // Copy work dir
-    free(proc->work_dir);
+    ::free(proc->work_dir);
     proc->work_dir = nullptr;
     if (work_dir)
         proc->work_dir = strdup(work_dir);
@@ -495,19 +500,6 @@ void Process::execve_transfer(Process* proc)
         if (sighandler != SIG_ERR && sighandler != SIG_DFL && sighandler != SIG_IGN)
             sighandler = SIG_DFL;
     }
-}
-
-void Process::register_mmap_allocation(const Memory::allocation& allocation)
-{
-    mmap_allocations.add(allocation);
-    mmap_allocations.ensure_validity();
-}
-
-bool Process::deallocate(const Memory::allocation& alloc)
-{
-    const bool ret = mmap_allocations.remove(alloc);
-    mmap_allocations.ensure_validity();
-    return ret;
 }
 
 int Process::open(const char* pathname, int flags, mode_t mode)

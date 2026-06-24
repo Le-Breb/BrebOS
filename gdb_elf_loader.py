@@ -64,3 +64,11 @@ def get_txt_ba(elf_path):
     off = int(tt2, 16)
 
     return off
+
+# ldso_path = "./sysroot/usr/lib/ld.so"
+# ldso_base = get_txt_ba(ldso_path) + 0x3000
+# print(f"loading {ldso_path} at 0x{ldso_base}")
+# gdb.execute(
+#     f"add-symbol-file {ldso_path} {hex(ldso_base)}",
+#     to_string=True
+# )

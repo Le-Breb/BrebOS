@@ -129,10 +129,10 @@ void Scheduler::set_first_ready_process_asleep_waiting_read()
 void Scheduler::resume_process(Process* p)
 {
     // Set TSS esp0 to point to the syscall handler stack (i.e. tell the CPU where is syscall handler stack)
-    GDT::set_tss_kernel_stack(p->k_stack_top);
+    GDT::set_tss_kernel_stack(p->k_stack_top); // Todo: update k_stack_top somehow ?
     GDT::set_tls(p->tls_base); // Set process TLS address base in GDT TLS entry
 
-    // Use process' address space
+    // Use process' address space // Todo: check if curr_pdt ~= process.pdt before changing it ?
     Interrupts::change_pdt_asm(PHYS_ADDR(Memory::page_tables, (uint) p->pdt));
 
     // Write some values in process' address space (likely syscall return values)
@@ -326,7 +326,7 @@ void Scheduler::init()
     Process::init();
 
     uint stack_switch_pe = Memory::get_free_pe();
-    Memory::allocate_page<false>(stack_switch_pe, true);
+    Memory::allocate_page(stack_switch_pe, DEFAULT_K_POLICY);
     stack_switch_stack_top = (void*)((stack_switch_pe << 12) + PAGE_SIZE - sizeof(uint)); // Stack top is at the end of the page
 
     // Those have to be pointers because they cannot be instantiated at program start since dynamic memory allocation
@@ -413,7 +413,7 @@ Process* Scheduler::load_process(const char* path, pid_t pid, pid_t ppid, int ar
         return nullptr;
     }
 
-    auto file = VFS::browse_to(path, use_path_if_no_beginning_slash);
+    const auto file = VFS::browse_to(path, use_path_if_no_beginning_slash);
     if (!file)
         return nullptr;
 
@@ -430,32 +430,22 @@ void Scheduler::create_kernel_init_process(void* process_host_mem, const uint lo
     auto* kernel = (Process*)process_host_mem;
     kernel->page_tables = Memory::page_tables;
     kernel->pdt = Memory::pdt;
-    kernel->mem_base = {.s = {&kernel->mem_base, 0}};
-    kernel->freep = &kernel->mem_base;
     kernel->pid = pid;
     kernel->lowest_free_pe = lowest_free_pe;
 
     // Setup ourselves as if this was the actual kernel process
     running_process = pid;
     processes[pid] = kernel;
-    *kernel_process = kernel;
+    *kernel_process = kernel; // kernel_process is used in malloc, so this is necessary
 
     // Now we can properly construct the process
     stack_state_t dummy_stack_state{};
-    auto k = new Process(nullptr, 0, Memory::page_tables, Memory::pdt, &dummy_stack_state,
+    uint lwfpe = lowest_free_pe;
+    Memory::lowest_free_pe = &lwfpe;
+    Process* k = new (process_host_mem) Process(nullptr, 0, Memory::page_tables, Memory::pdt, &dummy_stack_state,
                          1, pid, pid, ELF32_ADDR_ERR);
-
-    // Transfer allocation information from dummy process to actual process
-    k->lowest_free_pe = kernel->lowest_free_pe;
-    k->mem_base = kernel->mem_base;
-    Memory::memory_header* h;
-    for (h = k->freep; h->s.ptr != &kernel->mem_base; h = h->s.ptr){}
-    h->s.ptr = &k->mem_base; // Make free block list circular by removing the reference to the dummy process' mem_base
-    k->free_bytes = k->free_bytes;
-
-    // Register newly created process
-    running_process = k->pid;
-    processes[pid] = k;
+    k->lowest_free_pe = lwfpe;
+    Memory::lowest_free_pe = &k->lowest_free_pe;
 
     // Write result
     *kernel_process = k;
@@ -660,7 +650,7 @@ void Scheduler::start_kernel_process(void* eip)
     // Allocate stack page
     auto stack_top_page_id = Memory::get_free_pe();
     uint k_stack_top = (stack_top_page_id << 12) + PAGE_SIZE - 4;
-    Memory::allocate_page<false>(stack_top_page_id, true);
+    Memory::allocate_page(stack_top_page_id, DEFAULT_K_POLICY);
     stack_state_t stack_state{};
 
     // Create process

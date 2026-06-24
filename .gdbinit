@@ -4,6 +4,6 @@
 file isodir/boot/kernel.elf
 set architecture i8086
 source gdb_elf_loader.py
-layout asm
-layout regs
-target remote localhost:26000
+#  layout asm
+# layout reg
+# target remote localhost:26000

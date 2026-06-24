@@ -106,7 +106,6 @@ class Process
 
 	int ret_status{};
 
-	list<void*> allocations{};
 	char* work_dir;
 
 	Process* exec_replacement = nullptr; // Process which will replace this program after a call to execve
@@ -114,6 +113,10 @@ class Process
 	bool is_pre_freed = false;
 
 public:
+	const BST<Memory::allocation>::compare_func_t mmap_cmp = [](const Memory::allocation& a, const Memory::allocation& b) {return a.start == b.start ? 0  : (a.start > b.start ? 1 : -1);};
+	BST<Memory::allocation> mmap_allocations{mmap_cmp};
+	Memory::MemTree memtree{}; // Memory tree. MUST be early in fields list to be initialized before any other fields that needs dynamic memory
+
 	file_descriptor* file_descriptors[MAX_FD_PER_PROCESS]{};
 	// Lowest free file descriptor, 0, 1 and 2 are reserved for stdin, stdout and stderr. They are not implemented yet.
 	// but its for POSIX compatibility
@@ -151,10 +154,6 @@ public:
 	list<pid_t> children{};
 	list<address_val_pair> values_to_write{}; // list of values that need to be written in process address space
 
-	const BST<Memory::allocation>::compare_func_t mmap_cmp = [](const Memory::allocation& a, const Memory::allocation& b) {return a.start == b.start ? 0  : (a.start > b.start ? 1 : -1);};
-	BST<Memory::allocation> mmap_allocations{mmap_cmp};
-	Memory::memory_header mem_base{.s = {&mem_base, 0}};
-	Memory::memory_header* freep = &mem_base; // list of memory blocks allocated by the process
 	void* tls_base = nullptr;
 
 	// Those fields have to be first for alignment constraints
@@ -260,10 +259,6 @@ public:
 	 * @param proc process that whill replace this process
 	 */
 	void execve_transfer(Process* proc);
-
-	void register_mmap_allocation(const Memory::allocation& allocation);
-
-	bool deallocate(const Memory::allocation& alloc);
 
 	/**
 	 * Opens a file

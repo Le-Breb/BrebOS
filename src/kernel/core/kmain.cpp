@@ -29,7 +29,6 @@ extern "C" bool fpu_init_asm_();
 //Todo: run 42sh in interactive mode (so that $PWD is preserved across commands)
 //Todo: pass every syscall to Linux parameter passing convention
 //Todo: unify mlibc and brebos syscalls numbers (via header file)
-//Todo: unify allocation methods (mmap and malloc) (for now memory header kill LAZY_ZERO benefits) + use uniformly flags and prot across the whole memory code
 // Todo: Some TERM or CORE signals should be catchable by processes. For example, SIGTERM simply asks processes
 // to shut down, and OS terminates them only after a while if the process does not do it by itself
 // Todo: implement Process::mmap_allocations using RB tree
@@ -38,6 +37,13 @@ extern "C" bool fpu_init_asm_();
 // Todo: Understand where did program loading delay came back from and get rid of it
 // (cf. 18/06/26 screenshots where the last known fast loading project was, where a pull introduced delay back,
 // and reverting the pull didn't remove the delay)
+// Todo: add lazy non zero alloc
+// Todo: add free check in MemTree::realloc + refactor MemTree shrinking
+// Todo: use slab allocators for small allocation sizes (one allocator per size of 10 bytes ?)
+// Todo: remove inheritance of memtree on bst since some inherited methods use new or delete and are thus invalid
+// Todo: check if kernel_process->lowest_free_pe is correctly updated
+// Todo: replace flags by policy and remove policy (just translate curr flags to curr policy (eg new flags) in mmap)
+// Todo: parse memory map from BIOS (to be aware of available regions and RAM size)
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {
     // Get why this fails

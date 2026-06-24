@@ -5,8 +5,7 @@ class BST
 {
 public:
     typedef int (*compare_func_t)(const T& a, const T& b);
-    typedef bool (*matcher_t)(const T& a, const T& b);
-private:
+protected:
     struct Node
     {
         T data;
@@ -21,12 +20,14 @@ public:
     ~BST();
     void add(const T& elem);
     bool remove(const T& elem);
-    T* find(const T& elem);
+    T* find(const T& elem) const;
     void ensure_validity() const;
-private:
+protected:
+    Node* find_node(const T& elem, compare_func_t cmp_func, Node**& node_ptr) const;
     T extract_replacement(Node* node);
     void destroy_node(Node* node);
     void ensure_validity_aux(const Node* node) const;
+    void add_node(Node* node);
 };
 
 #include "BST.hxx"

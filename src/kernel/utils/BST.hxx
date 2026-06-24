@@ -18,12 +18,7 @@ BST<T>::~BST()
 template <typename T>
 void BST<T>::add(const T& elem)
 {
-    Node** cur = &root;
-
-    while (*cur)
-        cur = compare_func((*cur)->data, elem) >= 0 ? &(*cur)->left : &(*cur)->right;
-
-    *cur = new Node{elem, nullptr, nullptr};
+    add_node(new Node(elem, nullptr, nullptr));
 }
 
 template <typename T>
@@ -93,17 +88,11 @@ bool BST<T>::remove(const T& elem)
 }
 
 template <typename T>
-T* BST<T>::find(const T& elem)
+T* BST<T>::find(const T& elem) const
 {
-    Node* cur = root;
-
-    while (cur)
-    {
-        if (const int cmp = compare_func(cur->data, elem); cmp == 0)
-            return &cur->data;
-        else
-            cur = cmp > 0 ? cur->left : cur->right;
-    }
+    [[maybe_unused]] Node** node_ptr;
+    if (Node* node = find_node(elem, compare_func, node_ptr))
+        return node->data;
 
     return nullptr;
 }
@@ -112,6 +101,31 @@ template <typename T>
 void BST<T>::ensure_validity() const
 {
     return ensure_validity_aux(root);
+}
+
+template <typename T>
+typename BST<T>::Node* BST<T>::find_node(const T& elem, compare_func_t cmp_func, Node**& node_ptr) const
+{
+    Node* prev = nullptr;
+    Node* cur = root;
+    int prev_cmp = 0;
+
+    while (cur)
+    {
+        if (const int cmp = cmp_func(cur->data, elem); cmp == 0)
+        {
+            node_ptr = prev ? (prev_cmp > 0 ? &prev->left : &prev->right) : &((BST*)this)->root;
+            return cur;
+        }
+        else
+        {
+            prev_cmp = cmp;
+            prev = cur;
+            cur = cmp > 0 ? cur->left : cur->right;
+        }
+    }
+
+    return nullptr;
 }
 
 template <typename T>
@@ -165,4 +179,18 @@ void BST<T>::ensure_validity_aux(const Node* node) const
             irrecoverable_error("BST invalid");
         ensure_validity_aux(node->right);
     }
+}
+
+template <typename T>
+void BST<T>::add_node(Node* node)
+{
+    Node** cur = &root;
+
+    while (*cur)
+    {
+        const int cmp = compare_func((*cur)->data, node->data);
+        cur = cmp >= 0 ? &(*cur)->left : &(*cur)->right;
+    }
+
+    *cur = node;
 }

@@ -74,7 +74,7 @@ void ELFLoader::map_elf(const ELF* load_elf, Elf32_Addr runtime_load_address)
         // Allocate page in kernel address space
         int err;
         auto load_addr = (Elf32_Addr)
-        Memory::mmap((void*)KERNEL_VIRTUAL_BASE,  segment_num_pages * PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, 0, 0, err, Memory::kernel_process);
+        Memory::mmap((void*)KERNEL_VIRTUAL_BASE,  segment_num_pages * PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, 0, 0, err, Memory::kernel_process, false, true);
         if (!load_addr)
             irrecoverable_error("%s: mmap failed", __func__);
 
@@ -94,12 +94,12 @@ void ELFLoader::map_elf(const ELF* load_elf, Elf32_Addr runtime_load_address)
 
         // Register allocation
         const auto runtime_addr_base_page = runtime_page_id << 12;
+        const int prot = PROT_READ | (write ? PROT_WRITE : 0);
         allocations.add({
             {
                 runtime_addr_base_page,
                 runtime_addr_base_page + segment_num_pages * PAGE_SIZE,
-                PROT_READ | (write ? PROT_WRITE : 0),
-                MAP_PRIVATE | MAP_ANON
+                Memory::page_info{prot, DEFAULT_U_FLAGS, DEFAULT_U_POLICY}
             },
             load_addr
         });
@@ -140,7 +140,7 @@ void ELFLoader::allocate_stacks()
 
     // Allocate process stack pages
     void* stack_load_address =
-            Memory::mmap((void*)KERNEL_VIRTUAL_BASE, PROCESS_STACK_SIZE, prot, flags, 0, 0, err, Memory::kernel_process);
+            Memory::mmap(nullptr, PROCESS_STACK_SIZE, prot, flags, 0, 0, err, Memory::kernel_process, false, true);
     if (!stack_load_address)
         irrecoverable_error("%s: mmap failed", __func__);
     // Map them in process address space
@@ -150,13 +150,13 @@ void ELFLoader::allocate_stacks()
         uint dest_page_id = stack_start_page_id + i;
         if (PTE(page_tables, dest_page_id) != 0)
             irrecoverable_error("%s: Process kernel stack page entry is not empty", __FUNCTION__);
-        PTE(page_tables, dest_page_id) = PTE(Memory::page_tables, ADDR_PAGE((uint)stack_load_address) + i) | PAGE_USER;
+        PTE(page_tables, dest_page_id) = PTE(Memory::page_tables, ADDR_PAGE((uint)stack_load_address) + i); // Todo: use update_pte ?
     }
-    allocations.add({{stack_start_page_id << 12, (stack_start_page_id + PROCESS_STACK_N_PAGES) << 12, prot, flags}, (Elf32_Addr)stack_load_address});
+    allocations.add({{stack_start_page_id << 12, (stack_start_page_id + PROCESS_STACK_N_PAGES) << 12, Memory::DEFAULT_U_PAGE_INFO}, (Elf32_Addr)stack_load_address});
 
     // Allocate syscall stack pages
     void* kstack_load_address =
-            Memory::mmap((void*)KERNEL_VIRTUAL_BASE, PROCESS_SYSCALL_STACK_SIZE, prot, flags, 0, 0, err, Memory::kernel_process);
+            Memory::mmap(nullptr, PROCESS_SYSCALL_STACK_SIZE, prot, flags, 0, 0, err, Memory::kernel_process, false, false);
     if (!kstack_load_address)
         irrecoverable_error("%s: mmap failed", __func__);
     // Allocate syscall handler stack pages
@@ -166,9 +166,9 @@ void ELFLoader::allocate_stacks()
         uint kstack_dest_page_id = kstack_start_page_id + i;
         if (PTE(page_tables, kstack_dest_page_id) != 0)
             irrecoverable_error("%s: Process kernel stack page entry is not empty", __FUNCTION__);
-        PTE(page_tables, kstack_dest_page_id) = PTE(Memory::page_tables, ADDR_PAGE((uint)kstack_load_address));
+        PTE(page_tables, kstack_dest_page_id) = PTE(Memory::page_tables, ADDR_PAGE((uint)kstack_load_address) + i);
     }
-    allocations.add({{kstack_start_page_id << 12, (kstack_start_page_id + PROCESS_SYSCALL_STACK_N_PAGES) << 12, prot, flags}, (Elf32_Addr)kstack_load_address});
+    allocations.add({{kstack_start_page_id << 12, (kstack_start_page_id + PROCESS_SYSCALL_STACK_N_PAGES) << 12, Memory::DEFAULT_K_PAGE_INFO}, (Elf32_Addr)kstack_load_address});
 
     // Update relevant PDT entries
     for (int i = 0; i < (PROCESS_N_STACKS_PAGES + PT_ENTRIES - 1) / PT_ENTRIES; i++)
