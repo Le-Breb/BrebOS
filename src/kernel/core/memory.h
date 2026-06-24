@@ -98,15 +98,6 @@ namespace Memory
 	void* register_physical_data(uint physical_address, uint size);
 
 	/**
-	 *
-	 * @param n number of pages requested
-	 * @param process process owning the relevant address space
-	 * @param alloc_params optional allocation parameters
-	 * @return the first page entry id of a contiguous block of n pages, or -1 if no such block exists
-	 */
-	uint get_contiguous_pages(uint n, const Process* process, const alloc_params* alloc_params = nullptr);
-
-	/**
 	 * Translates a physical address to a virtual address
 	 * @param phys_addr physical address to translate
 	 * @return the corresponding virtual address if the provided physical address is mapped, (uint)-1 otherwise

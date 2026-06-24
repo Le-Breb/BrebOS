@@ -306,7 +306,12 @@ Process* ELFLoader::build_process(int argc, const char** argv, pid_t pid, pid_t 
     constexpr auto k_stack_top = ((768 * PT_ENTRIES - PROCESS_STACK_N_PAGES) << 12) - sizeof(int);
 
     used = true;
-    return new Process(file->get_absolute_path(), num_pages, page_tables, pdt, &stack_state, priority, pid, ppid, k_stack_top);
+    Process* p = new Process(file->get_absolute_path(), num_pages, page_tables, pdt, &stack_state, priority, pid, ppid, k_stack_top);
+
+    for (const auto& [alloc, _] : allocations)
+        p->memtree.register_external_allocation(alloc);
+
+    return p;
 }
 
 void ELFLoader::write_to_stack(Lptr<char>& stack_top, const void* content, size_t size)

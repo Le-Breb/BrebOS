@@ -450,4 +450,11 @@ namespace Memory
                 free_page(region_start + (i << 12), process);
         }
     }
+
+    void MemTree::register_external_allocation(const allocation& allocation)
+    {
+        Node* node = new_node(allocation);
+        ensure_validity_aux_aux(node, root);
+        add_node(node);
+    }
 }

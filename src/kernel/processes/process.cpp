@@ -79,7 +79,6 @@ void Process::pre_free()
     if (is_pre_freed)
         return;
 
-    // Todo: register PT_LOAD in memtree
     memtree.free_all(this);
 
     // Close open file descriptors

@@ -53,5 +53,6 @@ namespace Memory
         static MemTree bootstrap_memtree;
         void ensure_validity() const;
         void free_all(const Process* process);
+        void register_external_allocation(const allocation& allocation);
     };
 }

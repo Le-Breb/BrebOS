@@ -420,6 +420,8 @@ namespace Memory
                 // Allocate both in process and kernel page tables
                 for (uint i = b; i < e; ++i)
                 {
+                    // Todo: get rid of kernel allocation which is a useless duplicate
+                    // This will certainly have impacts on frame_rc...
                     const uint sys_pe = get_free_pe();
                     allocate_page(sys_pe, page_info.policy);
                     process->update_pte(i, PTE(page_tables, sys_pe), true);
@@ -701,7 +703,7 @@ namespace Memory
 
         bool handled = false;
 
-        // Handle Copy-On-Write (COW)
+        // Handle Copy-On-Write (COW) pages
         if (pte & PAGE_COW)
         {
             if (!write_access)
