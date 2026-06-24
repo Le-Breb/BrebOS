@@ -67,7 +67,8 @@ INTERNAL_OBJS=$(CRTI_OBJ) $(OBJECTS) $(CRTN_OBJ)
 programs=$(PROGRAMS_BUILD_DIR)
 CPPFLAGS=-I$(SRC_DIR)/libc
 libc=$(LIBC_BUILD_DIR)/libc.a
-libk=$(LIBC_BUILD_DIR)/libk.a
+libk=$(LIBK_BUILD_DIR)/libk.a
+MLIBC_STAMP := $(SYSROOT_DIR)/.mlibc.stamp
 
 programs_sources=$(shell find $(SRC_DIR)/programs -type f -name '*.cpp') $(SRC_DIR)/programs/start_program.s
 libc_sources=$(shell find $(SRC_DIR)/libc -type f -name '*.cpp')
@@ -85,7 +86,7 @@ GRUB_TIMEOUT=0
 FONT_FILE=Lat15-VGA16.psf
 FONT_OBJ= $(BUILD_DIR)/$(FONT_FILE:%.psf=%.o)
 
-.PHONY: libc libk programs bootloader mlibc
+.PHONY: libc libk programs bootloader
 
 all: init $(OS_ISO) compilation_ended
 
@@ -111,11 +112,12 @@ $(libc): $(libc_sources)
 $(libk): $(libk_sources)
 	+$(MAKE) -C $(SRC_DIR)/libk
 
-mlibc:
+$(MLIBC_STAMP): $(shell find mlibc/options -type f) $(shell find mlibc/sysdeps/brebos -type f) $(shell find mlibc -maxdepth 1 -type f)
 	cd $(BREBOS)/mlibc && \
 	DESTDIR=$(SYSROOT_DIR) ninja -C build install
+	touch $@
 
-$(programs): $(programs_sources) $(libk) mlibc
+$(programs): $(programs_sources) $(libk) $(MLIBC_STAMP)
 	+$(MAKE) -C $(SRC_DIR)/programs
 
 $(KERNEL_BUILD_DIR)/%.o: $(SRC_DIR)/kernel/%.cpp
@@ -208,6 +210,7 @@ run: $(OS_ISO)
       -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
       -device e1000,netdev=net0 \
       -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap \
+      -m 512M \
       || true
 	@echo "$(CYAN)Restoring default network configuration...$(WHITE)"
 	@sudo ./utils/net_cleanup.sh
