@@ -92,7 +92,7 @@ namespace Memory
     {
         uintptr_t page_base_addr = reinterpret_cast<uintptr_t>(t) & ~(PAGE_SIZE - 1);
         page_header* page_header = reinterpret_cast<struct page_header*>(page_base_addr);
-        struct alloc* alloc = reinterpret_cast<struct alloc*>(reinterpret_cast<uintptr_t>(t) + sizeof(T) - sizeof(struct alloc));
+        struct alloc* alloc = reinterpret_cast<struct alloc*>(reinterpret_cast<uintptr_t>(t));
         alloc->next = page_header->freep;
 
         page_header->freep = alloc;

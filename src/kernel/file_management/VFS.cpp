@@ -208,18 +208,16 @@ bool VFS::add_to_path(const char* path)
 
 SharedPointer<Dentry> VFS::browse_to(const char* path, const SharedPointer<Dentry>& starting_point, bool print_errors)
 {
-#define exit_free() delete[] p;
 #define error(...) {\
 	if (print_errors) \
 		printf_error(__VA_ARGS__); \
-	exit_free() \
 	return nullptr; \
 }
 	char* svptr; // Internal pointer for strok_r calls
 
-	char* p = new char[strlen(path) + 1];
-	strcpy(p, path);
-	char* token = strtok_r(p, "/", &svptr);
+	const TmpString p(strlen(path) + 1);
+	strcpy(*p, path);
+	char* token = strtok_r(*p, "/", &svptr);
 	SharedPointer<Dentry> dentry = starting_point;
 
 	// Browse cached dentries as much as possible
@@ -262,13 +260,11 @@ SharedPointer<Dentry> VFS::browse_to(const char* path, const SharedPointer<Dentr
 		{
 			if (print_errors)
 				irrecoverable_error("Too many dentries");
-			exit_free()
 			return nullptr;
 		}
 
 		token = strtok_r(nullptr, "/", &svptr);
 	}
-	delete[] p;
 
 	return dentry;
 }
@@ -322,24 +318,22 @@ SharedPointer<Dentry> VFS::get_file_parent_dentry(const char* pathname, const ch
 	// Extract parent directory path
 	file_name = get_file_name(pathname);
 	const auto dir_len = file_name - pathname;
-	const auto p = new char[dir_len + 1];
-	p[dir_len] = '\0';
-	memcpy(p, pathname, dir_len);
+	const TmpString p(dir_len + 1);
+	(*p)[dir_len] = '\0';
+	memcpy((*p), pathname, dir_len);
 	if (!strlen(file_name))
 	{
 		printf_error("Empty file name");
-		delete[] p;
 		return nullptr;
 	}
 
-	SharedPointer<Dentry> dentry = browse_to(p, true, print_errors);
+	SharedPointer<Dentry> dentry = browse_to(*p, true, print_errors);
 	if (!dentry || dentry->inode->type != Inode::Dir)
 	{
 		if (print_errors)
 			printf_error("%s no such/not a directory", pathname);
 		return nullptr;
 	}
-	delete[] p;
 
 	return dentry;
 }

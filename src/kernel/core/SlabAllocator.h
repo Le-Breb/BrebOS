@@ -14,7 +14,17 @@ namespace Memory
          * =================
          * We then must ensure that the allocator and its global header fit in a single page
          */
-        static_assert(sizeof(Derived) + sizeof(typename Derived::global_header) < PAGE_SIZE);
+        static_assert(sizeof(Derived) + sizeof(typename Derived::global_header) <= PAGE_SIZE);
+        /* Memory layout is
+         * ================
+         * page_header
+         * value_type_0
+         * value_type_1
+         * ...
+         * value_type_n
+         * We then must ensure that at least one value_type fits in a page after the page_header
+        */
+        static_assert(sizeof(typename Derived::page_header) + sizeof(struct Derived::alloc) <= PAGE_SIZE);
     };
 
     template<typename T>
@@ -23,8 +33,8 @@ namespace Memory
         friend class SlabAllocatorSizeChecker<SlabAllocator<T>>;
         struct alloc
         {
+            T data; // Data MUST be at the beginning of the struct so that 'free' computations are correct
             alloc* next;
-            T data; // Data MUST be at the end of the struct so that 'free' computations are correct
         };
         struct page_header
         {

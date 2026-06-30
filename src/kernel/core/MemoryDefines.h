@@ -48,6 +48,8 @@ Memory::lowest_free_frame = min(Memory::lowest_free_frame, (i)); \
 #define DEFAULT_U_FLAGS (MAP_ANONYMOUS | MAP_PRIVATE)
 #define DEFAULT_U_POLICY (PAGE_WRITE | PAGE_PRESENT | PAGE_USER)
 
+typedef unsigned int uint;
+
 namespace Memory
 {
 

@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include "FS.h"
 #include "dentry.h"
+#include "../utils/TmpString.h"
 
 // https://download.microsoft.com/download/1/6/1/161ba512-40e2-4cc9-843a-923143f3456c/fatgen103.doc
 // https://wiki.osdev.org/FAT
@@ -78,7 +79,7 @@ typedef struct fat_extBS_32
 
 class __attribute__((packed)) LongDirEntry
 {
-	static char* utf16_to_utf8_cautionless_cast(const char* str, uint len);
+	static TmpString utf16_to_utf8_cautionless_cast(const char* str, const uint length);
 
 public:
 	uint8_t order; // Order of this entry in LFN chain
@@ -90,7 +91,7 @@ public:
 	uint16_t first_cluster_low;
 	char name3[4];
 
-	[[nodiscard]] char* get_uglily_converted_utf8_name() const;
+	[[nodiscard]] TmpString get_uglily_converted_utf8_name() const;
 
 	[[nodiscard]] bool is_EOF() const;
 };
@@ -124,7 +125,7 @@ public:
 
 	[[nodiscard]] inline bool is_unused() const;
 
-	[[nodiscard]] char* get_name() const;
+	[[nodiscard]] TmpString get_name() const;
 
 	[[nodiscard]] inline uint32_t first_cluster_addr() const;
 

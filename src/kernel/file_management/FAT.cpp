@@ -7,6 +7,7 @@
 #include "../core/fb.h"
 #include "../core/memory.h"
 #include "../utils/comparison.h"
+#include "../utils/TmpString.h"
 
 FAT_drive* FAT_drive::drives[] = {};
 
@@ -24,50 +25,51 @@ FAT_drive* FAT_drive::drives[] = {};
         return nullptr;        \
     }
 
-char* LongDirEntry::utf16_to_utf8_cautionless_cast(const char* str, uint len)
+TmpString LongDirEntry::utf16_to_utf8_cautionless_cast(const char* str, const uint length)
 {
-    char* res = new char[len / 2 + 1];
-    for (uint i = 0; i < len / 2; ++i)
+    const uint half_length = length / 2;
+    const uint n = half_length + 1;
+    TmpString tmp_string{n};
+    char* res = *tmp_string;;
+    for (uint i = 0; i < half_length; ++i)
     {
         res[i] = str[i * 2];
         if (str[i * 2] == '\0' && str[i * 2 + 1] == '\0')
         {
             res[i] = '\0';
-            return res;
+            return tmp_string;
         }
     }
-    res[len / 2] = '\0';
+    res[half_length] = '\0';
 
-    return res;
+    return tmp_string;
 }
 
-char* LongDirEntry::get_uglily_converted_utf8_name() const
+TmpString LongDirEntry::get_uglily_converted_utf8_name() const
 {
-    char* n1 = utf16_to_utf8_cautionless_cast(name1, 10);
-    char* n2 = strlen(n1) < 5 ? nullptr : utf16_to_utf8_cautionless_cast(name2, 12);
-    char* n3 = (!n2 || strlen(n2) < 6) ? nullptr : utf16_to_utf8_cautionless_cast(name3, 4);
+    const auto n1 = utf16_to_utf8_cautionless_cast(name1, 10);
 
-    char* full_name = new char[10 + 12 + 4 + 1];
-    memset(full_name, 0, 10 + 12 + 4 + 1);
+    TmpString full_name(10 + 12 + 4 + 1);
+    memset(*full_name, 0, 10 + 12 + 4 + 1);
     uint p = 0, gp = 0;
-    while (p < 10 && n1[p])
-        full_name[gp++] = n1[p++];
-    if (n2)
-    {
-        p = 0;
-        while (p < 12 && n2[p])
-            full_name[gp++] = n2[p++];
-    }
-    if (n3)
-    {
-        p = 0;
-        while (p < 4 && n3[p])
-            full_name[gp++] = n3[p++];
-    }
+    while (p < 10 && (*n1)[p])
+        (*full_name)[gp++] = (*n1)[p++];
 
-    delete[] n1;
-    delete[] n2;
-    delete[] n3;
+    if (strlen(*n1) >= 5)
+    {
+        const auto n2 = utf16_to_utf8_cautionless_cast(name2, 12);
+        p = 0;
+        while (p < 12 && (*n2)[p])
+            (*full_name)[gp++] = (*n2)[p++];
+
+        if (*n2 && strlen(*n2) >= 6)
+        {
+            const auto n3 = utf16_to_utf8_cautionless_cast(name3, 4);
+            p = 0;
+            while (p < 4 && (*n3)[p])
+                (*full_name)[gp++] = (*n3)[p++];
+        }
+    }
 
     return full_name;
 }
@@ -368,35 +370,25 @@ uint FAT_drive::get_child_dir_entry_id(const SharedPointer<Dentry>& parent_dentr
             return ENTRY_NOT_FOUND;
 
         bool found_in_lfn = false;
-        char* whole_name = nullptr;
+        TmpString whole_name(1);
         while (ctx.dir_entry_id * sizeof(DirEntry) < ATA_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free())
         {
             if (found_in_lfn) // File name matched in previous entry which is a fln entry referring to the current entry
                 return ctx.dir_entry_id;
-            bool lfn = entries[ctx.dir_entry_id].is_LFN();
-            if (!lfn)
-            {
-                free(whole_name); // Delete LFN constructed name
-                whole_name = nullptr;
-            }
-            char* entry_name = lfn
+            const bool lfn = entries[ctx.dir_entry_id].is_LFN();
+
+            TmpString entry_name = lfn
                                    ? ((LongDirEntry*)&entries[ctx.dir_entry_id])->get_uglily_converted_utf8_name()
                                    : entries[ctx.dir_entry_id].get_name();
-            if (lfn && whole_name)
-            {
-                whole_name = static_cast<char*>(realloc(whole_name, strlen(whole_name) + strlen(entry_name) + 1));
-                whole_name = strcat(entry_name, whole_name);
-            }
+            if (lfn)
+                whole_name = entry_name.concat(whole_name);
             else
                 whole_name = entry_name;
 
-            const bool match = !strcmp(whole_name, name);
+            const bool match = !strcmp(*whole_name, name);
 
             if (!lfn)
-            {
-                free(whole_name); // Delete 8.3 name
-                whole_name = nullptr;
-            }
+                whole_name = TmpString(1); // Erase whole_name
             if (match)
             {
                 found_in_lfn = lfn;
@@ -415,8 +407,7 @@ uint FAT_drive::get_child_dir_entry_id(const SharedPointer<Dentry>& parent_dentr
 SharedPointer<Dentry> FAT_drive::get_child_dentry(SharedPointer<Dentry>& parent_dentry, const char* name)
 {
     uint entry_id;
-    ctx ctx{};
-    if ((entry_id = get_child_dir_entry_id(parent_dentry, name, ctx)) == ENTRY_NOT_FOUND)
+    if (ctx ctx{}; (entry_id = get_child_dir_entry_id(parent_dentry, name, ctx)) == ENTRY_NOT_FOUND)
         return nullptr;
     return dir_entry_to_dentry(entries[entry_id], parent_dentry, name);
 }
@@ -495,7 +486,7 @@ SharedPointer<Dentry> FAT_drive::touch(SharedPointer<Dentry>& parent_dentry, con
 
         // Skip used dir entries, aka files/folders inside wd
         while (ctx.dir_entry_id * sizeof(DirEntry) < ATA_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free() &&
-            strcmp(entries[ctx.dir_entry_id].get_name(), entry_name) != 0)
+            strcmp(*entries[ctx.dir_entry_id].get_name(), entry_name) != 0)
             ctx.dir_entry_id++;
 
         curr_cluster = ctx.table_value;
@@ -595,22 +586,19 @@ bool FAT_drive::ls(const SharedPointer<Dentry>& dentry, ls_printer printer)
         if (!change_active_cluster(curr_cluster, ctx, this->buf))
             return false;
 
-        // Acts like a boolean to know if the previous entry was a LFN entry, and if so, contains the lfn entry name
-        char* prev_is_lfn = nullptr;
+        TmpString prev_lfn(1);
+        auto prev_is_lfn = [&prev_lfn]() {return **prev_lfn != '\0';};
         while (ctx.dir_entry_id * sizeof(DirEntry) < ATA_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free())
         {
-            auto entry = entries + ctx.dir_entry_id;
-            bool is_lfn = entry->is_LFN();
-            if (is_lfn)
-                prev_is_lfn = ((LongDirEntry*)entry)->get_uglily_converted_utf8_name();
+            if (const auto entry = entries + ctx.dir_entry_id; entry->is_LFN())
+                prev_lfn = ((LongDirEntry*)entry)->get_uglily_converted_utf8_name().concat(prev_lfn);
             else
             {
-                char* entry_name = prev_is_lfn ? prev_is_lfn : entry->get_name();
+                TmpString entry_name = prev_is_lfn() ? prev_lfn : entry->get_name();
                 SharedPointer<Dentry> null_parent = {nullptr};
-                SharedPointer<Dentry> dir_dentry = dir_entry_to_dentry(*entry, null_parent, entry_name);
+                SharedPointer<Dentry> dir_dentry = dir_entry_to_dentry(*entry, null_parent, *entry_name);
                 printer(*dir_dentry);
-                delete[] entry_name;
-                prev_is_lfn = nullptr;
+                prev_lfn = TmpString(1);
             }
 
             ctx.dir_entry_id++;
@@ -821,13 +809,12 @@ char* DirEntry::get_extension() const
 {
     char* extension = (char*)calloc(4, 1);
     uint dot_pos = 0;
-    const char* file_name = get_name();
-    auto file_name_len = strlen(file_name);
-    while (dot_pos < file_name_len && file_name[dot_pos] != '.')
+    const TmpString file_name = get_name();
+    const auto file_name_len = strlen(*file_name);
+    while (dot_pos < file_name_len && (*file_name)[dot_pos] != '.')
         dot_pos++;
     if (file_name_len != dot_pos) // If file has an extension
-        memcpy(extension, file_name + dot_pos + 1, file_name_len - dot_pos - 1);
-    delete[] file_name;
+        memcpy(extension, *file_name + dot_pos + 1, file_name_len - dot_pos - 1);
 
     return extension;
 }
@@ -885,32 +872,32 @@ DirEntry::DirEntry(const char* name, uint8_t attrs, uint32_t first_cluster_addr,
     }
 }
 
-char* DirEntry::get_name() const
+TmpString DirEntry::get_name() const
 {
-    char* n = new char[DIR_ENTRY_NAME_LEN + 2]; // One for dot, one for '\0'
-    memset(n, 0, DIR_ENTRY_NAME_LEN + 2);
+    TmpString n(DIR_ENTRY_NAME_LEN + 2); // One for dot, one for '\0'
+    memset(*n, 0, DIR_ENTRY_NAME_LEN + 2);
     uint i = 0;
     for (int j = 0; j < 8; ++j)
     {
         if (name[j] == NAME_PADDING_BYTE)
             break;
-        n[i++] = name[j];
+        (*n)[i++] = name[j];
     }
     // If entry is a file, and it has an extension, add .
     if (!is_directory() && name[8] != NAME_PADDING_BYTE)
-        n[i++] = '.';
+        (*n)[i++] = '.';
     for (int j = 8; j < 11; ++j)
     {
         if (name[j] == NAME_PADDING_BYTE)
             break;
-        n[i++] = name[j];
+        (*n)[i++] = name[j];
     }
 
     // Convert names to lowercase
     for (int j = 0; j < 12; ++j)
     {
-        if (n[j] >= 'A' && n[j] <= 'Z')
-            n[j] -= 'A' - 'a';
+        if ((*n)[j] >= 'A' && (*n)[j] <= 'Z')
+            (*n)[j] -= 'A' - 'a';
     }
 
     return n;
