@@ -557,9 +557,9 @@ namespace Memory
         if (hint == (void*)KERNEL_VIRTUAL_BASE)
             hint = (void*)(kernel_process->lowest_free_pe << 12);
 
-        const int policy = (flags & PROT_WRITE ? PAGE_WRITE : 0) | (lazy_zero ? PAGE_LAZY_ZERO : PAGE_PRESENT) | (page_user ? PAGE_USER : 0);
+        const int policy = (prot & PROT_WRITE ? PAGE_WRITE : 0) | (lazy_zero ? PAGE_LAZY_ZERO : PAGE_PRESENT) | (page_user ? PAGE_USER : 0);
         const hint_info hint_info{reinterpret_cast<uintptr_t>(hint), (bool)(flags & MAP_FIXED)};
-        const page_info page_info{prot, flags, policy};
+        const page_info page_info{flags, policy};
         // printf_info("mmap call on range [0x%08x, 0x%08x]", (uint)hint, (uint)hint + (uint)size);
         void* window = process->memtree.allocate(size, page_info, process, hint_info);
         if (flags & MAP_FIXED && window != hint)
@@ -932,6 +932,6 @@ void* realloc(void* ptr, size_t size)
 
 void* lazy_malloc(uint n)
 {
-    constexpr page_info page_info{DEFAULT_K_PROT, DEFAULT_K_FLAGS, PAGE_LAZY_ZERO | PAGE_WRITE};
+    constexpr page_info page_info{DEFAULT_K_FLAGS, PAGE_LAZY_ZERO | PAGE_WRITE};
     return malloc(n, page_info, kernel_process);
 }

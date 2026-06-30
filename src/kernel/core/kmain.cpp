@@ -42,7 +42,6 @@ extern "C" bool fpu_init_asm_();
 // Todo: use slab allocators for small allocation sizes (one allocator per size of 10 bytes ?)
 // Todo: remove inheritance of memtree on bst since some inherited methods use new or delete and are thus invalid
 // Todo: check if kernel_process->lowest_free_pe is correctly updated
-// Todo: replace flags by policy and remove policy (just translate curr flags to curr policy (eg new flags) in mmap)
 // Todo: parse memory map from BIOS (to be aware of available regions and RAM size)
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {

@@ -112,7 +112,7 @@ GDB::GDB()
     int err;
     static_assert(PAGE_SIZE >= sizeof(process_info));
     gdb_struct = (process_info*)Memory::mmap((void*)gdb_struct_addr, PAGE_SIZE,
-                                             PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | MAP_FIXED, 0, 0, err, Memory::kernel_process, false, false);
+                                             DEFAULT_K_PROT, MAP_PRIVATE | MAP_ANON | MAP_FIXED, 0, 0, err, Memory::kernel_process, false, false);
     // const auto page_id = ADDR_PAGE((uint)gdb_struct_addr);
     // Scheduler::get_running_process()->update_pte(page_id, PTE(Memory::page_tables, page_id), true);
     if (!gdb_struct)

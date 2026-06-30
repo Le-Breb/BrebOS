@@ -52,8 +52,8 @@ namespace Memory
 
 	struct page_info
 	{
-		int prot, flags, policy;
-		bool operator==(const page_info& other) const {return prot == other.prot && flags == other.flags && policy == other.policy;}
+		int flags, policy;
+		bool operator==(const page_info& other) const {return flags == other.flags && policy == other.policy;}
 	};
 
 	struct allocation

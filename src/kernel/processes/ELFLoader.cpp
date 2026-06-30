@@ -74,7 +74,7 @@ void ELFLoader::map_elf(const ELF* load_elf, Elf32_Addr runtime_load_address)
         // Allocate page in kernel address space
         int err;
         auto load_addr = (Elf32_Addr)
-        Memory::mmap((void*)KERNEL_VIRTUAL_BASE,  segment_num_pages * PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, 0, 0, err, Memory::kernel_process, false, true);
+        Memory::mmap((void*)KERNEL_VIRTUAL_BASE,  segment_num_pages * PAGE_SIZE, DEFAULT_U_PROT, MAP_ANON | MAP_PRIVATE, 0, 0, err, Memory::kernel_process, false, true);
         if (!load_addr)
             irrecoverable_error("%s: mmap failed", __func__);
 
@@ -94,12 +94,12 @@ void ELFLoader::map_elf(const ELF* load_elf, Elf32_Addr runtime_load_address)
 
         // Register allocation
         const auto runtime_addr_base_page = runtime_page_id << 12;
-        const int prot = PROT_READ | (write ? PROT_WRITE : 0);
+        const int policy = DEFAULT_U_POLICY & (write ? -1U : ~PROT_WRITE);
         allocations.add({
             {
                 runtime_addr_base_page,
                 runtime_addr_base_page + segment_num_pages * PAGE_SIZE,
-                Memory::page_info{prot, DEFAULT_U_FLAGS, DEFAULT_U_POLICY},
+                Memory::page_info{DEFAULT_U_FLAGS, policy},
                 true
             },
             load_addr
@@ -136,12 +136,11 @@ void ELFLoader::load_elf_code(const ELF* elf, uint load_address, uint runtime_lo
 void ELFLoader::allocate_stacks()
 {
     int err;
-    constexpr int prot = PROT_READ | PROT_WRITE;
     constexpr int flags = MAP_ANONYMOUS | MAP_PRIVATE;
 
     // Allocate process stack pages
     void* stack_load_address =
-            Memory::mmap(nullptr, PROCESS_STACK_SIZE, prot, flags, 0, 0, err, Memory::kernel_process, false, true);
+            Memory::mmap(nullptr, PROCESS_STACK_SIZE, DEFAULT_U_PROT, flags, 0, 0, err, Memory::kernel_process, false, true);
     if (!stack_load_address)
         irrecoverable_error("%s: mmap failed", __func__);
     // Map them in process address space
@@ -157,7 +156,7 @@ void ELFLoader::allocate_stacks()
 
     // Allocate syscall stack pages
     void* kstack_load_address =
-            Memory::mmap(nullptr, PROCESS_SYSCALL_STACK_SIZE, prot, flags, 0, 0, err, Memory::kernel_process, false, false);
+            Memory::mmap(nullptr, PROCESS_SYSCALL_STACK_SIZE, DEFAULT_K_PROT, flags, 0, 0, err, Memory::kernel_process, false, false);
     if (!kstack_load_address)
         irrecoverable_error("%s: mmap failed", __func__);
     // Allocate syscall handler stack pages

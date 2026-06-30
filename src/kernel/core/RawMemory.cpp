@@ -29,8 +29,8 @@ namespace Memory
 
     uint* stack_top_ptr = (uint*)stack_top;
 
-    const page_info DEFAULT_K_PAGE_INFO{DEFAULT_K_PROT, DEFAULT_K_FLAGS, DEFAULT_K_POLICY};
-    const page_info DEFAULT_U_PAGE_INFO{DEFAULT_U_PROT, DEFAULT_U_FLAGS, DEFAULT_U_POLICY};
+    const page_info DEFAULT_K_PAGE_INFO{DEFAULT_K_FLAGS, DEFAULT_K_POLICY};
+    const page_info DEFAULT_U_PAGE_INFO{DEFAULT_U_FLAGS, DEFAULT_U_POLICY};
     const hint_info DEFAULT_HINT_INFO{0, false};
 
     uint get_free_frame()
