@@ -23,7 +23,6 @@ extern "C" bool fpu_init_asm_();
 
 //Todo: Advanced memory freeing (do something when free_pages do not manage to have free_bytes < FREE_THRESHOLD)
 //Todo: Use higher precision timer
-//Todo: Fast kernel memory pool: constantly allocated memory region with super-fast allocator for tmp operations
 //Todo: Syscall concurrent safety (that's a goddamn huge task)
 //Todo: Sanitize syscalls inputs (address ranges and permissions, value ranges)
 //Todo: run 42sh in interactive mode (so that $PWD is preserved across commands)
@@ -37,11 +36,8 @@ extern "C" bool fpu_init_asm_();
 // Todo: Understand where did program loading delay came back from and get rid of it
 // (cf. 18/06/26 screenshots where the last known fast loading project was, where a pull introduced delay back,
 // and reverting the pull didn't remove the delay)
-// Todo: add lazy non zero alloc
-// Todo: add free check in MemTree::realloc + refactor MemTree shrinking
 // Todo: use slab allocators for small allocation sizes (one allocator per size of 10 bytes ?)
 // Todo: remove inheritance of memtree on bst since some inherited methods use new or delete and are thus invalid
-// Todo: check if kernel_process->lowest_free_pe is correctly updated
 // Todo: parse memory map from BIOS (to be aware of available regions and RAM size)
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {
