@@ -99,7 +99,8 @@ void ELFLoader::map_elf(const ELF* load_elf, Elf32_Addr runtime_load_address)
             {
                 runtime_addr_base_page,
                 runtime_addr_base_page + segment_num_pages * PAGE_SIZE,
-                Memory::page_info{prot, DEFAULT_U_FLAGS, DEFAULT_U_POLICY}
+                Memory::page_info{prot, DEFAULT_U_FLAGS, DEFAULT_U_POLICY},
+                true
             },
             load_addr
         });
@@ -152,7 +153,7 @@ void ELFLoader::allocate_stacks()
             irrecoverable_error("%s: Process kernel stack page entry is not empty", __FUNCTION__);
         PTE(page_tables, dest_page_id) = PTE(Memory::page_tables, ADDR_PAGE((uint)stack_load_address) + i); // Todo: use update_pte ?
     }
-    allocations.add({{stack_start_page_id << 12, (stack_start_page_id + PROCESS_STACK_N_PAGES) << 12, Memory::DEFAULT_U_PAGE_INFO}, (Elf32_Addr)stack_load_address});
+    allocations.add({{stack_start_page_id << 12, (stack_start_page_id + PROCESS_STACK_N_PAGES) << 12, Memory::DEFAULT_U_PAGE_INFO, true}, (Elf32_Addr)stack_load_address});
 
     // Allocate syscall stack pages
     void* kstack_load_address =
@@ -168,7 +169,7 @@ void ELFLoader::allocate_stacks()
             irrecoverable_error("%s: Process kernel stack page entry is not empty", __FUNCTION__);
         PTE(page_tables, kstack_dest_page_id) = PTE(Memory::page_tables, ADDR_PAGE((uint)kstack_load_address) + i);
     }
-    allocations.add({{kstack_start_page_id << 12, (kstack_start_page_id + PROCESS_SYSCALL_STACK_N_PAGES) << 12, Memory::DEFAULT_K_PAGE_INFO}, (Elf32_Addr)kstack_load_address});
+    allocations.add({{kstack_start_page_id << 12, (kstack_start_page_id + PROCESS_SYSCALL_STACK_N_PAGES) << 12, Memory::DEFAULT_K_PAGE_INFO, true}, (Elf32_Addr)kstack_load_address});
 
     // Update relevant PDT entries
     for (int i = 0; i < (PROCESS_N_STACKS_PAGES + PT_ENTRIES - 1) / PT_ENTRIES; i++)

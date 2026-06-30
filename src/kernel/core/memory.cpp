@@ -781,7 +781,6 @@ namespace Memory
     void zero_out_possibly_lazily_allocated_memory(uint total_size, void* mem, const Process* process)
     {
         const uintptr_t uaddr = reinterpret_cast<uintptr_t>(mem);
-        const uint num_crossing_pages = 1 + ADDR_PAGE(uaddr + total_size) - ADDR_PAGE(uaddr); // Number of pages allocation spans over
         const page_table_t* pt = process->page_tables; // Page tables to use
         const uint first_page_id = ADDR_PAGE(uaddr);
         const uintptr_t mem_off = uaddr & (PAGE_SIZE - 1);
@@ -792,16 +791,17 @@ namespace Memory
             memset(mem, 0, bytes_on_first_page);
 
         // Handle other pages
+        const uint num_remaining_pages = ADDR_PAGE(total_size - bytes_on_first_page + PAGE_SIZE - 1);
         uint rem = total_size - bytes_on_first_page; // Remaining bytes to zero out
-        for (size_t i = 1; i < num_crossing_pages; i++)
+        for (size_t i = 0; i < num_remaining_pages; i++)
         {
-            if (PTE(pt, first_page_id + i) & PAGE_PRESENT)
+            const uint n = min(rem, (uint)PAGE_SIZE); // How many bytes are on this page
+            if (PTE(pt, first_page_id + 1 + i) & PAGE_PRESENT)
             {
-                const uint n = rem & (PAGE_SIZE - 1); // How many bytes are on this page
-                const uint address = (first_page_id + i) << 12; // Address of the beginning of the page
+                const uint address = (first_page_id + 1 + i) << 12; // Address of the beginning of the page
                 memset((void*)address, 0, n); // Zero out
-                rem -= n; // Update remaining byte count
             }
+            rem -= n; // Update remaining byte count
         }
     }
 }
