@@ -60,7 +60,6 @@ ELF* ELF::is_valid(uint start_address, ELF_type expected_type)
     }
 
     // Ensure program is supported
-    bool versioning_ignored = false;
     for (int k = 0; k < elf->global_hdr.e_shnum; ++k)
     {
         Elf32_Shdr* h = &elf->section_hdrs[k];
@@ -78,23 +77,15 @@ ELF* ELF::is_valid(uint start_address, ELF_type expected_type)
         case SHT_DYNAMIC:
         case SHT_INIT_ARRAY:
         case SHT_FINI_ARRAY:
+        case SHT_GNU_versym:
+        case SHT_GNU_verneed:
+        case SHT_GNU_verdef:
             break;
-        case SHT_GNU_versym: case SHT_GNU_verneed: case SHT_GNU_verdef:
-        {
-            // Those sections are very likely to be found in ELFs dynamically linked against libstdc++-v3
-            // The latter been compiled by using Linux configuration (cf sed in gcc_setup in toolchain_setup.sh).
-            // I guess Linux does use versioning because of glibc, resulting in those sections here.
-            // It is then reasonable to suppose that ignoring that information is harmless
-            versioning_ignored = true;
-            break;
-        }
         default:
             printf_error("Section type not supported: %i. Aborting", h->sh_type);
             is_valid_exit_err
         }
     }
-    if (versioning_ignored)
-        printf_warn("ELF versionning info ignored. Likely harmless, but we never know...");
 
     if (elf->global_hdr.e_phnum == 0)
     {

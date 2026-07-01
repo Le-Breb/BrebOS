@@ -31,7 +31,6 @@ extern "C" bool fpu_init_asm_();
 // Todo: Some TERM or CORE signals should be catchable by processes. For example, SIGTERM simply asks processes
 // to shut down, and OS terminates them only after a while if the process does not do it by itself
 // Todo: implement Process::mmap_allocations using RB tree
-// Todo: add support for ELF versioning sections
 // Todo: Investigate how vDSO could be implemented (mlibc has code related to that isn't it ?)
 // Todo: Understand where did program loading delay came back from and get rid of it
 // (cf. 18/06/26 screenshots where the last known fast loading project was, where a pull introduced delay back,
