@@ -36,7 +36,6 @@ extern "C" bool fpu_init_asm_();
 // Todo: Understand where did program loading delay came back from and get rid of it
 // (cf. 18/06/26 screenshots where the last known fast loading project was, where a pull introduced delay back,
 // and reverting the pull didn't remove the delay)
-// Todo: use slab allocators for small allocation sizes (one allocator per size of 10 bytes ?)
 // Todo: remove inheritance of memtree on bst since some inherited methods use new or delete and are thus invalid
 // Todo: parse memory map from BIOS (to be aware of available regions and RAM size)
 // Todo: make Process::update_pte usage more controlled
