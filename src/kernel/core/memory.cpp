@@ -905,7 +905,21 @@ extern "C" void* calloc(size_t nmemb, size_t size)
 MemTree::FreeState free(void* ptr, Process* process)
 {
     MemTree& mem_tree = process->memtree;
-    return mem_tree.free(reinterpret_cast<uintptr_t>(ptr), process);
+    const auto free_state = mem_tree.free(reinterpret_cast<uintptr_t>(ptr), process);
+
+    // Treat free errors in kernel as irrecoverable
+    if (process == kernel_process && free_state != MemTree::FreeState::OK)
+    {
+        switch (free_state) {
+            case MemTree::FreeState::DOUBLE_FREE:
+                irrecoverable_error("delete[] failed, double free detected");
+            case MemTree::FreeState::NOT_FOUND:
+                irrecoverable_error("delete[] failed, allocation is nowhere to be found");
+            default:
+                irrecoverable_error("delete[] failed with unknown state %d", (int)free_state);
+        }
+    }
+    return free_state;
 }
 
 extern "C" void free(void* ptr)
