@@ -23,7 +23,6 @@ public:
 	Elf32_Phdr* prog_hdrs = nullptr;
 	Elf32_Shdr* section_hdrs = nullptr;
 	Elf32_Dyn* dyn_table = nullptr;
-	Elf32_Rel* dyn_relocs = nullptr;
 	Elf32_Sym* dynsym = nullptr;
 	Elf32_Shdr* dynsym_hdr = nullptr;
 	Elf32_Sym* symtab = nullptr;
@@ -32,7 +31,7 @@ public:
 	const char* dynsym_strtab = nullptr;
 	const char* strtab = nullptr;
 	const char* shstrtab = nullptr;
-	size_t num_dyn_relocs;
+	size_t num_dyn_relocs = 0;
     Elf32_Addr runtime_got_addr = ELF32_ADDR_ERR;
     Elf32_Addr hash_table_runtime_address = ELF32_ADDR_ERR;
 

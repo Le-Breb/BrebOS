@@ -243,127 +243,60 @@ Elf32_Sym* ELF::get_symbol(const char* symbol_name) const
 ELF::ELF(Elf32_Ehdr* elf32Ehdr, Elf32_Phdr* elf32Phdr, Elf32_Shdr* elf32Shdr,
          uint start_address) : global_hdr(*elf32Ehdr)
 {
-    // Copy phdrs
-    prog_hdrs = new Elf32_Phdr[elf32Ehdr->e_phnum];
-    for (int k = 0; k < this->global_hdr.e_phnum; ++k)
-        prog_hdrs[k] = *(Elf32_Phdr*)((uint)elf32Phdr + this->global_hdr.e_phentsize * k);
+    prog_hdrs = elf32Phdr;
+    section_hdrs = elf32Shdr;
 
-    // Copy shdrs
-    section_hdrs = new Elf32_Shdr[elf32Ehdr->e_shnum];
-    for (int k = 0; k < this->global_hdr.e_shnum; ++k)
-        section_hdrs[k] = *(Elf32_Shdr*)((uint)elf32Shdr + this->global_hdr.e_shentsize * k);
-
-    // Copy dynamic table
-    dyn_table = nullptr;
     for (int k = 0; k < this->global_hdr.e_shnum; ++k)
     {
-        Elf32_Shdr& h = section_hdrs[k];
-
-        if (h.sh_type != SHT_DYNAMIC)
-            continue;
-        uint num_entries = h.sh_size / h.sh_entsize;
-        dyn_table = new Elf32_Dyn[num_entries];
-        Elf32_Dyn* dyn_table = (Elf32_Dyn*)(start_address + h.sh_offset);
-        int i = 0;
-        for (; dyn_table->d_tag != DT_NULL; dyn_table++, i++)
-            this->dyn_table[i] = *dyn_table;
-        this->dyn_table[i] = *dyn_table;
-
-        break;
-    }
-
-    for (int k = 0; k < this->global_hdr.e_phnum; ++k)
-    {
-        Elf32_Phdr* h = &prog_hdrs[k];
-        if (h->p_type != PT_DYNAMIC)
-            continue;
-
-        Elf32_Dyn* dyns = (Elf32_Dyn*)(start_address + h->p_offset);
-        while (dyns->d_tag != DT_NULL)
+        switch (Elf32_Shdr* h = &section_hdrs[k]; h->sh_type)
         {
-            dyns++;
+            case SHT_DYNAMIC:
+                dyn_table = (Elf32_Dyn*)(start_address + h->sh_offset);
+                break;
+            case SHT_SYMTAB:
+            {
+                symtab_hdr = h;
+                symtab = (Elf32_Sym*)(start_address + symtab_hdr->sh_offset);
+
+                Elf32_Shdr* strtab_hdr = (Elf32_Shdr*)((uint)elf32Shdr + elf32Ehdr->e_shentsize * symtab_hdr->sh_link);
+                strtab = (char*)start_address + strtab_hdr->sh_offset;
+                break;
+            }
+            case SHT_DYNSYM:
+            {
+                dynsym_hdr = h;
+                Elf32_Shdr* dyn_strtab_h = &section_hdrs[h->sh_link];
+                dynsym_strtab = (char*)start_address + dyn_strtab_h->sh_offset;
+                break;
+            }
+            default:
+                break;
         }
     }
 
-    // Copy interpreter path
-    interpreter_name = nullptr;
+
     for (int k = 0; k < this->global_hdr.e_phnum; ++k)
     {
-        Elf32_Phdr* h = &prog_hdrs[k];
+        const Elf32_Phdr* h = &prog_hdrs[k];
 
         if (h->p_type != PT_INTERP)
             continue;
 
-        char* interpr_path = (char*)start_address + h->p_offset;
-        interpreter_name = new char[strlen(interpr_path) + 1];
-        strcpy((char*)interpreter_name, interpr_path);
+        interpreter_name = (char*)start_address + h->p_offset;
         break;
     }
 
-    // Copy shstrtab
     Elf32_Shdr* sh_strtab_h = (Elf32_Shdr*)((uint)elf32Shdr +
         elf32Ehdr->e_shentsize * elf32Ehdr->e_shstrndx);
-    shstrtab = new char[sh_strtab_h->sh_size];
-    memcpy((char*)shstrtab, (char*)start_address + sh_strtab_h->sh_offset, sh_strtab_h->sh_size);
+    shstrtab = (char*)start_address + sh_strtab_h->sh_offset;
 
-    // Copy symtab and strtab
-    for (int k = 0; k < elf32Ehdr->e_shnum; ++k)
-    {
-        auto h = (Elf32_Shdr*)((uint)elf32Shdr + elf32Ehdr->e_shentsize * k);
-
-        if (h->sh_type != SHT_SYMTAB)
-            continue;
-        symtab_hdr = new Elf32_Shdr(*h);
-        uint symtab_num_entries = symtab_hdr->sh_size / symtab_hdr->sh_entsize;
-        symtab = new Elf32_Sym[symtab_num_entries];
-        for (uint i = 0; i < symtab_num_entries; i++)
-        {
-            Elf32_Sym* symbol_entry = (Elf32_Sym*)(start_address + symtab_hdr->sh_offset +
-                i * symtab_hdr->sh_entsize);
-            symtab[i] = *symbol_entry;
-        }
-
-        Elf32_Shdr* strtab_hdr = (Elf32_Shdr*)((uint)elf32Shdr + elf32Ehdr->e_shentsize * symtab_hdr->sh_link);
-        strtab = new char[strtab_hdr->sh_size];
-        memcpy((char*)strtab, (char*)start_address + strtab_hdr->sh_offset, strtab_hdr->sh_size);
-        break;
-    }
-
-    // Copy dynsym header and dynsym strtab
-    dynsym_hdr = nullptr;
-    dynsym_strtab = nullptr;
-    for (int k = 0; k < elf32Ehdr->e_shnum; ++k)
-    {
-        auto h = (Elf32_Shdr*)((uint)elf32Shdr + elf32Ehdr->e_shentsize * k);
-
-        if (h->sh_type != SHT_DYNSYM)
-            continue;
-        dynsym_hdr = new Elf32_Shdr(*h);
-        Elf32_Shdr* dyn_strtab_h = &section_hdrs[h->sh_link];
-        dynsym_strtab = new char[dyn_strtab_h->sh_size];
-        memcpy((char*)dynsym_strtab, (char*)start_address + dyn_strtab_h->sh_offset, dyn_strtab_h->sh_size);
-        break;
-    }
-
-    // Copy dynamic symbols
-    dynsym = nullptr;
-    if (dynsym_hdr)
-    {
-        uint lib_dynsym_num_entries = dynsym_hdr->sh_size / dynsym_hdr->sh_entsize;
-        dynsym = new Elf32_Sym[lib_dynsym_num_entries];
-        for (uint i = 0; i < lib_dynsym_num_entries; i++)
-        {
-            Elf32_Sym* lib_symbol_entry = (Elf32_Sym*)(start_address + dynsym_hdr->sh_offset +
-                i * dynsym_hdr->sh_entsize);
-            dynsym[i] = *lib_symbol_entry;
-        }
-    }
+    dynsym = dynsym_hdr ? (Elf32_Sym*)(start_address + dynsym_hdr->sh_offset) : nullptr;
 
     // In order to know whether base address should be retrieved from values, refer to Figure 2-10: Dynamic Array Tags
     // in http://www.skyfree.org/linux/references/ELF_Format.pdf
     if (dyn_table)
     {
-        for (Elf32_Dyn* d = dyn_table; d->d_tag != DT_NULL; d++)
+        for (const Elf32_Dyn* d = dyn_table; d->d_tag != DT_NULL; d++)
         {
             switch (d->d_tag)
             {
@@ -392,16 +325,6 @@ ELF::ELF(uint start_address)
 
 ELF::~ELF()
 {
-    delete[] prog_hdrs;
-    delete[] section_hdrs;
-    delete[] dyn_table;
-    delete[] interpreter_name;
-    delete[] dyn_relocs;
-    delete dynsym_hdr;
-    delete[] dynsym;
-    delete[] strtab;
-    delete[] symtab;
-    delete symtab_hdr;
 }
 
 size_t ELF::base_address() const
@@ -409,12 +332,11 @@ size_t ELF::base_address() const
     size_t lowest_address = -1;
     for (int k = 0; k < global_hdr.e_phnum; ++k)
     {
-        Elf32_Phdr* h = &prog_hdrs[k];
+        const Elf32_Phdr* h = &prog_hdrs[k];
         if (h->p_type != PT_LOAD)
             continue;
 
-        uint addr = h->p_vaddr;
-        if (addr < lowest_address)
+        if (const uint addr = h->p_vaddr; addr < lowest_address)
             lowest_address = addr;
     }
 
