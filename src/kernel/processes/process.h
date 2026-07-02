@@ -2,7 +2,6 @@
 #define INCLUDE_PROCESS_H
 
 #include <signal.h>
-#include "../utils/BST.h"
 #include "../core/memory.h"
 #include "../core/interrupts.h"
 #include "ELF.h"
@@ -113,8 +112,6 @@ class Process
 	bool is_pre_freed = false;
 
 public:
-	const BST<Memory::allocation>::compare_func_t mmap_cmp = [](const Memory::allocation& a, const Memory::allocation& b) {return a.start == b.start ? 0  : (a.start > b.start ? 1 : -1);};
-	BST<Memory::allocation> mmap_allocations{mmap_cmp};
 	Memory::MemTree memtree{}; // Memory tree. MUST be early in fields list to be initialized before any other fields that needs dynamic memory
 
 	file_descriptor* file_descriptors[MAX_FD_PER_PROCESS]{};
