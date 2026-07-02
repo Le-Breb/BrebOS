@@ -11,9 +11,20 @@ class Process;
 
 namespace Memory
 {
-    class MemTree : protected BST<allocation>
+    class MemTree
     {
     protected:
+        struct Node
+        {
+            allocation data;
+            Node* left = nullptr;
+            Node* right = nullptr;
+        };
+
+        Node* root = nullptr;
+
+        static int compare_func(const allocation& a, const allocation& b);
+
         static constexpr uint N_FREE_PAGES_THRESHOLD = 2;
         static Node* find_free_block(Node* current, uint size, const hint_info& hint_info);
         static void shrink_block(Node* node, uint size);
@@ -27,8 +38,10 @@ namespace Memory
         static Node* new_node(const allocation& allocation);
         static void delete_node(Node* node);
         static void remove_node(Node* node, Node** node_ptr);
-        static void ensure_validity_aux(Node* node, Node* root);
+        static void ensure_validity_aux(Node* node, Node* tree_root);
         static void ensure_validity_aux_aux(Node* node, const Node* root);
+        void add_node(Node* node);
+        Node* find_node(const allocation& elem, Node**& node_ptr) const;
         Node* get_lowest_alloc(Node* node, Node* prev, Node**& node_ptr);
     public:
         static bool go;
@@ -45,7 +58,7 @@ namespace Memory
             FAILED
         };
 
-        MemTree();
+        MemTree() = default;
         void* allocate(uint size, const page_info& page_info, Process* process, const hint_info& hint_info = DEFAULT_HINT_INFO);
         allocation* find_allocation(uintptr_t address) const;
         ReallocState realloc(uintptr_t address, uint size, Process* process, uintptr_t& new_address);

@@ -1,7 +1,6 @@
 #include "Memtree.h"
 #include "kstring.h"
 #include "../utils/comparison.h"
-#include "abi-bits/vm-flags.h"
 #include "../processes/process.h"
 #include "SlabAllocator.h"
 #include "RawMemory.h"
@@ -15,7 +14,14 @@ namespace Memory
 {
     MemTree MemTree::bootstrap_memtree{};
 
-    BST<allocation>::Node* MemTree::find_free_block(Node* current, uint size, const hint_info& hint_info)
+    int MemTree::compare_func(const allocation& a, const allocation& b)
+    {
+        return a.start == b.start
+                   ? 0
+                   : a.start > b.start ? 1 : -1;
+    }
+
+    MemTree::Node* MemTree::find_free_block(Node* current, uint size, const hint_info& hint_info)
     {
         if (!current)
             return nullptr;
@@ -97,7 +103,7 @@ namespace Memory
         return true;
     }
 
-    BST<allocation>::Node* MemTree::node_physical_alloc(uint size, const page_info& page_info, const hint_info& hint_info, Process* process)
+    MemTree::Node* MemTree::node_physical_alloc(uint size, const page_info& page_info, const hint_info& hint_info, Process* process)
     {
         constexpr uint MIN_ALLOC_PAGES = 2;
         const uint num_pages_base = ADDR_PAGE(size + PAGE_SIZE - 1);
@@ -114,10 +120,10 @@ namespace Memory
         return node;
     }
 
-    BST<allocation>::Node* MemTree::find_allocation_node(uintptr_t address, Node**& node_ptr) const
+    MemTree::Node* MemTree::find_allocation_node(uintptr_t address, Node**& node_ptr) const
     {
         const allocation dummy{address, 0, DEFAULT_K_PAGE_INFO};
-        return find_node(dummy, compare_func, node_ptr);
+        return find_node(dummy, node_ptr);
     }
 
     void MemTree::merge_free_node(Node* node)
@@ -166,7 +172,7 @@ namespace Memory
         }
     }
 
-    BST<allocation>::Node* MemTree::new_node(const allocation& allocation)
+    MemTree::Node* MemTree::new_node(const allocation& allocation)
     {
         return new (SlabAllocator<Node>::get_instance()->alloc()) Node{allocation, nullptr, nullptr};
     }
@@ -213,13 +219,23 @@ namespace Memory
         delete_node(node);
     }
 
-    void MemTree::ensure_validity_aux(Node* node, Node* root)
+    void MemTree::ensure_validity_aux(Node* node, Node* tree_root)
     {
         if (!node)
             return;
-        ensure_validity_aux_aux(node, root);
-        ensure_validity_aux(node->left, root);
-        ensure_validity_aux(node->right, root);
+        ensure_validity_aux_aux(node, tree_root);
+        if (node->left)
+        {
+            if (compare_func(node->data, node->left->data) < 0)
+                irrecoverable_error("MemTree: order is wrong");
+            ensure_validity_aux(node->left, tree_root);
+        }
+        if (node->right)
+        {
+            if (compare_func(node->data, node->right->data) > 0)
+                irrecoverable_error("MemTree: order is wrong");
+            ensure_validity_aux(node->right, tree_root);
+        }
     }
 
     bool do_overlap(const allocation& alloc1, const allocation& alloc2)
@@ -230,32 +246,58 @@ namespace Memory
 
     void MemTree::ensure_validity_aux_aux(Node* node, const Node* root)
     {
-        if (!root)
-            return;
-
         if (do_overlap(node->data, root->data))
             irrecoverable_error("memtree overlap detected");
-        ensure_validity_aux_aux(node, root->left);
-        ensure_validity_aux_aux(node, root->right);
+        if (node->left)
+            ensure_validity_aux_aux(node, root->left);
+        if (node->right)
+            ensure_validity_aux_aux(node, root->right);
     }
 
-    BST<allocation>::Node* MemTree::get_lowest_alloc(Node* node, Node* prev, Node**& node_ptr)
+    void MemTree::add_node(Node* node)
+    {
+        Node** cur = &root;
+
+        while (*cur)
+        {
+            const int cmp = compare_func((*cur)->data, node->data);
+            cur = cmp >= 0 ? &(*cur)->left : &(*cur)->right;
+        }
+
+        *cur = node;
+    }
+
+    MemTree::Node* MemTree::find_node(const allocation& elem, Node**& node_ptr) const
+    {
+        Node* prev = nullptr;
+        Node* cur = root;
+        int prev_cmp = 0;
+
+        while (cur)
+        {
+            if (const int cmp = compare_func(cur->data, elem); cmp == 0)
+            {
+                node_ptr = prev ? (prev_cmp > 0 ? &prev->left : &prev->right) : &((MemTree*)this)->root;
+                return cur;
+            }
+            else
+            {
+                prev_cmp = cmp;
+                prev = cur;
+                cur = cmp > 0 ? cur->left : cur->right;
+            }
+        }
+
+        return nullptr;
+    }
+
+    MemTree::Node* MemTree::get_lowest_alloc(Node* node, Node* prev, Node**& node_ptr)
     {
         if (node->left)
             return get_lowest_alloc(node->left, node, node_ptr);
 
         node_ptr = prev ? &prev->left : &root;
         return node;
-    }
-
-    MemTree::MemTree() : BST([](const Memory::allocation& a, const Memory::allocation& b)
-    {
-        return a.start == b.start
-                   ? 0
-                   : a.start > b.start ? 1 : -1;
-    })
-    {
-
     }
 
     void* MemTree::allocate(uint size, const page_info& page_info, Process* process, const hint_info& hint_info)
@@ -320,21 +362,8 @@ namespace Memory
         if (!node)
             return ReallocState::FAILED;
 
-        const uint base_node_size = node_size(node);
-
-        if (size <= base_node_size)
-        {
-            const uint shrink = base_node_size - size;
-            shrink_block(node, shrink);
-            add_node(new_node({node->data.end, node->data.end + shrink, node->data.page_info, false}));
-            new_address = address;
-#if ENSURE_VALIDITY
-            ensure_validity();
-#endif
-            return ReallocState::OK;
-        }
-
-        if (base_node_size == size)
+        const uint ns = node_size(node);
+        if (ns == size)
         {
             new_address = address;
 #if ENSURE_VALIDITY
@@ -342,13 +371,9 @@ namespace Memory
 #endif
             return ReallocState::OK;
         }
-
-        merge_node_with_free_successor(node);
-        const uint new_node_size = node_size(node);
-
-        if (size <= new_node_size)
+        if (size < ns)
         {
-            const uint shrink = new_node_size - size;
+            const uint shrink = ns - size;
             shrink_block(node, shrink);
             add_node(new_node({node->data.end, node->data.end + shrink, node->data.page_info, false}));
             new_address = address;
@@ -362,7 +387,7 @@ namespace Memory
         if (!new_buffer)
             return ReallocState::NOMEM;
 
-        memcpy(new_buffer, reinterpret_cast<void*>(address), base_node_size);
+        memcpy(new_buffer, reinterpret_cast<void*>(address), ns);
         free_node(node, node_ptr, process);
         new_address = reinterpret_cast<uintptr_t>(new_buffer);
 
@@ -411,8 +436,7 @@ namespace Memory
 
     void MemTree::ensure_validity() const
     {
-        BST::ensure_validity();
-        ensure_validity_aux(root, root);
+        return ensure_validity_aux(root, root);
     }
 
     void MemTree::free_all(const Process* process)
@@ -454,7 +478,8 @@ namespace Memory
     void MemTree::register_external_allocation(const allocation& allocation)
     {
         Node* node = new_node(allocation);
-        ensure_validity_aux_aux(node, root);
+        if (root)
+            ensure_validity_aux_aux(node, root);
         add_node(node);
     }
 }
