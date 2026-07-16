@@ -140,7 +140,8 @@ void* lazy_malloc(uint n);
  */
 void* malloc(uint n, const Memory::page_info& page_info, Process* process);
 
-void* calloc(size_t nmemb, size_t size, const Memory::page_info& page_info, Process* process);
+void* calloc(size_t nmemb, size_t size, const Memory::page_info& page_info, Process* process, const Memory::hint_info& hint_info =
+	             Memory::DEFAULT_HINT_INFO);
 
 extern "C" void* calloc(size_t nmemb, size_t size);
 

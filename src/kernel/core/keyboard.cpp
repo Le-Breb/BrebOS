@@ -4,6 +4,7 @@
 #include "interrupts.h"
 #include "system.h"
 #include "../processes/scheduler.h"
+#include "IO.h"
 
 #define CTRL_PRESSED 1
 #define CTRL_RELEASED 157

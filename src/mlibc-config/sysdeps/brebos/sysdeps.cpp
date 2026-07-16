@@ -299,11 +299,9 @@ int SysdepImpl<Waitpid>::operator()(int pid, int *status,
 
     if (ru)
         mlibc::panicLogger() << "waitpid called with non-null ru, this is not supported yet\n" << frg::endlog;
-    if (flags)
-        mlibc::panicLogger() << "waitpid called with non-null flags (" << frg::hex_fmt{flags} << ", this is not supported yet\n" << frg::endlog;
 
     sc_result_t ret;
-    __asm__ volatile("int $0x80" : "=a"(ret) : "a"(14), "D"(pid), "S"(status));
+    __asm__ volatile("int $0x80" : "=a"(ret) : "a"(14), "D"(pid), "S"(status), "d"(flags));
 
 	if (const int e = sc_error(ret); e)
 		return e;
@@ -642,8 +640,9 @@ int SysdepImpl<SetUid>::operator()(uid_t uid) {
 }
 
 int SysdepImpl<Sleep>::operator()(time_t *secs, long *nanos) {
-    (void)secs; (void)nanos;
-    STUB();
+    do_syscall(7, secs, nanos);
+
+    return 0;
 }
 
 int SysdepImpl<Symlink>::operator()(const char *target_path, const char *link_path) {

@@ -37,7 +37,6 @@ private:
 	{
 		pid_t pid;
 		int fd;
-		size_t request, read_so_far;
 
 		bool operator==(const proc_waiting_for_read& other) const {return other.pid == pid && fd == other.fd; }
 	};
@@ -48,6 +47,7 @@ private:
 	static list<proc_waiting_for_read>* processes_waiting_for_read;
 	static Process* processes[MAX_PROCESSES];
 	static MinHeap<asleep_process>* sleeping_processes;
+	static list<Process*>* exec_processes_to_free;
 
 	/**
 	 * Round-robin scheduler
@@ -65,9 +65,14 @@ private:
 
 	static void wake_up_process_parent(pid_t process_pid);
 
-	static void signal_handling(Process* p);
+	static bool signal_handling(Process* p);
+
+	static void reparent_process_to_init(Process* p);
+
+	static void delete_exec_processes();
 
 public:
+	static pid_t init_pid;
 	/**
 	 * Create the process that will be used for global kernel memory mappings, and which will handle the end of kernel
 	 * initialization, when PIT is needed (likely for parts that need to call sleep).
@@ -109,7 +114,9 @@ public:
 
 	static void set_process_ready(Process* p);
 
-	static void free_terminated_process(Process& p);
+	static void free_process(const Process& p);
+
+	static void on_process_terminated(Process& p);
 
 	static void set_first_ready_process_asleep_waiting_key_press();
 
@@ -125,7 +132,7 @@ public:
 	 */
 	static void stop_kernel_init_process();
 
-	static int register_process_wait(pid_t waiting_process, pid_t waited_for_process);
+	static int register_process_wait(pid_t waiting_process, pid_t waited_for_process, bool no_hang, bool& return_now);
 
 	static void set_process_asleep(Process* p, uint duration);
 
@@ -147,9 +154,12 @@ public:
 	[[noreturn]]
 	static void resume_user_process(Process* p);
 
-	static void do_read_wait(pid_t process_pid, int fd, size_t n);
+	[[noreturn]]
+	static void resume_syscall_handler(Process* p);
 
-	static void wake_up_read_waiting_processes(int write_fd, int read_fd, int count);
+	static void do_read_wait(pid_t process_pid, int fd);
+
+	static void wake_up_read_waiting_processes(int write_fd, int read_fd);
 };
 
 

@@ -38,7 +38,7 @@
 // Can be increased up to <= sizeof(sigset_t) * 8.
 // Do not forget to update @signal_default_action initialization accordingly if you increase that value
 // Do not forget to update @sig_names too
-#define HIGHEST_SIGNAL 12
+#define HIGHEST_SIGNAL 17
 #define MAX_CONCURRENT_SIGNAL_HANDLERS 10
 
 #define SIGDISP_TERM 0
@@ -237,7 +237,11 @@ public:
 
 	[[nodiscard]] bool is_sleeping() const;
 
+	[[nodiscard]] bool is_zombie() const;
+
 	[[nodiscard]] bool exec_running() const;
+
+	[[nodiscard]] int get_ret_status() const;
 
 	static void init();
 

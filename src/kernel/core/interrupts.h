@@ -1,9 +1,9 @@
 #ifndef INCLUDE_INTERRUPTS_H
 #define INCLUDE_INTERRUPTS_H
 
-#include "IO.h"
+#include "PIC.h"
 
-#define TRIGGER_TIMER_INTERRUPT __asm__ volatile("int $0x20");
+#define TRIGGER_TIMER_INTERRUPT {PIC::enable_preemptive_scheduling(); ;__asm__ volatile("int $0x20");}
 
 struct cpu_state
 {

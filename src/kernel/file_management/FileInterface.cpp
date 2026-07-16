@@ -151,18 +151,16 @@ bool File::preload_read(void* buf, uint offset, uint count, const SharedPointer<
     if constexpr (!enable_preload)
         return false;
 
-    char* abs_path = dentry->get_absolute_path();
+    const auto abs_path = dentry->get_absolute_path_tmp();
     for (const auto& [path, data] : preloads_list)
     {
-        if (!strcmp(path, abs_path))
+        if (!strcmp(path, *abs_path))
         {
             memcpy(buf, static_cast<char*>(data) + offset, count);
-            free(abs_path);
             return true;
         }
     }
 
-    free(abs_path);
     return false;
 }
 
@@ -249,7 +247,7 @@ int Pipe::read(void* buf, uint count)
     if (end != Read)
         return -EINVAL; // Unsuitable for reading
 
-    CircularBuffer<char>::section* sections = this->buf->read(count);
+    const CircularBuffer<char>::section* sections = this->buf->read(count);
     memcpy(buf, sections[0].beg, sections[0].size);
     memcpy((char*)buf + sections[0].size, sections[1].beg, sections[1].size);
 

@@ -422,7 +422,7 @@ int VFS::read(int fd, uint length, void* buf)
 
 	if (r == 0 && f->should_wait_for_data_on_read())
 	{
-		Scheduler::do_read_wait(Scheduler::get_running_process_pid(), f->get_write_fd(), length);
+		Scheduler::do_read_wait(Scheduler::get_running_process_pid(), f->get_write_fd());
 		return read(fd, length - r, (char*)buf + r);
 	}
 
@@ -440,7 +440,7 @@ int VFS::write(int fd, void* buf, uint count)
 		Scheduler::get_running_process()->kill(SIGPIPE);
 
 	if (status > 0 && f->get_read_fd() != -1)
-		Scheduler::wake_up_read_waiting_processes(fd, f->get_read_fd(), status);
+		Scheduler::wake_up_read_waiting_processes(fd, f->get_read_fd());
 
 	return status;
 }
@@ -459,7 +459,7 @@ int VFS::close(int fd)
 		file_descriptors[fd] = nullptr;
 		lowest_free_fd = min(lowest_free_fd, fd);
 		if (write_fd != -1 && read_fd != -1)
-			Scheduler::wake_up_read_waiting_processes(write_fd, read_fd, 0);
+			Scheduler::wake_up_read_waiting_processes(write_fd, read_fd);
 	}
 
 	return 0; // Success

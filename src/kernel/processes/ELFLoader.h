@@ -65,6 +65,7 @@ private:
     {
         ELF* elf;
         Elf32_Addr runtime_load_address;
+        void* data;
     };
 
     Process* current_process;

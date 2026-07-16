@@ -1,6 +1,8 @@
 #include "PIC.h"
 #include "IO.h"
 
+bool PIC::preemptive_scheduling_enabled = false;
+
 void PIC::init()
 {
 	// Remap the PIC
@@ -58,12 +60,22 @@ void PIC::acknowledge(uint interrupt)
 
 void PIC::enable_preemptive_scheduling()
 {
+	if (preemptive_scheduling_enabled)
+		return;
+
 	uint a = inb(PIC1_DATA) & ~1;
 	outb(PIC1_DATA, a);
+
+	preemptive_scheduling_enabled = true;
 }
 
 void PIC::disable_preemptive_scheduling()
 {
+	if (!preemptive_scheduling_enabled)
+		return;
+
 	uint a = inb(PIC1_DATA) | 1;
 	outb(PIC1_DATA, a);
+
+	preemptive_scheduling_enabled = false;
 }

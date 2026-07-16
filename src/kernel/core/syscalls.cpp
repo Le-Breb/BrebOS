@@ -66,6 +66,11 @@ void Syscall::get_key()
 [[noreturn]]
 void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stack_state)
 {
+    // As no lock mechanism is implemented yet, syscall preemption has multiple concurrency issues, especially about memory,
+    // which introduces non-deterministic errors.
+    // Thus, this is why preemption is (sadly) disabled during syscall execution
+    PIC::disable_preemptive_scheduling();
+
     Process* p = Scheduler::get_running_process();
 
     // Update PCB
@@ -95,6 +100,9 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             break;
         case 6:
             System::shutdown();
+        case 7:
+            sleep(p);
+            break;
         case 8:
             malloc(p);
             break;
@@ -531,21 +539,59 @@ int Syscall::execve(Process* p, bool use_path_if_no_heading_slash)
     return Scheduler::execve(p, path, argc, argv, envp, use_path_if_no_heading_slash);
 }
 
+void Syscall::sleep(Process* p)
+{
+    if (const long ns = *(long*)p->cpu_state.ecx)
+    {
+        printf_warn("%s called 'sleep' with nano seconds, only seconds are supported for now", p->bin_path);
+        p->kill(SIGQUIT);
+        irrecoverable_error("unreachable code reached");
+    }
+
+    time_t s = *(time_t*)p->cpu_state.ebx;
+    Scheduler::set_process_asleep(p, s * 1000);
+    TRIGGER_TIMER_INTERRUPT
+}
+
 __attribute__((no_instrument_function)) // May not return, which would mess up profiling data
 int Syscall::wait_pid(Process* p)
 {
-    int wait = Scheduler::register_process_wait(p->get_pid(), (int)p->cpu_state.edi);
+    const int waited_for_process = (int)p->cpu_state.edi;
+    const int flags = (int)p->cpu_state.edx;
+
+    if (constexpr int supported_flags = WNOHANG; flags & ~supported_flags)
+    {
+        printf_warn("waitpid called with the following unsupported flags: 0x%x", flags & ~supported_flags);
+        return -EINVAL;
+    }
+
+    bool return_now;
+    const int wait = Scheduler::register_process_wait(p->get_pid(), waited_for_process, flags & WNOHANG, return_now);
 
     // Direct return, either error or child already terminated
-    if (wait != 0)
+    if (return_now)
     {
-        if (wait > 0) // set wstatus. Cf. wait.h
-            *(int*)p->cpu_state.esi = wait << 8;
+        if (wait > 0)
+        {
+            Process* waited_for_proc = Scheduler::get_process(wait);
+
+            int* wstatus = (int*)p->cpu_state.esi;
+            *wstatus = waited_for_proc->get_ret_status();
+
+            if (waited_for_proc->is_zombie())
+                Scheduler::free_process(*waited_for_proc);
+        }
         return wait;
     }
 
     // Wait
     TRIGGER_TIMER_INTERRUPT
+    // Done waiting
 
-    return (int)p->cpu_state.eax; // Return value is written here by Scheduler
+    // Free child
+    const int child_pid = (int)p->cpu_state.eax; // Return value is written here by Scheduler
+    Scheduler::free_process(*Scheduler::get_process(child_pid));
+
+    // Syscall return value
+    return child_pid;
 }

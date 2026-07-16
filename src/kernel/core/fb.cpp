@@ -479,8 +479,8 @@ void FB::init(uint fps)
 	shadow_lim = fb_width * fb_height;
 	FB::fps = fps;
 
-	FG = WHITE;
-	BG = BLACK;
+	FG = WHITE_COLOR;
+	BG = BLACK_COLOR;
 
 	// Initialize rasterized font
 	r_font = new uint32_t[font->characterSize * 8 * 255];

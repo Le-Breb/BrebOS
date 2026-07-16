@@ -31,8 +31,8 @@
 #define CURSOR_END_LINE 0x0B
 #define CURSOR_BEGIN_LINE 0x0A
 
-#define WHITE 0xFFFFFF
-#define BLACK 0
+#define WHITE_COLOR 0xFFFFFF
+#define BLACK_COLOR 0
 
 #define FLUSH_LOCKED_ACTION(ret, action) {\
 FB::lock_flushing(); \

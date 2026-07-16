@@ -16,7 +16,8 @@ namespace Memory
         allocate_page(pe, DEFAULT_K_POLICY);
 
         page_header* page_header = new (reinterpret_cast<void*>(addr)) struct page_header();
-        struct alloc* alloc = new (reinterpret_cast<void*>(page_header + 1)) struct alloc();
+        // Do not call constructor to allow usage of data types without default constructors
+        struct alloc* alloc = reinterpret_cast<struct alloc*>(page_header + 1);
 
         for (uint i = 0; i < max_allocs_per_page - 1; i++)
             alloc[i].next = &alloc[i + 1];
@@ -43,7 +44,7 @@ namespace Memory
     SlabAllocator<T>::~SlabAllocator()
     {
         const uintptr_t addr = reinterpret_cast<uintptr_t>(this);
-        free_page(addr);
+        free_page(ADDR_PAGE(addr));
     }
 
     template <typename T>

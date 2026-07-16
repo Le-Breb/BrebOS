@@ -561,7 +561,8 @@ namespace Memory
         const hint_info hint_info{reinterpret_cast<uintptr_t>(hint), (bool)(flags & MAP_FIXED)};
         const page_info page_info{flags, policy};
         // printf_info("mmap call on range [0x%08x, 0x%08x]", (uint)hint, (uint)hint + (uint)size);
-        void* window = process->memtree.allocate(size, page_info, process, hint_info);
+        // Man page states that MAP_ANON allocations MUST BE zeroed out, thus calloc is used
+        void* window = calloc(size, 1, page_info, process, hint_info);
         if (flags & MAP_FIXED && window != hint)
             irrecoverable_error("%s: MAP_FIXED set, but returned window does not match hit", __func__);
         if (!window)
@@ -873,13 +874,13 @@ extern "C" void* malloc(uint n)
     return addr;
 }
 
-void* calloc(size_t nmemb, size_t size, const page_info& page_info, Process* process)
+void* calloc(size_t nmemb, size_t size, const page_info& page_info, Process* process, const hint_info& hint_info)
 {
     MemTree& mem_tree = process->memtree;
 
     // Check edge cases according to man page
     if (!nmemb || !size)
-        return mem_tree.allocate(1, page_info, process);
+        return mem_tree.allocate(1, page_info, process, hint_info);
 
     // Check for overflow
     size_t total_size;
@@ -887,7 +888,7 @@ void* calloc(size_t nmemb, size_t size, const page_info& page_info, Process* pro
         return nullptr;
 
     // Get memory
-    void* mem = mem_tree.allocate(total_size, page_info, process);
+    void* mem = mem_tree.allocate(total_size, page_info, process, hint_info);
     if (!mem)
         return nullptr;
 
@@ -912,11 +913,11 @@ MemTree::FreeState free(void* ptr, Process* process)
     {
         switch (free_state) {
             case MemTree::FreeState::DOUBLE_FREE:
-                irrecoverable_error("delete[] failed, double free detected");
+                irrecoverable_error("free failed, double free detected");
             case MemTree::FreeState::NOT_FOUND:
-                irrecoverable_error("delete[] failed, allocation is nowhere to be found");
+                irrecoverable_error("free failed, allocation is nowhere to be found");
             default:
-                irrecoverable_error("delete[] failed with unknown state %d", (int)free_state);
+                irrecoverable_error("free failed with unknown state %d", (int)free_state);
         }
     }
     return free_state;

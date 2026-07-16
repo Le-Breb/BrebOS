@@ -124,6 +124,8 @@ class Syscall
 	static int mprotect(Process* p);
 
 	static int execve(Process* p, bool use_path_if_no_heading_slash);
+
+	static void sleep(Process* p);
 public:
 	/**
 	 * Handles a syscall

@@ -167,12 +167,14 @@ void Process::terminate_with_value(int ret_val)
 {
     flags |= P_TERMINATED;
     this->ret_status = (ret_val & 0xFF) << 8; // Cf. wait.h
+    Scheduler::get_process(ppid)->kill(SIGCHLD);
 }
 
 void Process::terminate_with_signal(int ret_sig)
 {
     flags |= P_TERMINATED;
     this->ret_status = ret_sig & 0x7F; // Cf. wait.h
+    Scheduler::get_process(ppid)->kill(SIGCHLD);
 }
 
 void* Process::malloc(uint n)
@@ -185,6 +187,7 @@ void* Process::calloc(size_t nmemb, size_t size)
     Memory::page_info page_info = Memory::DEFAULT_U_PAGE_INFO;
     page_info.policy &= ~PAGE_PRESENT;
     page_info.policy |= PAGE_LAZY_ZERO;
+
     return ::calloc(nmemb, size, page_info, this);
 }
 
@@ -257,9 +260,19 @@ bool Process::is_sleeping() const
     return flags & P_SLEEPING;
 }
 
+bool Process::is_zombie() const
+{
+    return flags & P_ZOMBIE;
+}
+
 bool Process::exec_running() const
 {
     return flags & P_EXEC;
+}
+
+int Process::get_ret_status() const
+{
+    return ret_status;
 }
 
 void Process::init()
@@ -276,6 +289,11 @@ void Process::init()
     signal_default_action[SIGUSR1] = SIGDISP_TERM;
     signal_default_action[SIGSEGV] = SIGDISP_CORE;
     signal_default_action[SIGUSR2] = SIGDISP_TERM;
+    signal_default_action[SIGPIPE] = SIGDISP_TERM;
+    signal_default_action[SIGALRM] = SIGDISP_TERM;
+    signal_default_action[SIGTERM] = SIGDISP_TERM;
+    signal_default_action[SIGSTKFLT] = SIGDISP_TERM;
+    signal_default_action[SIGCHLD] = SIGDISP_IGN;
 }
 
 void Process::copy_page_to_other_process(const Process* other, uint page_id, uint mapping_page_id) const
@@ -302,9 +320,14 @@ void Process::copy_page_to_other_process(const Process* other, uint page_id, uin
 
 void Process::copy_page_to_other_process_shared(const Process* other, uint page_id) const
 {
-    auto pte = PTE(page_tables, page_id);
-    if (!(pte & PAGE_PRESENT))
+    const auto pte = PTE(page_tables, page_id);
+
+    // For lazy zero, simply copy the entry
+    if (pte & PAGE_LAZY_ZERO)
+    {
+        other->update_pte(page_id, pte, false);
         return;
+    }
 
     // Remove write permission in current process, as we cannot write to the page anymore since it is shared
     // Mark page as COW in current and other process
@@ -371,14 +394,16 @@ pid_t Process::fork()
             continue;
         }
 
-        auto flags = pdt->entries[i] & 0x7FF;
-        auto frame_val = PHYS_ADDR(Memory::page_tables, (uint) &child->page_tables[i]);
+        const auto flags = pdt->entries[i] & 0x7FF;
+        const auto frame_val = PHYS_ADDR(Memory::page_tables, (uint) &child->page_tables[i]);
         child->pdt->entries[i] = frame_val | flags;
     }
     memcpy(child_pdt->entries + 768, pdt->entries + 768, sizeof(uint) * (PDT_ENTRIES - 768));
 
     // Clear mapping page
     update_pte(mapping_page, 0, true);
+
+    child->memtree = memtree;
 
     // Copy file descriptors
     for (uint i = 0; i < MAX_FD_PER_PROCESS; i++)
@@ -594,7 +619,7 @@ int Process::proc_to_sys_fd(int fd) const
 }
 
 constexpr const char* sig_names[] = {
-    "SIGUNUSED",
+    "SIGNULL",
     "SIGHUP",
     "SIGINT",
     "SIGQUIT",
@@ -607,6 +632,11 @@ constexpr const char* sig_names[] = {
     "SIGUSR1",
     "SIGSEGV",
     "SIGUSR2",
+    "SIGPIPE",
+    "SIGALRM",
+    "SIGTERM",
+    "SIGSTKFLT",
+    "SIGCHLD",
 };
 
 constexpr const char* sig_to_sig_name(int sig)

@@ -24,6 +24,8 @@
 class PIC
 {
 public:
+	static bool preemptive_scheduling_enabled;
+
 	/**
 	 * Sets up the PIC
 	 */

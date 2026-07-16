@@ -1,7 +1,5 @@
 #pragma once
 
-#include "TmpString.h"
-
 typedef unsigned int uint;
 
 /**

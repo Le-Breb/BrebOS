@@ -19,8 +19,11 @@ ELFLoader::ELFLoader(): current_process(Scheduler::get_running_process()), elf_d
 ELFLoader::~ELFLoader()
 {
     // Free stuff not transferred to process
-    for (auto i = 0; i < elf_dep_list->size(); i++)
-        delete elf_dep_list->get(i)->elf;
+    for (const auto& dep : *elf_dep_list)
+    {
+        delete (char*)dep.data;
+        delete dep.elf;
+    }
     delete elf_dep_list;
 
     if (used)
@@ -261,7 +264,8 @@ Lptr<char> ELFLoader::write_auxv(const Lptr<char>& stack_top, void* const argv0_
 ELF* ELFLoader::load_elf(const SharedPointer<Dentry>& file, ELF_type expected_type)
 {
     const auto proc = Scheduler::get_running_process();
-    const int fd = proc->open(file->get_absolute_path(), O_RDONLY, 0777);
+    const auto abs_path = file->get_absolute_path_tmp();
+    const int fd = proc->open(*abs_path, O_RDONLY, 0777);
     if (fd < 0)
         return nullptr;
     const auto buf = new char[file->inode->size];
@@ -272,7 +276,6 @@ ELF* ELFLoader::load_elf(const SharedPointer<Dentry>& file, ELF_type expected_ty
     }
 
     const auto elf = load_elf(buf, expected_type);
-    delete[] buf;
 
     return elf;
 }
@@ -285,7 +288,7 @@ ELF* ELFLoader::load_elf(void* buf, ELF_type expected_type)
 
     uint load_address = (uint)buf;
     uint runtime_load_addr = num_pages * PAGE_SIZE;
-    const auto dep = elf_dependence({elf, runtime_load_addr});
+    const auto dep = elf_dependence({elf, runtime_load_addr, buf});
     elf_dep_list->add(dep);
 
     map_elf(elf, runtime_load_addr);

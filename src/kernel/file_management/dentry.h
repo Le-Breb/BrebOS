@@ -3,6 +3,7 @@
 
 #include "inode.h"
 #include "../utils/shared_pointer.h"
+#include "../utils/TmpString.h"
 
 class Dentry
 {
@@ -13,6 +14,9 @@ public:
 
 	[[nodiscard]]
 	char* get_absolute_path() const;
+
+	[[nodiscard]]
+	TmpString get_absolute_path_tmp() const;
 
 private:
 	[[nodiscard]]

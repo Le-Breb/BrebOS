@@ -21,6 +21,15 @@ char* Dentry::get_absolute_path() const
 	return abs_name;
 }
 
+TmpString Dentry::get_absolute_path_tmp() const
+{
+	auto abs_name = TmpString(absolute_path_length());
+	(*abs_name)[0] = '\0';
+	[[maybe_unused]] auto _ = write_name(*abs_name, true);
+
+	return abs_name;
+}
+
 size_t Dentry::absolute_path_length() const
 {
 	// +1 for the '/' separator
