@@ -46,7 +46,7 @@ namespace Memory
         return node->data.end - node->data.start;
     }
 
-    MemTree::Node* MemTree::merge_node_with_free_successor(const Node* node)
+    MemTree::Node* MemTree::merge_node_with_free_successor(Node* node)
     {
         if (!node->right)
             return nullptr;
@@ -61,18 +61,14 @@ namespace Memory
             return nullptr; // Quit if non-contiguous or non-free
 
         // Merge
-        const allocation new_alloc = {node->data.start, node->data.end + node_size(cur), node->data.page_info, node->data.used};
-        // Delete before insertion to prevent having to allocations with same starting address during deletion,
-        // which could cause deletion of the new one instead of the old one
+        node->data.end += node_size(cur);
         const allocation node_data = node->data; // Get node data as node->data content may change during deletion
         deleteNode(cur);
-        deleteByVal(node_data); // node_data may have moved so we must delete by value and not by node
-        Node* new_node = insert_aux(new_alloc);
 
-        return new_node;
+        return search(node_data); // Cannot return node directly as deleteNode may have modified the tree
     }
 
-    RBTree<allocation>::Node* MemTree::merge_node_with_free_predecessor(const Node* node)
+    RBTree<allocation>::Node* MemTree::merge_node_with_free_predecessor(Node* node)
     {
         if (!node->left)
             return nullptr;
@@ -87,15 +83,11 @@ namespace Memory
             return nullptr; // Quit if non-contiguous or non-free
 
         // Merge
-        const allocation new_alloc = {cur->data.start, cur->data.end + node_size(node), cur->data.page_info, cur->data.used};
-        // Delete before insertion to prevent having to allocations with same starting address during deletion,
-        // which could cause deletion of the new one instead of the old one
-        const allocation node_data = node->data; // Get node data as node->data content may change during deletion
-        deleteNode(cur);
-        deleteByVal(node_data); // node_data may have moved so we must delete by value and not by node
-        Node* new_node = insert_aux(new_alloc);
+        cur->data.end += node_size(node);
+        const allocation cur_data = cur->data; // Get node cur as cur->data content may change during deletion
+        deleteNode(node);
 
-        return new_node;
+        return search(cur_data); // Cannot return cur directly as deleteNode may have modified the tree
     }
 
     MemTree::Node* MemTree::node_physical_alloc(uint size, const page_info& page_info, const hint_info& hint_info, Process* process)
@@ -135,15 +127,19 @@ namespace Memory
 
         if (num_pages >= N_FREE_PAGES_THRESHOLD)
         {
-            if (node->data.end - aligned_end)
-                insert({aligned_end, node->data.end, node->data.page_info, node->data.used});
+            const Node node_cpy = *node; // Copy node before potentially deleting it
+            // Shrink block so that its size is now part1_size
             if (const uint part1_size = aligned_start - node->data.start)
             {
                 const uint shrink = ns - part1_size;
                 shrink_block(node, shrink);
             }
-            else
-                deleteByVal(node->data); // Delete by val as insert may have change tree layout.
+            else // No part1, simply delete node
+                deleteNode(node);
+
+            // Create part2 if there is one, using node_cpy since node may be deleted by now
+            if (node_cpy.data.end - aligned_end)
+                insert({aligned_end, node_cpy.data.end, node_cpy.data.page_info, node_cpy.data.used});
 
             for (uint i = 0; i < num_pages; i++)
                 free_page(aligned_start + (i << 12), process);

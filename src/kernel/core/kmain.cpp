@@ -48,7 +48,6 @@ extern "C" bool fpu_init_asm_();
 // using inb and outb which are currently used for enabling/disabling preemption. Do not forget to remove PIC::enable_preemptive_scheduling() from TRIGGER_TIMER_INTERRUPT
 // Todo: in ELFLoader, do not map code above KERNEL_VIRTUAL_BASE, map below and use mapping pages, as for now ALL processes
 // will use PTE above KERNEL_VIRTUAL_BASE >> 12 and lower PTEs won't be used
-// Todo: try to optimized memtree merge/free (get rid of deleteByVal calls)
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {
     // Get why this fails

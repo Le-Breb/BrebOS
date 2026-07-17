@@ -47,13 +47,13 @@ namespace Memory
          * @param node the node to shrink
          * @return Pointer to the merged node. May be different from original pointer as tree may me modified
          */
-        Node* merge_node_with_free_successor(const Node* node);
+        Node* merge_node_with_free_successor(Node* node);
         /**
          * Merges a free node with its potential free predecessors
          * @param node the node to shrink
          * @return Pointer to the merged node. May be different from original pointer as tree may me modified
          */
-        Node* merge_node_with_free_predecessor(const Node* node);
+        Node* merge_node_with_free_predecessor(Node* node);
         /**
          * Tries to allocate size bytes and returns the newly created node.
          * @param size size of the new node
