@@ -62,22 +62,9 @@ Process::~Process()
 {
     if (!(flags & P_TERMINATED))
     {
-        printf_error("Process %u is not terminated", pid);
+        printf_error("%s: Process %u is not terminated", __PRETTY_FUNCTION__, pid);
         return;
     }
-
-    pre_free();
-
-    delete bin_path;
-    delete[] work_dir;
-
-    //printf_info("Process %u exited with code %d", pid, ret_val);
-}
-
-void Process::pre_free()
-{
-    if (is_pre_freed)
-        return;
 
     memtree.free_all(this);
 
@@ -98,7 +85,10 @@ void Process::pre_free()
     Memory::freea(page_tables);
     Memory::freea(pdt);
 
-    is_pre_freed = true;
+    delete bin_path;
+    delete[] work_dir;
+
+    //printf_info("Process %u exited with code %d", pid, ret_val);
 }
 
 Process::Process(char* bin_path, uint num_pages, Memory::page_table_t* page_tables,

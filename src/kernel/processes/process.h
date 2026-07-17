@@ -109,8 +109,6 @@ class Process
 
 	Process* exec_replacement = nullptr; // Process which will replace this program after a call to execve
 
-	bool is_pre_freed = false;
-
 public:
 	Memory::MemTree memtree{}; // Memory tree. MUST be early in fields list to be initialized before any other fields that needs dynamic memory
 
@@ -163,9 +161,6 @@ public:
 private:
 	/** Frees a terminated process */
 	~Process();
-
-	/** Frees the resources of the process (typically used for zombies to release most memory) **/
-	void pre_free();
 
 	Process(char* bin_path, uint num_pages, Memory::page_table_t* page_tables,
 		Memory::pdt_t* pdt, stack_state_t* stack_state, uint priority, pid_t pid,
