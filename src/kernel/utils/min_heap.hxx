@@ -47,9 +47,7 @@ void MinHeap<T>::min_heapify(uint i)
 
     if (m != i)
     {
-        T tmp = elements[i];
-        elements[i] = elements[m];
-        elements[m] = tmp;
+        std::swap(elements[i], elements[m]);
         min_heapify(m);
     }
 }

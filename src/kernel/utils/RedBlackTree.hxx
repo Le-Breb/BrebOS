@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RedBlackTree.h"
+#include <utility>
 
 // Taken from https://www.geeksforgeeks.org/dsa/deletion-in-red-black-tree/ and then modified by me
 
@@ -145,9 +146,7 @@ void RBTree<T>::swapColors(Node* x1, Node* x2)
 template <typename T>
 void RBTree<T>::swapValues(Node* u, Node* v)
 {
-    T temp = u->data; // Todo: optimize that with std::swap
-    u->data = v->data;
-    v->data = temp;
+    std::swap(u->data, v->data);
 }
 
 // fix red red at given node
@@ -529,7 +528,6 @@ typename RBTree<T>::Node* RBTree<T>::getRoot() { return root; }
 template <typename T>
 typename RBTree<T>::Node* RBTree<T>::search(const T& data)
 {
-    // Todo: simplifiy conditional expressions, and also do it in search_and_get_last
     Node* temp = root;
     while (temp != nullptr)
     {
