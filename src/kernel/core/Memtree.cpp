@@ -118,9 +118,9 @@ namespace Memory
         node = merge_free_node(node);
 
         const uint ns = node_size(node);
-        const uint aligned_start = (node->data.start + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+        const uint aligned_start = PAGE_ALIGN(node->data.start + PAGE_SIZE - 1);
         const uint aligned_start_page = ADDR_PAGE(aligned_start);
-        const uint aligned_end = node->data.end & ~(PAGE_SIZE - 1);
+        const uint aligned_end = PAGE_ALIGN(node->data.end);
         const uint num_pages = ns >= PAGE_SIZE ? ADDR_PAGE(aligned_end - aligned_start) : 0;
 
         if (num_pages >= N_FREE_PAGES_THRESHOLD)

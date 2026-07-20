@@ -45,6 +45,7 @@ Memory::lowest_free_frame = min(Memory::lowest_free_frame, (i)); \
 #define ADDR_PAGE_OFF(addr) ((addr) & (PAGE_SIZE - 1))
 #define IS_PAGE_ALIGNED(addr) (ADDR_PAGE_OFF(addr) == 0)
 #define IS_PAGE_SIZE_MUL(size) (ADDR_PAGE_OFF(size) == 0)
+#define PAGE_ALIGN(addr) ((addr) & ~(PAGE_SIZE - 1))
 
 #define DEFAULT_K_PROT (PROT_READ | PROT_WRITE)
 #define DEFAULT_K_FLAGS (MAP_ANONYMOUS | MAP_PRIVATE)

@@ -91,7 +91,7 @@ namespace Memory
     template <typename T>
     void SlabAllocator<T>::free(T* t)
     {
-        uintptr_t page_base_addr = reinterpret_cast<uintptr_t>(t) & ~(PAGE_SIZE - 1);
+        uintptr_t page_base_addr = PAGE_ALIGN(reinterpret_cast<uintptr_t>(t));
         page_header* page_header = reinterpret_cast<struct page_header*>(page_base_addr);
         struct alloc* alloc = reinterpret_cast<struct alloc*>(reinterpret_cast<uintptr_t>(t));
         alloc->next = page_header->freep;
