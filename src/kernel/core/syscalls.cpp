@@ -391,6 +391,7 @@ int Syscall::fstat(const Process* p)
     return p->fstat(proc_fd, statbuf);
 }
 
+__attribute__((no_instrument_function))
 int Syscall::kill(const Process* p)
 {
     int pid = (int)p->cpu_state.edi;

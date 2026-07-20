@@ -125,6 +125,7 @@ class Syscall
 
 	static int execve(Process* p, bool use_path_if_no_heading_slash);
 
+	__attribute__((no_instrument_function))
 	static void sleep(Process* p);
 public:
 	/**

@@ -670,6 +670,7 @@ constexpr const char* sig_to_sig_name(int sig)
     return "UNKNOWN";
 }
 
+__attribute__((no_instrument_function))
 int Process::kill(int signal)
 {
     if (signal == SIGCANCEL)
