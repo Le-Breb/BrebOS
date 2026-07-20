@@ -65,10 +65,35 @@ def get_txt_ba(elf_path):
 
     return off
 
+def load_program(elf_name):
+    elf_path = f"./src/programs/build/{elf_name}"
+    elf_base = get_txt_ba(elf_path)
+    print(f"loading {elf_path} at 0x{elf_base}")
+    gdb.execute(
+        f"add-symbol-file {elf_path} {hex(elf_base)}",
+        to_string=True
+    )
+
 # ldso_path = "./sysroot/usr/lib/ld.so"
-# ldso_base = get_txt_ba(ldso_path) + 0x3000
+# ldso_base = get_txt_ba(ldso_path) + 0x1e000
 # print(f"loading {ldso_path} at 0x{ldso_base}")
 # gdb.execute(
 #     f"add-symbol-file {ldso_path} {hex(ldso_base)}",
+#     to_string=True
+# )
+#
+# libcso_path = "./sysroot/usr/lib/libc.so"
+# libcso_base = get_txt_ba(libcso_path) + 0x41800000
+# print(f"loading {libcso_path} at 0x{hex(libcso_base)}")
+# gdb.execute(
+#     f"add-symbol-file {libcso_path} {hex(libcso_base)}",
+#     to_string=True
+# )
+
+# stdcpp_path = "./toolchain/usr/i686-brebos/lib/libstdc++.so.6.0.34"
+# stdcpp_base = get_txt_ba(stdcpp_path) + 0x41000000
+# print(f"loading {stdcpp_path} at 0x{hex(stdcpp_base)}")
+# gdb.execute(
+#     f"add-symbol-file {stdcpp_path} {hex(stdcpp_base)}",
 #     to_string=True
 # )
