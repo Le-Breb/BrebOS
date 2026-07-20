@@ -7,60 +7,64 @@
 
 class Syscall
 {
+	// Indicates what to do once a syscall has executed
+	// ReturnToUser is trivial
+	// Schedule requires a call to schedule, before returning to user
+	// ScheduleExit requires a call to schedule and SHALL NOT even return
+	enum class SyscallResult { ReturnToUser, Schedule, ScheduleExit};
 	/**
 	 * Returns current process' PID  */
-	static void get_pid();
+	static SyscallResult get_pid(Process* p);
 
 	/**
 	 * Prints a formatted string
 	 * @param cpu_state CPU state. EBX format string, ECX = pointer to printf arguments (on user stack)
 	 */
-	static void printf(cpu_state_t* cpu_state);
+	static SyscallResult printf(cpu_state_t* cpu_state);
 
 	/**
 	 * Terminates a process
 	 * @param p process to terminate
 	 * @param ret_val
 	 */
-	[[noreturn]] static void terminate_process(Process* p, int ret_val);
+	static SyscallResult terminate_process(Process* p, int ret_val);
 
 	/**
 	 * Tries to allocate dynamic memory for a given process
 	 * @param p calling process
 	 */
-	static void malloc(Process* p);
+	static SyscallResult malloc(Process* p);
 
-	static void calloc(Process* p);
+	static SyscallResult calloc(Process* p);
 
 	/**
 	 * Frees dynamic memory of a given process
 	 * @param p calling process
 	 */
-	static void free(Process* p);
+	static SyscallResult free(Process* p);
 
-	static void realloc(Process* p);
+	static SyscallResult realloc(Process* p);
 
-	static void get_key();
+	static SyscallResult get_key();
 
-	static void mkdir(cpu_state_t* cpu_state);
+	static SyscallResult mkdir(cpu_state_t* cpu_state);
 
-	static void touch(cpu_state_t* cpu_state);
+	static SyscallResult touch(cpu_state_t* cpu_state);
 
-	static void ls(cpu_state_t* cpu_state);
+	static SyscallResult ls(cpu_state_t* cpu_state);
 
-	static void dns(const cpu_state_t* cpu_state);
+	static SyscallResult dns(const cpu_state_t* cpu_state);
 
-	static void wget(const cpu_state_t* cpu_state);
+	static SyscallResult wget(const cpu_state_t* cpu_state);
 
-	static int wait_pid(Process* p);
+	static SyscallResult wait_pid(Process* p);
 
-	static int lseek(const Process* p);
+	static SyscallResult lseek(Process* p);
 
 	/**
 	 * Displays an image and make the process sleep for a bit - This is ugly, and I am aware of it
 	 */
-	__attribute__((no_instrument_function))
-	static void feh(Process *p);
+	static SyscallResult feh(Process *p);
 
 	/**
 	 * Gets the screen dimensions
@@ -69,7 +73,7 @@ class Syscall
 	 * EAX = screen width
 	 * EDI = screen height
 	 */
-	static void get_screen_dimensions(Process* p);
+	static SyscallResult get_screen_dimensions(Process* p);
 
 	/**
 	 * Loads a file into memory
@@ -79,54 +83,53 @@ class Syscall
 	 * EAX = pointer to file in memory, null if error
 	 * EDI = size of file
 	 */
-	static void load_file(Process* p);
+	static SyscallResult load_file(Process* p);
 
-	static int write(Process* p);
+	static SyscallResult write(Process* p);
 
-	static int open(Process* p);
+	static SyscallResult open(Process* p);
 
-	static int read(Process* p);
+	static SyscallResult read(Process* p);
 
-	static int close(Process* p);
+	static SyscallResult close(Process* p);
 
-	static int stat(const Process* p);
+	static SyscallResult stat(Process* p);
 
-	static int fstat(const Process* p);
+	static SyscallResult fstat(Process* p);
 
-	static int kill(const Process* p);
+	static SyscallResult kill(Process* p);
 
-	static __sighandler signal(Process* p);
+	static SyscallResult signal(Process* p);
 
-	static void signal_return(Process* p);
+	static SyscallResult signal_return(Process* p);
 
-	static int fcntl(Process* p);
+	static SyscallResult fcntl(Process* p);
 
-	static int dup(Process* p);
+	static SyscallResult dup(Process* p);
 
-	static int dup2(Process* p);
+	static SyscallResult dup2(Process* p);
 
-	static int pipe(Process* p);
+	static SyscallResult pipe(Process* p);
 
-	static void getcwd(Process* p);
+	static SyscallResult getcwd(Process* p);
 
-	static int chdir(Process* p);
+	static SyscallResult chdir(Process* p);
 
-	static uint tcbset(Process* p);
+	static SyscallResult tcbset(Process* p);
 
-	static int isatty(const Process* process);
+	static SyscallResult isatty(Process* process);
 
-	static int sigaction(Process* p);
+	static SyscallResult sigaction(Process* p);
 
-	static int sigprocmask(Process* p);
+	static SyscallResult sigprocmask(Process* p);
 
-	static int mmap(Process* p);
+	static SyscallResult mmap(Process* p);
 
-	static int mprotect(Process* p);
+	static SyscallResult mprotect(Process* p);
 
-	static int execve(Process* p, bool use_path_if_no_heading_slash);
+	static SyscallResult execve(Process* p, bool use_path_if_no_heading_slash);
 
-	__attribute__((no_instrument_function))
-	static void sleep(Process* p);
+	static SyscallResult sleep(Process* p);
 public:
 	/**
 	 * Handles a syscall

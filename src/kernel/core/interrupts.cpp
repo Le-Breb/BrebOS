@@ -123,7 +123,15 @@ void Interrupts::interrupt_timer(uint kesp, cpu_state_t* cpu_state, stack_state_
 
 	PIC::acknowledge(0x20);
 
-	Scheduler::schedule();
+	if (!Scheduler::preemption_lock && Scheduler::critical_section_preempt_exit)
+		irrecoverable_error("critical_section_preempt_exit set while preemption_lock isn't");
+	if (Scheduler::preemption_lock && Scheduler::critical_section_preempt_exit)
+		Scheduler::preemption_lock = Scheduler::critical_section_preempt_exit = false;
+
+	if (Scheduler::preemption_lock)
+		Scheduler::resume_process(p);
+	else
+		Scheduler::schedule();
 }
 
 extern "C"

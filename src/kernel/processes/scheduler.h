@@ -74,8 +74,22 @@ private:
 
 	static void gc_processes();
 
+	static void resume_process_(Process* p);
+
 public:
 	static pid_t init_pid;
+	// When true, interrupt timer does not call schedule and simply resume the current process
+	static bool preemption_lock;
+	// Allows exiting a preemption locked section (eg portion of code where preemption lock is true)
+	// In those critical sections, we cannot release the lock then call TRIGGER_TIMER_INTERRUPT, as the critical section
+	// may then be reentered. This may sound harmless as the critical section apparently reached its end since it tries
+	// to exit. However, this is actually an issue upon process termination. An example is when a signal that causes the
+	// termination of the current process. Preemption shall then be disabled, to prevent any code to run on the
+	// terminated process and ensure schedule is called, properly handling that scenario.
+	// This bool then indicates interrupt_timer that preemption was locked to ensure schedule is called, and that is
+	// interrupt_timer responsibility to unset critical_section_preempt_exir
+	static bool critical_section_preempt_exit;
+
 	/**
 	 * Create the process that will be used for global kernel memory mappings, and which will handle the end of kernel
 	 * initialization, when PIT is needed (likely for parts that need to call sleep).
@@ -147,9 +161,8 @@ public:
 
 	static pid_t get_free_pid();
 
-	static void resume_process(Process* p);
-
-	static int execve(Process* p, const char* path, int argc, const char** argv, const char** envp, bool use_path_if_no_beginning_slash);
+	static bool execve(Process* p, const char* path, int argc, const char** argv, const char** envp,
+	                   bool use_path_if_no_beginning_slash);
 
 	[[nodiscard]]
 	static Process* get_process(pid_t pid);
@@ -163,6 +176,9 @@ public:
 	static void do_read_wait(pid_t process_pid, int fd);
 
 	static void wake_up_read_waiting_processes(int write_fd, int read_fd);
+
+	[[noreturn]]
+	static void resume_process(Process* p);
 };
 
 

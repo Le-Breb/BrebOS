@@ -20,6 +20,8 @@ list<Process*>* Scheduler::exec_processes_to_free{};
 list<Process*>* Scheduler::processes_to_free{};
 void* Scheduler::stack_switch_stack_top = nullptr;
 pid_t Scheduler::init_pid = 0;
+bool Scheduler::preemption_lock = false;
+bool Scheduler::critical_section_preempt_exit = false;
 
 /**
  * Switch to a new stack anc all a function (taking a process as parameter)
@@ -125,7 +127,7 @@ void Scheduler::set_first_ready_process_asleep_waiting_read()
     // Nothing else to do, the rest has already been done in register_process_wait
 }
 
-void Scheduler::resume_process(Process* p)
+void Scheduler::resume_process_(Process* p)
 {
     // Set TSS esp0 to point to the syscall handler stack (i.e. tell the CPU where is syscall handler stack)
     GDT::set_tss_kernel_stack(p->k_stack_top); // Todo: update k_stack_top somehow ?
@@ -152,17 +154,16 @@ void Scheduler::resume_process(Process* p)
     resume_user_process(p);
 }
 
-int Scheduler::execve(Process* p, const char* path, int argc, const char** argv, const char** envp, bool use_path_if_no_beginning_slash)
+bool Scheduler::execve(Process* p, const char* path, int argc, const char** argv, const char** envp,
+                       bool use_path_if_no_beginning_slash)
 {
     Process* proc;
     if (!((proc = load_process(path, p->pid, p->ppid, argc, argv, envp, use_path_if_no_beginning_slash))))
-        return -1;
+        return false;
     p->execve_transfer(proc);
     p->set_flag(P_EXEC);
 
-    TRIGGER_TIMER_INTERRUPT;
-
-    irrecoverable_error("%s: unreachable called has been reached!", __PRETTY_FUNCTION__);
+    return true;
 }
 
 Process* Scheduler::get_process(pid_t pid)
@@ -229,6 +230,14 @@ void Scheduler::wake_up_read_waiting_processes(int write_fd, int read_fd)
     }
 }
 
+void Scheduler::resume_process(Process* p)
+{
+    if (!p)
+        irrecoverable_error("%s: process is null", __func__);
+
+    switch_stack_and_call_process_function(stack_switch_stack_top, resume_process_, p);
+}
+
 [[noreturn]]
 void Scheduler::schedule()
 {
@@ -259,7 +268,7 @@ void Scheduler::schedule()
     if (!p) // Although theoretically impossible, this happens sometimes, I'd like to know why
         irrecoverable_error("%s: no process to run", __func__);
 
-    switch_stack_and_call_process_function(stack_switch_stack_top, resume_process, p);
+    switch_stack_and_call_process_function(stack_switch_stack_top, resume_process_, p);
 }
 
 void Scheduler::start_module([[maybe_unused]] uint module, [[maybe_unused]] pid_t ppid, [[maybe_unused]] int argc, [[maybe_unused]] const char** argv)
@@ -498,6 +507,9 @@ void Scheduler::wake_up_process_parent(pid_t process_pid)
 
 bool Scheduler::signal_handling(Process* p)
 {
+    if (preemption_lock)
+        return false;
+    preemption_lock = true;
     const auto context = p->signals_contexts.peek();
     if (!context)
         irrecoverable_error("%s: process blocked signals stack is empty", __PRETTY_FUNCTION__);
@@ -521,9 +533,10 @@ bool Scheduler::signal_handling(Process* p)
             switch (Process::signal_default_action[signal])
             {
                 case SIGDISP_CORE: case SIGDISP_TERM:
-                    irrecoverable_error("%s: signal %d is about to sent. Its disposition is CORE or TERM. Signal"
-                                        "shouldn't have arrived up here, as CORE or TERM should have been performed on"
-                                        "program registration", __PRETTY_FUNCTION__, signal);
+                    p->terminate_with_signal(signal);
+                    critical_section_preempt_exit = true;
+                    TRIGGER_TIMER_INTERRUPT
+                    irrecoverable_error("unreachable code reached");
                 case SIGDISP_STOP: case SIGDISP_CONT:
                     irrecoverable_error("%s: signal %d is about to be sent. Its disposition is STOP or CONT,"
                                         "this is not supported yet", __PRETTY_FUNCTION__, signal);
@@ -554,9 +567,11 @@ bool Scheduler::signal_handling(Process* p)
         // Unmark signal as pending
         p->pending_signals.__sig[sig_grp_id] &= ~sig_grp_off;
 
+        preemption_lock = false;
         return true;
     }
 
+    preemption_lock = false;
     return false;
 }
 

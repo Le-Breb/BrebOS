@@ -670,7 +670,6 @@ constexpr const char* sig_to_sig_name(int sig)
     return "UNKNOWN";
 }
 
-__attribute__((no_instrument_function))
 int Process::kill(int signal)
 {
     if (signal == SIGCANCEL)
@@ -684,16 +683,7 @@ int Process::kill(int signal)
         printf_warn("%s: Signal %d is not supported yet, ignoring it", __PRETTY_FUNCTION__, signal);
         return -EINVAL;
     }
-    const auto default_action = signal_default_action[signal];
-    const bool default_act_is_core = default_action == SIGDISP_CORE;
-    const bool default_act_is_term = default_action == SIGDISP_TERM;
-    if (signal_action[signal] == SIG_DFL && (default_act_is_core || default_act_is_term))
-    {
-        printf_warn("Process %d (%s) received signal %s. Exiting.", pid, bin_path, sig_names[signal]);
-        terminate_with_signal(signal);
-        TRIGGER_TIMER_INTERRUPT
-        return 0;
-    }
+    
     const auto signo = signal - 1;
     pending_signals.__sig[signo / (8  * sizeof(unsigned long))] |= 1 << (signo % (8 * sizeof(unsigned long)));
 
