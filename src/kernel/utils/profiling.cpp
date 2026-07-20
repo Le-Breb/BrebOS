@@ -5,7 +5,7 @@
 #include <kstring.h>
 
 #include "../core/fb.h"
-#include "../core/memory.h"
+#include "../core/memory/memory.h"
 #include "../file_management/VFS.h"
 
 static bool initialized = false;
