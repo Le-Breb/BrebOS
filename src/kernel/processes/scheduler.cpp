@@ -17,6 +17,7 @@ Process* Scheduler::processes[MAX_PROCESSES] {};
 MinHeap<Scheduler::asleep_process>* Scheduler::sleeping_processes{};
 list<Scheduler::proc_waiting_for_read>* Scheduler::processes_waiting_for_read{};
 list<Process*>* Scheduler::exec_processes_to_free{};
+list<Process*>* Scheduler::processes_to_free{};
 void* Scheduler::stack_switch_stack_top = nullptr;
 pid_t Scheduler::init_pid = 0;
 
@@ -232,6 +233,7 @@ void Scheduler::wake_up_read_waiting_processes(int write_fd, int read_fd)
 void Scheduler::schedule()
 {
     delete_exec_processes();
+    gc_processes();
     // Wake up processes that have been sleeping enough
     check_for_processes_to_wake_up();
 
@@ -346,6 +348,7 @@ void Scheduler::init()
     sleeping_processes = new MinHeap<asleep_process>(MAX_PROCESSES);
     processes_waiting_for_read  = new list<proc_waiting_for_read>();
     exec_processes_to_free = new list<Process*>();
+    processes_to_free = new list<Process*>();
 
     set_process_ready(Memory::kernel_process);
 
@@ -358,6 +361,8 @@ void Scheduler::shutdown()
     delete waiting_queue;
     delete sleeping_processes;
     delete processes_waiting_for_read;
+    delete exec_processes_to_free;
+    delete processes_to_free;
 }
 
 pid_t Scheduler::get_running_process_pid()
@@ -561,7 +566,7 @@ void Scheduler::reparent_process_to_init(Process* p)
     p->set_flag(P_ZOMBIE);
     Process* init = processes[init_pid];
     init->children.add(p->pid);
-    init->kill(SIGCHLD); // Inform init that one of its children is terminated
+    get_process(p->ppid)->children.remove(p->pid);
 }
 
 void Scheduler::delete_exec_processes()
@@ -570,6 +575,14 @@ void Scheduler::delete_exec_processes()
         delete process;
 
     exec_processes_to_free->clear();
+}
+
+void Scheduler::gc_processes()
+{
+    for (const auto process : *processes_to_free)
+        free_process(*process);
+
+    processes_to_free->clear();
 }
 
 void Scheduler::on_process_terminated(Process& p)
@@ -587,6 +600,7 @@ void Scheduler::on_process_terminated(Process& p)
         {
             wake_up_process_parent(pid);
             p.is_waited_by_parent = processes[p.ppid]->is_waiting_for_any_child_to_terminate = false;
+            processes_to_free->add(&p);
         }
 
         // Make children orphans

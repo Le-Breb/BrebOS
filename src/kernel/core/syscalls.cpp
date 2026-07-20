@@ -590,7 +590,6 @@ int Syscall::wait_pid(Process* p)
 
     // Free child
     const int child_pid = (int)p->cpu_state.eax; // Return value is written here by Scheduler
-    Scheduler::free_process(*Scheduler::get_process(child_pid));
 
     // Syscall return value
     return child_pid;

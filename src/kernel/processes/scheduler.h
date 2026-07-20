@@ -48,6 +48,7 @@ private:
 	static Process* processes[MAX_PROCESSES];
 	static MinHeap<asleep_process>* sleeping_processes;
 	static list<Process*>* exec_processes_to_free;
+	static list<Process*>* processes_to_free;
 
 	/**
 	 * Round-robin scheduler
@@ -70,6 +71,8 @@ private:
 	static void reparent_process_to_init(Process* p);
 
 	static void delete_exec_processes();
+
+	static void gc_processes();
 
 public:
 	static pid_t init_pid;
