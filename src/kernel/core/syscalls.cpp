@@ -68,9 +68,8 @@ Syscall::SyscallResult Syscall::get_key()
 [[noreturn]]
 void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stack_state)
 {
-    // As no lock mechanism is implemented yet, syscall preemption has multiple concurrency issues, especially about memory,
-    // which introduces non-deterministic errors.
-    // Thus, this is why preemption is (sadly) disabled during syscall execution
+    // As syscalls are not concurrency-proof (yet ?), preemption is prevented by setting this lock.
+    // Interrupt_timer still runs, but won't call schedule and simply resume this syscall
     Scheduler::preemption_lock = true;
 
     // Don't ask me why, but adding this line improves overall speed by A LOT. This doesn't make any fucking sense, but
