@@ -38,7 +38,6 @@ extern "C" bool fpu_init_asm_();
 // Todo: fix example.com wget
 // Todo: make update_pte also update memtree page_infos
 // Todo: make signals be able to interrupt sleep
-// Todo: fix build system so that mlibc and programs get rebuilt when mlibc sources are modified
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {
     // Get why this fails
