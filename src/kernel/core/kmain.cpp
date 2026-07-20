@@ -39,10 +39,6 @@ extern "C" bool fpu_init_asm_();
 // Todo: make update_pte also update memtree page_infos
 // Todo: make signals be able to interrupt sleep
 // Todo: fix build system so that mlibc and programs get rebuilt when mlibc sources are modified
-// Todo: make every syscall return enum SyscallResult { ReturnToUser, Block, Exit, };. That way, a syscall preemption
-// lock can be easily implemented: bool set to true at beginning of syscall dispatcher, false after the switch. Then
-// interrupt_timer does nothing if lock is true. This would allow preemption from syscalls to userland PLUS prevent
-// using inb and outb which are currently used for enabling/disabling preemption. Do not forget to remove PIC::enable_preemptive_scheduling() from TRIGGER_TIMER_INTERRUPT
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {
     // Get why this fails
