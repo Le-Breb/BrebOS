@@ -92,10 +92,7 @@ namespace Memory
 
     MemTree::Node* MemTree::node_physical_alloc(uint size, const page_info& page_info, const hint_info& hint_info, Process* process)
     {
-        constexpr uint MIN_ALLOC_PAGES = 2;
-        const uint num_pages_base = ADDR_PAGE(size + PAGE_SIZE - 1);
-        const uint num_pages = max(MIN_ALLOC_PAGES, num_pages_base);
-
+        const uint num_pages = ADDR_PAGE(size + PAGE_SIZE - 1);
         const void* alloc = sbrk(num_pages, page_info, hint_info, process);
         if (!alloc)
             return nullptr;
@@ -352,17 +349,17 @@ namespace Memory
         busy = 3;
         // printf_info("called on %x", address);
         if (!address)
-            return FreeState::OK;
+            { busy = false; return FreeState::OK; }
 
         const allocation dummy = {address, 0,DEFAULT_K_PAGE_INFO};
 
         Node* node = search(dummy);
 
         if (!node)
-            return FreeState::NOT_FOUND;
+            { busy = false; return FreeState::NOT_FOUND; };
 
         if (node->data.used == false)
-            return FreeState::DOUBLE_FREE;
+            { busy = false; return FreeState::DOUBLE_FREE; }
 
         free_node(node, process);
 
@@ -443,5 +440,25 @@ namespace Memory
     uint MemTree::get_total_size() const
     {
         return get_total_size_aux(root);
+    }
+
+    bool MemTree::get_addr_alloc(uintptr_t addr, allocation& alloc) const
+    {
+        const Node* curr = root;
+
+        while (curr)
+        {
+            if (curr->data.start <= addr && curr->data.end > addr)
+            {
+                alloc = curr->data;
+                return true;
+            }
+            if (curr->data.end <= addr)
+                curr = curr->right;
+            else
+                curr = curr->left;
+        }
+
+        return false;
     }
 }

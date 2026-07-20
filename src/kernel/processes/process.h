@@ -11,7 +11,6 @@
 #include <abi-bits/signal.h>
 
 #include "stdarg.h"
-#include "../utils/min_heap.h"
 #include "../utils/Stack.h"
 
 // Process is ready to be executed
@@ -162,7 +161,7 @@ private:
 	/** Frees a terminated process */
 	~Process();
 
-	Process(char* bin_path, uint num_pages, Memory::page_table_t* page_tables,
+	Process(char* bin_path, uint num_elf_pages, Memory::page_table_t* page_tables,
 		Memory::pdt_t* pdt, stack_state_t* stack_state, uint priority, pid_t pid,
 		pid_t ppid, Elf32_Addr k_stack_top);
 
@@ -192,6 +191,18 @@ public:
 	 * Terminates a process that exited because of a signal
 	 */
 	void terminate_with_signal(int ret_sig);
+
+	/**
+	 * Attempts to map a region of another process address space in the current address space
+	 * @param start_page index of first page in target process
+	 * @param num_pages number of pages the mapping should span over
+	 * @param target_process process we want to access the address space of
+	 * @param force_write force write permission on mapping
+	 * @return PTE of mapping first page, -1 on failure
+	 */
+	uint new_proc_mapping(uint start_page, uint num_pages, const Process* target_process, bool force_write) const;
+
+	void remove_page_mapping(uint page_id) const;
 
 	/**
 	 * Contiguous heap memory allocator

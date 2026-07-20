@@ -2,8 +2,7 @@
 
 #include "../core/memory.h"
 #include "ELF_defines.h"
-#include "../utils/list.h"
-
+#include "../core/AddressSpaceBridge.h"
 
 namespace ELFTools
 {
@@ -30,10 +29,10 @@ namespace ELFTools
     {
         using ptr = ptr_underlying_type*;
         ptr p_runtime_ptr = nullptr;
-        const list<alloc>* allocations;
+        Memory::AddressSpaceBridge* address_space_bridge;
     public:
 
-        Lptr(ptr runtime_ptr, const list<alloc>* address_space_manager);
+        Lptr(ptr runtime_ptr, Memory::AddressSpaceBridge* address_space_bridge);
 
         Lptr& operator=(Elf32_Addr runtime_addr);
         Lptr& operator=(ptr runtime_ptr);
@@ -59,7 +58,7 @@ namespace ELFTools
         [[nodiscard]]
         ptr get_runtime_ptr() const;
         [[nodiscard]]
-        static ptr get_load_addr(void* runtime_ptr, const list<alloc>& allocations);
+        static ptr get_load_addr(void* runtime_ptr, Memory::AddressSpaceBridge* address_space_bridge);
     };
 };
 

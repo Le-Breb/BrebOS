@@ -1,4 +1,6 @@
 #include "memory.h"
+
+#include "../processes/ELFTools.h"
 using namespace Memory;
 
 #include "fb.h"
@@ -413,8 +415,6 @@ namespace Memory
         }
         else
         {
-            if (!(page_info.policy & PAGE_USER))
-                irrecoverable_error("sbrk: allocating pages for user process without PAGE_USER flag");
             if (!(page_info.policy & PAGE_LAZY_ZERO))
             {
                 // Allocate both in process and kernel page tables
@@ -547,17 +547,12 @@ namespace Memory
 
         if (prot == 0)
             mmap_ret_err_with_warn(EINVAL, "mmap called with prot == 0. I don't know how to implement that, returning failure")
+        const bool write = prot & PROT_WRITE;
 
         // At that point we know we have ANONYMOUS and MAP_PRIVATE
 
-        // If hint is KERNEL_VIRTUAL_BASE, then there is obviously no free memory below kernel_process->lowest_free_pe << 12
-        // So hint is set to that value to avoid useless searching
-        // Note that passing KERNEL_VIRTUAL_BASE as hint is a way to force mmap to allocate in higher half, thus making
-        // the allocation accessible from any address space
-        if (hint == (void*)KERNEL_VIRTUAL_BASE)
-            hint = (void*)(kernel_process->lowest_free_pe << 12);
-
-        const int policy = (prot & PROT_WRITE ? PAGE_WRITE : 0) | (lazy_zero ? PAGE_LAZY_ZERO : PAGE_PRESENT) | (page_user ? PAGE_USER : 0);
+        // Policy set to write for calloc, then write is removed if user did not specify it
+        const int policy = PROT_WRITE | (lazy_zero ? PAGE_LAZY_ZERO : PAGE_PRESENT) | (page_user ? PAGE_USER : 0);
         const hint_info hint_info{reinterpret_cast<uintptr_t>(hint), (bool)(flags & MAP_FIXED)};
         const page_info page_info{flags, policy};
         // printf_info("mmap call on range [0x%08x, 0x%08x]", (uint)hint, (uint)hint + (uint)size);
@@ -567,6 +562,8 @@ namespace Memory
             irrecoverable_error("%s: MAP_FIXED set, but returned window does not match hit", __func__);
         if (!window)
             mmap_ret_err(ENOMEM);
+        if (!write) // Remove write permission if user did not specify it
+            mprotect(window, size, prot, process);
         return window;
     }
 
@@ -787,9 +784,20 @@ namespace Memory
         const uintptr_t mem_off = uaddr & (PAGE_SIZE - 1);
         const uint bytes_on_first_page = min(PAGE_SIZE - mem_off, total_size);
 
+        Process* current_process = Scheduler::get_running_process();
+        AddressSpaceBridge address_space_bridge(current_process, process);
+        auto memset_func = [&](void* addr, char c, uint size)
+        {
+            // If setting mem in an address range accessible from current process, use memset, otherwise use Lptr to jump between address spaces
+            if (process == current_process || uaddr >= KERNEL_VIRTUAL_BASE)
+                memset(addr, c, size);
+            else
+                ELFTools::Lptr(addr, &address_space_bridge).memset(c, size);
+        };
+
         // Handle first page alone since start address is not necessarily page aligned
         if (PTE(pt, first_page_id) & PAGE_PRESENT)
-            memset(mem, 0, bytes_on_first_page);
+            memset_func(mem, 0, bytes_on_first_page);
 
         // Handle other pages
         const uint num_remaining_pages = ADDR_PAGE(total_size - bytes_on_first_page + PAGE_SIZE - 1);
@@ -800,7 +808,7 @@ namespace Memory
             if (PTE(pt, first_page_id + 1 + i) & PAGE_PRESENT)
             {
                 const uint address = (first_page_id + 1 + i) << 12; // Address of the beginning of the page
-                memset((void*)address, 0, n); // Zero out
+                memset_func((void*)address, 0, n); // Zero out
             }
             rem -= n; // Update remaining byte count
         }
@@ -876,6 +884,9 @@ extern "C" void* malloc(uint n)
 
 void* calloc(size_t nmemb, size_t size, const page_info& page_info, Process* process, const hint_info& hint_info)
 {
+    if (!(page_info.policy & PAGE_WRITE))
+        irrecoverable_error("calloc called without PAGE_WRITE");
+
     MemTree& mem_tree = process->memtree;
 
     // Check edge cases according to man page

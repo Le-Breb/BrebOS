@@ -3,8 +3,6 @@
 #include "../core/fb.h"
 #include "../file_management/VFS.h"
 
-using namespace ELFTools;
-
 #define is_valid_exit_err {delete elf; return nullptr;}
 
 ELF* ELF::is_valid(uint start_address, ELF_type expected_type)
@@ -187,36 +185,6 @@ uint ELF::get_highest_runtime_addr() const
     }
 
     return highest_addr;
-}
-
-Elf32_Sym* ELF::get_dynamic_symbol(const char* symbol_name, Elf32_Addr load_address, const list<alloc>& allocations) const
-{
-    // If there is no hash table available, linearly search for the symbol
-    if (hash_table_runtime_address == ELF32_ADDR_ERR)
-    {
-        uint lib_dynsym_num_entries = dynsym_hdr->sh_size / dynsym_hdr->sh_entsize;
-        for (uint i = 1; i < lib_dynsym_num_entries; i++)
-        {
-            if (strcmp(&dynsym_strtab[dynsym[i].st_name], symbol_name) == 0)
-                return &dynsym[i];
-        }
-    }
-    else // Otherwise, make fast lookup during the hash table
-    {
-        const auto h = hash((const unsigned char*)symbol_name);
-        Lptr<uint> hash_table = Lptr((uint*)(load_address + hash_table_runtime_address), &allocations);
-        uint nbucket = hash_table[0];
-        Lptr<uint> buckets = hash_table + 2U;
-        Lptr<uint> chain = buckets + nbucket;
-        uint y = buckets[h % nbucket];
-
-        while (y != STN_UNDEF && strcmp(&dynsym_strtab[dynsym[y].st_name], symbol_name) != 0)
-            y = chain[y];
-
-        return y == STN_UNDEF ? nullptr : &dynsym[y];
-    }
-
-    return nullptr;
 }
 
 Elf32_Sym* ELF::get_symbol(const char* symbol_name) const

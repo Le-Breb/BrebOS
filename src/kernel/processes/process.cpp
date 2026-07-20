@@ -91,16 +91,16 @@ Process::~Process()
     //printf_info("Process %u exited with code %d", pid, ret_val);
 }
 
-Process::Process(char* bin_path, uint num_pages, Memory::page_table_t* page_tables,
+Process::Process(char* bin_path, uint num_elf_pages, Memory::page_table_t* page_tables,
                  Memory::pdt_t* pdt, stack_state_t* stack_state, uint priority, pid_t pid, pid_t ppid, Elf32_Addr k_stack_top) :
     quantum(0), priority(priority),
-    num_pages(num_pages),
+    num_pages(num_elf_pages),
     pid(pid), ppid(ppid), k_stack_top(k_stack_top), flags(P_READY),
-    lowest_free_pe(num_pages),
+    lowest_free_pe(num_elf_pages),
     bin_path(bin_path),
     page_tables(page_tables),
     pdt(pdt),
-    program_break(num_pages * PAGE_SIZE)
+    program_break(num_elf_pages * PAGE_SIZE)
 {
     memcpy(&this->stack_state, stack_state, sizeof(stack_state_t));
     memcpy(signal_action, signal_default_action, sizeof(signal_action));
@@ -165,6 +165,40 @@ void Process::terminate_with_signal(int ret_sig)
     flags |= P_TERMINATED;
     this->ret_status = ret_sig & 0x7F; // Cf. wait.h
     Scheduler::get_process(ppid)->kill(SIGCHLD);
+}
+
+uint Process::new_proc_mapping(uint start_page, uint num_pages, const Process* target_process, bool force_write) const
+{
+    // Get free pages
+    const uint map_pte_id = Memory::get_contiguous_pages(num_pages, Memory::DEFAULT_HINT_INFO, page_tables, lowest_free_pe);
+    if (map_pte_id == -1U)
+        return -1U;; // Not enough contiguous pages to perform mapping
+
+    Memory::allocation target_alloc;
+    if (!target_process->memtree.get_addr_alloc(start_page << 12, target_alloc))
+        return -1U;
+    if (!target_alloc.used)
+        irrecoverable_error("?");
+
+    // Allocate in those pages, mapping them to target pages
+    for (uint i = 0; i < num_pages; i++)
+    {
+        const uint target_pte = PTE(target_process->page_tables, start_page + i) | (force_write ? PAGE_WRITE : 0);
+        update_pte(map_pte_id + i, target_pte, true);
+    }
+    Memory::allocation alloc{map_pte_id << 12, (map_pte_id + num_pages) << 12, target_alloc.page_info, true};
+    if (force_write)
+        alloc.page_info.policy |= PAGE_WRITE;
+
+    return map_pte_id;
+}
+
+void Process::remove_page_mapping(uint page_id) const
+{
+    const uint pte = PTE(page_tables, page_id);
+    if (!pte || !(pte & PAGE_PRESENT))
+        irrecoverable_error("%s: page is not allocated", __PRETTY_FUNCTION__);
+    update_pte(page_id, 0, false);
 }
 
 void* Process::malloc(uint n)

@@ -17,13 +17,10 @@ protected:
     class Node
     {
     public:
-        const int canary1 = 0xCAFEBABE;
         T data;
         COLOR color;
         Node *left, *right;
-        const int canary3 = 0xDEADBABE;
         Node* parent;
-        const int canary2 = 0xCAFEBABE;
 
         Node(const T& val);
 

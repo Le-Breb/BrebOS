@@ -73,45 +73,46 @@ private:
     uint num_pages = 0;
     Memory::page_table_t* page_tables;
     Memory::pdt_t* pdt;
-    stack_state_t stack_state{};
+    Memory::AddressSpaceBridge* address_space_bridge;
     bool used = false;
 
     ELFLoader();
     ~ELFLoader();
 
-    list<ELFTools::alloc> allocations;
-
     template<typename ptr_inner_type>
     [[nodiscard]]
-    ELFTools::Lptr<ptr_inner_type> new_lptr(Elf32_Addr runtime_address) const;
+    ELFTools::Lptr<ptr_inner_type> new_lptr(Elf32_Addr runtime_address);
     template<typename ptr_inner_type>
     [[nodiscard]]
-    ELFTools::Lptr<ptr_inner_type> new_lptr(ptr_inner_type runtime_address) const;
+    ELFTools::Lptr<ptr_inner_type> new_lptr(ptr_inner_type runtime_address);
 
     /**
     * Sets up a dynamically linked process
     * @param elf process' main ELF
+    * @param proc process being loaded
     * @return process set up, NULL if an error occurred
     */
-    bool dynamic_loading(const ELF* elf);
+    bool dynamic_loading(const ELF* elf, Process* proc);
 
     /**
      * Load ELF file code and data into a process' address space and maps it
      * @param file ELF to load
-     * @param expected_type
+     * @param expected_type expected ELF type
+     * @param proc process being loaded
      * @return Loaded ELF, nullptr on error
      */
-    ELF* load_elf(const SharedPointer<Dentry>& file, ELF_type expected_type);
+    ELF* load_elf(const SharedPointer<Dentry>& file, ELF_type expected_type, Process* proc);
 
-    ELF* load_elf(void* buf, ELF_type expected_type);
+    ELF* load_elf(void* buf, ELF_type expected_type, Process* proc);
 
     /**
      * Maps the segments of an ELF into the process' virtual address space
      *
      * @param load_elf ELF to map
      * @param runtime_load_address runtime load address of the lib
+     * @param proc process being loaded
      */
-    void map_elf(const ELF* load_elf, Elf32_Addr runtime_load_address);
+    void map_elf(const ELF* load_elf, Elf32_Addr runtime_load_address, Process* proc);
 
     /**
      * Create a process to run an ELF executable
@@ -127,7 +128,7 @@ private:
      * @param envp environment pointers
      * @return ESP in process address space ready to be used
      */
-    void* write_args_to_stack(int argc, const char** argv, const char** envp) const;
+    void* write_args_to_stack(int argc, const char** argv, const char** envp);
 
     /**
      * Process setup last phase: once the main ELF has been loaded, this function executes the remaining setup actions:
@@ -135,16 +136,17 @@ private:
      * @param argc num args
      * @param argv args
      * @param envp environment pointers
+     * @param proc process being loaded
      */
-    void finalize_process_setup(int argc, const char** argv, const char** envp);
+    void finalize_process_setup(int argc, const char** argv, const char** envp, Process* proc);
 
-    void load_elf_code(const ELF* elf, uint load_address, uint runtime_load_address) const;
+    void load_elf_code(const ELF* elf, uint load_address, uint runtime_load_address);
 
-    void allocate_stacks();
+    static void allocate_stacks(Process* proc);
 
-    void setup_pcb(int argc, const char** argv, const char** envp);
+    void setup_pcb(int argc, const char** argv, const char** envp, Process* proc);
 
-    void setup_pdt();
+    void setup_pdt() const;
 
     ELFTools::Lptr<char> write_auxv(const ELFTools::Lptr<char>& stack_top, void* argv0_runtime_addr, void* random_runtime_addr) const;
 
