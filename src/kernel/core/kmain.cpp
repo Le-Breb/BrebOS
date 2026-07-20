@@ -38,6 +38,8 @@ extern "C" bool fpu_init_asm_();
 // Todo: fix example.com wget
 // Todo: make update_pte also update memtree page_infos
 // Todo: make signals be able to interrupt sleep
+// Todo: get rid of kernel allocations which are a useless duplicate. This will certainly have impacts on frame_rc...
+// Todo: use a hash map for cached dentries (and see if some lists could benefit from being converted to hash map)
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {
     // Get why this fails

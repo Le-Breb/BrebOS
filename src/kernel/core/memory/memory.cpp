@@ -284,7 +284,6 @@ namespace Memory
         //load_grub_modules(multibootInfo);
 
         // Todo: register allocations in kernel process
-        // Todo: make sure all allocating functions reference the allocations in kernel memtree
 
         Multiboot::init(register_multiboot_info(multiboot_info));
         if (multiboot_info == nullptr)
@@ -420,8 +419,6 @@ namespace Memory
                 // Allocate both in process and kernel page tables
                 for (uint i = b; i < e; ++i)
                 {
-                    // Todo: get rid of kernel allocation which is a useless duplicate
-                    // This will certainly have impacts on frame_rc...
                     const uint sys_pe = get_free_pe();
                     allocate_page(sys_pe, page_info.policy);
                     process->update_pte(i, PTE(page_tables, sys_pe), true);

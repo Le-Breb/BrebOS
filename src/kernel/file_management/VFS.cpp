@@ -180,7 +180,7 @@ void VFS::ls_printer(const Dentry& dentry)
 	FB::set_fg(FB_WHITE);
 }
 
-SharedPointer<Dentry> VFS::get_cached_dentry(const SharedPointer<Dentry>& parent, const char* name) // Todo: use a hash map
+SharedPointer<Dentry> VFS::get_cached_dentry(const SharedPointer<Dentry>& parent, const char* name)
 {
 	for (auto& ddentry : dentries)
 	{
