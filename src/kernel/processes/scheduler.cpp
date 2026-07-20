@@ -337,7 +337,7 @@ void Scheduler::init()
 
     uint stack_switch_pe = Memory::get_free_pe();
     Memory::allocate_page(stack_switch_pe, DEFAULT_K_POLICY);
-    stack_switch_stack_top = (void*)((stack_switch_pe << 12) + PAGE_SIZE - sizeof(uint)); // Stack top is at the end of the page
+    stack_switch_stack_top = (void*)(PAGE_ADDR(stack_switch_pe) + PAGE_SIZE - sizeof(uint)); // Stack top is at the end of the page
 
     // Those have to be pointers because they cannot be instantiated at program start since dynamic memory allocation
     // is not available at this moment. However, it is ok to allocate them now.
@@ -698,7 +698,7 @@ void Scheduler::start_kernel_process(void* eip)
 
     // Allocate stack page
     auto stack_top_page_id = Memory::get_free_pe();
-    uint k_stack_top = (stack_top_page_id << 12) + PAGE_SIZE - 4;
+    uint k_stack_top = PAGE_ADDR(stack_top_page_id) + PAGE_SIZE - 4;
     Memory::allocate_page(stack_top_page_id, DEFAULT_K_POLICY);
     stack_state_t stack_state{};
 

@@ -119,6 +119,7 @@ namespace Memory
 
         const uint ns = node_size(node);
         const uint aligned_start = (node->data.start + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+        const uint aligned_start_page = ADDR_PAGE(aligned_start);
         const uint aligned_end = node->data.end & ~(PAGE_SIZE - 1);
         const uint num_pages = ns >= PAGE_SIZE ? ADDR_PAGE(aligned_end - aligned_start) : 0;
 
@@ -139,7 +140,7 @@ namespace Memory
                 insert({aligned_end, node_cpy.data.end, node_cpy.data.page_info, node_cpy.data.used});
 
             for (uint i = 0; i < num_pages; i++)
-                free_page(aligned_start + (i << 12), process);
+                free_page(PAGE_ADDR(aligned_start_page + i), process);
         }
     }
 
@@ -410,12 +411,13 @@ namespace Memory
             }
 
             const uintptr_t region_size = region_end - region_start;
-            if (region_size & (PAGE_SIZE - 1))
-                irrecoverable_error("%s: memory region size is not a multiple of PAGE_SIZE", __PRETTY_FUNCTION__);
+            if (region_size & (PAGE_SIZE - 1) || region_start & (PAGE_SIZE - 1))
+                irrecoverable_error("%s: memory region size is not a multiple of PAGE_SIZE or region start is not page aligned", __PRETTY_FUNCTION__);
 
             const uint num_pages = region_size / PAGE_SIZE;
+            const uint region_start_page = ADDR_PAGE(region_start);
             for (uint i = 0; i < num_pages; i++)
-                free_page(region_start + (i << 12), process);
+                free_page(PAGE_ADDR(region_start_page + i), process);
         }
         busy = false;
     }

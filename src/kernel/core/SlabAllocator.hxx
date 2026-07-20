@@ -12,7 +12,7 @@ namespace Memory
     typename SlabAllocator<T>::page_header* SlabAllocator<T>::get_new_page()
     {
         const uint pe = get_free_pe();
-        const uintptr_t addr = pe << 12;
+        const uintptr_t addr = PAGE_ADDR(pe);
         allocate_page(pe, DEFAULT_K_POLICY);
 
         page_header* page_header = new (reinterpret_cast<void*>(addr)) struct page_header();
@@ -57,7 +57,7 @@ namespace Memory
 
         const uint pe = get_free_pe();
         allocate_page(pe, DEFAULT_K_POLICY);
-        allocator = reinterpret_cast<SlabAllocator*>(pe << 12);
+        allocator = reinterpret_cast<SlabAllocator*>(PAGE_ADDR(pe));
         allocator = new(allocator) SlabAllocator();
         return allocator;
     }

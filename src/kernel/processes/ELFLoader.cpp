@@ -119,13 +119,13 @@ void ELFLoader::allocate_stacks(Process* proc)
 
     // Allocate process stack pages
     constexpr uint stack_start_page_id = 768 * PT_ENTRIES - PROCESS_STACK_N_PAGES;
-    void* stack_start_addr = reinterpret_cast<void*>(stack_start_page_id << 12);
+    void* stack_start_addr = reinterpret_cast<void*>(PAGE_ADDR(stack_start_page_id));
     if (!Memory::mmap(stack_start_addr, PROCESS_STACK_SIZE, DEFAULT_U_PROT, flags, 0, 0, err, proc, false, true))
         irrecoverable_error("%s: mmap failed", __func__);
 
     // Allocate syscall stack pages
     constexpr uint kstack_start_page_id = 768 * PT_ENTRIES - PROCESS_STACK_N_PAGES - PROCESS_SYSCALL_STACK_N_PAGES;
-    void* kstack_start_addr = reinterpret_cast<void*>(kstack_start_page_id << 12);
+    void* kstack_start_addr = reinterpret_cast<void*>(PAGE_ADDR(kstack_start_page_id));
     if (!Memory::mmap(kstack_start_addr, PROCESS_SYSCALL_STACK_SIZE, DEFAULT_K_PROT, flags, 0, 0, err, proc, false, false))
         irrecoverable_error("%s: mmap failed", __func__);
 }
@@ -245,7 +245,7 @@ ELF* ELFLoader::load_elf(void* buf, ELF_type expected_type, Process* proc)
 Process* ELFLoader::build_process(int argc, const char** argv, pid_t pid, pid_t ppid,
                                   const char** envp, const SharedPointer<Dentry>& file, uint priority)
 {
-    constexpr auto k_stack_top = ((768 * PT_ENTRIES - PROCESS_STACK_N_PAGES) << 12) - sizeof(int);
+    constexpr auto k_stack_top = (PAGE_ADDR(768 * PT_ENTRIES - PROCESS_STACK_N_PAGES)) - sizeof(int);
     stack_state_t dummy_stack_state{};
     Process* p = new Process(file->get_absolute_path(), num_pages, page_tables, pdt, &dummy_stack_state, priority, pid, ppid, k_stack_top);
     address_space_bridge = new Memory::AddressSpaceBridge(current_process, p);

@@ -51,7 +51,7 @@ namespace Memory
 
     void free_page(uint page_id)
     {
-        const uint frame_id = PHYS_ADDR(page_tables, page_id << 12) >> 12;
+        const uint frame_id = PHYS_ADDR(page_tables, PAGE_ADDR(page_id)) >> 12;
         // Todo: make that cleaner, there are two free_page functions now, everybody manipulates frame_rc...
         // Write PTE in kernel global memory mapping
         auto pte_ptr = &PTE(page_tables, page_id);

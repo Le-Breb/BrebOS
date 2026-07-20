@@ -261,7 +261,7 @@ namespace Memory
         if (n_pages > 1)
             irrecoverable_error("not handled because i'm lazy");
 
-        void* mem = (void*)(lowest_free_pte << 12);
+        void* mem = (void*)(PAGE_ADDR(lowest_free_pte));
 
         // Allocate memory by hand to store the process
         for (size_t i = 0; i < n_pages; i++)
@@ -314,7 +314,7 @@ namespace Memory
 
         // Allocate a page to get access to the multiboot struct size
         Memory::allocate_page(base, page_id, DEFAULT_K_POLICY);
-        uint page_addr = page_id << 12;
+        uint page_addr = PAGE_ADDR(page_id);
         uint tmp_v_addr = page_addr + (uaddr & (PAGE_SIZE - 1));
         auto total_size= ((multiboot_info_t*)tmp_v_addr)->total_size; // Get size
         // Deallocate first page
@@ -339,7 +339,7 @@ namespace Memory
         if (frame_to_page[frame_id] == (uint)-1)
             return (uint)-1;
 
-        return (frame_to_page[frame_id] << 12) + (phys_addr & (PAGE_SIZE - 1));
+        return (PAGE_ADDR(frame_to_page[frame_id])) + (phys_addr & (PAGE_SIZE - 1));
     }
 
     int mprotect(void* addr, size_t len, int prot, const Process* process)
@@ -436,7 +436,7 @@ namespace Memory
             process->lowest_free_pe++;
 
         // Allocated memory block virtually starts at page b. Return it.
-        return (void*)(b << 12);
+        return (void*)PAGE_ADDR(b);
     }
 
     void free_page(uint address, const Process* process)
@@ -626,7 +626,7 @@ namespace Memory
         for (uint i = 0; i < num_pages; ++i)
             allocate_page(frame_beg + i, page_beg + i, DEFAULT_K_POLICY);
 
-        return (void*)(page_beg << 12);
+        return (void*)PAGE_ADDR(page_beg);
     }
 
     void handle_cow_page_fault(const Process* current_process, bool higher_half, uint page_id, const page_table_t* pt)
@@ -649,7 +649,7 @@ namespace Memory
         current_process->update_pte(page_id, FRAME_ID_ADDR(frame) | new_policy, true);
 
         // Copy page to new page
-        memcpy((void*)(page_id << 12), (void*)(mapping_pe << 12), PAGE_SIZE);
+        memcpy((void*)PAGE_ADDR(page_id), (void*)PAGE_ADDR(mapping_pe), PAGE_SIZE);
 
         // Unmap old page which is now at mapping_pe
         current_process->update_pte(mapping_pe, 0, true);
@@ -667,7 +667,7 @@ namespace Memory
         uint frame_id = get_free_frame(); // Get frame
         *pte_ptr = FRAME_ID_ADDR(frame_id) | (page_user ? PAGE_USER : 0) | PAGE_WRITE | PAGE_PRESENT; // Update pte
         INVALIDATE_PAGE(page_id >> 10, page_id & 0x3FF); // Invalidate cache
-        memset((void*)(page_id << 12), 0, PAGE_SIZE); // Zero out page
+        memset((void*)PAGE_ADDR(page_id), 0, PAGE_SIZE); // Zero out page
 
         // If process is kernel process or address is in higher half, kernel global page tables have already
         // been updated, we just need to register the allocated frame
@@ -766,12 +766,12 @@ namespace Memory
             for (uint i = 0; i < n_pages; i++)
                 allocate_page(frame_base + i, b + i, DEFAULT_K_POLICY);
 
-            return (void*)((b << 12) + (physical_address & (PAGE_SIZE - 1)));
+            return (void*)(PAGE_ADDR(b) + (physical_address & (PAGE_SIZE - 1)));
         }
 
         // Everything is already mapped, simply return the corresponding virtual address
         if (all_frame_used)
-            return (void*)((frame_to_page[physical_address >> 12] << 12) + (physical_address & (PAGE_SIZE - 1)));
+            return (void*)(PAGE_ADDR(frame_to_page[physical_address >> 12]) + (physical_address & (PAGE_SIZE - 1)));
 
         return nullptr;
     }
@@ -807,7 +807,7 @@ namespace Memory
             const uint n = min(rem, (uint)PAGE_SIZE); // How many bytes are on this page
             if (PTE(pt, first_page_id + 1 + i) & PAGE_PRESENT)
             {
-                const uint address = (first_page_id + 1 + i) << 12; // Address of the beginning of the page
+                const uint address = PAGE_ADDR(first_page_id + 1 + i); // Address of the beginning of the page
                 memset_func((void*)address, 0, n); // Zero out
             }
             rem -= n; // Update remaining byte count

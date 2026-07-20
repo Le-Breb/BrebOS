@@ -41,6 +41,7 @@ Memory::frame_rc[(i)] = 0;}\
 Memory::lowest_free_frame = min(Memory::lowest_free_frame, (i)); \
 }
 #define PHYS_ADDR(page_tables, virt_addr) ((page_tables[(virt_addr) >> 22].entries[((virt_addr) >> 12) & 0x3FF] & ~0x3FF) | ((virt_addr) & 0xFFF))
+#define PAGE_ADDR(page_id) ((page_id) << 12)
 
 #define DEFAULT_K_PROT (PROT_READ | PROT_WRITE)
 #define DEFAULT_K_FLAGS (MAP_ANONYMOUS | MAP_PRIVATE)

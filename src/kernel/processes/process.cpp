@@ -175,7 +175,7 @@ uint Process::new_proc_mapping(uint start_page, uint num_pages, const Process* t
         return -1U;; // Not enough contiguous pages to perform mapping
 
     Memory::allocation target_alloc;
-    if (!target_process->memtree.get_addr_alloc(start_page << 12, target_alloc))
+    if (!target_process->memtree.get_addr_alloc(PAGE_ADDR(start_page), target_alloc))
         return -1U;
     if (!target_alloc.used)
         irrecoverable_error("?");
@@ -186,7 +186,7 @@ uint Process::new_proc_mapping(uint start_page, uint num_pages, const Process* t
         const uint target_pte = PTE(target_process->page_tables, start_page + i) | (force_write ? PAGE_WRITE : 0);
         update_pte(map_pte_id + i, target_pte, true);
     }
-    Memory::allocation alloc{map_pte_id << 12, (map_pte_id + num_pages) << 12, target_alloc.page_info, true};
+    Memory::allocation alloc{PAGE_ADDR(map_pte_id), PAGE_ADDR(map_pte_id + num_pages), target_alloc.page_info, true};
     if (force_write)
         alloc.page_info.policy |= PAGE_WRITE;
 
@@ -339,7 +339,7 @@ void Process::copy_page_to_other_process(const Process* other, uint page_id, uin
     update_pte(mapping_page_id, PTE(Memory::page_tables, sys_pe), true);
 
     // Copy page to child page
-    memcpy((void*)(mapping_page_id << 12), (void*)(page_id << 12), PAGE_SIZE);
+    memcpy((void*)PAGE_ADDR(mapping_page_id), (void*)PAGE_ADDR(page_id), PAGE_SIZE);
 }
 
 void Process::copy_page_to_other_process_shared(const Process* other, uint page_id) const

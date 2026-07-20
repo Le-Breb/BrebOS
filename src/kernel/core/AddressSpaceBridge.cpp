@@ -50,6 +50,6 @@ namespace Memory
         }
 
         // Return mapped address
-        return (current_pte_id << 12) + offset;
+        return PAGE_ADDR(current_pte_id) + offset;
     }
 } // Memory
