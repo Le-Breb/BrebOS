@@ -5,7 +5,7 @@
 #include <wctype.h> // NOLINT(*-deprecated-headers)
 #include <kstring.h>
 
-#include "memory.h"
+#include "memory/memory.h"
 #include "PIT.h"
 #include "system.h"
 

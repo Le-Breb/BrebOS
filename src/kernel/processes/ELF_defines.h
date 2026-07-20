@@ -2,7 +2,7 @@
 #define CUSTOM_OS_ELF_DEFINES_H
 //http://www.skyfree.org/linux/references/ELF_Format.pdf
 //https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779
-#include "../core/memory.h"
+#include "../core/memory/memory.h"
 
 #define EI_NIDENT (16)
 

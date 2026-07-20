@@ -5,7 +5,7 @@
 #include "Endianness.h"
 #include "Network.h"
 #include "UDP.h"
-#include "../core/memory.h"
+#include "../core/memory/memory.h"
 #include "../core/fb.h"
 
 uint32_t DHCP::disc_id = 0;

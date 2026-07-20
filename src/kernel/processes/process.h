@@ -2,7 +2,7 @@
 #define INCLUDE_PROCESS_H
 
 #include <signal.h>
-#include "../core/memory.h"
+#include "../core/memory/memory.h"
 #include "../core/interrupts.h"
 #include "ELF.h"
 #include "../utils/list.h"

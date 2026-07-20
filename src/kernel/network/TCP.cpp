@@ -3,7 +3,7 @@
 #include "ARP.h"
 #include "IPV4.h"
 #include "Network.h"
-#include "../core/memory.h"
+#include "../core/memory/memory.h"
 #include "Socket.h"
 #include "../core/fb.h"
 

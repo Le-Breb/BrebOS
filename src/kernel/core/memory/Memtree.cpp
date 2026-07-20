@@ -1,10 +1,10 @@
 #include "Memtree.h"
 #include "kstring.h"
-#include "../utils/comparison.h"
-#include "../processes/process.h"
+#include "../../utils/comparison.h"
+#include "../../processes/process.h"
 #include "SlabAllocator.h"
 #include "RawMemory.h"
-#include "../processes/scheduler.h"
+#include "../../processes/scheduler.h"
 
 #define ENSURE_VALIDITY 0
 

@@ -4,7 +4,7 @@
 #include "Endianness.h"
 #include "IPV4.h"
 #include "Network.h"
-#include "../core/memory.h"
+#include "../core/memory/memory.h"
 
 uint8_t* Ethernet::write_header(uint8_t* buf, uint8_t dest[MAC_ADDR_LEN], uint16_t type)
 {

@@ -4,7 +4,7 @@
 
 #include "ELFLoader.h"
 #include "scheduler.h"
-#include "../core/memory.h"
+#include "../core/memory/memory.h"
 #include "../core/fb.h"
 #include "../file_management/VFS.h"
 #include "../utils/comparison.h"

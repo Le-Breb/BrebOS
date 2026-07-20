@@ -5,7 +5,7 @@
 #include "superblock.h"
 #include "dentry.h"
 #include "../core/fb.h"
-#include "../core/memory.h"
+#include "../core/memory/memory.h"
 #include "../utils/comparison.h"
 #include "../utils/TmpString.h"
 

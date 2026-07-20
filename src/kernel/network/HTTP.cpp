@@ -5,7 +5,7 @@
 #include "Socket.h"
 #include "TCP.h"
 #include "../core/fb.h"
-#include "../core/memory.h"
+#include "../core/memory/memory.h"
 #include "../file_management/VFS.h"
 
 list<HTTP*> HTTP::instances = {};

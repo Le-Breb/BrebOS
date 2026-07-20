@@ -3,7 +3,7 @@
 #include "dentry.h"
 #include "kstddef.h"
 #include "../utils/shared_pointer.h"
-#include "../core/memory.h"
+#include "../core/memory/memory.h"
 #include "../utils/circular_buffer.h"
 
 #define SEEK_SET 0

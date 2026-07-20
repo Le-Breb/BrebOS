@@ -3,7 +3,7 @@
 #include "IPV4.h"
 #include "Network.h"
 #include "../core/fb.h"
-#include "../core/memory.h"
+#include "../core/memory/memory.h"
 
 Ethernet::packet_info_t ARP::pending_queue[ARP_PENDING_QUEUE_SIZE] = {};
 size_t ARP::pending_queue_head = 0;

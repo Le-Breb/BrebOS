@@ -7,7 +7,7 @@
 #include "Ethernet.h"
 #include "Network.h"
 #include "ports.h"
-#include "../core/memory.h"
+#include "../core/memory/memory.h"
 #include "../core/fb.h"
 #include "../core/interrupts.h"
 #include "../core/PIC.h"

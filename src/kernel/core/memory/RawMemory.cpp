@@ -1,8 +1,8 @@
 #include "RawMemory.h"
 
-#include "fb.h"
+#include "../fb.h"
 #include "abi-bits/vm-flags.h"
-#include "../utils/comparison.h"
+#include "../../utils/comparison.h"
 
 [[noreturn]]
 extern __attribute__ ((format (printf, 1, 2))) int irrecoverable_error(const char* format, ...);

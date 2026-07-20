@@ -1,7 +1,7 @@
 #include "multiboot.h"
 
 #include "../core/fb.h"
-#include "../core/memory.h"
+#include "../core/memory/memory.h"
 
 const multiboot_info_t* Multiboot::multiboot_info = nullptr;
 bool Multiboot::is_used = false;

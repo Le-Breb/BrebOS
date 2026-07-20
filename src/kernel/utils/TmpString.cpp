@@ -1,5 +1,5 @@
 #include "TmpString.h"
-#include "../core/SlabAlloc.h"
+#include "../core/memory/SlabAlloc.h"
 
 TmpString::TmpString(uint size) : size(size)
 {

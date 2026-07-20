@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../core/memory.h"
+#include "../core/memory/memory.h"
 #include "ELF_defines.h"
-#include "../core/AddressSpaceBridge.h"
+#include "../core/memory/AddressSpaceBridge.h"
 
 namespace ELFTools
 {

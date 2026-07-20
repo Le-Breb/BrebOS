@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../processes/process.h"
+#include "../../processes/process.h"
 
 namespace Memory
 {

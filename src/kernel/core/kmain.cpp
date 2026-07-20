@@ -1,7 +1,7 @@
 #include "fb.h"
 #include "GDT.h"
 #include "interrupts.h"
-#include "memory.h"
+#include "memory/memory.h"
 #include "system.h"
 #include "../processes/scheduler.h"
 #include "PIC.h"

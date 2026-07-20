@@ -5,7 +5,7 @@
 #include "Network.h"
 #include "UDP.h"
 #include "../core/fb.h"
-#include "../core/memory.h"
+#include "../core/memory/memory.h"
 
 const uint8_t DNS::google_dns_ip[IPV4_ADDR_LEN] = {8, 8, 8, 8};
 uint16_t DNS::last_query_id = 0;

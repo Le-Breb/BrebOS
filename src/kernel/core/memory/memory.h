@@ -1,7 +1,7 @@
 #ifndef INCLUDE_MEMORY_H
 #define INCLUDE_MEMORY_H
 
-#include "../boot/multiboot.h"
+#include "../../boot/multiboot.h"
 #include <kstddef.h>
 #include <stddef.h>
 

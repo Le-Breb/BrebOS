@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 #include "SlabAllocator.h"
-#include "../utils/RedBlackTree.h"
+#include "../../utils/RedBlackTree.h"
 
 typedef unsigned int uint;
 

@@ -6,7 +6,7 @@
 #include <errno.h>
 #include "../core/fb.h"
 #include <fcntl.h>
-#include "../core/memory.h"
+#include "../core/memory/memory.h"
 
 FileInterface::FileInterface(int fd, int flags, uint offset, FileType type) : fd(fd), flags(flags), offset(offset), type(type)
 {

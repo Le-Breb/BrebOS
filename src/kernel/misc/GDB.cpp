@@ -1,5 +1,5 @@
 #include "GDB.h"
-#include "../core/memory.h"
+#include "../core/memory/memory.h"
 #include "abi-bits/vm-flags.h"
 #include <stdint.h>
 

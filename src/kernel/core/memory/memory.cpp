@@ -1,15 +1,15 @@
 #include "memory.h"
 
-#include "../processes/ELFTools.h"
+#include "../../processes/ELFTools.h"
 using namespace Memory;
 
-#include "fb.h"
+#include "../fb.h"
 #include <kstring.h>
 #include <stdint.h>
 #include <sys/mman.h>
 
-#include "../processes/scheduler.h"
-#include "../utils/comparison.h"
+#include "../../processes/scheduler.h"
+#include "../../utils/comparison.h"
 #include "abi-bits/errno.h"
 #include "RawMemory.h"
 
