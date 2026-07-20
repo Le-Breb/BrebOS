@@ -27,7 +27,7 @@ namespace Memory
         if (!(target_start_pte & PAGE_PRESENT)) // Cannot point to a page that is not present
             return CONVERSION_ERROR;
 
-        const uint offset = target_address & (PAGE_SIZE - 1);
+        const uint offset = ADDR_PAGE_OFF(target_address);
         const uint num_pages = ADDR_PAGE(size + offset + PAGE_SIZE - 1);
         const page_mapping mapping{target_pte_id, CONVERSION_ERROR, CONVERSION_ERROR};
 

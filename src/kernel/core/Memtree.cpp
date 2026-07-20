@@ -411,7 +411,7 @@ namespace Memory
             }
 
             const uintptr_t region_size = region_end - region_start;
-            if (region_size & (PAGE_SIZE - 1) || region_start & (PAGE_SIZE - 1))
+            if (!IS_PAGE_SIZE_MUL(region_size) || !IS_PAGE_ALIGNED(region_start))
                 irrecoverable_error("%s: memory region size is not a multiple of PAGE_SIZE or region start is not page aligned", __PRETTY_FUNCTION__);
 
             const uint num_pages = region_size / PAGE_SIZE;

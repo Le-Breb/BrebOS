@@ -309,13 +309,13 @@ namespace Memory
             irrecoverable_error("Cannot map multiboot info");
 
         // ...
-        if (PAGE_SIZE - (uaddr & (PAGE_SIZE - 1)) < sizeof(uint32_t))
+        if (PAGE_SIZE - ADDR_PAGE_OFF(uaddr) < sizeof(uint32_t))
             irrecoverable_error("Are u kidding me ?");
 
         // Allocate a page to get access to the multiboot struct size
         Memory::allocate_page(base, page_id, DEFAULT_K_POLICY);
         uint page_addr = PAGE_ADDR(page_id);
-        uint tmp_v_addr = page_addr + (uaddr & (PAGE_SIZE - 1));
+        uint tmp_v_addr = page_addr + ADDR_PAGE_OFF(uaddr);
         auto total_size= ((multiboot_info_t*)tmp_v_addr)->total_size; // Get size
         // Deallocate first page
         free_page(page_addr, kernel_process);
@@ -339,13 +339,13 @@ namespace Memory
         if (frame_to_page[frame_id] == (uint)-1)
             return (uint)-1;
 
-        return (PAGE_ADDR(frame_to_page[frame_id])) + (phys_addr & (PAGE_SIZE - 1));
+        return (PAGE_ADDR(frame_to_page[frame_id])) + ADDR_PAGE_OFF(phys_addr);
     }
 
     int mprotect(void* addr, size_t len, int prot, const Process* process)
     {
         const auto uaddr = (Elf32_Addr)addr;
-        if (uaddr & (PAGE_SIZE - 1))
+        if (!IS_PAGE_ALIGNED(uaddr))
             return -EINVAL;
 
         constexpr int supported_flags = PROT_READ | PROT_WRITE | PROT_EXEC;
@@ -532,7 +532,7 @@ namespace Memory
 
         if (!((flags & MAP_PRIVATE) | (flags & MAP_SHARED)))
             mmap_ret_err(EINVAL)  // According to man page
-        if ((Elf32_Addr)hint & (PAGE_SIZE - 1) || size & (PAGE_SIZE - 1) || offset & (PAGE_SIZE - 1))
+        if (!IS_PAGE_SIZE_MUL((Elf32_Addr)hint) || !IS_PAGE_SIZE_MUL(size) || !(IS_PAGE_SIZE_MUL(offset)))
             mmap_ret_err(EINVAL); // According to man page
 
         // When memory mapped files will be implemented, don't forget to handle EACCES error or mprotect (cf man page)
@@ -721,7 +721,7 @@ namespace Memory
 
     void* register_physical_data(uint physical_address, uint size)
     {
-        auto n_pages = (size + (physical_address & (PAGE_SIZE - 1)) + PAGE_SIZE - 1) >> 12;
+        auto n_pages = (size + (ADDR_PAGE_OFF(physical_address)) + PAGE_SIZE - 1) >> 12;
         auto frame_base = physical_address >> 12;
 
         bool all_frame_used = true;
@@ -766,12 +766,12 @@ namespace Memory
             for (uint i = 0; i < n_pages; i++)
                 allocate_page(frame_base + i, b + i, DEFAULT_K_POLICY);
 
-            return (void*)(PAGE_ADDR(b) + (physical_address & (PAGE_SIZE - 1)));
+            return (void*)(PAGE_ADDR(b) + (ADDR_PAGE_OFF(physical_address)));
         }
 
         // Everything is already mapped, simply return the corresponding virtual address
         if (all_frame_used)
-            return (void*)(PAGE_ADDR(frame_to_page[physical_address >> 12]) + (physical_address & (PAGE_SIZE - 1)));
+            return (void*)(PAGE_ADDR(frame_to_page[physical_address >> 12]) + ADDR_PAGE_OFF(physical_address));
 
         return nullptr;
     }
@@ -781,7 +781,7 @@ namespace Memory
         const uintptr_t uaddr = reinterpret_cast<uintptr_t>(mem);
         const page_table_t* pt = process->page_tables; // Page tables to use
         const uint first_page_id = ADDR_PAGE(uaddr);
-        const uintptr_t mem_off = uaddr & (PAGE_SIZE - 1);
+        const uintptr_t mem_off = ADDR_PAGE_OFF(uaddr);
         const uint bytes_on_first_page = min(PAGE_SIZE - mem_off, total_size);
 
         Process* current_process = Scheduler::get_running_process();

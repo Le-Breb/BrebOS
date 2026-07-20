@@ -83,7 +83,7 @@ namespace Memory
     {
         if (hint_info.is_mandatory)
         {
-            if (hint_info.hint & (PAGE_SIZE - 1))
+            if (!IS_PAGE_ALIGNED(hint_info.hint))
                 irrecoverable_error("%s: alloc_params->hint is not page aligned (0x%x)", __func__, hint_info.hint);
             uint b = ADDR_PAGE(hint_info.hint);
             uint pte = b;
