@@ -34,11 +34,11 @@ void IDE::init()
 
             // (I) Select Drive:
             write(i, ATA_REG_HDDEVSEL, 0xA0 | (j << 4)); // Select Drive.
-            PIT::sleep(1); // Wait 1ms for drive select to work.
+            PIT::sleep<true>(1); // Wait 1ms for drive select to work.
 
             // (II) Send ATA Identify Command:
             write(i, ATA_REG_COMMAND, ATA_CMD_IDENTIFY);
-            PIT::sleep(1); // This function should be implemented in your OS. which waits for 1 ms.
+            PIT::sleep<true>(1); // This function should be implemented in your OS. which waits for 1 ms.
             // it is based on System Timer Device Driver.
 
             // (III) Polling:
@@ -69,7 +69,7 @@ void IDE::init()
                     continue; // Unknown Type (may not be a device).
 
                 write(i, ATA_REG_COMMAND, ATA_CMD_IDENTIFY_PACKET);
-                PIT::sleep(1);
+                PIT::sleep<true>(1);
             }
 
             // (V) Read Identification Space of the Device:

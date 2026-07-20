@@ -3,7 +3,9 @@
 
 #include "PIC.h"
 
-#define TRIGGER_TIMER_INTERRUPT {PIC::enable_preemptive_scheduling(); ;__asm__ volatile("int $0x20");}
+#define TRIGGER_TIMER_INTERRUPT {if (Scheduler::preemption_lock && !Scheduler::critical_section_preempt_exit) \
+	{irrecoverable_error("%s:%d TRIGGER_TIMER_INTERRUPT called while preemption lock is on", __FILE__, __LINE__);}; \
+	PIC::enable_preemptive_scheduling(); ;__asm__ volatile("int $0x20");}
 
 struct cpu_state
 {

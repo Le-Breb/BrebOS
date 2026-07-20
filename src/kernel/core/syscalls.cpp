@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <bits/wint_t.h>
 
+#include "PIT.h"
 #include "../misc/GDB.h"
 #include "abi-bits/wait.h"
 
@@ -566,9 +567,8 @@ Syscall::SyscallResult Syscall::sleep(Process* p)
     }
 
     time_t s = *(time_t*)p->cpu_state.ebx;
-    Scheduler::set_process_asleep(p, s * 1000);
 
-    return SyscallResult::Schedule;
+    return PIT::sleep<false>(s * 1000) ? SyscallResult::Schedule : SyscallResult::ReturnToUser;
 }
 
 Syscall::SyscallResult Syscall::wait_pid(Process* p)

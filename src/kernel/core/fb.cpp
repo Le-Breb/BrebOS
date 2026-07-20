@@ -326,7 +326,7 @@ void FB::refresh_loop()
 	while (true)
 	{
 		show_cursor = tick <= fps;
-		PIT::sleep(frame_duration);
+		PIT::sleep<true>(frame_duration);
 		flush();
 
 		tick++;
