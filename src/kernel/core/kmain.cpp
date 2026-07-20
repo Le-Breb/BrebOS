@@ -37,15 +37,12 @@ extern "C" bool fpu_init_asm_();
 // Todo: make Process::update_pte usage more controlled
 // Todo: fix example.com wget
 // Todo: make update_pte also update memtree page_infos
-// Todo: remove Process:pre_free as it is now useless ?
 // Todo: make signals be able to interrupt sleep
 // Todo: fix build system so that mlibc and programs get rebuilt when mlibc sources are modified
 // Todo: make every syscall return enum SyscallResult { ReturnToUser, Block, Exit, };. That way, a syscall preemption
 // lock can be easily implemented: bool set to true at beginning of syscall dispatcher, false after the switch. Then
 // interrupt_timer does nothing if lock is true. This would allow preemption from syscalls to userland PLUS prevent
 // using inb and outb which are currently used for enabling/disabling preemption. Do not forget to remove PIC::enable_preemptive_scheduling() from TRIGGER_TIMER_INTERRUPT
-// Todo: in ELFLoader, do not map code above KERNEL_VIRTUAL_BASE, map below and use mapping pages, as for now ALL processes
-// will use PTE above KERNEL_VIRTUAL_BASE >> 12 and lower PTEs won't be used
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {
     // Get why this fails
