@@ -21,7 +21,6 @@ extern "C" void _init(void); // NOLINT(*-reserved-identifier)
 
 extern "C" bool fpu_init_asm_();
 
-//Todo: Advanced memory freeing (do something when free_pages do not manage to have free_bytes < FREE_THRESHOLD)
 //Todo: Use higher precision timer
 //Todo: Syscall concurrent safety (that's a goddamn huge task)
 //Todo: Sanitize syscalls inputs (address ranges and permissions, value ranges)
@@ -30,7 +29,6 @@ extern "C" bool fpu_init_asm_();
 //Todo: unify mlibc and brebos syscalls numbers (via header file)
 // Todo: Some TERM or CORE signals should be catchable by processes. For example, SIGTERM simply asks processes
 // to shut down, and OS terminates them only after a while if the process does not do it by itself
-// Todo: implement Process::mmap_allocations using RB tree
 // Todo: Investigate how vDSO could be implemented (mlibc has code related to that isn't it ?)
 // Todo: Understand where did program loading delay came back from and get rid of it
 // (cf. 18/06/26 screenshots where the last known fast loading project was, where a pull introduced delay back,
