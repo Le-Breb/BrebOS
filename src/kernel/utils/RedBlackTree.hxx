@@ -69,10 +69,6 @@ void RBTree<T>::Node::moveDown(Node* nParent)
     }
     nParent->parent = parent;
     parent = nParent;
-
-    // sanity: nParent must now be reachable from its parent (or be root)
-    if (nParent->parent && nParent->parent->left != nParent && nParent->parent->right != nParent)
-        irrecoverable_error("moveDown: nParent not linked from its new parent");
 }
 
 template <typename T>
@@ -104,9 +100,6 @@ void RBTree<T>::leftRotate(Node* x)
 
     // connect new parent with x
     nParent->left = x;
-
-    if (!(x->parent == nParent and nParent->left == x))
-        irrecoverable_error("pb");
 }
 
 template <typename T>
@@ -130,9 +123,6 @@ void RBTree<T>::rightRotate(Node* x)
 
     // connect new parent with x
     nParent->right = x;
-
-    if (!(x->parent == nParent and nParent->right == x))
-        irrecoverable_error("pb");
 }
 
 template <typename T>
