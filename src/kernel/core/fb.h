@@ -6,6 +6,7 @@
 
 #include <stdint.h>
 #include "../utils/PSF.h"
+#include <stdarg.h>
 
 #define FB_BLACK        0x000000
 #define FB_BLUE         0x0000AA
@@ -258,4 +259,6 @@ __attribute__ ((format (printf, 1, 2))) int irrecoverable_error(const char* form
 
 __attribute__ ((format (printf, 1, 2))) int printf_warn(const char* format, ...);
 
+[[noreturn]]
+void irrecoverable_error_aux(const char* format, va_list list);
 #endif /* INCLUDE_FB_H */

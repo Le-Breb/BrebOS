@@ -20,6 +20,7 @@ public:
     T* operator->();
     operator bool(); // NOLINT(*-explicit-constructor)
     bool operator==(nullopt_t nullopt) const;
+    T& expect(const char* format, ...);
 };
 
 #include "optional.hxx"

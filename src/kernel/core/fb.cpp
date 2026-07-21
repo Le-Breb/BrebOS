@@ -1122,14 +1122,11 @@ int printf_warn(const char* format, ...)
 }
 
 [[noreturn]]
-__attribute__ ((format (printf, 1, 2))) int irrecoverable_error(const char* format, ...)
+void irrecoverable_error_aux(const char* format, va_list list)
 {
 	FB::fatal_error_decorator();
 	FB::putchar(' ');
-	va_list list;
-	va_start(list, format);
 	kvprintf(format, output_funcs(kprintf_output), list);
-	va_end(list);
 	FB::putchar(' ');
 	FB::fatal_error();
 	FB::write("Press any key to continue...");
@@ -1142,4 +1139,13 @@ __attribute__ ((format (printf, 1, 2))) int irrecoverable_error(const char* form
 	{
 		__asm__ volatile("hlt");
 	}
+}
+
+[[noreturn]]
+__attribute__ ((format (printf, 1, 2))) int irrecoverable_error(const char* format, ...)
+{
+	va_list list;
+	va_start(list, format);
+	irrecoverable_error_aux(format, list);
+	va_end(list);
 }
