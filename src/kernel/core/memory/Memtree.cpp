@@ -444,23 +444,20 @@ namespace Memory
         return get_total_size_aux(root);
     }
 
-    bool MemTree::get_addr_alloc(uintptr_t addr, allocation& alloc) const
+    Optional<allocation> MemTree::get_addr_alloc(uintptr_t addr) const
     {
         const Node* curr = root;
 
         while (curr)
         {
             if (curr->data.start <= addr && curr->data.end > addr)
-            {
-                alloc = curr->data;
-                return true;
-            }
+                return {curr->data};
             if (curr->data.end <= addr)
                 curr = curr->right;
             else
                 curr = curr->left;
         }
 
-        return false;
+        return nullopt;
     }
 }

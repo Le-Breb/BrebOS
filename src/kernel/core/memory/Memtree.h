@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include "SlabAllocator.h"
 #include "../../utils/RedBlackTree.h"
+#include "../../utils/optional.h"
 
 typedef unsigned int uint;
 
@@ -114,6 +115,6 @@ namespace Memory
         void free_all(const Process* process); // Frees all allocations registered in the tree
         void register_external_allocation(const allocation& allocation); // Registered externally allocated memory
         [[nodiscard]] uint get_total_size() const;
-        [[nodiscard]] bool get_addr_alloc(uintptr_t addr, allocation& alloc) const;
+        [[nodiscard]] Optional<allocation> get_addr_alloc(uintptr_t addr) const;
     };
 }

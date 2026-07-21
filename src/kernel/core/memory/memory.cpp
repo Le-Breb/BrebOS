@@ -402,8 +402,8 @@ namespace Memory
         uint e = b + num_pages_requested; /* block end page index + 1*/
 
         // Allocate pages
-        if (constexpr int supported_policy = PAGE_USER | PAGE_LAZY_ZERO | PAGE_PRESENT | PAGE_WRITE; page_info.policy & ~supported_policy)
-            irrecoverable_error("sbrk: Unsupported allocation flags: 0x%x", page_info.policy & ~supported_policy);
+        if (page_info.policy & ~PAGE_BREBOS_MANAGED_FLAGS)
+            irrecoverable_error("sbrk: Unsupported allocation flags: 0x%x", page_info.policy & ~PAGE_BREBOS_MANAGED_FLAGS);
         if ((page_info.policy & PAGE_PRESENT) && (page_info.policy & PAGE_LAZY_ZERO))
             irrecoverable_error("sbrk: both PAGE_PRESENT and PAGE_LAZY zero cannot be specified at the same time");
 

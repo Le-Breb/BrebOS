@@ -4,9 +4,15 @@
 #define PAGE_PRESENT	0x1
 #define PAGE_WRITE		0x2
 #define PAGE_USER		0x4
+#define PAGE_PWD		0X08
+#define PAGE_PCD		0x10
+#define PAGE_ACCESSED	0x20
+#define PAGE_DIRTY		0x40
+#define PAGE_PAT		0x80
 #define PAGE_LAZY_ZERO	0x200 // Page is lazily zeroed, meaning it will be allocated and zeroed on first access
 #define PAGE_COW		0x100 // Page is Copy On Write, meaning it is shared between processes and will be copied on first write
 #define PAGE_SHRO		0x400 // Page is shared read-only, meaning it is shared between processes but not writable
+#define PAGE_BREBOS_MANAGED_FLAGS (PAGE_PRESENT | PAGE_WRITE | PAGE_USER | PAGE_LAZY_ZERO | PAGE_COW | PAGE_SHRO)
 
 #define PDT_ENTRIES 1024
 #define PT_ENTRIES 1024

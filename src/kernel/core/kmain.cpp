@@ -36,7 +36,6 @@ extern "C" bool fpu_init_asm_();
 // Todo: parse memory map from BIOS (to be aware of available regions and RAM size)
 // Todo: make Process::update_pte usage more controlled
 // Todo: fix example.com wget
-// Todo: make update_pte also update memtree page_infos
 // Todo: make signals be able to interrupt sleep
 // Todo: get rid of kernel allocations which are a useless duplicate. This will certainly have impacts on frame_rc...
 // Todo: use a hash map for cached dentries (and see if some lists could benefit from being converted to hash map)

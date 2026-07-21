@@ -72,12 +72,6 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
     // Interrupt_timer still runs, but won't call schedule and simply resume this syscall
     Scheduler::preemption_lock = true;
 
-    // Don't ask me why, but adding this line improves overall speed by A LOT. This doesn't make any fucking sense, but
-    // that's the way it is. The only possible explanation I can think of isvy2xe5w9
-    // that this changes ELF layout and has a
-    // great impact on TLB ?
-    // [[maybe_unused]] int dummy = 0;
-
     Process* p = Scheduler::get_running_process();
 
     // Update PCB

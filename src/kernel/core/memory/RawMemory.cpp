@@ -90,7 +90,7 @@ namespace Memory
                 return (uint)-1;
 
             uint target = pte + n;
-            for (; !(PTE_USED(pt, pte)) && pte != target; pte++) {}
+            for (; pte != target && !(PTE_USED(pt, pte)); pte++) {}
 
             return pte == target ? b : (uint)-1;
         }

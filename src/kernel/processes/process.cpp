@@ -174,12 +174,10 @@ uint Process::new_proc_mapping(uint start_page, uint num_pages, const Process* t
     if (map_pte_id == -1U)
         return -1U;; // Not enough contiguous pages to perform mapping
 
-    Memory::allocation target_alloc;
-    if (!target_process->memtree.get_addr_alloc(PAGE_ADDR(start_page), target_alloc))
+    if (!target_process->memtree.get_addr_alloc(PAGE_ADDR(start_page)))
         return -1U;
-    if (!target_alloc.used)
-        irrecoverable_error("?");
 
+    const Memory::allocation target_alloc = target_process->memtree.get_addr_alloc(PAGE_ADDR(start_page)).expect("?");
     // Allocate in those pages, mapping them to target pages
     for (uint i = 0; i < num_pages; i++)
     {
@@ -320,26 +318,17 @@ void Process::init()
     signal_default_action[SIGCHLD] = SIGDISP_IGN;
 }
 
-void Process::copy_page_to_other_process(const Process* other, uint page_id, uint mapping_page_id) const
+void Process::copy_page_to_other_process(Process* other, uint page_id, Memory::AddressSpaceBridge& bridge) const
 {
     if (!PTE(page_tables, page_id))
         return;
 
-    // Allocate a page in kernel address space
-    const uint sys_pe = Memory::get_free_pe_user(); // Get sys PTE id
-    const uint frame = Memory::get_free_frame();
-    const int policy = PTE(page_tables, page_id) & 0x7FF;
-    Memory::allocate_page(frame, sys_pe, policy); // Allocate page in kernel address space
-
-    // Register page in child address space
-    const uint frame_val = frame << 12;
-    other->update_pte(page_id , frame_val | policy, false);
-
-    // Map the new page in current process address space to be able to access it
-    update_pte(mapping_page_id, PTE(Memory::page_tables, sys_pe), true);
-
-    // Copy page to child page
-    memcpy((void*)PAGE_ADDR(mapping_page_id), (void*)PAGE_ADDR(page_id), PAGE_SIZE);
+    const uintptr_t addr = PAGE_ADDR(page_id);
+    const Memory::allocation alloc = memtree.get_addr_alloc(addr).expect("%s: memtree.get_addr_alloc failed", __func__);
+    const Memory::hint_info hint_info{addr, true};
+    if (!Memory::sbrk(1, alloc.page_info, hint_info, other))
+        irrecoverable_error("%s: sbrk failed", __func__);
+    ELFTools::Lptr((void*)addr, &bridge).memcpy((void*)addr, PAGE_SIZE);
 }
 
 void Process::copy_page_to_other_process_shared(const Process* other, uint page_id) const
@@ -383,10 +372,7 @@ pid_t Process::fork()
     child->flags = flags & ~P_SYSCALL_INTERRUPTED;
     child->tls_base = tls_base;
 
-    // Duplicate page table entries
-    uint mapping_page = ADDR_PAGE(KERNEL_VIRTUAL_BASE) - PROCESS_N_STACKS_PAGES - 1; // Free page that will be used to map the child pages in the current address space
-    if (page_tables[mapping_page / PT_ENTRIES].entries[mapping_page % PT_ENTRIES])
-        irrecoverable_error("%s: mapping mage is not empty", __func__);
+    child->memtree = memtree;
 
     uint page_id_off = 0;
     for (uint i = 0; i < 768 - (PROCESS_N_STACKS_PAGES + PT_ENTRIES - 1) / PT_ENTRIES; i++)
@@ -402,11 +388,13 @@ pid_t Process::fork()
         page_id_off += PT_ENTRIES;
     }
 
+    Memory::AddressSpaceBridge bridge(this, child);
+
     // Duplicate stacks - do not use COW for stacks, because they are not shared
-    for (int i = 0; i <= PROCESS_STACK_N_PAGES; i++) // First copy the process stack
-        copy_page_to_other_process(child, ADDR_PAGE(KERNEL_VIRTUAL_BASE - PAGE_SIZE * (i + 1)), mapping_page);
-    for (int i = 0; i <= PROCESS_SYSCALL_STACK_N_PAGES; i++) // Next proceed with syscall stack
-        copy_page_to_other_process(child, ADDR_PAGE(KERNEL_VIRTUAL_BASE - PAGE_SIZE * (PROCESS_STACK_N_PAGES + i + 1)), mapping_page);
+    for (int i = 0; i < PROCESS_STACK_N_PAGES; i++) // First copy the process stack
+        copy_page_to_other_process(child, ADDR_PAGE(KERNEL_VIRTUAL_BASE - PAGE_SIZE * (i + 1)), bridge);
+    for (int i = 0; i < PROCESS_SYSCALL_STACK_N_PAGES; i++) // Next proceed with syscall stack
+        copy_page_to_other_process(child, ADDR_PAGE(KERNEL_VIRTUAL_BASE - PAGE_SIZE * (PROCESS_STACK_N_PAGES + i + 1)), bridge);
 
     // Duplicate PDT entries - This MUST be done after copying the pages, because page tables are lazily allocated.
     // If we do it before, the page tables would not be actually allocated yet, thus PHYS_ADDR would return 0
@@ -423,11 +411,6 @@ pid_t Process::fork()
         child->pdt->entries[i] = frame_val | flags;
     }
     memcpy(child_pdt->entries + 768, pdt->entries + 768, sizeof(uint) * (PDT_ENTRIES - 768));
-
-    // Clear mapping page
-    update_pte(mapping_page, 0, true);
-
-    child->memtree = memtree;
 
     // Copy file descriptors
     for (uint i = 0; i < MAX_FD_PER_PROCESS; i++)

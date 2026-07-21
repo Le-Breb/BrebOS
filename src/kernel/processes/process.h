@@ -48,6 +48,12 @@
 #define SIGDISP_HLDR 5
 
 #define PROCESS_STACK_SIZE 0x80000 // 512 KiB
+
+namespace Memory
+{
+	class AddressSpaceBridge;
+}
+
 static_assert((PROCESS_STACK_SIZE % PAGE_SIZE) == 0, "PROCESS_STACK_SIZE must be a multiple of STACK_SIZE");
 #define PROCESS_STACK_N_PAGES (PROCESS_STACK_SIZE / PAGE_SIZE)
 #define PROCESS_SYSCALL_STACK_SIZE 0x2000
@@ -129,7 +135,7 @@ private:
 	sigset_t pending_signals{};
 	sigset_t* signal_top_level_block_mask = nullptr; // Ptr to signals_contexts[0].blocked_mask. Do not free
 
-	void copy_page_to_other_process(const Process* other, uint page_id, uint mapping_page_id) const;
+	void copy_page_to_other_process(Process* other, uint page_id, Memory::AddressSpaceBridge& bridge) const;
 
 	void copy_page_to_other_process_shared(const Process* other, uint page_id) const;
 
