@@ -812,15 +812,6 @@ namespace Memory
     }
 }
 
-void* operator new(size_t, void* p)
-{
-    return p;
-}
-
-void operator delete(void*, void*)
-{
-}
-
 void* operator new(size_t size)
 {
     return malloc(size, DEFAULT_K_PAGE_INFO, kernel_process);
