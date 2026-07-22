@@ -30,7 +30,7 @@ class UnorderedSet
 
     static_assert(is_power_of_2(capacity), "HashMap capacity must be a power of 2");
 
-    size_t size = 0;
+    uint32_t size = 0;
     struct elem
     {
         alignas(T) std::byte data[sizeof(T)];
@@ -63,6 +63,35 @@ public:
     template <typename K>
     requires kdetail::FindCompatible<hash_func, equal_func, T, K>
     Optional<const T*> find(const K& element) const;
+    [[nodiscard]]
+    uint32_t get_size() const;
+    [[nodiscard]]
+    bool is_full() const;
+
+    class Iterator
+    {
+        elem* elems;
+        uint32_t index;
+
+    public:
+        T& operator*() const { return elems[index].value(); }
+        T* operator->() const { return elems[index].ptr(); }
+        Iterator& operator++()
+        {
+            do { ++index; }
+            while (index < capacity && elems[index].used);
+            return *this;
+        }
+        bool operator==(const Iterator& other) const { return other.index == index; }
+
+        Iterator(uint32_t index, elem* elems) : elems(elems), index(index) {}
+    };
+
+    [[nodiscard]]
+    Iterator begin();
+
+    [[nodiscard]]
+    Iterator end();
 };
 
 #include "UnorderedSet.hxx"

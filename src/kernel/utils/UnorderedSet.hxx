@@ -108,7 +108,7 @@ void UnorderedSet<T, capacity, hash_func, equal_func>::remove(const T& element)
 
 
 template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
-template<typename K>
+template <typename K>
 requires kdetail::FindCompatible<hash_func, equal_func, T, K>
 Optional<const T*> UnorderedSet<T, capacity, hash_func, equal_func>::find(const K& element) const
 {
@@ -121,4 +121,31 @@ Optional<const T*> UnorderedSet<T, capacity, hash_func, equal_func>::find(const 
     }
 
     return nullopt;
+}
+
+template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
+[[nodiscard]]
+uint32_t UnorderedSet<T, capacity, hash_func, equal_func>::get_size() const
+{
+    return size;
+}
+
+template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
+bool UnorderedSet<T, capacity, hash_func, equal_func>::is_full() const
+{
+    return size == capacity;
+}
+
+template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
+typename UnorderedSet<T, capacity, hash_func, equal_func>::Iterator UnorderedSet<T, capacity, hash_func, equal_func>::
+begin()
+{
+    return Iterator(0, elements);
+}
+
+template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
+typename UnorderedSet<T, capacity, hash_func, equal_func>::Iterator UnorderedSet<T, capacity, hash_func, equal_func>::
+end()
+{
+    return Iterator(capacity, elements);
 }
