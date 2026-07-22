@@ -4,8 +4,6 @@
 
 // Hash algorith taken from https://github.com/lcn2/fnv
 
-typedef uint32_t Fnv32_t;
-
 #define FNV1A_32_INIT ((Fnv32_t)0x811c9dc5)
 
 /*
@@ -69,9 +67,9 @@ fnv_32a_buf(void *buf, size_t len, Fnv32_t hval)
  *	 hval arg on the first call to either fnv_32a_buf() or fnv_32a_str().
  */
 Fnv32_t
-fnv_32a_str(char *str, Fnv32_t hval)
+fnv_32a_str(const char *str, Fnv32_t hval)
 {
-    unsigned char *s = (unsigned char *)str;	/* unsigned string */
+    const unsigned char *s = (unsigned char *)str;	/* unsigned string */
 
     /*
      * FNV-1a hash each octet in the buffer
