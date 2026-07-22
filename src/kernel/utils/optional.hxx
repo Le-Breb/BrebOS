@@ -30,9 +30,9 @@ T* Optional<T>::operator->()
 }
 
 template <typename T>
-Optional<T>::operator bool()
+Optional<T>::operator bool() const
 {
-    return data != nullptr;
+    return !is_null;
 }
 
 template <typename T>

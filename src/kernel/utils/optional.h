@@ -18,7 +18,7 @@ public:
 
     T& operator*();
     T* operator->();
-    operator bool(); // NOLINT(*-explicit-constructor)
+    operator bool() const; // NOLINT(*-explicit-constructor)
     bool operator==(nullopt_t nullopt) const;
     T& expect(const char* format, ...);
 };
