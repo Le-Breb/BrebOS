@@ -55,6 +55,7 @@ endif
 ifdef PROFILING
 	CFLAGS += -finstrument-functions -DPROFILING
 endif
+CXXFLAGS = -std=c++20
 
 CC_PATH=$(TOOLCHAIN_DIR)/usr/bin/$(CC)
 libgcc=$(shell $(CC_PATH) $(CFLAGS) -print-libgcc-file-name)
@@ -122,7 +123,7 @@ $(programs): $(programs_sources) $(libk) $(MLIBC_STAMP)
 
 $(KERNEL_BUILD_DIR)/%.o: $(SRC_DIR)/kernel/%.cpp
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(CPPFLAGS) $< -o $@
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(CXXFLAGS) $< -o $@
 $(KERNEL_BUILD_DIR)/%.o: $(SRC_DIR)/kernel/%.s
 	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) $< -o $@

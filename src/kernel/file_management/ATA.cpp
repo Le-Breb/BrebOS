@@ -303,7 +303,9 @@ unsigned char ATA::access(unsigned char direction, unsigned char drive, uint lba
     unsigned char head, sect, err;
 
     // Disable IRQs by setting bit 1 if the Control Register (nIEN bit). This affects master and slave of this channel
-    IDE::write(channel, ATA_REG_CONTROL, IDE::channels[channel].nIEN = (IDE::irq_invoked = 0x0) + 0x02);
+    IDE::irq_invoked = 0x0;
+    IDE::channels[channel].nIEN = 0x02;
+    IDE::write(channel, ATA_REG_CONTROL, 0x02);
 
     // (I) Select one from LBA28, LBA48 or CHS;
     if (lba >= 0x10000000)
