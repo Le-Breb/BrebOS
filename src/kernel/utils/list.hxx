@@ -1,7 +1,7 @@
 #pragma once
 
 #include "list.h"
-
+#include <utility>
 #include <kstddef.h>
 
 template<class T>
@@ -10,8 +10,14 @@ list<T>::Node::Node() {
 }
 
 template<class T>
-list<T>::Node::Node(const T& val) : value(val) {
-    next = nullptr;
+list<T>::Node::Node(const T& val) : value(val), next(nullptr) {
+
+}
+
+template <class T>
+list<T>::Node::Node(T&& val) : value(std::move(val)), next(nullptr)
+{
+
 }
 
 template <class E>
@@ -72,9 +78,9 @@ void list<E>::add(const E& e)
 }
 
 template <class E>
-void list<E>::add(const E&& e)
+void list<E>::add(E&& e)
 {
-    auto* newNode = new Node(e);
+    auto* newNode = new Node(std::forward<E>(e));
     add(newNode);
 }
 

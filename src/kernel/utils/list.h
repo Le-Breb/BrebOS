@@ -13,6 +13,7 @@ private:
 		Node();
 
 		explicit Node(const E& val);
+		explicit Node(E&& val);
 	};
 
     Node *head;
@@ -62,7 +63,7 @@ public:
 	 *
 	 * @param e - the element to add
 	 */
-	void add(const E&& e);
+	void add(E&& e);
 
     /**
      * Inserts the specified element at the specified position in this list.
