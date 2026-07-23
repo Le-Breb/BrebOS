@@ -74,6 +74,12 @@ def load_program(elf_name):
         to_string=True
     )
 
+gdb.execute(
+    f"add-symbol-file ./bootloader/build/bootloader2.elf 0x1000",
+    to_string=True
+)
+load_program("seq")
+
 # ldso_path = "./sysroot/usr/lib/ld.so"
 # ldso_base = get_txt_ba(ldso_path) + 0x1e000
 # print(f"loading {ldso_path} at 0x{ldso_base}")
