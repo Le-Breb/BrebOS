@@ -8,6 +8,7 @@ OBJECTS= $(SRC:%.cpp=$(BUILD_DIR)/%.o)
 CC = i686-brebos-g++
 CFLAGS = -fno-stack-protector -Wall -Wextra -Werror -c \
 		 -MMD -MP -g
+CXXFLAGS = -std=c++20
 LDFLAGS =
 AS = nasm
 ASFLAGS = -f elf -F dwarf
@@ -39,7 +40,7 @@ $(LIBK_PATH):
 # libc dependency added so that programs are automatically rebuilt when libc is rebuilt
 $(BUILD_DIR)/%.o: %.cpp $(SYSROOT_DIR)/usr/lib/libc.a $(SYSROOT_DIR)/usr/lib/libc.so
 	@mkdir -p $(dir $@)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $@
+	$(CC) $(CPPFLAGS) $(CXXFLAGS) $(CFLAGS) $< -o $@
 $(BUILD_DIR)/%.o: %.s
 	$(AS) $(ASFLAGS) $< -o $@
 
