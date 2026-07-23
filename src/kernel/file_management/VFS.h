@@ -56,7 +56,8 @@ private:
 			return fnv_32a_buf(&parent_addr, sizeof(parent_addr), fnv_32a_str(val->name, FNV1A_32_INIT));
 		}
 	};
-	static std::unordered_set<SharedPointer<Dentry>, dentry_hash, cached_dentry_equality>* dentries;
+
+	static std::unordered_set<SharedPointer<Dentry>, dentry_hash, cached_dentry_equality, Memory::SlabAllocatorSTL<SharedPointer<Dentry>>>* dentries;
 	static SharedPointer<Dentry>* path[PATH_CAPACITY];
 	static uint num_path;
 	static int lowest_free_fd;

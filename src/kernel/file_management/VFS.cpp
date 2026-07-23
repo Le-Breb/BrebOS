@@ -9,7 +9,7 @@
 #include <errno.h>
 #include <fcntl.h>
 
-std::unordered_set<SharedPointer<Dentry>, VFS::dentry_hash, VFS::cached_dentry_equality>* VFS::dentries = nullptr;
+std::unordered_set<SharedPointer<Dentry>, VFS::dentry_hash, VFS::cached_dentry_equality, Memory::SlabAllocatorSTL<SharedPointer<Dentry>>>* VFS::dentries = nullptr;
 uint VFS::num_path = 0;
 SharedPointer<Dentry>* VFS::path[PATH_CAPACITY] = {};
 FileInterface* VFS::file_descriptors[MAX_FD] = {};
@@ -20,7 +20,7 @@ void VFS::init()
 	FS::init();
 	FAT_drive::init();
 
-	dentries = new std::unordered_set<SharedPointer<Dentry>, dentry_hash, cached_dentry_equality>();
+	dentries = new std::unordered_set<SharedPointer<Dentry>, dentry_hash, cached_dentry_equality, Memory::SlabAllocatorSTL<SharedPointer<Dentry>>>();
 	FS** main_fs = FS::fs_list->get(0);
 	if (main_fs == nullptr)
 		irrecoverable_error("Couldn't get main file system");
