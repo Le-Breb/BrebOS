@@ -1,18 +1,11 @@
 #pragma once
 
 #include <functional>
-
 #include "Hash.h"
 #include "kstddef.h"
 #include "Status.h"
+#include "kdetail.h"
 
-namespace kdetail
-{
-    template<typename Hash, typename Equal, typename T, typename K>
-    concept FindCompatible =
-        std::invocable<Hash, const K&> &&
-        std::predicate<Equal, const T&, const K&>;
-}
 
 template <typename T, uint32_t capacity, typename hash_func = Hash<T>, typename equal_func = std::equal_to<T>>
 class UnorderedSet

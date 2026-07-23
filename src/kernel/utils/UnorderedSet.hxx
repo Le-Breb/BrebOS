@@ -1,8 +1,8 @@
-#include <stdint.h>
+#pragma once
 
-#include "Hash.h"
-#include "optional.h"
 #include "UnorderedSet.h"
+#include <stdint.h>
+#include "optional.h"
 
 [[noreturn]]
 extern __attribute__ ((format (printf, 1, 2))) int irrecoverable_error(const char* format, ...);
