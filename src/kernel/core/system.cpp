@@ -16,6 +16,7 @@ bool System::irrecoverable_error_happened = false;
 #ifdef PROFILING
 	Profiling::save_data();
 #endif
+	VFS::shutdown();
 	FAT_drive::shutdown();
 	Socket::close_all_connections();
 	Scheduler::shutdown();

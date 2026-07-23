@@ -9,7 +9,7 @@
 #include <errno.h>
 #include <fcntl.h>
 
-UnorderedSet<SharedPointer<Dentry>, MAX_DENTRIES, Hash<SharedPointer<Dentry>>, VFS::cached_dentry_equality> VFS::dentries = {};
+std::unordered_map<VFS::dentry_cache_key, SharedPointer<Dentry>, VFS::dentry_hash, VFS::cached_dentry_equality>* VFS::dentries = nullptr;
 uint VFS::num_path = 0;
 SharedPointer<Dentry>* VFS::path[PATH_CAPACITY] = {};
 FileInterface* VFS::file_descriptors[MAX_FD] = {};
@@ -20,6 +20,7 @@ void VFS::init()
 	FS::init();
 	FAT_drive::init();
 
+	dentries = new std::unordered_map<dentry_cache_key, SharedPointer<Dentry>, dentry_hash, cached_dentry_equality>();
 	FS** main_fs = FS::fs_list->get(0);
 	if (main_fs == nullptr)
 		irrecoverable_error("Couldn't get main file system");
@@ -60,6 +61,11 @@ void VFS::init()
 		}
 	}
 	printf_info("ELF preload finished");
+}
+
+void VFS::shutdown()
+{
+	delete dentries;
 }
 
 SharedPointer<Dentry> VFS::touch(const char* pathname)
@@ -181,15 +187,8 @@ void VFS::ls_printer(const Dentry& dentry)
 
 SharedPointer<Dentry> VFS::get_cached_dentry(const SharedPointer<Dentry>& parent, const char* name)
 {
-	if (auto dentry = dentries.find(name); dentry)
-		return **dentry;
-	return nullptr;
-	for (auto& dentry : dentries)
-	{
-		if (!strcmp(dentry->name, name) && dentry->parent == parent)
-			return dentry;
-	}
-
+	if (const auto it = dentries->find({name, parent.get()}); it != dentries->end())
+		return it->second;
 	return nullptr;
 }
 
@@ -269,27 +268,27 @@ SharedPointer<Dentry> VFS::browse_to(const char* path, const SharedPointer<Dentr
 
 bool VFS::cache_dentry(const SharedPointer<Dentry>& dentry)
 {
-	if (dentries.is_full())
+	if (dentries->size() == MAX_DENTRIES)
 		free_unused_dentry_cache_entries();
 	// No need to check for lowest_free_inode cause there is one or more dentry per inode,
-	// ie there cannot have more inodes than dentires
+	// ie there cannot have more inodes than dentries
 
-	if (dentries.is_full())
+	if (dentries->size() == MAX_DENTRIES)
 		return false;
 
-	dentries.add(dentry);
+	dentries->emplace(std::pair<dentry_cache_key, SharedPointer<Dentry>>({{dentry->name, dentry->parent.get()}, dentry}));
 
 	return true;
 }
 
 void VFS::free_unused_dentry_cache_entries()
 {
-	for (auto& dentry : dentries)
+	for (auto it = dentries->begin(); it != dentries->end();)
 	{
-		while (dentry.use_count() == 1)
-		{
-			dentries.remove(dentry);
-		}
+		if (it->second.use_count() == 1)
+			it = dentries->erase(it);
+		else
+			++it;
 	}
 }
 
@@ -599,14 +598,28 @@ const char* VFS::get_file_name(const char* pathname)
 	return pathname + i + 1;
 }
 
+template <typename Container, typename Key>
+static auto find_expect(const Container& container, const Key& key, const char* format, ...)
+{
+	auto it = container.find(key);
+	if (it == container.end())
+	{
+		va_list list;
+		va_start(list, format);
+		irrecoverable_error_aux(format, list);
+	}
+
+	return it;
+}
+
 SharedPointer<Dentry> VFS::get_root_dentry()
 {
-	return *dentries.find("/").expect("%s: couldn't find root", __func__);
+	return find_expect(*dentries, dentry_cache_key{"/", nullptr}, "%s: couldn't find root", __func__)->second;
 }
 
 SharedPointer<Dentry> VFS::get_mnt_dentry()
 {
-	return *dentries.find("mnt").expect("%s: couldn't find root", __func__);
+	return find_expect(*dentries, dentry_cache_key{"mnt", get_root_dentry().get()}, "%s: couldn't find root", __func__)->second;
 }
 
 bool VFS::mount(FS* fs)
@@ -636,7 +649,7 @@ bool VFS::mount(FS* fs)
 
 bool VFS::mount_rootfs(FS* fs)
 {
-	if (dentries.find("/"))
+	if (dentries->contains( {"/", nullptr}))
 		return false;
 
 	// Compute mount point
