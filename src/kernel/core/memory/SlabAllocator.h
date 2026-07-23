@@ -1,6 +1,9 @@
 #pragma once
 
+#include <limits>
+
 #include "MemoryDefines.h"
+#include "../../utils/std_patch.h"
 
 namespace Memory
 {
@@ -59,6 +62,33 @@ namespace Memory
         static SlabAllocator* get_instance();
         T* alloc();
         void free(T* t);
+    };
+
+    template <typename T>
+    class SlabAllocatorSTL
+    {
+    public:
+        using value_type = T;
+
+        SlabAllocatorSTL() noexcept = default;
+
+        template <typename U>
+        constexpr SlabAllocatorSTL(const SlabAllocatorSTL<U>&) noexcept
+        {
+        }
+
+        T* allocate(std::size_t n)
+        {
+            if (n > std::numeric_limits<std::size_t>::max() / sizeof(T))
+                std::__throw_bad_alloc();
+
+            return SlabAllocator<T>::get_instance()->alloc();
+        }
+
+        void deallocate(T* ptr, std::size_t /*n*/) noexcept
+        {
+            SlabAllocator<T>::get_instance()->free(ptr);
+        }
     };
 }
 
