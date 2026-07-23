@@ -8,7 +8,7 @@
 // configuration (no-rtti and no-excepts)
 
 [[noreturn]]
-extern void irrecoverable_error(const char* format, ...);
+extern int irrecoverable_error(const char* format, ...);
 
 namespace std
 {
