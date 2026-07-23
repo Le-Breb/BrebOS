@@ -72,7 +72,7 @@ public:
         Iterator& operator++()
         {
             do { ++index; }
-            while (index < capacity && elems[index].used);
+            while (index < capacity && !elems[index].used);
             return *this;
         }
         bool operator==(const Iterator& other) const { return other.index == index; }
