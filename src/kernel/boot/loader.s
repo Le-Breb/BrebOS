@@ -151,7 +151,7 @@ done_mapping:
     lea ecx, [rel higher_half]
     jmp ecx
 
-section .higher_half
+section .text
 higher_half:
     ; At this point, paging is fully set up and enabled.
 
