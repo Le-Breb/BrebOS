@@ -80,7 +80,7 @@ void list<E>::add(const E& e)
 template <class E>
 void list<E>::add(E&& e)
 {
-    auto* newNode = new Node(std::forward<E>(e));
+    auto* newNode = new Node(e);
     add(newNode);
 }
 
