@@ -6,13 +6,27 @@
 
 #define MAX_FS 10
 #define MAX_OPEN_FILES 100
-#define MAX_DENTRIES 200
+#define MAX_DENTRIES 256
 #define PATH_CAPACITY 1024
 #define MAX_FD 100
 #define MAX_FD_PER_PROCESS 20
 
 #include "FileInterface.h"
 #include "FS.h"
+#include "../utils/UnorderedSet.h"
+
+template<>
+struct Hash<SharedPointer<Dentry>>
+{
+	uint32_t operator()(const SharedPointer<Dentry>& dentry) const
+	{
+		return fnv_32a_str(dentry->name, FNV1A_32_INIT);
+	}
+	uint32_t operator()(const char* name) const
+	{
+		return fnv_32a_str(name, FNV1A_32_INIT);
+	}
+};
 
 /**
  * Virtual File System. \n
@@ -26,8 +40,12 @@ class VFS
 public:
 	static FileInterface* file_descriptors[MAX_FD];
 private:
-	static uint lowest_free_dentry;
-	static SharedPointer<Dentry>* dentries[MAX_DENTRIES]; // Caches directory entries. [0] = /, [1] = /mnt
+	struct cached_dentry_equality
+	{
+		bool operator()(const SharedPointer<Dentry>& a, const SharedPointer<Dentry>& b) const {return !(strcmp(a->name, b->name));}
+		bool operator()(const SharedPointer<Dentry>& a, const char* b) const {return !(strcmp(a->name, b));}
+	};
+	static UnorderedSet<SharedPointer<Dentry>, MAX_DENTRIES, Hash<SharedPointer<Dentry>>, cached_dentry_equality> dentries;
 	static SharedPointer<Dentry>* path[PATH_CAPACITY];
 	static uint num_path;
 	static int lowest_free_fd;
@@ -57,6 +75,12 @@ private:
 
 	[[nodiscard]]
 	static const char* get_file_name(const char* pathname);
+
+	[[nodiscard]]
+	static SharedPointer<Dentry> get_root_dentry();
+
+	[[nodiscard]]
+	static SharedPointer<Dentry> get_mnt_dentry();
 public:
 	static void init();
 
