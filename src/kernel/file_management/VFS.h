@@ -36,16 +36,27 @@ private:
 	};
 	struct cached_dentry_equality
 	{
-		bool operator()(const dentry_cache_key& a, const dentry_cache_key& b) const {return !strcmp(a.name, b.name) && a.parent == b.parent;}
+		using is_transparent = void;
+
+		bool operator()(const SharedPointer<Dentry>& a, const SharedPointer<Dentry>& b) const {return !strcmp(a->name, b->name) && a->parent.get() == b->parent.get();}
+		bool operator()(const dentry_cache_key& a, const SharedPointer<Dentry>& b)  const {return !strcmp(a.name, b->name) && a.parent == b->parent.get();}
+		bool operator()(const SharedPointer<Dentry>& a, const dentry_cache_key& b)  const {return !strcmp(a->name, b.name) && a->parent.get() == b.parent;}
 	};
 	struct dentry_hash
 	{
+		using is_transparent = void;
+
 		uint32_t operator()(const dentry_cache_key& key) const noexcept
 		{
 			return fnv_32a_buf((void*)&key.parent, sizeof(key.parent), fnv_32a_str(key.name, FNV1A_32_INIT));
 		}
+		uint32_t operator()(const SharedPointer<Dentry>& val) const noexcept
+		{
+			const uintptr_t parent_addr = reinterpret_cast<uintptr_t>(val->parent.get());
+			return fnv_32a_buf(&parent_addr, sizeof(parent_addr), fnv_32a_str(val->name, FNV1A_32_INIT));
+		}
 	};
-	static std::unordered_map<dentry_cache_key, SharedPointer<Dentry>, dentry_hash, cached_dentry_equality>* dentries;
+	static std::unordered_set<SharedPointer<Dentry>, dentry_hash, cached_dentry_equality>* dentries;
 	static SharedPointer<Dentry>* path[PATH_CAPACITY];
 	static uint num_path;
 	static int lowest_free_fd;

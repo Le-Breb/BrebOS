@@ -2,8 +2,8 @@
 
 #include "SlabAllocator.h"
 #include "RawMemory.h"
+#include <new>
 
-extern void* operator new(size_t, void* p); // Idk why this is not found by default...
 __attribute__ ((format (printf, 1, 2))) int printf_warn(const char* format, ...);
 
 namespace Memory
