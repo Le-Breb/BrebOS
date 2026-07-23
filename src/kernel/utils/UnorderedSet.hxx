@@ -97,7 +97,9 @@ void UnorderedSet<T, capacity, hash_func, equal_func>::remove(const T& element)
             (j < home && home <= i))
         {
             std::construct_at(elements[i].ptr(), std::move(elements[j].value()));
-            std::destroy_at(&elements[j].value());
+            elements[i].used = true;
+
+            std::destroy_at(elements[j].ptr());
             elements[j].used = false;
             i = j;
         }
