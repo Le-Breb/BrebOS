@@ -20,12 +20,14 @@ template <typename K>
 requires kdetail::FindCompatible<hash_func, equal_func, T, K>
 size_t UnorderedSet<T, capacity, hash_func, equal_func>::get_index(const K& element) const
 {
+    uint32_t n = 0;
     uint32_t index = bucket(element);
-    while (elements[index].used)
+    while (n < capacity && elements[index].used)
     {
         if (equal(elements[index].value(), element))
             return index;
         advance_index(index);
+        n++;
     }
 
     return capacity;
@@ -112,12 +114,14 @@ template <typename K>
 requires kdetail::FindCompatible<hash_func, equal_func, T, K>
 Optional<const T*> UnorderedSet<T, capacity, hash_func, equal_func>::find(const K& element) const
 {
+    uint32_t n = 0;
     uint32_t index = bucket(element);
-    while (elements[index].used)
+    while (n < capacity && elements[index].used)
     {
         if (equal(elements[index].value(), element))
             return {elements[index].ptr()};
         advance_index(index);
+        n++;
     }
 
     return nullopt;
