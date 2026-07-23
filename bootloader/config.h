@@ -11,5 +11,7 @@ typedef unsigned long size_t;
 #define DRIVE 0
 #define SECTOR_SIZE 512
 #define DS 0x10
-#define MALLOC_BASE 0x4000
+// Temporary heap sbrk base
+// Heap starts after loaded kernel ELF image
+#define MALLOC_BASE (ELF_LOAD_ADDRESS + N_SECTORS * SECTOR_SIZE)
 #endif
