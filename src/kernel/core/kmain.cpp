@@ -29,24 +29,18 @@ extern "C" bool fpu_init_asm_();
 //Todo: unify mlibc and brebos syscalls numbers (via header file)
 // Todo: Some TERM or CORE signals should be catchable by processes. For example, SIGTERM simply asks processes
 // to shut down, and OS terminates them only after a while if the process does not do it by itself
-// Todo: Investigate how vDSO could be implemented (mlibc has code related to that isn't it ?)
-// Todo: Understand where did program loading delay came back from and get rid of it
-// (cf. 18/06/26 screenshots where the last known fast loading project was, where a pull introduced delay back,
-// and reverting the pull didn't remove the delay)
 // Todo: parse memory map from BIOS (to be aware of available regions and RAM size)
-// Todo: make Process::update_pte usage more controlled
 // Todo: fix example.com wget
 // Todo: make signals be able to interrupt sleep
 // Todo: get rid of kernel allocations which are a useless duplicate. This will certainly have impacts on frame_rc...
-// Todo: use a hash map for cached dentries (and see if some lists could benefit from being converted to hash map)
+// Todo: compile libstdc++ non-hosted for kernel usage (also ensure -fno-excepts (and -no-rtti ?))
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {
-    // Get why this fails
-    // _init(); // Execute constructors
-
     Interrupts::disable_asm();
 
     Memory::init((multiboot_info_t*)ebx);
+
+    _init(); // C-runtime initialization
 
     // Initialize framebuffer, so that we can use it and printf calls don't crash, which is preferable :D
     FB::init(FPS);
