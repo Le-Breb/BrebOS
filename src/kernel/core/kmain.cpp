@@ -32,7 +32,6 @@ extern "C" bool fpu_init_asm_();
 // Todo: parse memory map from BIOS (to be aware of available regions and RAM size)
 // Todo: fix example.com wget
 // Todo: make signals be able to interrupt sleep
-// Todo: get rid of kernel allocations which are a useless duplicate. This will certainly have impacts on frame_rc...
 // Todo: compile libstdc++ non-hosted for kernel usage (also ensure -fno-excepts (and -no-rtti ?))
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {

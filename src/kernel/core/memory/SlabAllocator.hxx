@@ -44,7 +44,7 @@ namespace Memory
     SlabAllocator<T>::~SlabAllocator()
     {
         const uintptr_t addr = reinterpret_cast<uintptr_t>(this);
-        free_page(ADDR_PAGE(addr));
+        update_page(ADDR_PAGE(addr), pdt, page_tables, 0, false);
     }
 
     template <typename T>
@@ -109,7 +109,7 @@ namespace Memory
             {
                 struct page_header* to_be_freed = ghdr->empty_pages;
                 ghdr->empty_pages = ghdr->empty_pages->next_page_hdr;
-                free_page(ADDR_PAGE(reinterpret_cast<uintptr_t>(to_be_freed)));
+                update_page(ADDR_PAGE(reinterpret_cast<uintptr_t>(to_be_freed)), pdt, page_tables, 0, false);
             }
         }
     }

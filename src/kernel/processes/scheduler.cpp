@@ -175,7 +175,8 @@ Process* Scheduler::get_process(pid_t pid)
 }
 
 [[noreturn]]
-void Scheduler::resume_user_process(Process* p)
+void Scheduler::
+resume_user_process(Process* p)
 {
     signal_handling(p);
 

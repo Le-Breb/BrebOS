@@ -444,31 +444,7 @@ pid_t Process::fork()
 
 void Process::update_pte(uint pte, uint val, bool update_cache) const
 {
-    // Decrease previously mapped frame reference count if there were one being referenced
-    uint previous_frame = PTE(page_tables, pte) >> 12;
-    if (Memory::frame_rc[previous_frame])
-        Memory::frame_rc[previous_frame]--;
-    else if (PTE(page_tables, pte) & PAGE_PRESENT && !(PTE(page_tables, pte) & PAGE_LAZY_ZERO))
-        irrecoverable_error("huh");
-
-    PTE(page_tables, pte) = val;
-    uint pde = pte >> 10;
-    if (!pdt->entries[pde])
-    {
-        pdt->entries[pde] = PHYS_ADDR(Memory::page_tables, (uint) &page_tables[pde]) | PAGE_USER | PAGE_WRITE |
-            PAGE_PRESENT;
-        if (update_cache)
-            Memory::reload_cr3_asm();
-    }
-    else if (update_cache)
-        INVALIDATE_PAGE(pde, pte);
-
-    // Increase frame reference count if we are actually mapping a frame
-    if (val & PAGE_PRESENT && !(val & PAGE_LAZY_ZERO))
-    {
-        uint frame_id = val >> 12;
-        Memory::frame_rc[frame_id]++;
-    }
+    Memory::update_page(pte, pdt, page_tables, val, update_cache);
 }
 
 void Process::execve_transfer(Process* proc)

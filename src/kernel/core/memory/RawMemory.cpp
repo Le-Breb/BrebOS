@@ -49,18 +49,37 @@ namespace Memory
         return *lowest_free_pe;
     }
 
-    void free_page(uint page_id)
+    void update_page(uint page_id, pdt_t* pdt, page_table_t* pt, uint val, bool update_cache)
     {
-        const uint frame_id = PHYS_ADDR(page_tables, PAGE_ADDR(page_id)) >> 12;
-        // Write PTE in kernel global memory mapping
-        auto pte_ptr = &PTE(page_tables, page_id);
-        bool lazy = *pte_ptr & PAGE_LAZY_ZERO;
-        if (!lazy && frame_id == 0)
-            irrecoverable_error("wut");
-        *pte_ptr = 0;
+        // Decrease previously mapped frame reference count if there were one being referenced
+        uint previous_frame = PTE(pt, page_id) >> 12;
+        if (frame_rc[previous_frame])
+        {
+            frame_rc[previous_frame]--;
+            if (previous_frame && !frame_rc[previous_frame])
+                MARK_FRAME_FREE(previous_frame); // Internal deallocation registration
+        }
+        else if (PTE(pt, page_id) & PAGE_PRESENT && !(PTE(pt, page_id) & PAGE_LAZY_ZERO))
+            irrecoverable_error("huh");
 
-        if (!lazy)
-            MARK_FRAME_FREE(frame_id); // Internal deallocation registration
+        PTE(pt, page_id) = val;
+        uint pde = page_id >> 10;
+        if (!pdt->entries[pde])
+        {
+            pdt->entries[pde] = PHYS_ADDR(Memory::page_tables, (uint) &pt[pde]) | PAGE_USER | PAGE_WRITE |
+                PAGE_PRESENT;
+            if (update_cache)
+                reload_cr3_asm();
+        }
+        else if (update_cache)
+            INVALIDATE_PAGE(pde, page_id);
+
+        // Increase frame reference count if we are actually mapping a frame
+        if (val & PAGE_PRESENT && !(val & PAGE_LAZY_ZERO))
+        {
+            uint frame_id = val >> 12;
+            frame_rc[frame_id]++;
+        }
     }
 
     void allocate_page(uint frame_id, uint page_id, int policy)
@@ -70,7 +89,7 @@ namespace Memory
         __asm__ volatile("invlpg (%0)" : : "r" (frame_id << 12));
 
         if (policy & PAGE_PRESENT)
-            MARK_FRAME_USED(frame_id, page_id);
+            MARK_FRAME_USED(frame_id);
     }
 
     void allocate_page(uint page_id, int policy)

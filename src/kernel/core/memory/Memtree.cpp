@@ -140,7 +140,7 @@ namespace Memory
                 insert({aligned_end, node_cpy.data.end, node_cpy.data.page_info, node_cpy.data.used});
 
             for (uint i = 0; i < num_pages; i++)
-                free_page(PAGE_ADDR(aligned_start_page + i), process);
+                process->update_pte(aligned_start_page + i, 0, false);
         }
     }
 
@@ -417,7 +417,7 @@ namespace Memory
             const uint num_pages = region_size / PAGE_SIZE;
             const uint region_start_page = ADDR_PAGE(region_start);
             for (uint i = 0; i < num_pages; i++)
-                free_page(PAGE_ADDR(region_start_page + i), process);
+                process->update_pte(region_start_page + i, 0, false);
         }
         busy = false;
     }

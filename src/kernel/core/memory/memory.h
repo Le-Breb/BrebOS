@@ -20,9 +20,6 @@ namespace Memory
 
 	static inline constexpr uint FB_MODE_INFO_ADDR_WHEN_CUSTOM_BOOTLOADER_USED = 0x700;
 
-	/** Reload cr3 which will acknowledge every pte change and invalidate TLB */
-	extern "C" void reload_cr3_asm();
-
 	/** Initialize memory, by referencing free pages, allocating pages to store 1024 pages tables
 	 *
 	 * @param minfo Multiboot info structure
@@ -58,14 +55,6 @@ namespace Memory
 	 */
 	void freea(void* ptr);
 
-	/**
-	 * Free a page
-	 * @param address address to free
-	 * @param process process to get the relevant address space from to correctly interpret the address, nullptr
-	 * if kernel
-	 */
-	void free_page(uint address, const Process* process);
-
 	/** Get index of lowest free page entry id in lower half and update lowest_free_pe_user to next free page id */
 	uint get_free_pe_user();
 
@@ -86,7 +75,7 @@ namespace Memory
 	 * @param write_access whether the fault was caused by a write access
 	 * @return whether the fault has been handled or is an error
 	 */
-	bool page_fault_handler(Process* current_process, uint fault_address, bool write_access);
+	bool page_fault_handler(const Process* current_process, uint fault_address, bool write_access);
 
 	/**
 	 * Attempts to map some memory that has been written somewhere by some entity (BIOS, GRUB...) with a known physical
@@ -102,7 +91,7 @@ namespace Memory
 	 * @param phys_addr physical address to translate
 	 * @return the corresponding virtual address if the provided physical address is mapped, (uint)-1 otherwise
 	 */
-	uint phys_to_virt_addr(uint phys_addr);
+	Optional<uint> phys_to_virt_addr(uint phys_addr);
 
 	int mprotect(void* addr, size_t len, int prot, const Process* process);
 

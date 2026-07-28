@@ -33,13 +33,12 @@
 #define PTE_PHYS_ADDR(i) (FRAME_ID_ADDR((PDT_ENTRIES + (i))))
 #define PTE_USED(page_tables, i) (PTE(page_tables, i) & (PAGE_PRESENT | PAGE_LAZY_ZERO))
 #define PTE(page_tables, i) (page_tables[(i) >> 10].entries[(i) & 0x3FF])
-#define FRAME_USED(i) (Memory::frame_to_page[i] != (uint)-1)
+#define FRAME_USED(i) (Memory::frame_rc[i])
 #define FRAME_FREE(i) !(FRAME_USED(i))
-#define MARK_FRAME_USED(frame_id, page_id) {\
+#define MARK_FRAME_USED(frame_id) {\
 	if (Memory::frame_rc[(frame_id)]) { irrecoverable_error("%s: %d Trying to allocate frame which is already allocated", __FILE__, __LINE__); } \
-	Memory::frame_to_page[(frame_id)] = (page_id);\
 	Memory::frame_rc[(frame_id)]++;}
-#define MARK_FRAME_FREE(i) {Memory::frame_to_page[(i)] = (uint)-1; if (Memory::frame_rc[(i)] > 1){irrecoverable_error \
+#define MARK_FRAME_FREE(i) {if (Memory::frame_rc[(i)] > 1){irrecoverable_error \
 	("Kernel is trying to free a frame which is referenced by a process");} \
 else \
 {\

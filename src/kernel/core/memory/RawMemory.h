@@ -33,11 +33,14 @@ namespace Memory
 
 	extern "C" void boot_page_table1();
 
+	/** Reload cr3 which will acknowledge every pte change and invalidate TLB */
+	extern "C" void reload_cr3_asm();
+
 	extern pdt_t* pdt;
 	extern page_table_t* asm_pt1;
 	extern page_table_t* page_tables;
 	extern GRUB_module* grub_modules;
-	extern uint* frame_to_page;
+	extern uint* frame_to_page; // Maps frame id to page id. Filled only by register_physical_memory
 	extern uint* frame_rc;
 	extern uint lowest_free_pe_user;
 	extern uint lowest_free_frame;
@@ -86,7 +89,7 @@ namespace Memory
 	/** Get index of lowest free page entry id in higher half and update lowest_free_pe to next free page id */
 	uint get_free_pe();
 
-	void free_page(uint page_id);
+	void update_page(uint page_id, pdt_t* pdt, page_table_t* pt, uint val, bool update_cache);
 
 	uint get_contiguous_pages(uint n, const hint_info& hint_info, const page_table_t* pt, uint lowest_free_page_entry);
 }

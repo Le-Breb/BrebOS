@@ -1,6 +1,7 @@
 #include "memory.h"
 
 #include "../../processes/ELFTools.h"
+#include "../../utils/optional.h"
 using namespace Memory;
 
 #include "../fb.h"
@@ -85,11 +86,10 @@ namespace Memory
     /** Handles a lazy zero page fault that occurred in the kernel address space
      *
      * @param current_process process that was running when the page fault occurred
-     * @param higher_half whether the page fault occurred in the higher half of the kernel address space
      * @param page_id page id that caused the fault
      * @param pt page table to use for the fault handling
      */
-    void handle_lazy_zero_page_fault(Process* current_process, bool higher_half, uint page_id, page_table_t* pt);
+    void handle_lazy_zero_page_fault(const Process* current_process, uint page_id, page_table_t* pt);
 
     uint get_free_pe_user()
     {
@@ -288,8 +288,7 @@ namespace Memory
         Multiboot::init(register_multiboot_info(multiboot_info));
         if (multiboot_info == nullptr)
         {
-            uint fb_info_addr = phys_to_virt_addr(FB_MODE_INFO_ADDR_WHEN_CUSTOM_BOOTLOADER_USED);
-            if (fb_info_addr == (uint)-1)
+            if (!phys_to_virt_addr(FB_MODE_INFO_ADDR_WHEN_CUSTOM_BOOTLOADER_USED))
                 register_physical_data(FB_MODE_INFO_ADDR_WHEN_CUSTOM_BOOTLOADER_USED, sizeof(FB::vbe_mode_info_structure));
         }
     }
@@ -303,8 +302,7 @@ namespace Memory
         uint base = uaddr >> 12;
         uint page_id = get_free_pe();
 
-        uint curr = frame_to_page[base];
-        if (curr != (uint)-1)
+        if (FRAME_USED(base))
             irrecoverable_error("Cannot map multiboot info");
 
         // ...
@@ -317,7 +315,7 @@ namespace Memory
         uint tmp_v_addr = page_addr + ADDR_PAGE_OFF(uaddr);
         auto total_size= ((multiboot_info_t*)tmp_v_addr)->total_size; // Get size
         // Deallocate first page
-        free_page(page_addr, kernel_process);
+        kernel_process->update_pte(page_id, 0, false);
 
         // Map the whole structure.
         multiboot_info_t* v_minfo;
@@ -332,11 +330,11 @@ namespace Memory
         return get_contiguous_pages(n, hint_info, process->page_tables, process->lowest_free_pe);
     }
 
-    uint phys_to_virt_addr(uint phys_addr)
+    Optional<uint> phys_to_virt_addr(uint phys_addr)
     {
         uint frame_id = phys_addr >> 12;
         if (frame_to_page[frame_id] == (uint)-1)
-            return (uint)-1;
+            return nullopt;
 
         return (PAGE_ADDR(frame_to_page[frame_id])) + ADDR_PAGE_OFF(phys_addr);
     }
@@ -416,12 +414,10 @@ namespace Memory
         {
             if (!(page_info.policy & PAGE_LAZY_ZERO))
             {
-                // Allocate both in process and kernel page tables
                 for (uint i = b; i < e; ++i)
                 {
-                    const uint sys_pe = get_free_pe();
-                    allocate_page(sys_pe, page_info.policy);
-                    process->update_pte(i, PTE(page_tables, sys_pe), true);
+                    const uint pte = get_free_frame() << 12 | page_info.policy;
+                    process->update_pte(i, pte, true);
                 }
             }
             else // Lazy allocation, do not allocate in kernel page tables
@@ -434,49 +430,6 @@ namespace Memory
 
         // Allocated memory block virtually starts at page b. Return it.
         return (void*)PAGE_ADDR(b);
-    }
-
-    void free_page(uint address, const Process* process)
-    {
-        // Cache is not updated, since this is not necessary on free. Pages may appear allocated (from the CPU's
-        // perspective) even though they are not, but this is not an issue, as long as cache is updated upon allocation
-
-        uint pde = ADDR_PDE(address);
-        uint pte = ADDR_PTE(address);
-        uint sys_page_id, frame_id;
-        if (process->pdt != pdt)
-        {
-            uint page_id = address >> 12;
-
-            const auto entry = process->page_tables[pde].entries[pte];
-            if (entry & PAGE_LAZY_ZERO)
-            {
-                // We are freeing a page which has been lazily allocated and never accessed, thus there
-                // is no frame to free and no associated kernel page table entry.
-                // We can simply zero out the entry and exit.
-                process->update_pte(page_id, 0, false);
-                return;
-            }
-
-            // Compute sys_page_id using physical address and frame_to_page
-            auto physical_address = PHYS_ADDR(process->page_tables, address);
-            frame_id = physical_address >> 12;
-            sys_page_id = frame_to_page[frame_id];
-            process->update_pte(page_id, 0, false); // Update process pte
-        }
-        else
-        {
-            // Current process is kernel process, so index computation is straightforward
-            sys_page_id = pde * PT_ENTRIES + pte;
-            frame_id = PHYS_ADDR(page_tables, address) >> 12;
-            frame_rc[frame_id]--; // Decrement rc. For user processes this is done in udpate_pte
-        }
-
-        uint rc = frame_rc[frame_id];
-        if (rc >= 1) // Frame is still used, do not free it
-            return;
-
-        free_page(sys_page_id);
     }
 
     void* malloca(uint size)
@@ -633,12 +586,10 @@ namespace Memory
         if (higher_half)
             irrecoverable_error("COW on higher half");
 
-        uint sys_pe = get_free_pe_user(); // Get sys PTE id
-        uint frame = get_free_frame(); // Get frame id
+        const uint frame = get_free_frame(); // Get frame id
         const uint current_policy = PTE(pt, page_id) & 0x7FF;
         const uint new_policy = (current_policy & ~PAGE_COW) | PAGE_WRITE;
-        allocate_page(frame, sys_pe, new_policy); // Allocate page in kernel address space
-        uint mapping_pe = get_contiguous_pages(1, DEFAULT_HINT_INFO, current_process); // Get a free pe
+        const uint mapping_pe = get_contiguous_pages(1, DEFAULT_HINT_INFO, current_process); // Get a free pe
 
         // Move old page to mapping page
         current_process->update_pte(mapping_pe, PTE(pt, page_id), true);
@@ -650,45 +601,19 @@ namespace Memory
 
         // Unmap old page which is now at mapping_pe
         current_process->update_pte(mapping_pe, 0, true);
-
-        // If the frame of the original page is not used anymore, free it
-        if (frame_rc[frame] == 0)
-            MARK_FRAME_FREE(frame);
     }
 
-    void handle_lazy_zero_page_fault(Process* current_process, bool higher_half, uint page_id, page_table_t* pt)
+    void handle_lazy_zero_page_fault(const Process* current_process, uint page_id, page_table_t* pt)
     {
         // Allocate frame and update memory mapping
-        auto pte_ptr = &PTE(pt, page_id); // Get pointer to pte
-        bool page_user = *pte_ptr & PAGE_USER; // Should page be user accessible ?
-        uint frame_id = get_free_frame(); // Get frame
-        *pte_ptr = FRAME_ID_ADDR(frame_id) | (page_user ? PAGE_USER : 0) | PAGE_WRITE | PAGE_PRESENT; // Update pte
-        INVALIDATE_PAGE(page_id >> 10, page_id & 0x3FF); // Invalidate cache
+        const bool page_user = PTE(pt, page_id) & PAGE_USER; // Should page be user accessible ?
+        const uint frame_id = get_free_frame(); // Get frame
+        const uint new_val = FRAME_ID_ADDR(frame_id) | (page_user ? PAGE_USER : 0) | PAGE_WRITE | PAGE_PRESENT; // Update pte
+        current_process->update_pte(page_id, new_val, true);
         memset((void*)PAGE_ADDR(page_id), 0, PAGE_SIZE); // Zero out page
-
-        // If process is kernel process or address is in higher half, kernel global page tables have already
-        // been updated, we just need to register the allocated frame
-        if (current_process->pdt == pdt || higher_half)
-        {
-            MARK_FRAME_USED(frame_id, page_id);
-        }
-        else
-        {
-            // Register allocation of the frame in kernel global page tables
-            uint sys_page_id = get_free_pe();
-            PTE(page_tables, sys_page_id) = *pte_ptr;
-            MARK_FRAME_USED(frame_id, sys_page_id);
-        }
-        // If the process is not the kernel, then the page is referenced by the kernel AND the process, thus we need
-        // to increment the frame reference count by one
-        // Normally this is done in Process::update_pte, but here we are not using it, this could be changed. Mind
-        // that this would then trigger an error in MARK_FRAME_USED since we would be trying to allocate a frame
-        // which has a non-null ref count.
-        if (current_process->pdt != pdt)
-            frame_rc[frame_id]++;
     }
 
-    bool page_fault_handler(Process* current_process, uint fault_address, bool write_access)
+    bool page_fault_handler(const Process* current_process, uint fault_address, bool write_access)
     {
         // Gather information
         const uint page_id = ADDR_PAGE(fault_address);
@@ -711,7 +636,7 @@ namespace Memory
         if (!(pte && pte & PAGE_LAZY_ZERO))
             return handled;
 
-        handle_lazy_zero_page_fault(current_process, higher_half, page_id, pt);
+        handle_lazy_zero_page_fault(current_process, page_id, pt);
 
         return true;
     }
@@ -726,6 +651,8 @@ namespace Memory
         for (uint i = 0; i < n_pages; i++)
         {
             bool used = FRAME_USED(frame_base + i);
+            if (used && frame_to_page[frame_base + i] == -1U)
+                return nullptr; // Frame is used but frame_to_page info available, mapping probably does not originate from phys data registration
             all_frame_used &= used;
             no_frame_used &= !used;
         }
@@ -761,7 +688,10 @@ namespace Memory
             }
 
             for (uint i = 0; i < n_pages; i++)
+            {
                 allocate_page(frame_base + i, b + i, DEFAULT_K_POLICY);
+                frame_to_page[frame_base + i] = b + i; // Todo: add a way to deregister physical data
+            }
 
             return (void*)(PAGE_ADDR(b) + (ADDR_PAGE_OFF(physical_address)));
         }

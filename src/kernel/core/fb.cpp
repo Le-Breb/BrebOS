@@ -458,7 +458,7 @@ void FB::init(uint fps)
 	}
 	else
 	{
-		uint fb_mode_info_buffer_addr = Memory::phys_to_virt_addr(Memory::FB_MODE_INFO_ADDR_WHEN_CUSTOM_BOOTLOADER_USED);
+		uint fb_mode_info_buffer_addr = Memory::phys_to_virt_addr(Memory::FB_MODE_INFO_ADDR_WHEN_CUSTOM_BOOTLOADER_USED).expect("%s: phys_to_virt_addr failed", __PRETTY_FUNCTION__);
 		auto mode_info = (vbe_mode_info_structure*)fb_mode_info_buffer_addr;
 		fb_width = mode_info->width;
 		fb_height = mode_info->height;
