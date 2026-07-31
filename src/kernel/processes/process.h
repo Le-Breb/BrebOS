@@ -334,6 +334,8 @@ public:
 	int sigaction(int signum, const struct sigaction* act, struct sigaction* old_act);
 
 	int sigprogmask(int how, const sigset_t* set, sigset_t* oldset);
+
+	int getdents(int fd, void* buffer, size_t max_size, size_t* bytes_read) const;
 };
 
 #endif //INCLUDE_PROCESS_H

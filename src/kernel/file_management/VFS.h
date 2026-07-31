@@ -220,6 +220,8 @@ public:
 	 * @return 0 if fd is a TTY, -errno otherwise
 	 */
 	static int isatty(int fd);
+
+	static int getdents(int fd, void *buffer, size_t max_size, size_t *bytes_read);
 };
 
 

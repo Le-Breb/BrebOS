@@ -65,8 +65,8 @@ def get_txt_ba(elf_path):
 
     return off
 
-def load_program(elf_name):
-    elf_path = f"./src/programs/build/{elf_name}"
+def load_program(elf_name, comes_from_busybox):
+    elf_path = f"./busybox/0_lib/{elf_name}" if comes_from_busybox else f"./src/programs/build/{elf_name}"
     elf_base = get_txt_ba(elf_path)
     print(f"loading {elf_path} at 0x{elf_base}")
     gdb.execute(
@@ -78,7 +78,11 @@ gdb.execute(
     f"add-symbol-file ./bootloader/build/bootloader2.elf 0x1000",
     to_string=True
 )
-load_program("seq")
+
+# libbusybox_path = "./busybox/0_lib/libbusybox.so.1.36.1_unstripped"
+# lib_base = get_txt_ba(# libbusybox_path) + 0x41000000
+# print(f"loading {# libbusybox_path} at 0x{lib_base:x}")
+# gdb.execute(f"add-symbol-file {# libbusybox_path} {hex(lib_base)}", to_string=True)
 
 # ldso_path = "./sysroot/usr/lib/ld.so"
 # ldso_base = get_txt_ba(ldso_path) + 0x1e000

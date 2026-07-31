@@ -88,7 +88,7 @@ GRUB_TIMEOUT=0
 FONT_FILE=Lat15-VGA16.psf
 FONT_OBJ= $(BUILD_DIR)/$(FONT_FILE:%.psf=%.o)
 
-.PHONY: libc libk programs bootloader
+.PHONY: libc libk programs bootloader busybox
 
 all: init $(OS_ISO) compilation_ended
 
@@ -137,7 +137,7 @@ $(FONT_OBJ): $(FONT_FILE)
 $(BUILD_DIR)/kernel.elf: $(BUILD_DIR)/.dir_timestamp $(FONT_OBJ) $(INTERNAL_OBJS) $(libc) $(gcc)
 	i686-brebos-ld $(LDFLAGS) $(OBJ_LIST) $(libc) $(FONT_OBJ) -o $(BUILD_DIR)/kernel.elf $(libstdcpp) $(libgcc)
 
-$(OS_ISO): $(BUILD_DIR)/kernel.elf $(programs) bootloader
+$(OS_ISO): $(BUILD_DIR)/kernel.elf $(programs) bootloader busybox
 	@#Create directories
 	@mkdir -p isodir
 	@mkdir -p isodir/boot
@@ -169,6 +169,15 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(programs) bootloader
 	@for prog in $(shell find $(SRC_DIR)/programs/build -type f ! -name "*.*"); do \
     		mcopy -i disk_image.img $$prog ::/bin; \
 	done
+	mcopy -i disk_image.img ./busybox/0_lib/cat ::/bin
+	mcopy -i disk_image.img ./busybox/0_lib/ls ::/bin
+	mcopy -i disk_image.img ./busybox/0_lib/printf ::/bin
+	mcopy -i disk_image.img ./busybox/0_lib/dirname ::/bin
+	mcopy -i disk_image.img ./busybox/0_lib/cut ::/bin
+	mcopy -i disk_image.img ./busybox/0_lib/factor ::/bin
+	mcopy -i disk_image.img ./busybox/0_lib/wc ::/bin
+	mcopy -i disk_image.img ./busybox/0_lib/yes ::/bin
+	mcopy -i disk_image.img ./busybox/0_lib/libbusybox.so.1.36.1 ::/usr/lib
 
 	@echo "set timeout=$(GRUB_TIMEOUT)" > grub.cfg
 	@echo "set default=0" >> grub.cfg
@@ -198,6 +207,9 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(programs) bootloader
 
 bootloader:
 	+$(MAKE) -C bootloader
+
+busybox:
+	+$(MAKE) -C busybox ARCH=i386 CROSS_COMPILE=i686-brebos- CC=i686-brebos-gcc
 
 run: $(OS_ISO)
 	@#	bochs -f bochsrc.txt -q

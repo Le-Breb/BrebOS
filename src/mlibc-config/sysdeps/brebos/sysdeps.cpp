@@ -5,6 +5,9 @@
 #include <mlibc/sysdeps.hpp>
 #include <stdio.h>
 #include <sys/statvfs.h>
+#if __MLIBC_LINUX_OPTION
+#include <abi-bits/statx.h>
+#endif // __MLIBC_LINUX_OPTION
 
 #define STUB()                                                         \
     ({                                                                 \
@@ -266,14 +269,42 @@ int SysdepImpl<Sigprocmask>::operator()(int how,
 	return 0;
 }
 
-int SysdepImpl<Stat>::operator()(mlibc::fsfd_target fsfdt,
-        int fd, const char *path, int flags, struct stat *statbuf) {
-    (void)fsfdt;
-    (void)fd;
-    (void)path;
-    (void)flags;
-    (void)statbuf;
-    STUB();
+int SysdepImpl<Stat>::operator()(mlibc::fsfd_target fsfdt, int fd,
+                                 const char *path, [[maybe_unused]] int flags,
+                                 struct stat *statbuf) {
+  switch (fsfdt) {
+	  case fsfd_target::none: {
+	  	mlibc::infoLogger() << __PRETTY_FUNCTION__
+							  << " called with fsdt 'none'. Returning ENOMEM"
+							  << frg::endlog;
+	  	return -ENOMEM; // Error case
+	  }
+  	case fsfd_target::path: {
+  		const auto ret = do_syscall(16, path, statbuf);
+  		if (const int e = sc_error(ret); e)
+  			return e;
+  		return 0;
+  	}
+  	case fsfd_target::fd: {
+  		const auto ret = do_syscall(34, fd, statbuf);
+  		if (const int e = sc_error(ret); e)
+  			return e;
+  		return 0;
+  	}
+  	case fsfd_target::fd_path: {
+  		mlibc::infoLogger()
+			 << __PRETTY_FUNCTION__
+			 << " called with fsdt 'fd_path', not handled yet. Returning ENOMEM"
+			 << frg::endlog;
+  		return -ENOMEM;
+  	}
+  	default: {
+  		mlibc::infoLogger() << __PRETTY_FUNCTION__
+						  << " called with unknown fsdt. Returning ENOMEM"
+						  << frg::endlog;
+  		return -ENOMEM; // Error case
+  	}
+  }
 }
 
 void SysdepImpl<ThreadExit>::operator()() {
@@ -952,9 +983,15 @@ int SysdepImpl<Munlock>::operator()(void const*, unsigned long)
     STUB();
 }
 
-int SysdepImpl<OpenDir>::operator()(char const*, int*)
+int SysdepImpl<OpenDir>::operator()(char const* path, int* handle)
 {
-    STUB();
+    const auto ret = do_syscall(27, path);
+
+	if (const int e = sc_error(ret); e)
+		return e;
+
+	*handle = sc_int_result<int>(ret);
+	return 0;
 }
 
 int SysdepImpl<Peername>::operator()(int, sockaddr*, unsigned int, unsigned int*)
@@ -987,9 +1024,14 @@ int SysdepImpl<Ptsname>::operator()(int, char*, unsigned long)
     STUB();
 }
 
-int SysdepImpl<ReadEntries>::operator()(int, void*, unsigned long, unsigned long*)
+int SysdepImpl<ReadEntries>::operator()(int handle, void *buffer, size_t max_size, size_t *bytes_read)
 {
-    STUB();
+	const auto ret = do_syscall(51, handle, buffer, max_size, bytes_read);
+
+	if (const int e = sc_error(ret); e)
+		return e;
+
+	return 0;
 }
 
 int SysdepImpl<Readv>::operator()(int, iovec const*, int, int*)
@@ -1169,6 +1211,287 @@ int SysdepImpl<Writev>::operator()(int, iovec const*, int, int*)
 
 void SysdepImpl<Yield>::operator()()
 {
+    STUB();
+}
+
+int SysdepImpl<Brk>::operator()(void **out_addr) {
+    (void)out_addr;
+    STUB();
+}
+int SysdepImpl<Capget>::operator()(__user_cap_header_struct *hdrp, __user_cap_data_struct *datap) {
+    (void)hdrp; (void)datap;
+    STUB();
+}
+int SysdepImpl<Capset>::operator()(__user_cap_header_struct *hdrp, __user_cap_data_struct *datap) {
+    (void)hdrp; (void)datap;
+    STUB();
+}
+int SysdepImpl<CopyFileRange>::operator()(int fd_in, long long *off_in, int fd_out, long long *off_out, unsigned long len, unsigned int flags, int *out) {
+    (void)fd_in; (void)off_in; (void)fd_out; (void)off_out; (void)len; (void)flags; (void)out;
+    STUB();
+}
+int SysdepImpl<DeleteModule>::operator()(const char *name, unsigned int flags) {
+    (void)name; (void)flags;
+    STUB();
+}
+int SysdepImpl<EpollCreate>::operator()(int flags, int *fd) {
+    (void)flags; (void)fd;
+    STUB();
+}
+int SysdepImpl<EpollCtl>::operator()(int epfd, int op, int fd, epoll_event *event) {
+    (void)epfd; (void)op; (void)fd; (void)event;
+    STUB();
+}
+int SysdepImpl<EpollPwait>::operator()(int epfd, epoll_event *events, int maxevents, int timeout, const sigset_t *sigmask, int *out) {
+    (void)epfd; (void)events; (void)maxevents; (void)timeout; (void)sigmask; (void)out;
+    STUB();
+}
+int SysdepImpl<EventfdCreate>::operator()(unsigned int initval, int flags, int *fd) {
+    (void)initval; (void)flags; (void)fd;
+    STUB();
+}
+int SysdepImpl<Fgetxattr>::operator()(int fd, const char *name, void *value, unsigned long size, int *out) {
+    (void)fd; (void)name; (void)value; (void)size; (void)out;
+    STUB();
+}
+int SysdepImpl<Flistxattr>::operator()(int fd, char *list, unsigned long size, int *out) {
+    (void)fd; (void)list; (void)size; (void)out;
+    STUB();
+}
+int SysdepImpl<Fremovexattr>::operator()(int fd, const char *name) {
+    (void)fd; (void)name;
+    STUB();
+}
+int SysdepImpl<Fsconfig>::operator()(int fd, unsigned int cmd, const char *key, const void *value, int aux) {
+    (void)fd; (void)cmd; (void)key; (void)value; (void)aux;
+    STUB();
+}
+int SysdepImpl<Fsetxattr>::operator()(int fd, const char *name, const void *value, unsigned long size, int flags) {
+    (void)fd; (void)name; (void)value; (void)size; (void)flags;
+    STUB();
+}
+int SysdepImpl<Fsmount>::operator()(int fd, unsigned int flags, unsigned int attr_flags, int *out) {
+    (void)fd; (void)flags; (void)attr_flags; (void)out;
+    STUB();
+}
+int SysdepImpl<Fsopen>::operator()(const char *fsname, unsigned int flags, int *out) {
+    (void)fsname; (void)flags; (void)out;
+    STUB();
+}
+int SysdepImpl<Fstatfs>::operator()(int fd, struct statfs *buf) {
+    (void)fd; (void)buf;
+    STUB();
+}
+int SysdepImpl<GetAffinity>::operator()(int pid, unsigned long cpusetsize, cpu_set_t *mask) {
+    (void)pid; (void)cpusetsize; (void)mask;
+    STUB();
+}
+int SysdepImpl<Getcpu>::operator()(int *cpu) {
+    (void)cpu;
+    STUB();
+}
+int SysdepImpl<Getifaddrs>::operator()(ifaddrs **out) {
+    (void)out;
+    STUB();
+}
+int SysdepImpl<GetLoadavg>::operator()(double *out) {
+    (void)out;
+    STUB();
+}
+int SysdepImpl<GetThreadaffinity>::operator()(int pid, unsigned long cpusetsize, cpu_set_t *mask) {
+    (void)pid; (void)cpusetsize; (void)mask;
+    STUB();
+}
+int SysdepImpl<Getxattr>::operator()(const char *path, const char *name, void *value, unsigned long size, int *out) {
+    (void)path; (void)name; (void)value; (void)size; (void)out;
+    STUB();
+}
+int SysdepImpl<InitModule>::operator()(void *module_image, unsigned long len, const char *param_values) {
+    (void)module_image; (void)len; (void)param_values;
+    STUB();
+}
+int SysdepImpl<InotifyAddWatch>::operator()(int fd, const char *pathname, unsigned int mask, int *out) {
+    (void)fd; (void)pathname; (void)mask; (void)out;
+    STUB();
+}
+int SysdepImpl<InotifyCreate>::operator()(int flags, int *fd) {
+    (void)flags; (void)fd;
+    STUB();
+}
+int SysdepImpl<InotifyRmWatch>::operator()(int fd, int wd) {
+    (void)fd; (void)wd;
+    STUB();
+}
+int SysdepImpl<Ioperm>::operator()(unsigned long from, unsigned long num, int turn_on) {
+    (void)from; (void)num; (void)turn_on;
+    STUB();
+}
+int SysdepImpl<Iopl>::operator()(int level) {
+    (void)level;
+    STUB();
+}
+int SysdepImpl<Klogctl>::operator()(int type, char *bufp, int len, int *out) {
+    (void)type; (void)bufp; (void)len; (void)out;
+    STUB();
+}
+int SysdepImpl<Lgetxattr>::operator()(const char *path, const char *name, void *value, unsigned long size, int *out) {
+    (void)path; (void)name; (void)value; (void)size; (void)out;
+    STUB();
+}
+int SysdepImpl<Listxattr>::operator()(const char *path, char *list, unsigned long size, int *out) {
+    (void)path; (void)list; (void)size; (void)out;
+    STUB();
+}
+int SysdepImpl<Llistxattr>::operator()(const char *path, char *list, unsigned long size, int *out) {
+    (void)path; (void)list; (void)size; (void)out;
+    STUB();
+}
+int SysdepImpl<Lremovexattr>::operator()(const char *path, const char *name) {
+    (void)path; (void)name;
+    STUB();
+}
+int SysdepImpl<Lsetxattr>::operator()(const char *path, const char *name, const void *value, unsigned long size, int flags) {
+    (void)path; (void)name; (void)value; (void)size; (void)flags;
+    STUB();
+}
+int SysdepImpl<Madvise>::operator()(void *addr, unsigned long length, int advice) {
+    (void)addr; (void)length; (void)advice;
+    STUB();
+}
+int SysdepImpl<MemfdCreate>::operator()(const char *name, int flags, int *fd) {
+    (void)name; (void)flags; (void)fd;
+    STUB();
+}
+int SysdepImpl<Mincore>::operator()(void *addr, unsigned long length, unsigned char *vec) {
+    (void)addr; (void)length; (void)vec;
+    STUB();
+}
+int SysdepImpl<Mount>::operator()(const char *source, const char *target, const char *fstype, unsigned long flags, const void *data) {
+    (void)source; (void)target; (void)fstype; (void)flags; (void)data;
+    STUB();
+}
+int SysdepImpl<MoveMount>::operator()(int from_dfd, const char *from_path, int to_dfd, const char *to_path, unsigned int flags) {
+    (void)from_dfd; (void)from_path; (void)to_dfd; (void)to_path; (void)flags;
+    STUB();
+}
+int SysdepImpl<NameToHandleAt>::operator()(int dfd, const char *path, file_handle *handle, int *mnt_id, int flags) {
+    (void)dfd; (void)path; (void)handle; (void)mnt_id; (void)flags;
+    STUB();
+}
+int SysdepImpl<OpenTree>::operator()(int dfd, const char *path, unsigned int flags, int *out) {
+    (void)dfd; (void)path; (void)flags; (void)out;
+    STUB();
+}
+int SysdepImpl<Personality>::operator()(unsigned long persona, int *out) {
+    (void)persona; (void)out;
+    STUB();
+}
+int SysdepImpl<PidfdGetpid>::operator()(int pidfd, int *out) {
+    (void)pidfd; (void)out;
+    STUB();
+}
+int SysdepImpl<PidfdOpen>::operator()(int pid, unsigned int flags, int *out) {
+    (void)pid; (void)flags; (void)out;
+    STUB();
+}
+int SysdepImpl<PidfdSendSignal>::operator()(int pidfd, int sig, siginfo_t *info, unsigned int flags) {
+    (void)pidfd; (void)sig; (void)info; (void)flags;
+    STUB();
+}
+int SysdepImpl<Prctl>::operator()(int option, char *arg2, int *out) {
+    (void)option; (void)arg2; (void)out;
+    STUB();
+}
+int SysdepImpl<ProcessVmReadv>::operator()(int pid, const iovec *local_iov, unsigned long liovcnt, const iovec *remote_iov, unsigned long riovcnt, unsigned long flags, int *out) {
+    (void)pid; (void)local_iov; (void)liovcnt; (void)remote_iov; (void)riovcnt; (void)flags; (void)out;
+    STUB();
+}
+int SysdepImpl<ProcessVmWritev>::operator()(int pid, const iovec *local_iov, unsigned long liovcnt, const iovec *remote_iov, unsigned long riovcnt, unsigned long flags, int *out) {
+    (void)pid; (void)local_iov; (void)liovcnt; (void)remote_iov; (void)riovcnt; (void)flags; (void)out;
+    STUB();
+}
+int SysdepImpl<Ptrace>::operator()(long request, int pid, void *addr, void *data, long *out) {
+    (void)request; (void)pid; (void)addr; (void)data; (void)out;
+    STUB();
+}
+int SysdepImpl<Reboot>::operator()(int cmd) {
+    (void)cmd;
+    STUB();
+}
+int SysdepImpl<Removexattr>::operator()(const char *path, const char *name) {
+    (void)path; (void)name;
+    STUB();
+}
+int SysdepImpl<Sendfile>::operator()(int out_fd, int in_fd, long long *offset, unsigned long count, int *out) {
+    (void)out_fd; (void)in_fd; (void)offset; (void)count; (void)out;
+    STUB();
+}
+int SysdepImpl<SetNs>::operator()(int fd, int nstype) {
+    (void)fd; (void)nstype;
+    STUB();
+}
+int SysdepImpl<SetThreadaffinity>::operator()(int pid, unsigned long cpusetsize, const cpu_set_t *mask) {
+    (void)pid; (void)cpusetsize; (void)mask;
+    STUB();
+}
+int SysdepImpl<Setxattr>::operator()(const char *path, const char *name, const void *value, unsigned long size, int flags) {
+    (void)path; (void)name; (void)value; (void)size; (void)flags;
+    STUB();
+}
+int SysdepImpl<SignalfdCreate>::operator()(const sigset_t *mask, int flags, int *fd) {
+    (void)mask; (void)flags; (void)fd;
+    STUB();
+}
+int SysdepImpl<Splice>::operator()(int fd_in, long long *off_in, int fd_out, long long *off_out, unsigned long len, unsigned int flags, int *out) {
+    (void)fd_in; (void)off_in; (void)fd_out; (void)off_out; (void)len; (void)flags; (void)out;
+    STUB();
+}
+int SysdepImpl<Statfs>::operator()(const char *path, struct statfs *buf) {
+    (void)path; (void)buf;
+    STUB();
+}
+int SysdepImpl<Statx>::operator()(int dfd, const char *path, int flags, unsigned int mask, struct statx *buf) {
+    (void)dfd; (void)path; (void)flags; (void)mask; (void)buf;
+    STUB();
+}
+int SysdepImpl<Swapoff>::operator()(const char *path) {
+    (void)path;
+    STUB();
+}
+int SysdepImpl<Swapon>::operator()(const char *path, int flags) {
+    (void)path; (void)flags;
+    STUB();
+}
+int SysdepImpl<Syncfs>::operator()(int fd) {
+    (void)fd;
+    STUB();
+}
+int SysdepImpl<Sysinfo>::operator()(struct sysinfo *info) {
+    (void)info;
+    STUB();
+}
+int SysdepImpl<TimerfdCreate>::operator()(int clockid, int flags, int *fd) {
+    (void)clockid; (void)flags; (void)fd;
+    STUB();
+}
+int SysdepImpl<TimerfdGettime>::operator()(int fd, itimerspec *curr_value) {
+    (void)fd; (void)curr_value;
+    STUB();
+}
+int SysdepImpl<TimerfdSettime>::operator()(int fd, int flags, const itimerspec *new_value, itimerspec *old_value) {
+    (void)fd; (void)flags; (void)new_value; (void)old_value;
+    STUB();
+}
+int SysdepImpl<Umount2>::operator()(const char *target, int flags) {
+    (void)target; (void)flags;
+    STUB();
+}
+int SysdepImpl<Unshare>::operator()(int flags) {
+    (void)flags;
+    STUB();
+}
+int SysdepImpl<VmRemap>::operator()(void *old_addr, unsigned long old_size, unsigned long new_size, void **new_addr) {
+    (void)old_addr; (void)old_size; (void)new_size; (void)new_addr;
     STUB();
 }
 } // namespace mlibc

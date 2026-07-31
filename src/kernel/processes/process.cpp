@@ -901,3 +901,13 @@ int Process::sigprogmask(int how, const sigset_t* set, sigset_t* oldset)
 
     return 0;
 }
+
+int Process::getdents(int fd, void* buffer, size_t max_size, size_t* bytes_read) const
+{
+    int sys_fd = proc_to_sys_fd(fd);
+
+    if (fd == -1)
+        return -EBADF;
+
+    return VFS::getdents(sys_fd, buffer, max_size, bytes_read);
+}

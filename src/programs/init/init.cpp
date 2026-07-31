@@ -20,7 +20,7 @@ int start_terminal()
 {
     char* const argv[2] = {(char*)"/bin/terminal", nullptr};
     char* const envp[4] = {
-        (char*)"MLIBC_DEBUG_PRINTF=0", (char*)"MLIBC_DEBUG_MALLOC=0", (char*)"NOPE_MLIBC_RTLD_DEBUG_VERBOSE=1", nullptr
+        (char*)"MLIBC_DEBUG_PRINTF=0", (char*)"MLIBC_DEBUG_MALLOC=0", (char*)"NOPE_MLIBC_RTLD_DEBUG=1", nullptr
     };
     execve("/bin/terminal", argv, envp);
 

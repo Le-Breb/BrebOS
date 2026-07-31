@@ -1,8 +1,8 @@
 sysdep_supported_options = {
 	'posix': true,
-	'linux': false,
-	'glibc': false,
-	'bsd': false,
+	'linux': true,
+	'glibc': true,
+	'bsd': true,
 }
 
 if not no_headers
@@ -55,6 +55,9 @@ if not no_headers
 		'include/abi-bits/utmp-defines.h',
 		'include/abi-bits/utmpx.h',
 		'include/abi-bits/sigset_t.h',
+		'include/abi-bits/statx.h',
+		'include/abi-bits/statfs.h',
+		'include/abi-bits/ioctls.h',
 		subdir: 'abi-bits',
 		follow_symlinks: true
 	)

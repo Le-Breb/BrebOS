@@ -329,6 +329,8 @@ SharedPointer<Dentry> VFS::get_file_dentry(const char* pathname, bool print_erro
 	const bool is_path_abs = pathname[0] == '/';
 	if (!pathname || (!is_path_abs && !work_dir))
 		return nullptr;
+	if (!strcmp("/", pathname))
+		return get_root_dentry();
 
 	const char* file_name;
 	const SharedPointer<Dentry> parent_dentry = is_path_abs ?
@@ -484,11 +486,12 @@ FileInterface* VFS::open_file(const char* pathname, int flags, mode_t mode, int&
 			open_file_leave_with_error(-ENOENT) // File not found
 	};
 
-	if (dentry->inode->type == Inode::Dir)
-		open_file_leave_with_error(-EISDIR) // Is a directory
-
 	if (flags & O_TRUNC)
+	{
+		if (dentry->inode->type != Inode::File)
+			open_file_leave_with_error(-EINVAL);
 		resize(dentry, 0);
+	}
 
 	// Truncate file if asked and permitted by flags
 	if (flags & O_TRUNC && (flags & O_WRONLY || flags & O_RDWR))
@@ -568,6 +571,25 @@ int VFS::isatty(int fd)
 		return 0;
 
 	return -ENOTTY;
+}
+
+int VFS::getdents(int fd, void* buffer, size_t max_size, size_t* bytes_read)
+{
+	const auto sys_fd = file_descriptors[fd];
+	if (sys_fd == nullptr)
+		return -EBADF;
+
+	if (sys_fd->type != FileInterface::File)
+		return -ENOTDIR;
+
+	const auto dir = (File*)sys_fd;
+	if (dir->dentry->inode->type != Inode::Dir)
+		return -ENOTDIR;
+
+	if (!dir->dentry->inode->superblock->get_fs()->getdents(dir->dentry, buffer, max_size, bytes_read, sys_fd->offset))
+		return -EIO;
+
+	return 0;
 }
 
 int VFS::get_free_fd()

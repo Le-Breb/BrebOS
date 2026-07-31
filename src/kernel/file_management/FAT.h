@@ -130,6 +130,8 @@ public:
 	[[nodiscard]] inline uint32_t first_cluster_addr() const;
 
 	[[nodiscard]] char* get_extension() const;
+
+	[[nodiscard]] uint32_t get_inode() const;
 };
 
 struct directory
@@ -225,6 +227,8 @@ public:
 	bool write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length) override;
 
 	bool resize(SharedPointer<Dentry>& dentry, uint new_size) override;
+
+	bool getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t max_size, size_t* bytes_read, uint& fd_off) override;
 };
 
 

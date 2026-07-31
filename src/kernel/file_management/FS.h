@@ -40,6 +40,8 @@ public:
 
 	virtual bool ls(const SharedPointer<Dentry>& dentry, ls_printer printer) = 0;
 
+	virtual bool getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t max_size, size_t* bytes_read, uint& fd_off) = 0;
+
 	void* load_file_to_buf(const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset, uint length, uint& loaded_bytes);
 
 	virtual bool load_file_to_buf(void* buf, const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset, uint length, uint& loaded_bytes) = 0;

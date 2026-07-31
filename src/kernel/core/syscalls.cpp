@@ -14,6 +14,7 @@
 
 #include "PIT.h"
 #include "../misc/GDB.h"
+#include "abi-bits/fcntl.h"
 #include "abi-bits/wait.h"
 
 Syscall::SyscallResult Syscall::get_pid(Process* p)
@@ -149,6 +150,8 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
                 return SyscallResult::ReturnToUser;
             case 26:
                 return write(p);
+            case 27:
+                return opendir(p);
             case 28:
                 p->cpu_state.eax = p->fork();
                 return SyscallResult::ReturnToUser;
@@ -203,6 +206,8 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             case 50:
                 GDB::get_instance()->unload_elf((const char*)p->cpu_state.edx);
                 return SyscallResult::ReturnToUser;
+            case 51:
+                return getdents(p);
             case 400: // dbg
                 FB::flush();
                 printf_info("%d | 0x%x", p->cpu_state.edi, p->cpu_state.edi);
@@ -370,8 +375,8 @@ Syscall::SyscallResult Syscall::close(Process* p)
 
 Syscall::SyscallResult Syscall::stat(Process* p)
 {
-    const char* pathname = (const char*)p->cpu_state.edi;
-    auto statbuf = (struct stat*)p->cpu_state.esi;
+    const char* pathname = (const char*)p->cpu_state.ebx;
+    auto statbuf = (struct stat*)p->cpu_state.ecx;
 
     p->cpu_state.eax = (uint)p->stat(pathname, statbuf);
     return SyscallResult::ReturnToUser;
@@ -379,8 +384,8 @@ Syscall::SyscallResult Syscall::stat(Process* p)
 
 Syscall::SyscallResult Syscall::fstat(Process* p)
 {
-    int proc_fd = (int)p->cpu_state.edi;
-    auto statbuf = (struct stat*)p->cpu_state.esi;
+    int proc_fd = (int)p->cpu_state.ebx;
+    auto statbuf = (struct stat*)p->cpu_state.ecx;
 
     p->cpu_state.eax = p->fstat(proc_fd, statbuf);
     return SyscallResult::ReturnToUser;
@@ -562,6 +567,59 @@ Syscall::SyscallResult Syscall::sleep(Process* p)
     time_t s = *(time_t*)p->cpu_state.ebx;
 
     return PIT::sleep<false>(s * 1000) ? SyscallResult::Schedule : SyscallResult::ReturnToUser;
+}
+
+Syscall::SyscallResult Syscall::opendir(Process* process)
+{
+    const char* path = (const char*)process->cpu_state.ebx;
+
+    const int tmp_fd = process->open(path, O_RDONLY, 0777);
+    if (tmp_fd < 0)
+    {
+        process->cpu_state.eax = tmp_fd;
+        return SyscallResult::ReturnToUser;
+    }
+
+    const int sys_fd = process->proc_to_sys_fd(tmp_fd);
+    if (sys_fd == -1)
+    {
+        printf_warn("%s: open succeeded but proc_to_sys_fd failed", __func__);
+        process->kill(SIGTERM);
+        return SyscallResult::ReturnToUser;
+    }
+    const auto sys_fi = VFS::file_descriptors[sys_fd];
+    if (!sys_fi)
+    {
+        printf_warn("%s: No FileInterface matching sys_fd was found", __func__);
+        process->kill(SIGTERM);
+        return SyscallResult::ReturnToUser;
+    }
+    if (sys_fi->type != FileInterface::File)
+    {
+        printf_warn("%s: FileInterface is not of type File", __func__);
+        process->kill(SIGTERM);
+        return SyscallResult::ReturnToUser;
+    }
+    if (((File*)sys_fi)->dentry->inode->type == Inode::Dir)
+    {
+        process->cpu_state.eax = tmp_fd;
+        return SyscallResult::ReturnToUser;
+    }
+
+    process->cpu_state.eax = -ENOTDIR;
+    return SyscallResult::ReturnToUser;
+}
+
+Syscall::SyscallResult Syscall::getdents(Process* p)
+{
+    const int handle = (int)p->cpu_state.ebx;
+    void *buffer = (void*)p->cpu_state.ecx;
+    const size_t max_size = (size_t)p->cpu_state.edx;
+    size_t *bytes_read = (size_t*)p->cpu_state.esi;
+
+    p->cpu_state.eax = p->getdents(handle, buffer, max_size, bytes_read);
+
+    return SyscallResult::ReturnToUser;
 }
 
 Syscall::SyscallResult Syscall::wait_pid(Process* p)

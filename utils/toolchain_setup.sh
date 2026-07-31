@@ -1,6 +1,6 @@
 #!/bin/sh
 
-set -e
+set -ex
 
 CYAN="\033[0;36m"
 WHITE="\033[0;37m"
@@ -28,6 +28,7 @@ mlibc_config()
 
     git clone https://github.com/managarm/mlibc
     cd mlibc
+    git checkout c367b780a47dc1d6c70d19a8379f4a74e5a7ed96
     cp "$MLIBC_CONFIG"/brebos-cross.txt ./
     ln -s "$MLIBC_CONFIG"/sysdeps/brebos ./sysdeps/brebos
     ln -s "$(pwd)"/sysdeps/linux/include/abi-bits ./sysdeps/brebos/include/abi-bits
@@ -36,6 +37,8 @@ mlibc_config()
             -e 's/sysdeps\/demo/sysdeps\/brebos/g' \
             -e 's/demo-sysdeps/brebos-sysdeps/g' \
             meson.build
+    sed -i 's|make |make -j $(nproc --all) |g' ./scripts/get-linux-headers.sh
+    ARCH=x86 ./scripts/get-linux-headers.sh
 }
 
 mlibc_first_headers_install()
@@ -48,8 +51,14 @@ mlibc_first_headers_install()
               --cross-file=brebos-cross.txt \
               --prefix=/usr \
               -Dheaders_only=true \
+              -Dlinux_kernel_headers=./linux-headers \
               headers-build
     DESTDIR=${SYSROOT_DIR} ninja -C headers-build install
+
+    mkdir -p "$SYSROOT_DIR/usr/include"
+    cp -r linux-headers/asm "$SYSROOT_DIR/usr/include/"
+    cp -r linux-headers/asm-generic "$SYSROOT_DIR/usr/include/"
+    cp -r linux-headers/linux "$SYSROOT_DIR/usr/include/"
 }
 
 binutils_setup_and_build()
@@ -71,6 +80,15 @@ binutils_setup_and_build()
           --enable-default-execstack=no \
           --enable-shared
     make -j"$NUM_JOBS"
+
+    # Work around a parallel-build race in ld's genscripts.sh step: under -j,
+    # some emulations' base ldscripts (.x/.xr) can end up missing even though
+    # make considers the corresponding .o target satisfied. Force-clean and
+    # serially regenerate ld's outputs to guarantee correctness.
+    rm -f ld/eelf_i386_brebos.o ld/ldscripts/elf_i386_brebos.x ld/ldscripts/elf_i386_brebos.xr
+    rm -f ld/eelf_x86_64_brebos.o ld/ldscripts/elf_x86_64_brebos.x ld/ldscripts/elf_x86_64_brebos.xr
+    make -C ld
+
     DESTDIR="$TOOLCHAIN_DIR" make install
 }
 
@@ -168,8 +186,21 @@ mlibc_build()
                 --prefix=/usr \
                 -Ddefault_library=both \
                 -Dno_headers=true \
+                -Dlinux_kernel_headers=./linux-headers \
                 build
     DESTDIR="$SYSROOT_DIR" ninja -C build install
+}
+
+busybox_setup()
+{
+    cyan_echo "busybox setup"
+    cd "$BREBOS"
+
+    git clone https://github.com/mirror/busybox.git
+    cd busybox
+    git checkout 1_36_stable
+    ln -s "$BREBOS/src/busybox_config/.config" .config
+    make -j "$NUM_JOBS" ARCH=i386 CROSS_COMPILE=i686-brebos- CC=i686-brebos-gcc
 }
 
 mlibc_config
@@ -179,3 +210,4 @@ gcc_setup_and_build
 mlibc_build
 autoconf_setup_and_build
 libstdcpp_build
+busybox_setup

@@ -8,6 +8,9 @@
 #include "../core/memory/memory.h"
 #include "../utils/comparison.h"
 #include "../utils/TmpString.h"
+#include <dirent.h>
+
+#define ALIGN_UP(x, align) (((x) + (align) - 1) & ~((align) - 1))
 
 FAT_drive* FAT_drive::drives[] = {};
 
@@ -795,6 +798,62 @@ bool FAT_drive::resize(SharedPointer<Dentry>& dentry, uint new_size)
     return true;
 }
 
+bool FAT_drive::getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t max_size, size_t* bytes_read, uint& fd_off)
+
+{
+    uint parent_sector = dentry->inode->lba;
+    uint parent_cluster = parent_sector * bs.sectors_per_cluster;
+    ctx ctx{};
+    *bytes_read = 0;
+    auto remaining_bytes = [&]() {return max_size - *bytes_read;};
+    char* buf = (char*)buffer;
+
+    uint curr_cluster = parent_cluster;
+    off_t off = 0;
+    do
+    {
+        // ~= cd wd
+        if (!change_active_cluster(curr_cluster, ctx, this->buf))
+            return false;
+
+        TmpString prev_lfn(1);
+        auto prev_is_lfn = [&prev_lfn]() {return **prev_lfn != '\0';};
+        while (ctx.dir_entry_id * sizeof(DirEntry) < ATA_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free())
+        {
+            if (off >= fd_off)
+            {
+                if (const auto entry = entries + ctx.dir_entry_id; entry->is_LFN())
+                    prev_lfn = ((LongDirEntry*)entry)->get_uglily_converted_utf8_name().concat(prev_lfn);
+                else
+                {
+                    TmpString entry_name = prev_is_lfn() ? prev_lfn : entry->get_name();
+                    const auto dirent_size = ALIGN_UP(offsetof(struct dirent, d_name) + strlen(*entry_name), sizeof(struct dirent));
+                    if (remaining_bytes() < dirent_size)
+                        return true; // No more room available in buffer, exit
+                    if (strlen(*entry_name) > __MLIBC_NAME_MAX)
+                        irrecoverable_error("%s: file name '%s' is too long to be supported by mlibc", __PRETTY_FUNCTION__, *entry_name);
+                    dirent* dirent = (struct dirent*)buf;
+                    dirent->d_ino = entry->get_inode();
+                    dirent->d_off = off;
+                    dirent->d_reclen = dirent_size;
+                    dirent->d_type = entry->is_directory() ? DT_DIR : DT_REG;
+                    strcpy(dirent->d_name, *entry_name);
+                    *bytes_read += dirent_size;
+                    buf += dirent_size;
+                    prev_lfn = TmpString(1);
+                }
+                fd_off++;
+            }
+
+            off++;
+            ctx.dir_entry_id++;
+        }
+        curr_cluster = ctx.table_value;
+    } while (curr_cluster < CLUSTER_MIN_EOC);
+
+    return true;
+}
+
 inline bool DirEntry::is_directory() const
 {
     return attrs & DIRECTORY;
@@ -817,6 +876,11 @@ char* DirEntry::get_extension() const
         memcpy(extension, *file_name + dot_pos + 1, file_name_len - dot_pos - 1);
 
     return extension;
+}
+
+uint32_t DirEntry::get_inode() const
+{
+    return first_cluster_addr();
 }
 
 inline bool DirEntry::is_free() const

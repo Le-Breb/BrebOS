@@ -130,6 +130,10 @@ class Syscall
 	static SyscallResult execve(Process* p, bool use_path_if_no_heading_slash);
 
 	static SyscallResult sleep(Process* p);
+
+	static SyscallResult opendir(Process* process);
+
+	static SyscallResult getdents(Process* p);
 public:
 	/**
 	 * Handles a syscall
