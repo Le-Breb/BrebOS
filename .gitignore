@@ -8,3 +8,4 @@ toolchain_sources/
 *.dir_timestamp
 build/
 src/programs/*/Makefile
+src/programs/.clangd

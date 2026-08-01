@@ -203,6 +203,12 @@ busybox_setup()
     make -j "$NUM_JOBS" ARCH=i386 CROSS_COMPILE=i686-brebos- CC=i686-brebos-gcc
 }
 
+gen_clangd_config()
+{
+    cyan_echo "clangd config generation"
+    "$BREBOS"/utils/gen_clangd.sh
+}
+
 mlibc_config
 mlibc_first_headers_install
 binutils_setup_and_build
@@ -211,3 +217,4 @@ mlibc_build
 autoconf_setup_and_build
 libstdcpp_build
 busybox_setup
+gen_clangd_config
