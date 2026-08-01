@@ -132,10 +132,15 @@ BrebOS can run C++ programs that *you* write, provided they respect the followin
 - Any C++ feature (normally) works, including RTTI and exceptions!
 
 To add your program, simply follow the following steps:
-- Copy your source files under `BrebOS/src/programs/your_awesome_program_name` <br>
-  That's all! Yep, you've read well, there's nothing else you have to do! The Makefile will handle the compilation of
-  your program and will add it at `/bin` in BrebOS' disk. <br>
-  You can now run your program using `your_awesome_program_name` in BrebOS.
+- Run `./utils/program_manager.sh add <program_name>`. This creates the directory `src/programs/program_name`. The directory is set up with:
+  - A dummy `main.cpp`. Modify it as you want.
+  - A Makefile ready to compile your program. Feel free to modify the provided Makefile if needed.
+
+That's all! Yep, you've read well, there's nothing else you have to do! The build system will automatically
+add you program at `/bin` in BrebOS' disk. <br>
+You can now run your program using `your_awesome_program_name` in BrebOS.
+
+> You can also remove a program using `./utils/program_manager.sh remove program_name`
 
 ### Network
 
