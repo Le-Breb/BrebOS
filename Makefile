@@ -35,6 +35,7 @@ SRC=$(shell cd $(SRC_DIR)/kernel; find . -name '*.cpp' -o -name '*.s' | sed 's|^
 OBJECTS = $(patsubst %.cpp, $(KERNEL_BUILD_DIR)/%.o, $(filter %.cpp, $(SRC))) \
           $(patsubst %.s, $(KERNEL_BUILD_DIR)/%.o, $(filter %.s, $(SRC)))
 DEPS=$(OBJECTS:.o=.d)
+.DEFAULT_GOAL := all
 -include $(DEPS)
 
 CC = i686-brebos-gcc
