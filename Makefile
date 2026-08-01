@@ -30,6 +30,8 @@ GCC_BUILD_DIR=$(SRC_DIR)/gcc/build
 KERNEL_BUILD_DIR=$(SRC_DIR)/kernel/build
 PROGRAMS_BUILD_DIR=$(SRC_DIR)/programs/build
 BOOTLOADER_BUILD_DIR=./bootloader/build
+BUSYBOX_DIR=busybox
+BUSYBOX_PROGRAMS_LIST=src/busybox_config/programs.list
 
 SRC=$(shell cd $(SRC_DIR)/kernel; find . -name '*.cpp' -o -name '*.s' | sed 's|^\./||')
 OBJECTS = $(patsubst %.cpp, $(KERNEL_BUILD_DIR)/%.o, $(filter %.cpp, $(SRC))) \
@@ -74,6 +76,7 @@ libk=$(LIBK_BUILD_DIR)/libk.a
 MLIBC_STAMP := $(SYSROOT_DIR)/.mlibc.stamp
 
 programs_sources=$(shell find $(SRC_DIR)/programs -type f -name '*.cpp') $(SRC_DIR)/programs/start_program.s
+busybox_programs=$(shell sed 's/#.*//' $(BUSYBOX_PROGRAMS_LIST) | tr -s ' \t\n' '\n' | grep -v '^$$')
 libc_sources=$(shell find $(SRC_DIR)/libc -type f -name '*.cpp')
 libk_sources=$(shell find $(SRC_DIR)/libk -type f -name '*.cpp')
 
@@ -170,14 +173,9 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(programs) bootloader busybox
 	@for prog in $(shell find $(SRC_DIR)/programs/build -type f ! -name "*.*"); do \
     		mcopy -i disk_image.img $$prog ::/bin; \
 	done
-	mcopy -i disk_image.img ./busybox/0_lib/cat ::/bin
-	mcopy -i disk_image.img ./busybox/0_lib/ls ::/bin
-	mcopy -i disk_image.img ./busybox/0_lib/printf ::/bin
-	mcopy -i disk_image.img ./busybox/0_lib/dirname ::/bin
-	mcopy -i disk_image.img ./busybox/0_lib/cut ::/bin
-	mcopy -i disk_image.img ./busybox/0_lib/factor ::/bin
-	mcopy -i disk_image.img ./busybox/0_lib/wc ::/bin
-	mcopy -i disk_image.img ./busybox/0_lib/yes ::/bin
+	@for prog in $(busybox_programs); do \
+    		mcopy -i disk_image.img ./busybox/0_lib/$$prog ::/bin; \
+	done
 	mcopy -i disk_image.img ./busybox/0_lib/libbusybox.so.1.36.1 ::/usr/lib
 
 	@echo "set timeout=$(GRUB_TIMEOUT)" > grub.cfg
@@ -209,7 +207,10 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(programs) bootloader busybox
 bootloader:
 	+$(MAKE) -C bootloader
 
-busybox:
+$(BUSYBOX_DIR)/.config: $(BUSYBOX_PROGRAMS_LIST) utils/gen_busybox_config.sh
+	+./utils/gen_busybox_config.sh
+
+busybox: $(BUSYBOX_DIR)/.config
 	+$(MAKE) -C busybox ARCH=i386 CROSS_COMPILE=i686-brebos- CC=i686-brebos-gcc
 
 run: $(OS_ISO)

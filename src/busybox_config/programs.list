@@ -1,0 +1,21 @@
+# Made with Claude Code
+
+# List of busybox applets to build as standalone /bin programs.
+#
+# One applet name per line, matching the resulting binary name (e.g. "cat",
+# "ls"). Lines starting with # and blank lines are ignored. Edit this file to
+# add/remove busybox programs, then just run `make` - it takes care of
+# updating busybox's .config and copying the built binaries into the disk
+# image.
+#
+# The shell (sh/ash) is always built regardless of this list; it's handled
+# separately by utils/gen_busybox_config.sh.
+
+cat
+cut
+dirname
+factor
+ls
+printf
+wc
+yes

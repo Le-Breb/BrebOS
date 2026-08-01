@@ -199,7 +199,7 @@ busybox_setup()
     git clone https://github.com/mirror/busybox.git
     cd busybox
     git checkout 1_36_stable
-    ln -s "$BREBOS/src/busybox_config/.config" .config
+    "$BREBOS"/utils/gen_busybox_config.sh
     make -j "$NUM_JOBS" ARCH=i386 CROSS_COMPILE=i686-brebos- CC=i686-brebos-gcc
 }
 
