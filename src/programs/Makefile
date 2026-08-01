@@ -23,7 +23,6 @@ start_program.o: start_program.s
 	$(AS) $(ASFLAGS) -o $@ $<
 
 $(PROGRAMS):
-	@cp ./program_Makefile $@/Makefile
 	$(MAKE) -C $@
 
 clean:
