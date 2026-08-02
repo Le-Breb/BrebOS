@@ -1,6 +1,4 @@
 # Generic Makefile that builds any program in a subdirectory of $(SRC_DIR)/programs.
-# This file is copied by $(SRC_DIR)/programs/Makefile in every subdirectory of
-# $(SRC_DIR)/programs before being called.
 
 EXEC_NAME=$(shell basename $(CURDIR))
 SRC = $(shell find -name '*.cpp')
