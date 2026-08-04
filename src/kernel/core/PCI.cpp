@@ -80,27 +80,17 @@ void PCI::checkDevice(uint8_t bus, uint8_t device)
     if (vendorID == 0xFFFF) return;
     checkFunction(bus, device, function);
     uint8_t headerType = getHeaderType(bus, device, function);
-    if (headerType & 0x80)
-    {
+    if (headerType & 0x80) // Multi-function device, check other functions
         for (function = 1; function < 8; function++)
-        {
             if (getVendorID(bus, device, function) != 0xFFFF)
-            {
                 checkFunction(bus, device, function);
-            }
-        }
-    }
 }
 
 void PCI::checkAllBuses()
 {
     for (uint16_t bus = 0; bus < 256; bus++)
-    {
         for (uint8_t device = 0; device < 32; device++)
-        {
             checkDevice(bus, device);
-        }
-    }
 }
 
 uint32_t PCI::getPCIBar(uint8_t bus, uint8_t device, uint8_t function, uint8_t barIndex)
