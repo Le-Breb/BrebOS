@@ -564,9 +564,10 @@ Syscall::SyscallResult Syscall::sleep(Process* p)
         return SyscallResult::ReturnToUser;
     }
 
-    time_t s = *(time_t*)p->cpu_state.ebx;
+    const time_t s = *(time_t*)p->cpu_state.ebx;
+    PIT::sleep(s * 1000);
 
-    return PIT::sleep<false>(s * 1000) ? SyscallResult::Schedule : SyscallResult::ReturnToUser;
+    return SyscallResult::ReturnToUser;
 }
 
 Syscall::SyscallResult Syscall::opendir(Process* process)

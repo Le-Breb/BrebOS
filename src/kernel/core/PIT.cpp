@@ -70,29 +70,20 @@ void sleep_cycles(uint64_t cycles)
     while (System::rdtsc() - start < cycles);
 }
 
-
-template<bool can_preempt>
 __attribute__((no_instrument_function))
-conditional_t<can_preempt, void, bool> PIT::sleep(uint ms)
+void PIT::sleep(uint ms)
 {
-    uint num_ticks_to_wait = (uint)((float)TICKS_PER_SEC * (float)ms / 1000.f);
+    const uint num_ticks_to_wait = (uint)((float)TICKS_PER_SEC * (float)ms / 1000.f);
     if (num_ticks_to_wait == 0)
         sleep_cycles(tsc_ticks_per_us * ms * 1000);
     else
     {
         Scheduler::set_process_asleep(Scheduler::get_running_process(), ms);
-        if constexpr (can_preempt)
-            TRIGGER_TIMER_INTERRUPT
-        else
-            return true;
+        if (Scheduler::preemption_lock)
+            Scheduler::critical_section_preempt_exit = true;
+        TRIGGER_TIMER_INTERRUPT
     }
-
-    if constexpr (!can_preempt)
-        return false;
 }
-
-template bool PIT::sleep<false>(uint);
-template void PIT::sleep<true>(uint);
 
 uint PIT::ms_to_pit_divider(uint ms)
 {

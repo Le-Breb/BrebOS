@@ -11,21 +11,6 @@
 #define CLOCK_TICK_MS 10
 #define TICKS_PER_SEC (1000 / CLOCK_TICK_MS)
 
-template<bool B, typename T, typename F>
-	struct conditional
-{
-	using type = T;
-};
-
-template<typename T, typename F>
-struct conditional<false, T, F>
-{
-	using type = F;
-};
-
-template<bool B, typename T, typename F>
-using conditional_t = typename conditional<B, T, F>::type;
-
 class PIT
 {
 	static uint32_t tsc_ticks_per_us;
@@ -55,13 +40,10 @@ public:
 
 	/**
 	 * Sleeps for ms milliseconds
-	 * @tparam can_preempt indicates whether this function has the right to call TRIGGER_TIMER_INTERRUPT.
-	 * @param ms number of milliseconds to wait
-	 * @return If !can_preempt, returns whether TRIGGER_TIMER_INTERRUPT should be called. Otherwise returns nothing
+	 * @parameter ms number of milliseconds to wait
 	 */
-	template<bool can_preempt>
 	__attribute__((no_instrument_function))
-	static conditional_t<can_preempt, void, bool> sleep(uint ms);
+	static void sleep(uint ms);
 };
 
 
