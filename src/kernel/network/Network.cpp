@@ -23,7 +23,7 @@ class E1000;
 
 void Network::init()
 {
-    PCI::checkAllBuses();
+
 }
 
 void Network::run()

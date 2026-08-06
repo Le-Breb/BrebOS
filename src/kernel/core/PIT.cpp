@@ -85,6 +85,13 @@ void PIT::sleep(uint ms)
     }
 }
 
+void PIT::spin_sleep(uint us)
+{
+    if (us > 100)
+        printf_warn("spin_sleep is not recommended for long sleeps, use PIT::sleep instead\n");
+    sleep_cycles(tsc_ticks_per_us * us);
+}
+
 uint PIT::ms_to_pit_divider(uint ms)
 {
     // 1000 / f = ms

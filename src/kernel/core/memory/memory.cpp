@@ -538,17 +538,22 @@ namespace Memory
         return true;
     }
 
-    void* physically_aligned_malloc(uint n)
+    void* physically_aligned_malloc(uint n, uint alignment, uint boundary)
     {
+        if (alignment > PAGE_SIZE || PAGE_SIZE % alignment)
+            irrecoverable_error("%s: only alignments satisfied when allocating page aligned memory are"
+                                "supported for now (got 0x%x)", __func__,  alignment);
+
         uint page_beg = (uint)-1;
         uint frame_beg = (uint)-1;
-        uint num_pages = (n + PAGE_SIZE - 1) >> 12;
-        for (auto p = kernel_process->lowest_free_pe; p < PDT_ENTRIES * PT_ENTRIES; p++)
+        const uint num_pages = (n + PAGE_SIZE - 1) >> 12;
+        for (uint p = kernel_process->lowest_free_pe; p < PDT_ENTRIES * PT_ENTRIES; p += num_pages)
         {
-            uint i;
-            for (i = 0; i < num_pages && !PTE_USED(page_tables, p + i); i++)
-            {
-            };
+            if (PAGE_ADDR(p) / boundary != PAGE_ADDR(p + num_pages - 1) / boundary)
+                continue;
+
+            uint i = 0;
+            for (; i < num_pages && !PTE_USED(page_tables, p + i); i++) {};
             if (i == num_pages)
             {
                 page_beg = p;

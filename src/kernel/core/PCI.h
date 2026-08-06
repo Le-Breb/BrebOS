@@ -36,6 +36,8 @@ public:
 
     static Device ethernet_card;
 
+    static Device xCHI;
+
     static uint32_t getPCIBar(uint8_t bus, uint8_t device, uint8_t function, uint8_t barIndex);
 
     static uint32_t getPCIBarType(uint8_t bus, uint8_t device, uint8_t function, uint8_t barIndex);

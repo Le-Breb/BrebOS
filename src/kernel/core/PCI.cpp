@@ -4,6 +4,7 @@
 #include "fb.h"
 
 PCI::Device PCI::ethernet_card = Device(-1,-1, -1);
+PCI::Device PCI::xCHI = Device(-1,-1, -1);
 
 void outl(uint16_t port, uint32_t value)
 {
@@ -51,16 +52,22 @@ void displayCard(const char* name)
 
 void PCI::checkFunction(uint8_t bus, uint8_t device, uint8_t function)
 {
-        uint16_t vendorID = getVendorID(bus, device, function);
-        if (vendorID == 0xFFFF) return; // No device, skip
+    uint16_t vendorID = getVendorID(bus, device, function);
+    if (vendorID == 0xFFFF) return; // No device, skip
 
-        uint16_t deviceID = pciConfigReadWord(bus, device, function, 2); // Read device ID
-        uint8_t classCode = pciConfigReadWord(bus, device, function, 0x0A) >> 8; // PCI class code (network device class is 0x02)
+    const uint16_t deviceID = pciConfigReadWord(bus, device, function, 2); // Read device ID
+    const uint16_t classSubclass = pciConfigReadWord(bus, device, function, 0x0A);
+    const uint8_t classCode = classSubclass >> 8; // PCI class code (network device class is 0x02)
+    const uint8_t subclass  = classSubclass & 0xFF;
+    const uint16_t revProgIF = pciConfigReadWord(bus, device, function, 0x08);
+    const uint8_t progIF = revProgIF >> 8;
 
         // printf("%x | %x | %x \n", vendorID, deviceID, classCode);
 
     if (vendorID == 0x8086 && deviceID == 0x100e) { // Intel PRO/1000 e1000
         displayCard("Intel PRO/1000 Ethernet");
+        if (ethernet_card.bus != (uint8_t)-1u)
+            irrecoverable_error("Multiple Intel PRO/1000 Ethernet detected, don't know what to do");
         ethernet_card = Device(bus, device, function);
     }// else if (vendorID == 0x8086 && deviceID == 0x1209) {
     //    displayCard("Intel 8255x");
@@ -68,8 +75,11 @@ void PCI::checkFunction(uint8_t bus, uint8_t device, uint8_t function)
     //}
     else if (vendorID == 0x1af4 && deviceID == 0x1000 && classCode == 0x02) { // Virtio Network Device
         displayCard("Virtio Network");
-    } else {
-        // Not an Ethernet card, you can add other devices' checks here if needed.
+    } else if (classCode == 0x0C && subclass == 0x03 && progIF == 0x30) {
+        if (xCHI.bus != (uint8_t)-1)
+            irrecoverable_error("multiple xCHI controllers detected, don't know what to do");
+        displayCard("xHCI controller");
+        xCHI = Device(bus, device, function);
     }
 }
 

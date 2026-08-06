@@ -44,9 +44,11 @@ namespace Memory
 	 * Does not go through the classical malloc process, thus the resulting pointer cannot be given to free.
 	 * Memory acquired with this function has to be released by hand.
 	 * @param n Size of memory block to allocate
+	 * @param alignment alignment allocated memory must follow
+	 * @param boundary specifies a memory region size the allocation must not cross
 	 * @return Pointer to beginning of memory block, nullptr on failure
 	 */
-	void* physically_aligned_malloc(uint n);
+	void* physically_aligned_malloc(uint n, uint alignment = PAGE_SIZE, uint boundary = -1U);
 
 	/**
 	 * Free page-aligned memory

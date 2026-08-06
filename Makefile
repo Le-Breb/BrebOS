@@ -227,6 +227,10 @@ run: $(OS_ISO)
       -device e1000,netdev=net0 \
       -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap \
       -m 512M \
+      -device qemu-xhci,id=xhci,p3=0 \
+	  -drive if=none,id=usbstick,file=usb_disk.img,format=raw \
+	  -device usb-storage,bus=xhci.0,drive=usbstick \
+	  -trace "usb_xhci_*" -D qemu_trace.log \
       || true
 	@echo "$(CYAN)Restoring default network configuration...$(WHITE)"
 	@sudo ./utils/net_cleanup.sh

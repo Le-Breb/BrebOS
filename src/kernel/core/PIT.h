@@ -44,6 +44,8 @@ public:
 	 */
 	__attribute__((no_instrument_function))
 	static void sleep(uint ms);
+
+	static void spin_sleep(uint us);
 };
 
 
