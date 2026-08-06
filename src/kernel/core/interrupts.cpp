@@ -106,9 +106,15 @@ void Interrupts::interrupt_timer(uint kesp, cpu_state_t* cpu_state, stack_state_
 			if (syscall_interrupted)
 			{
 				p->k_cpu_state = *cpu_state;
-				p->k_stack_state = *stack_state;
 
-				// Update ESP and SS manually because the CPU did not push them as no privilege level change occurred
+				// As no privilege level change occurred, CPU did not push ESP and SS. No need to copy them. Furthermore,
+				// copying them can even segfault, when ESP is near the top of the stack.
+				p->k_stack_state.error_code = stack_state->error_code;
+				p->k_stack_state.eip = stack_state->eip;
+				p->k_stack_state.cs = stack_state->cs;
+				p->k_stack_state.eflags = stack_state->eflags;
+
+				// Manually set ESP and SS
 				p->k_stack_state.esp = kesp;
 				__asm__ volatile("mov %%ss, %0" : "=r"(p->k_stack_state.ss));
 			}
