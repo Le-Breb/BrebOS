@@ -54,6 +54,25 @@ typedef struct xhci_command_completion_request_block {
 } xhci_command_completion_trb_t;
 static_assert(sizeof(xhci_command_completion_trb_t) == sizeof(uint32_t) * 4);
 
+typedef struct xhci_port_status_change_request_block {
+    struct {
+        uint32_t rsvd0   : 24;
+        uint32_t port_id : 8;
+    };
+    uint32_t rsvd1;
+    struct {
+        uint32_t rsvd2           : 24;
+        uint32_t completion_code : 8;
+    };
+    struct {
+        uint32_t cycle_bit : 1;
+        uint32_t rsvd3     : 9;
+        uint32_t trb_type  : 6;
+        uint32_t rsvd4     : 16;
+    };
+} xhci_port_status_change_trb_t;
+static_assert(sizeof(xhci_port_status_change_trb_t) == sizeof(uint32_t) * 4);
+
 static inline const char* trb_completion_code_to_string(uint8_t completion_code) {
     switch (completion_code) {
     case XHCI_TRB_COMPLETION_CODE_INVALID:

@@ -312,6 +312,13 @@ void xHCI::process_events()
                 command_completion_status = 1;
                 command_completion_events.push_back((xhci_command_completion_trb_t*)event);
                 break;
+            case XHCI_TRB_TYPE_PORT_STATUS_CHANGE_EVENT:
+            {
+                const auto* psc_event = (xhci_port_status_change_trb_t*)event;
+                // Port IDs in the event are 1-based; read_portsc_reg()/reset_port() expect a 0-based index
+                handle_port_connect_change(psc_event->port_id - 1);
+                break;
+            }
             default:
                 printf_info("Unhandled event TRB type: %u. Status: 0x%x", event->trb_type, event->status);
                 break;
@@ -495,16 +502,19 @@ void xHCI::start()
     //     printf_info("Port %u: %s", port + 1, is_usb3_port(port) ? "USB2" : "USB3");
 
     for (uint8_t port = 0; port < m_max_ports; port++)
-    {
-        const xhci_portsc_register portsc = read_portsc_reg(port);
+        handle_port_connect_change(port);
+}
 
-        if (portsc.csc && portsc.ccs)
-        {
-            if (reset_port(port))
-                printf_info("Device connected on port %i - %s", port, _usb_speed_to_string(portsc.port_speed));
-            else
-                printf_warn("Failed to reset port %i after device connection", port);
-        }
+void xHCI::handle_port_connect_change(uint8_t port_num)
+{
+    const xhci_portsc_register portsc = read_portsc_reg(port_num);
+
+    if (portsc.csc && portsc.ccs)
+    {
+        if (reset_port(port_num))
+            printf_info("Device connected on port %i - %s", port_num, _usb_speed_to_string(portsc.port_speed));
+        else
+            printf_warn("Failed to reset port %i after device connection", port_num);
     }
 }
 

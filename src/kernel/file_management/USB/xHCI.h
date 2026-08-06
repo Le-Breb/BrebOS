@@ -38,6 +38,7 @@ class xHCI : public PCI::Device, public Interrupt_handler
     xhci_portsc_register read_portsc_reg(uint8_t port_num) const;
     void write_portsc_reg(xhci_portsc_register reg, uint8_t port_num);
     bool reset_port(uint8_t port_num);
+    void handle_port_connect_change(uint8_t port_num);
     xhci_command_completion_trb_t* send_command_trb(xhci_trb_t* cmd_trb, uint32_t timeout_ms = 200);
 
     static const char* _usb_speed_to_string(uint8_t speed);
