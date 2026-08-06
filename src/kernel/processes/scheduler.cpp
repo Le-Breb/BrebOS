@@ -19,6 +19,7 @@ list<Scheduler::proc_waiting_for_read>* Scheduler::processes_waiting_for_read{};
 list<Process*>* Scheduler::exec_processes_to_free{};
 list<Process*>* Scheduler::processes_to_free{};
 void* Scheduler::stack_switch_stack_top = nullptr;
+void* Scheduler::idle_stack_top = nullptr;
 pid_t Scheduler::init_pid = 0;
 bool Scheduler::preemption_lock = false;
 bool Scheduler::critical_section_preempt_exit = false;
@@ -255,10 +256,10 @@ void Scheduler::schedule()
             System::shutdown();
         else
         {
-            // All processes are waiting for a key press. Thus, we can halt the CPU
+            // All processes are waiting. Thus, we can halt the CPU
             running_process = MAX_PROCESSES; // Indicate that no process is running
 
-            __asm__ volatile("mov %0, %%esp" : : "r"(Memory::get_stack_top_ptr())); // Use global kernel stack
+            __asm__ volatile("mov %0, %%esp" : : "r"(idle_stack_top));
             __asm__ volatile("sti"); // Make sure interrupts are enabled
             __asm__ volatile("hlt"); // Halt
         }
@@ -347,9 +348,13 @@ void Scheduler::init()
     PIT::init();
     Process::init();
 
-    uint stack_switch_pe = Memory::get_free_pe();
+    const uint stack_switch_pe = Memory::get_free_pe();
     Memory::allocate_page(stack_switch_pe, DEFAULT_K_POLICY);
     stack_switch_stack_top = (void*)(PAGE_ADDR(stack_switch_pe) + PAGE_SIZE - sizeof(uint)); // Stack top is at the end of the page
+
+    const uint idle_stack_pe = Memory::get_free_pe();
+    Memory::allocate_page(idle_stack_pe, DEFAULT_K_POLICY);
+    idle_stack_top = (void*)(PAGE_ADDR(idle_stack_pe) + PAGE_SIZE - sizeof(uint)); // Stack top is at the end of the page
 
     // Those have to be pointers because they cannot be instantiated at program start since dynamic memory allocation
     // is not available at this moment. However, it is ok to allocate them now.
