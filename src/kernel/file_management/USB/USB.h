@@ -13,6 +13,7 @@
 struct usb_mass_storage_device
 {
     SharedPointer<xhci_device> device;
+    uint8_t  interface_number;         // bInterfaceNumber of the BOT interface - wIndex for GET_MAX_LUN/RESET
     uint8_t  bulk_in_endpoint;         // bEndpointAddress, bit 7 set (IN)
     uint8_t  bulk_out_endpoint;        // bEndpointAddress, bit 7 clear (OUT)
     uint16_t bulk_in_max_packet_size;

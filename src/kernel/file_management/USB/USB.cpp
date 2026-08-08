@@ -206,6 +206,7 @@ void USB::enumerate_device(const SharedPointer<xhci_device>& device)
 
     // --- Walk the descriptor list looking for a Bulk-Only Transport Mass Storage interface ---
     bool in_bot_interface = false;
+    uint8_t bot_interface_number = 0;
     uint8_t bulk_in_ep = 0, bulk_out_ep = 0;
     uint16_t bulk_in_mps = 0, bulk_out_mps = 0;
 
@@ -223,6 +224,8 @@ void USB::enumerate_device(const SharedPointer<xhci_device>& device)
             in_bot_interface = iface->interface_class == USB_CLASS_MASS_STORAGE &&
                                 iface->interface_sub_class == USB_SUBCLASS_SCSI &&
                                 iface->interface_protocol == USB_PROTOCOL_BULK_ONLY;
+            if (in_bot_interface)
+                bot_interface_number = iface->interface_number;
         }
         else if (desc_type == USB_DESCRIPTOR_TYPE_ENDPOINT && desc_len >= sizeof(usb_endpoint_descriptor_raw) && in_bot_interface)
         {
@@ -285,6 +288,7 @@ void USB::enumerate_device(const SharedPointer<xhci_device>& device)
 
     usb_mass_storage_device msd{};
     msd.device = device;
+    msd.interface_number = bot_interface_number;
     msd.bulk_in_endpoint = bulk_in_ep;
     msd.bulk_out_endpoint = bulk_out_ep;
     msd.bulk_in_max_packet_size = bulk_in_mps;
