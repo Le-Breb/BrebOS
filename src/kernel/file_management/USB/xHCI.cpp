@@ -6,6 +6,7 @@
 #include "../../core/PIT.h"
 #include "../../core/memory/memory.h"
 #include "../../processes/process.h"
+#include <kstring.h>
 
 [[noreturn]]
 extern int irrecoverable_error(const char* format, ...);
@@ -303,6 +304,7 @@ void xHCI::process_events()
         event_ring->dequeue_events(events);
 
     uint8_t command_completion_status = 0;
+    uint8_t transfer_completion_status = 0;
 
     for (const auto event : events)
     {
@@ -311,6 +313,10 @@ void xHCI::process_events()
             case XHCI_TRB_TYPE_CMD_COMPLETION_EVENT:
                 command_completion_status = 1;
                 command_completion_events.push_back((xhci_command_completion_trb_t*)event);
+                break;
+            case XHCI_TRB_TYPE_TRANSFER_EVENT:
+                transfer_completion_status = 1;
+                transfer_completion_events.push_back((xhci_transfer_event_trb_t*)event);
                 break;
             case XHCI_TRB_TYPE_PORT_STATUS_CHANGE_EVENT:
             {
@@ -326,6 +332,7 @@ void xHCI::process_events()
     }
 
     command_irq_completed = command_completion_status;
+    transfer_irq_completed = transfer_completion_status;
 }
 
 bool xHCI::is_usb3_port(uint8_t port) const
@@ -465,6 +472,29 @@ xhci_command_completion_trb_t* xHCI::send_command_trb(xhci_trb_t* cmd_trb, uint3
     return completion_trb;
 }
 
+xhci_transfer_event_trb_t* xHCI::wait_for_transfer_event(uint32_t timeout_ms)
+{
+    // ** Important Assumption **
+    //  - Only one transfer is in flight at a time, same assumption as send_command_trb()
+    uint64_t sleep_passed = 0;
+    while (!transfer_irq_completed) {
+        PIT::spin_sleep(10);
+        sleep_passed += 10;
+
+        if (sleep_passed > timeout_ms * 1000) {
+            break;
+        }
+    }
+
+    xhci_transfer_event_trb_t* event =
+        transfer_completion_events.get_size() ? transfer_completion_events[0] : nullptr;
+
+    transfer_completion_events.clear();
+    transfer_irq_completed = 0;
+
+    return event;
+}
+
 const char* xHCI::_usb_speed_to_string(uint8_t speed)
 {
     static const char* speed_string[7] = {
@@ -478,6 +508,327 @@ const char* xHCI::_usb_speed_to_string(uint8_t speed)
     };
 
     return speed_string[speed];
+}
+
+uint16_t xHCI::default_control_max_packet_size(uint8_t speed)
+{
+    // xHci Spec Section 4.3 / USB2 Spec Table 5-5: default control pipe max packet size is fixed
+    // by speed, except for Full-Speed devices where it can be 8, 16, 32 or 64 and must be read
+    // from the device's Device Descriptor (see setup_device()).
+    switch (speed)
+    {
+        case XHCI_USB_SPEED_LOW_SPEED: return 8;
+        case XHCI_USB_SPEED_FULL_SPEED: return 8; // conservative guess, corrected after reading the device descriptor
+        case XHCI_USB_SPEED_HIGH_SPEED: return 64;
+        case XHCI_USB_SPEED_SUPER_SPEED:
+        case XHCI_USB_SPEED_SUPER_SPEED_PLUS: return 512;
+        default: return 8;
+    }
+}
+
+uint8_t xHCI::endpoint_dci(uint8_t endpoint_number, bool is_in)
+{
+    // xHci Spec Section 4.5.1: Device Context Index (DCI) = (Endpoint Number * 2) + Direction.
+    // endpoint_number is 1-based (endpoint 0/the control endpoint always uses DCI 1 directly).
+    return static_cast<uint8_t>(2 * endpoint_number + (is_in ? 1 : 0));
+}
+
+uint8_t xHCI::enable_device_slot()
+{
+    xhci_trb_t trb{};
+    trb.trb_type = XHCI_TRB_TYPE_ENABLE_SLOT_CMD;
+
+    return send_command_trb(&trb)->slot_id;
+}
+
+bool xHCI::create_device_context(uint8_t slot_id)
+{
+    const size_t device_context_size = m_64byte_context_size ? sizeof(xhci_device_context64) : sizeof(xhci_device_context32);
+
+    void* ctx = Memory::physically_aligned_malloc(
+        device_context_size,
+        XHCI_DEVICE_CONTEXT_ALIGNMENT,
+        XHCI_DEVICE_CONTEXT_BOUNDARY
+    );
+    if (!ctx)
+        return false;
+
+    memset(ctx, 0, device_context_size);
+
+    // Ownership of the Output Device Context passes to the xHC once the doorbell is rung for
+    // the first Address Device Command targeting this slot (xHci Spec Section 6.2.1)
+    dcbaa[slot_id] = PHYS_ADDR(Memory::page_tables, (uintptr_t)ctx);
+
+    return true;
+}
+
+bool xHCI::address_device(const SharedPointer<xhci_device>& device)
+{
+    if (!device->has_transfer_ring(1))
+        device->create_transfer_ring(1, XHCI_TRANSFER_RING_TRB_COUNT);
+
+    xhci_input_control_context32* input_ctrl_ctx = device->get_input_control_ctx();
+    input_ctrl_ctx->add_flags = (1u << 0) | (1u << 1); // A0: slot context, A1: control endpoint (DCI 1)
+
+    xhci_slot_context32* slot_ctx = device->get_input_slot_ctx();
+    slot_ctx->route_string = 0; // Device is attached directly to a root hub port, no hubs involved
+    slot_ctx->speed = device->get_speed();
+    slot_ctx->context_entries = 1; // Only the control endpoint is valid so far
+    slot_ctx->root_hub_port_num = device->get_port();
+
+    xhci_endpoint_context32* ep0_ctx = device->get_input_control_ep_ctx();
+    ep0_ctx->endpoint_type = XHCI_ENDPOINT_TYPE_CONTROL;
+    ep0_ctx->max_packet_size = default_control_max_packet_size(device->get_speed());
+    ep0_ctx->error_count = 3;
+    ep0_ctx->average_trb_length = 8; // Setup Stage TRBs are always 8 bytes; refined once real traffic flows
+    ep0_ctx->transfer_ring_dequeue_ptr = (device->get_transfer_ring(1)->get_physical_base() & ~0xFULL) | 1 /* DCS */;
+
+    xhci_trb_t trb{};
+    trb.trb_type = XHCI_TRB_TYPE_ADDRESS_DEVICE_CMD;
+    trb.parameter = device->get_input_ctx_physical_addr();
+    trb.control |= static_cast<uint32_t>(device->get_slot()) << XHCI_TRB_CMD_SLOT_ID_SHIFT;
+
+    return send_command_trb(&trb) != nullptr;
+}
+
+bool xHCI::evaluate_context(const SharedPointer<xhci_device>& device)
+{
+    xhci_input_control_context32* input_ctrl_ctx = device->get_input_control_ctx();
+    input_ctrl_ctx->drop_flags = 0;
+    input_ctrl_ctx->add_flags = 1u << 1; // A1: control endpoint context only
+
+    xhci_trb_t trb{};
+    trb.trb_type = XHCI_TRB_TYPE_EVALUATE_CONTEXT_CMD;
+    trb.parameter = device->get_input_ctx_physical_addr();
+    trb.control |= static_cast<uint32_t>(device->get_slot()) << XHCI_TRB_CMD_SLOT_ID_SHIFT;
+
+    return send_command_trb(&trb) != nullptr;
+}
+
+bool xHCI::control_transfer(const SharedPointer<xhci_device>& device, const usb_device_request& request,
+                             void* data, uint32_t* actual_length)
+{
+    if (actual_length)
+        *actual_length = 0;
+
+    const SharedPointer<xhci_transfer_ring>& ring = device->get_transfer_ring(1);
+    if (!ring)
+        return false;
+
+    const bool has_data = request.w_length > 0;
+    const bool device_to_host = (request.bm_request_type & 0x80) != 0;
+
+    // Setup Stage TRB - the 8-byte SETUP packet is placed directly in "parameter" (Immediate Data)
+    xhci_trb_t setup_trb{};
+    memcpy(&setup_trb.parameter, &request, sizeof(usb_device_request));
+    setup_trb.status = sizeof(usb_device_request);
+    setup_trb.trb_type = XHCI_TRB_TYPE_SETUP_STAGE;
+    setup_trb.immediate_data = 1;
+    setup_trb.control |= (has_data ? (device_to_host ? XHCI_TRB_TRT_IN_DATA_STAGE : XHCI_TRB_TRT_OUT_DATA_STAGE)
+                                    : XHCI_TRB_TRT_NO_DATA_STAGE) << XHCI_TRB_TRT_SHIFT;
+    ring->enqueue(&setup_trb);
+
+    if (has_data)
+    {
+        xhci_trb_t data_trb{};
+        data_trb.parameter = PHYS_ADDR(Memory::page_tables, (uintptr_t)data);
+        data_trb.status = request.w_length;
+        data_trb.trb_type = XHCI_TRB_TYPE_DATA_STAGE;
+        if (device_to_host)
+            data_trb.control |= XHCI_TRB_DIR_IN_BIT;
+        ring->enqueue(&data_trb);
+    }
+
+    // Status stage direction is always opposite the data stage (IN when there was no data stage)
+    const bool status_dir_in = !(has_data && device_to_host);
+
+    xhci_trb_t status_trb{};
+    status_trb.trb_type = XHCI_TRB_TYPE_STATUS_STAGE;
+    status_trb.interrupt_on_completion = 1;
+    if (status_dir_in)
+        status_trb.control |= XHCI_TRB_DIR_IN_BIT;
+    ring->enqueue(&status_trb);
+
+    doorbell_manager->ring_control_endpoint_doorbell(device->get_slot());
+
+    const xhci_transfer_event_trb_t* event = wait_for_transfer_event();
+    if (!event)
+        return false;
+
+    if (event->completion_code != XHCI_TRB_COMPLETION_CODE_SUCCESS &&
+        event->completion_code != XHCI_TRB_COMPLETION_CODE_SHORT_PACKET)
+        return false;
+
+    if (actual_length)
+        *actual_length = request.w_length - event->trb_transfer_length;
+
+    return true;
+}
+
+bool xHCI::configure_endpoints(const SharedPointer<xhci_device>& device, const vector<usb_endpoint_desc>& endpoints)
+{
+    xhci_input_control_context32* input_ctrl_ctx = device->get_input_control_ctx();
+    memset(input_ctrl_ctx, 0, sizeof(*input_ctrl_ctx));
+
+    xhci_slot_context32* slot_ctx = device->get_input_slot_ctx();
+    uint8_t max_dci = slot_ctx->context_entries;
+
+    for (const auto& desc : endpoints)
+    {
+        const uint8_t ep_num = desc.address & 0xF;
+        const bool is_in = (desc.address & 0x80) != 0;
+        const uint8_t dci = endpoint_dci(ep_num, is_in);
+
+        if (dci > max_dci)
+            max_dci = dci;
+
+        if (!device->has_transfer_ring(dci))
+            device->create_transfer_ring(dci, XHCI_TRANSFER_RING_TRB_COUNT);
+
+        xhci_endpoint_context32* ep_ctx = device->get_input_ep_ctx(dci);
+        memset(ep_ctx, 0, sizeof(*ep_ctx));
+
+        const uint8_t transfer_type = desc.attributes & 0x3;
+        ep_ctx->endpoint_type = transfer_type == 2 ? (is_in ? XHCI_ENDPOINT_TYPE_BULK_IN : XHCI_ENDPOINT_TYPE_BULK_OUT)
+                               : transfer_type == 3 ? (is_in ? XHCI_ENDPOINT_TYPE_INTERRUPT_IN : XHCI_ENDPOINT_TYPE_INTERRUPT_OUT)
+                                                     : (is_in ? XHCI_ENDPOINT_TYPE_ISOCHRONOUS_IN : XHCI_ENDPOINT_TYPE_ISOCHRONOUS_OUT);
+        ep_ctx->max_packet_size = desc.max_packet_size;
+        ep_ctx->error_count = 3;
+        ep_ctx->average_trb_length = desc.max_packet_size;
+        ep_ctx->interval = desc.xhci_interval;
+        ep_ctx->transfer_ring_dequeue_ptr = (device->get_transfer_ring(dci)->get_physical_base() & ~0xFULL) | 1 /* DCS */;
+
+        input_ctrl_ctx->add_flags |= 1u << dci;
+    }
+
+    slot_ctx->context_entries = max_dci;
+    input_ctrl_ctx->add_flags |= 1u << 0; // A0: slot context (context_entries may have changed)
+
+    xhci_trb_t trb{};
+    trb.trb_type = XHCI_TRB_TYPE_CONFIGURE_ENDPOINT_CMD;
+    trb.parameter = device->get_input_ctx_physical_addr();
+    trb.control |= static_cast<uint32_t>(device->get_slot()) << XHCI_TRB_CMD_SLOT_ID_SHIFT;
+
+    return send_command_trb(&trb) != nullptr;
+}
+
+bool xHCI::bulk_transfer(const SharedPointer<xhci_device>& device, uint8_t endpoint_address,
+                          void* data, uint32_t length, uint32_t* actual_length)
+{
+    if (actual_length)
+        *actual_length = 0;
+
+    if (length == 0)
+        return false;
+
+    const uint8_t ep_num = endpoint_address & 0xF;
+    const bool is_in = (endpoint_address & 0x80) != 0;
+    const uint8_t dci = endpoint_dci(ep_num, is_in);
+
+    const SharedPointer<xhci_transfer_ring>& ring = device->get_transfer_ring(dci);
+    if (!ring)
+        return false;
+
+    const uintptr_t phys_base = PHYS_ADDR(Memory::page_tables, (uintptr_t)data);
+
+    uint32_t offset = 0;
+    while (offset < length)
+    {
+        const uint32_t chunk = length - offset > XHCI_MAX_NORMAL_TRB_TRANSFER_LENGTH
+            ? XHCI_MAX_NORMAL_TRB_TRANSFER_LENGTH : length - offset;
+        const bool last_chunk = offset + chunk == length;
+
+        xhci_trb_t trb{};
+        trb.trb_type = XHCI_TRB_TYPE_NORMAL;
+        trb.parameter = phys_base + offset;
+        trb.status = chunk;
+        if (last_chunk)
+            trb.interrupt_on_completion = 1;
+        else
+            trb.chain_bit = 1;
+        ring->enqueue(&trb);
+
+        offset += chunk;
+    }
+
+    doorbell_manager->ring_doorbell(device->get_slot(), dci);
+
+    const xhci_transfer_event_trb_t* event = wait_for_transfer_event();
+    if (!event)
+        return false;
+
+    if (event->completion_code != XHCI_TRB_COMPLETION_CODE_SUCCESS &&
+        event->completion_code != XHCI_TRB_COMPLETION_CODE_SHORT_PACKET)
+        return false;
+
+    if (actual_length)
+        *actual_length = length - event->trb_transfer_length;
+
+    return true;
+}
+
+void xHCI::setup_device(uint8_t port_num)
+{
+    const xhci_portsc_register portsc = read_portsc_reg(port_num);
+    const uint8_t speed = portsc.port_speed;
+
+    const uint8_t slot_id = enable_device_slot();
+    if (!slot_id)
+    {
+        printf_warn("Failed to enable a device slot for port %i", port_num);
+        return;
+    }
+
+    if (!create_device_context(slot_id))
+    {
+        printf_warn("Failed to create a device context for slot %i", slot_id);
+        return;
+    }
+
+    SharedPointer<xhci_device> device = { new xhci_device(port_num + 1, slot_id, speed, m_64byte_context_size) };
+
+    if (!address_device(device))
+    {
+        printf_warn("Failed to address device on port %i (slot %i)", port_num, slot_id);
+        return;
+    }
+
+    // Read the first 8 bytes of the Device Descriptor to learn the device's real
+    // bMaxPacketSize0. Only Full-Speed devices can actually differ from our speed-based guess
+    // (xHci Spec Section 4.3); for the other speeds this is purely a smoke test that the
+    // control pipe works.
+    void* desc_buf = Memory::physically_aligned_malloc(8, 8, PAGE_SIZE);
+    if (desc_buf)
+    {
+        const usb_device_request get_desc_req = {
+            .bm_request_type = 0x80, // Device-to-host | Standard | Device
+            .b_request = 6,          // GET_DESCRIPTOR
+            .w_value = 0x0100,       // Descriptor Type = Device (1), Index = 0
+            .w_index = 0,
+            .w_length = 8
+        };
+
+        uint32_t actual_length = 0;
+        if (control_transfer(device, get_desc_req, desc_buf, &actual_length) && actual_length == 8)
+        {
+            const uint8_t real_mps0 = static_cast<uint8_t*>(desc_buf)[7];
+            xhci_endpoint_context32* ep0_ctx = device->get_input_control_ep_ctx();
+
+            if (speed == XHCI_USB_SPEED_FULL_SPEED && real_mps0 && real_mps0 != ep0_ctx->max_packet_size)
+            {
+                ep0_ctx->max_packet_size = real_mps0;
+                if (!evaluate_context(device))
+                    printf_warn("Failed to update control endpoint max packet size for slot %i", slot_id);
+            }
+        }
+        else
+            printf_warn("Failed to read device descriptor header for slot %i", slot_id);
+    }
+
+    devices.push_back(device);
+
+    printf_info("USB device ready on port %i: slot=%i speed=%s max_packet_size0=%i",
+                port_num, slot_id, _usb_speed_to_string(speed), device->get_input_control_ep_ctx()->max_packet_size);
 }
 
 xHCI* xHCI::get_instance()
@@ -512,7 +863,10 @@ void xHCI::handle_port_connect_change(uint8_t port_num)
     if (portsc.csc && portsc.ccs)
     {
         if (reset_port(port_num))
+        {
             printf_info("Device connected on port %i - %s", port_num, _usb_speed_to_string(portsc.port_speed));
+            setup_device(port_num);
+        }
         else
             printf_warn("Failed to reset port %i after device connection", port_num);
     }

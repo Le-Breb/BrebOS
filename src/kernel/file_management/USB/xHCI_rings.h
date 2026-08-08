@@ -23,6 +23,11 @@ private:
     uint8_t             m_rcs_bit;           // Ring cycle state
 };
 
+// A Transfer Ring is structurally identical to a Command Ring - same TRB layout and cycle-bit
+// mechanics (xHci Spec Section 4.9.2) - it is simply attached to a device endpoint instead of
+// the controller itself, so it reuses the exact same class.
+using xhci_transfer_ring = xhci_command_ring;
+
 /*
 // xHci Spec Section 6.5 Event Ring Segment Table Figure 6-40: Event Ring Segment Table Entry
 

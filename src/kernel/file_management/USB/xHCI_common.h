@@ -1306,3 +1306,49 @@ fields of a PSI Dword.
 // (TO-DO: Find spec page)
 #define XHCI_DOORBELL_TARGET_COMMAND_RING       0
 #define XHCI_DOORBELL_TARGET_CONTROL_EP_RING    1
+
+/*
+// xHci Spec Section 6.4.3: Command TRBs (various figures)
+
+Slot ID field (bits 31:24) of the Control dword. Present on Address Device,
+Configure Endpoint, Evaluate Context, Reset Device, Stop Endpoint and Reset
+Endpoint Command TRBs to identify which Device Slot the command targets.
+*/
+#define XHCI_TRB_CMD_SLOT_ID_SHIFT  24
+
+/*
+// xHci Spec Section 6.4.3.4 Figure 6-25: Address Device Command TRB
+
+Block Set Address Request (BSR) - bit 9 of the Control dword. When set to '1',
+the xHC transitions the Slot from Enabled to the Default state without
+actually issuing a SET_ADDRESS request to the device, leaving Slot ID 0 in
+place. Left cleared ('0') for a normal Address Device Command.
+*/
+#define XHCI_ADDRESS_DEVICE_BSR_BIT  (1 << 9)
+
+/*
+// xHci Spec Section 6.4.1.2.1 Figure 6-9: Setup Stage TRB
+
+Transfer Type (TRT) field, bits 17:16 of the Control dword.
+*/
+#define XHCI_TRB_TRT_SHIFT               16
+#define XHCI_TRB_TRT_NO_DATA_STAGE       0
+#define XHCI_TRB_TRT_OUT_DATA_STAGE      2
+#define XHCI_TRB_TRT_IN_DATA_STAGE       3
+
+/*
+// xHci Spec Section 6.4.1.2.2 Figure 6-10 / 6.4.1.2.3 Figure 6-11
+
+Direction (DIR) field, bit 16 of the Control dword, shared by Data Stage and
+Status Stage TRBs. '1' = IN (device to host), '0' = OUT (host to device).
+*/
+#define XHCI_TRB_DIR_IN_BIT  (1 << 16)
+
+/*
+// xHci Spec Section 6.4.1.1 Figure 6-8 / Section 4.11.2.1
+
+TRB Transfer Length field of a Normal/Data Stage TRB is 17 bits wide (max
+131071 bytes), but software is expected to keep individual TRBs at or below a
+conservative 64KB so a single TD only ever needs to span a handful of TRBs.
+*/
+#define XHCI_MAX_NORMAL_TRB_TRANSFER_LENGTH  0x10000
