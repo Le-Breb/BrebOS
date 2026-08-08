@@ -1,9 +1,83 @@
 #include "USB.h"
 
 #include "../../core/memory/memory.h"
+#include <kstring.h>
 
 __attribute__ ((format (printf, 1, 2))) extern int printf_warn(const char* format, ...);
 __attribute__ ((format (printf, 1, 2))) extern int printf_info(const char* format, ...);
+
+// USB 2.0 Spec Section 9.6.7: fetches the device's supported-languages String Descriptor
+// (index 0) and returns its first Language ID, falling back to US English if that fails.
+static uint16_t get_usb_string_lang_id(xHCI* xhci, const SharedPointer<xhci_device>& device)
+{
+    void* buf = Memory::physically_aligned_malloc(255, 8, PAGE_SIZE);
+    if (!buf)
+        return USB_LANGID_US_ENGLISH;
+
+    const usb_device_request req = {
+        .bm_request_type = 0x80, // Device-to-host | Standard | Device
+        .b_request = USB_REQUEST_GET_DESCRIPTOR,
+        .w_value = static_cast<uint16_t>(USB_DESCRIPTOR_TYPE_STRING << 8), // String Descriptor index 0
+        .w_index = 0,
+        .w_length = 255
+    };
+
+    uint32_t actual = 0;
+    if (!xhci->control_transfer(device, req, buf, &actual) || actual < 4)
+        return USB_LANGID_US_ENGLISH;
+
+    const auto* raw = static_cast<const uint8_t*>(buf);
+    return static_cast<uint16_t>(raw[2] | (raw[3] << 8));
+}
+
+/*
+// USB 2.0 Spec Section 9.6.7: String Descriptor
+
+Fetches String Descriptor `index` (an iProduct/iManufacturer/... field from another descriptor,
+NOT a string itself) and decodes its UTF-16LE payload into ASCII, replacing any non-ASCII code
+point with '?'. Leaves out[0] = '\0' and returns false if index is 0 (device has no such string)
+or the descriptor couldn't be read.
+*/
+static bool get_usb_string(xHCI* xhci, const SharedPointer<xhci_device>& device, uint8_t index,
+                            uint16_t lang_id, char* out, size_t out_size)
+{
+    out[0] = '\0';
+    if (index == 0)
+        return false;
+
+    void* buf = Memory::physically_aligned_malloc(255, 8, PAGE_SIZE);
+    if (!buf)
+        return false;
+
+    const usb_device_request req = {
+        .bm_request_type = 0x80,
+        .b_request = USB_REQUEST_GET_DESCRIPTOR,
+        .w_value = static_cast<uint16_t>((USB_DESCRIPTOR_TYPE_STRING << 8) | index),
+        .w_index = lang_id,
+        .w_length = 255
+    };
+
+    uint32_t actual = 0;
+    if (!xhci->control_transfer(device, req, buf, &actual) || actual < 2)
+        return false;
+
+    const auto* raw = static_cast<const uint8_t*>(buf);
+    const uint8_t desc_len = raw[0] < actual ? raw[0] : static_cast<uint8_t>(actual);
+    if (desc_len < 2)
+        return false;
+
+    const size_t char_count = (desc_len - 2) / 2;
+
+    size_t n = 0;
+    for (; n < char_count && n + 1 < out_size; n++)
+    {
+        const uint16_t code_unit = static_cast<uint16_t>(raw[2 + n * 2] | (raw[3 + n * 2] << 8));
+        out[n] = code_unit < 128 ? static_cast<char>(code_unit) : '?';
+    }
+    out[n] = '\0';
+
+    return n > 0;
+}
 
 USB* USB::get_instance()
 {
@@ -68,9 +142,17 @@ void USB::enumerate_device(const SharedPointer<xhci_device>& device)
     }
 
     const auto* dev_desc = static_cast<usb_device_descriptor*>(dev_desc_buf);
-    printf_info("USB: slot %i vendor=0x%x product=0x%x class=0x%x configs=%i",
-                slot, dev_desc->vendor_id, dev_desc->product_id, dev_desc->device_class,
-                dev_desc->num_configurations);
+
+    // iProduct/iManufacturer are just String Descriptor indices - fetch the actual strings
+    const uint16_t lang_id = get_usb_string_lang_id(xhci, device);
+    char product_name[USB_STRING_MAX_LEN];
+    char manufacturer_name[USB_STRING_MAX_LEN];
+    get_usb_string(xhci, device, dev_desc->product_idx, lang_id, product_name, sizeof(product_name));
+    get_usb_string(xhci, device, dev_desc->manufacturer_idx, lang_id, manufacturer_name, sizeof(manufacturer_name));
+
+    printf_info("USB: slot %i product=\"%s\" manufacturer=\"%s\" vendor=0x%x product_id=0x%x class=0x%x configs=%i",
+                slot, product_name, manufacturer_name, dev_desc->vendor_id, dev_desc->product_id,
+                dev_desc->device_class, dev_desc->num_configurations);
 
     // --- Configuration Descriptor (index 0): header first to learn total_length ---
     void* cfg_header_buf = Memory::physically_aligned_malloc(sizeof(usb_config_descriptor), 8, PAGE_SIZE);
@@ -201,13 +283,16 @@ void USB::enumerate_device(const SharedPointer<xhci_device>& device)
         return;
     }
 
-    mass_storage_devices.push_back({
-        .device = device,
-        .bulk_in_endpoint = bulk_in_ep,
-        .bulk_out_endpoint = bulk_out_ep,
-        .bulk_in_max_packet_size = bulk_in_mps,
-        .bulk_out_max_packet_size = bulk_out_mps
-    });
+    usb_mass_storage_device msd{};
+    msd.device = device;
+    msd.bulk_in_endpoint = bulk_in_ep;
+    msd.bulk_out_endpoint = bulk_out_ep;
+    msd.bulk_in_max_packet_size = bulk_in_mps;
+    msd.bulk_out_max_packet_size = bulk_out_mps;
+    memcpy(msd.product_name, product_name, sizeof(msd.product_name));
+    memcpy(msd.manufacturer_name, manufacturer_name, sizeof(msd.manufacturer_name));
+    mass_storage_devices.push_back(msd);
 
-    printf_info("USB: mass storage device ready on slot %i (bulk in=0x%x out=0x%x)", slot, bulk_in_ep, bulk_out_ep);
+    printf_info("USB: mass storage device \"%s\" ready on slot %i (bulk in=0x%x out=0x%x)",
+                product_name, slot, bulk_in_ep, bulk_out_ep);
 }

@@ -4,6 +4,9 @@
 #include "xHCI.h"
 #include "USB_common.h"
 
+// Max ASCII characters (+ null terminator) kept from a decoded USB String Descriptor
+#define USB_STRING_MAX_LEN 64
+
 // A USB device found to expose a Bulk-Only Transport Mass Storage interface, fully configured
 // (SET_CONFIGURATION issued, bulk endpoints brought up via xHCI::configure_endpoints()) and
 // ready for the caller to drive CBW/CSW/SCSI traffic over via xHCI::bulk_transfer().
@@ -14,6 +17,8 @@ struct usb_mass_storage_device
     uint8_t  bulk_out_endpoint;        // bEndpointAddress, bit 7 clear (OUT)
     uint16_t bulk_in_max_packet_size;
     uint16_t bulk_out_max_packet_size;
+    char     product_name[USB_STRING_MAX_LEN];      // Empty string if the device has no iProduct string
+    char     manufacturer_name[USB_STRING_MAX_LEN];  // Empty string if the device has no iManufacturer string
 };
 
 class USB
