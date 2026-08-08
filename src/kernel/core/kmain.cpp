@@ -6,6 +6,7 @@
 #include "../processes/scheduler.h"
 #include "PIC.h"
 #include "IDT.h"
+#include "../file_management/USB/USB.h"
 #include "../file_management/VFS.h"
 #include "../network/Network.h"
 #include "../utils/profiling.h"
@@ -64,11 +65,16 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure point
     // Start refreshing the display every frame
     Scheduler::start_kernel_process((void*)FB::refresh_loop);
 
+    FB_OK_OP("Discovering PCI devices\n", PCI::checkAllBuses());
+
+    xHCI::get_instance()->start();
+    USB::get_instance()->enumerate_devices();
+
 #ifdef PROFILING
     Profiling::init();
 #endif
 
-    FB_OK_OP("Initialize network card and stack\n", Network::init());
+    //FB_OK_OP("Initialize network card and stack\n", Network::init());
 
     FB_OK_OP("Initializing Virtual File System\n", VFS::init());
 

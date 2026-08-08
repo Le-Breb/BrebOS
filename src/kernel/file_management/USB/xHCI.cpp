@@ -802,8 +802,8 @@ void xHCI::setup_device(uint8_t port_num)
     {
         const usb_device_request get_desc_req = {
             .bm_request_type = 0x80, // Device-to-host | Standard | Device
-            .b_request = 6,          // GET_DESCRIPTOR
-            .w_value = 0x0100,       // Descriptor Type = Device (1), Index = 0
+            .b_request = USB_REQUEST_GET_DESCRIPTOR,
+            .w_value = static_cast<uint16_t>(USB_DESCRIPTOR_TYPE_DEVICE << 8), // Descriptor Type = Device, Index = 0
             .w_index = 0,
             .w_length = 8
         };
