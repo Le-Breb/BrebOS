@@ -43,7 +43,7 @@ uint8_t PCI::getHeaderType(uint8_t bus, uint8_t device, uint8_t function)
 
 void displayCard(const char* name)
 {
-    printf("Found ");
+    printf(" Found ");
     FB::set_fg(FB_LIGHTRED);
     printf("%s", name);
     FB::set_fg(FB_WHITE);
