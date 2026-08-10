@@ -1083,14 +1083,20 @@ __attribute__ ((format (printf, 1, 2))) int printf(const char* format, ...)
 	return i;
 }
 
-__attribute__((format(printf, 2, 3))) int sprintf(char* str, const char *format, ...)
+int sprintf_aux(char* str, const char* format, va_list list)
 {
   	ksprintf_buf = str;
+	const int i = kvprintf(format, output_funcs(ksprintf_output), list);
+	ksprintf_buf = nullptr;
+	return i;
+}
+
+__attribute__((format(printf, 2, 3))) int sprintf(char* str, const char *format, ...)
+{
 	va_list list;
 	va_start (list, format);
-	int i = kvprintf(format, output_funcs(ksprintf_output), list);
+	int i = sprintf_aux(str, format, list);
 	va_end (list);
-	ksprintf_buf = nullptr;
 	return i;
 }
 

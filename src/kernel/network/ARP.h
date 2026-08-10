@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <kstring.h>
 
-#include "Endianness.h"
+#include "../utils/Endianness.h"
 #include "Ethernet.h"
 
 #define ARP_ETHERNET 1

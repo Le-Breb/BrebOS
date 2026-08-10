@@ -90,7 +90,7 @@ USB* USB::get_instance()
         printf_warn("Cannot get USB instance as no xCHI controller is available");
         return nullptr;
     }
-    return new USB();
+    return (instance = new USB());
 }
 
 void USB::enumerate_devices()

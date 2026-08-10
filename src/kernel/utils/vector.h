@@ -32,7 +32,7 @@ class vector
 public:
     vector();
     void push_back(const T& t);
-    T& operator[](size_t index);
+    T& operator[](size_t index) const;
     void clear();
     [[nodiscard]] size_t get_size() const;
     Iterator begin() const;

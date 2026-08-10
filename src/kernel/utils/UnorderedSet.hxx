@@ -51,7 +51,7 @@ template <typename T, uint32_t capacity, typename hash_func, typename equal_func
 Status UnorderedSet<T, capacity, hash_func, equal_func>::add(const T& element)
 {
     if (size == capacity)
-        return Status::failure();
+        return Status::failure("set is full!");
 
     uint32_t index = bucket(element);
     while (elements[index].used)

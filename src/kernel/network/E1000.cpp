@@ -3,7 +3,7 @@
 #include <kstring.h>
 
 #include "ARP.h"
-#include "Endianness.h"
+#include "../utils/Endianness.h"
 #include "Ethernet.h"
 #include "Network.h"
 #include "ports.h"

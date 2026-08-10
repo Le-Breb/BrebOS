@@ -261,4 +261,6 @@ __attribute__ ((format (printf, 1, 2))) int printf_warn(const char* format, ...)
 
 [[noreturn]]
 void irrecoverable_error_aux(const char* format, va_list list);
+
+int sprintf_aux(char* str, const char* format, va_list list);
 #endif /* INCLUDE_FB_H */

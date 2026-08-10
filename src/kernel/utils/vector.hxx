@@ -33,7 +33,7 @@ void vector<T>::push_back(const T& t)
 }
 
 template <typename T>
-T& vector<T>::operator[](size_t index)
+T& vector<T>::operator[](size_t index) const
 {
     if (index >= size)
         irrecoverable_error("%s: index out of bounds", __PRETTY_FUNCTION__);

@@ -178,6 +178,8 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(programs) bootloader busybox
 	done
 	mcopy -i disk_image.img ./busybox/0_lib/libbusybox.so.1.36.1 ::/usr/lib
 
+	qemu-img create -f raw usb_disk.img 64M
+
 	@echo "set timeout=$(GRUB_TIMEOUT)" > grub.cfg
 	@echo "set default=0" >> grub.cfg
 	@# uncomment the following lines to enable serial debugging. use it with -serial file:serial.log in qemu
