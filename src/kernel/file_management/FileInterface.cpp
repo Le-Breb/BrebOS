@@ -28,7 +28,7 @@ int File::read(void* buf, uint count)
     if (preload_read(buf, offset, count, dentry))
         loaded_bytes = count;
     else if (!dentry->inode->superblock->get_fs()->load_file_to_buf(buf, dentry->name, dentry->parent, offset, l,
-                                                                        loaded_bytes))
+                                                                        loaded_bytes).warn_is_ok())
         return -EIO; // IO error
 
     offset += loaded_bytes;
@@ -71,9 +71,10 @@ int File::write(void* buf, uint count)
 
     uint file_size = dentry->inode->size;
     uint loaded_bytes = 0;
-    auto file = dentry->inode->superblock->get_fs()->load_file_to_buf(dentry->name, dentry->parent, 0, file_size, loaded_bytes);
-    if (!file)
+    auto file_res = dentry->inode->superblock->get_fs()->load_file_to_buf(dentry->name, dentry->parent, 0, file_size, loaded_bytes);
+    if (!file_res.warn_is_ok())
         return -EIO; // IO error
+    auto file = std::move(file_res).expect();
 
     auto nf = realloc(file, file_size + count);
     if (!nf)
@@ -87,7 +88,7 @@ int File::write(void* buf, uint count)
     memcpy((char*)file + offset, buf, count);
 
     uint new_file_size = file_size + count;
-    bool write_op = dentry->inode->superblock->get_fs()->write_buf_to_file(dentry, file, new_file_size);
+    const bool write_op = dentry->inode->superblock->get_fs()->write_buf_to_file(dentry, file, new_file_size).warn_is_ok();
     delete (char*)file;
     if (!write_op)
         return -EIO; // IO error
@@ -100,7 +101,7 @@ int File::write(void* buf, uint count)
 int File::fstat(struct stat* statbuf)
 {
     auto inode = dentry->inode;
-    statbuf->st_dev = inode->superblock->get_fs()->get_dev();
+    statbuf->st_dev = inode->superblock->get_fs()->get_device()->get_dev();
     statbuf->st_ino = inode->id;
     statbuf->st_mode = inode->mode;
     statbuf->st_nlink = inode->nlink;

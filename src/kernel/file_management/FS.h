@@ -3,8 +3,11 @@
 
 #include "inode.h"
 #include "../utils/list.h"
+#include "../utils/Result.h"
 #include "dentry.h"
 #include <sys/stat.h>
+
+#include "BlockDevice.h"
 
 class Superblock;
 
@@ -14,14 +17,13 @@ class FS
 {
 	friend Superblock;
 
-	const blksize_t block_size;
-
-	dev_t dev;
-
 protected:
 	Superblock* superblock;
 
-	FS(blksize_t block_size, dev_t dev);
+	BlockDevice* dev;
+	const blksize_t block_size;
+
+	explicit FS(blksize_t block_size, BlockDevice* dev);
 
 public:
 	typedef void (*ls_printer)(const Dentry& dentry);
@@ -34,21 +36,24 @@ public:
 
 	virtual SharedPointer<Dentry> get_child_dentry(SharedPointer<Dentry>& parent_dentry, const char* entry_name) = 0;
 
-	virtual SharedPointer<Dentry> touch(SharedPointer<Dentry>& parent_dentry, const char* entry_name) = 0;
+	virtual Result<SharedPointer<Dentry>> touch(SharedPointer<Dentry>& parent_dentry, const char* entry_name) = 0;
 
-	virtual SharedPointer<Dentry> mkdir(SharedPointer<Dentry>& parent_dentry, const char* entry_name) = 0;
+	virtual Result<SharedPointer<Dentry>> mkdir(SharedPointer<Dentry>& parent_dentry, const char* entry_name) = 0;
 
-	virtual bool ls(const SharedPointer<Dentry>& dentry, ls_printer printer) = 0;
+	virtual Status ls(const SharedPointer<Dentry>& dentry, ls_printer printer) = 0;
 
-	virtual bool getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t max_size, size_t* bytes_read, uint& fd_off) = 0;
+	virtual Status getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t max_size, size_t* bytes_read,
+	                        uint& fd_off) = 0;
 
-	void* load_file_to_buf(const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset, uint length, uint& loaded_bytes);
+	Result<void*> load_file_to_buf(const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset,
+	                               uint length, uint& loaded_bytes);
 
-	virtual bool load_file_to_buf(void* buf, const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset, uint length, uint& loaded_bytes) = 0;
+	virtual Status load_file_to_buf(void* buf, const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset,
+	                                uint length, uint& loaded_bytes) = 0;
 
-	virtual bool write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length) = 0;
+	virtual Status write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length) = 0;
 
-	virtual bool resize(SharedPointer<Dentry>& dentry, uint new_size) = 0;
+	virtual Status resize(SharedPointer<Dentry>& dentry, uint new_size) = 0;
 
 	[[nodiscard]]
 	virtual Inode* get_root_node() = 0;
@@ -57,7 +62,7 @@ public:
 	blksize_t get_block_size() const;
 
 	[[nodiscard]]
-	dev_t get_dev() const;
+	BlockDevice* get_device() const;
 };
 
 

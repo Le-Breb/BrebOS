@@ -75,11 +75,16 @@ SharedPointer<Dentry> VFS::touch(const char* pathname)
 	if (!parent_dentry)
 		return nullptr;
 
-	auto dentry = parent_dentry->inode->superblock->get_fs()->touch(parent_dentry, file_name);
-	if (dentry)
-		cache_dentry(dentry);
+	auto dentry_res = parent_dentry->inode->superblock->get_fs()->touch(parent_dentry, file_name);
+	if (dentry_res.warn_is_ok())
+	{
+		auto dentry = std::move(dentry_res).expect();
+		if (dentry)
+			cache_dentry(dentry);
+		return dentry;
+	}
 
-	return dentry;
+	return nullptr;
 }
 
 bool VFS::ls(const char* pathname)
@@ -100,7 +105,7 @@ bool VFS::ls(const char* pathname)
 		return false;
 	}
 
-	return dentry->inode->superblock->get_fs()->ls(dentry, ls_printer);
+	return dentry->inode->superblock->get_fs()->ls(dentry, ls_printer).warn_is_ok();
 }
 
 bool VFS::mkdir(const char* pathname)
@@ -142,10 +147,14 @@ bool VFS::mkdir(const char* pathname)
 	}
 	delete[] parent_dir_path;
 
-	dentry = dentry->inode->superblock->get_fs()->mkdir(dentry, dir_name);
-	if (dentry)
-		cache_dentry(dentry);
-	return dentry;
+	const auto dentry_res = dentry->inode->superblock->get_fs()->mkdir(dentry, dir_name);
+	if (dentry_res.warn_is_ok())
+	{
+		if (dentry)
+			cache_dentry(dentry);
+		return true;
+	}
+	return false;
 }
 
 char* VFS::get_absolute_path(const char* path)
@@ -168,7 +177,7 @@ bool VFS::write_buf_to_file(const char* pathname, const void* buf, uint length)
 		if (!((dentry = touch(pathname))))
 			return false;
 
-	return dentry->inode->superblock->get_fs()->write_buf_to_file(dentry, buf, length);
+	return dentry->inode->superblock->get_fs()->write_buf_to_file(dentry, buf, length).warn_is_ok();
 }
 
 void VFS::ls_printer(const Dentry& dentry)
@@ -387,8 +396,11 @@ void* VFS::load_file(const SharedPointer<Dentry>& file, uint offset, uint length
 
 	uint loaded_bytes;
 	uint l = length ? min(length, file->inode->size) : file->inode->size;
-	void* buf =  file->inode->superblock->get_fs()->load_file_to_buf(file->name, file->parent, offset, l,
+	Result<void*> res =  file->inode->superblock->get_fs()->load_file_to_buf(file->name, file->parent, offset, l,
 																	loaded_bytes);
+	if (!res.warn_is_ok())
+		return nullptr;
+	void* buf = std::move(res).expect();
 
 	if (loaded_bytes != l)
 	{
@@ -495,7 +507,7 @@ FileInterface* VFS::open_file(const char* pathname, int flags, mode_t mode, int&
 
 	// Truncate file if asked and permitted by flags
 	if (flags & O_TRUNC && (flags & O_WRONLY || flags & O_RDWR))
-		if (!dentry->inode->superblock->get_fs()->write_buf_to_file(dentry, nullptr, 0))
+		if (const auto res = dentry->inode->superblock->get_fs()->write_buf_to_file(dentry, nullptr, 0); !res.warn_is_ok())
 			open_file_leave_with_error(-EIO) // IO error (I did not check if this whether it's man compliant)
 	file_descriptors[system_fd] = new File(system_fd, flags, 0, dentry);
 
@@ -535,7 +547,7 @@ int VFS::fstat(int fd, struct stat* statbuf)
 
 bool VFS::resize(SharedPointer<Dentry>& dentry, size_t new_size)
 {
-	return dentry->inode->superblock->get_fs()->resize(dentry, new_size);
+	return dentry->inode->superblock->get_fs()->resize(dentry, new_size).warn_is_ok();
 }
 
 int VFS::pipe(int pipefd[2])
@@ -586,7 +598,7 @@ int VFS::getdents(int fd, void* buffer, size_t max_size, size_t* bytes_read)
 	if (dir->dentry->inode->type != Inode::Dir)
 		return -ENOTDIR;
 
-	if (!dir->dentry->inode->superblock->get_fs()->getdents(dir->dentry, buffer, max_size, bytes_read, sys_fd->offset))
+	if (!dir->dentry->inode->superblock->get_fs()->getdents(dir->dentry, buffer, max_size, bytes_read, sys_fd->offset).warn_is_ok())
 		return -EIO;
 
 	return 0;

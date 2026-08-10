@@ -3,9 +3,12 @@
 
 #include <kstddef.h>
 #include <stdint.h>
+
+#include "BlockDevice.h"
 #include "FS.h"
 #include "dentry.h"
 #include "../utils/TmpString.h"
+#include "../utils/Result.h"
 
 // https://download.microsoft.com/download/1/6/1/161ba512-40e2-4cc9-843a-923143f3456c/fatgen103.doc
 // https://wiki.osdev.org/FAT
@@ -167,11 +170,10 @@ class FAT_drive : public FS
 	char* buf; // Buffer used to browse directories entries
 	DirEntry* entries; // Pointer to buf to read directories entries in it
 	unsigned char* FAT; // Buffer to store FAT
-	const unsigned char id; // Drive IDE ID
 
 	Inode* root_node = nullptr;
 
-	explicit FAT_drive(unsigned char id, fat_BS_t* bs, uint major);
+	explicit FAT_drive(BlockDevice* dev, fat_BS_t* bs);
 
 	/**Splits a string based on '/' separator
 	 *
@@ -181,7 +183,7 @@ class FAT_drive : public FS
 	 */
 	static const char** split_at_slashes(const char* str, uint* num_tokens);
 
-	uint* get_free_clusters(size_t n) const;
+	Result<uint*> get_free_clusters(size_t n) const;
 
 	/**Set environment to target a certain cluster
 	 *
@@ -190,26 +192,27 @@ class FAT_drive : public FS
 	 * @param buffer
 	 * @return boolean indicating whether the operation succeeded
 	 */
-	bool
-	change_active_cluster(uint new_active_cluster, ctx& ctx, void* buffer);
+	Status
+	change_active_cluster(uint new_active_cluster, ctx& ctx, void* buffer) const;
 
-	static FAT_drive* from_drive(unsigned char drive, uint major);
+	static Result<FAT_drive*> from_block_device(BlockDevice* dev);
 
-	uint get_child_dir_entry_id(const SharedPointer<Dentry>& parent_dentry, const char* name, ctx& ctx);
+	Result<uint> get_child_dir_entry_id(const SharedPointer<Dentry>& parent_dentry, const char* name, ctx& ctx);
 
 	SharedPointer<Dentry> get_child_dentry(SharedPointer<Dentry>& parent_dentry, const char* name) override;
 
-	SharedPointer<Dentry> dir_entry_to_dentry(const DirEntry& dir_entry, SharedPointer<Dentry>& parent_dentry, const char* name);
+	Result<SharedPointer<Dentry>> dir_entry_to_dentry(const DirEntry& dir_entry,
+	                                                  const SharedPointer<Dentry>& parent_dentry, const char* name);
 
-	bool write_fat(const ctx& ctx) const;
+	Status write_fat(const ctx& ctx) const;
 
-	bool write_data_sectors(uint numsects, uint lba, const void* buffer, ctx& ctx) const;
+	Status write_data_sectors(uint numsects, uint lba, const void* buffer, ctx& ctx) const;
 public:
-	SharedPointer<Dentry> touch(SharedPointer<Dentry>& parent_dentry, const char* entry_name) override;
+	Result<SharedPointer<Dentry>> touch(SharedPointer<Dentry>& parent_dentry, const char* entry_name) override;
 
-	SharedPointer<Dentry> mkdir(SharedPointer<Dentry>& parent_dentry, const char* entry_name) override;
+	Result<SharedPointer<Dentry>> mkdir(SharedPointer<Dentry>& parent_dentry, const char* entry_name) override;
 
-	bool ls(const SharedPointer<Dentry>& dentry, ls_printer printer) override;
+	Status ls(const SharedPointer<Dentry>& dentry, ls_printer printer) override;
 
 	[[nodiscard]] static bool drive_present(uint drive_id);
 
@@ -217,18 +220,20 @@ public:
 
 	static void shutdown();
 
-	bool load_file_to_buf(void* buf, const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset, uint length, uint& loaded_bytes) override;
+	Status load_file_to_buf(void* buf, const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset,
+	                        uint length, uint& loaded_bytes) override;
 
 	~FAT_drive() override;
 
 	[[nodiscard]]
 	Inode* get_root_node() override;
 
-	bool write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length) override;
+	Status write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length) override;
 
-	bool resize(SharedPointer<Dentry>& dentry, uint new_size) override;
+	Status resize(SharedPointer<Dentry>& dentry, uint new_size) override;
 
-	bool getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t max_size, size_t* bytes_read, uint& fd_off) override;
+	Status getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t max_size, size_t* bytes_read,
+	                uint& fd_off) override;
 };
 
 

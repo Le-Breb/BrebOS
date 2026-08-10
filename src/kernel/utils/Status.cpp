@@ -7,6 +7,8 @@ __attribute__ ((format (printf, 1, 2)))
 extern int irrecoverable_error(const char* format, ...);
 extern char* strdup(const char* s);
 extern int sprintf_aux(char* str, const char* format, va_list list);
+__attribute__ ((format (printf, 1, 2)))
+extern int printf_warn(const char* format, ...);
 
 Status::Status(const char* msg) : success_(false), msg(strdup(msg))
 {
@@ -35,20 +37,35 @@ Status Status::failure(const char* format, ...)
     return Status(buffer);
 }
 
-bool Status::ok() const
+Status::Status(Err&& err) : success_(false), msg(err.release())
+{
+}
+
+
+bool Status::is_ok() const
 {
     return success_;
 }
 
-const char* Status::get_msg() const
+Err Status::err() const
 {
-    return msg;
+    return Err(msg);
 }
 
 void Status::expect() const
 {
     if (!success_)
         irrecoverable_error("Status::expect: %s", msg);
+}
+
+bool Status::warn_is_ok() const
+{
+    if (!success_)
+    {
+        printf_warn("Result::warn_if_err: %s", msg);
+        return false;
+    }
+    return true;
 }
 
 [[noreturn]]

@@ -1,5 +1,32 @@
 #pragma once
 
+#define TRY(expr)                                  \
+    ({                                              \
+        auto&& _try_res = (expr);                  \
+        if (!_try_res.is_ok())                      \
+            return _try_res.err();                  \
+        std::move(_try_res).expect();                \
+    })
+
+class Err
+{
+    const char* msg;
+public:
+    explicit Err(const char* msg) : msg(msg) {}
+
+    Err(const Err&) = delete;
+    Err& operator=(const Err&) = delete;
+    Err(Err&& other) noexcept : msg(other.msg) { other.msg = nullptr; }
+    Err& operator=(Err&&) = delete;
+
+    ~Err() { delete msg; }
+
+    const char* what() const { return msg; }
+
+    // transfers ownership out; caller becomes responsible for freeing
+    const char* release() { const char* m = msg; msg = nullptr; return m; }
+};
+
 class Status
 {
 protected:
@@ -13,13 +40,17 @@ public:
     static Status success();
     static Status failure(const char* format, ...);
 
-    [[nodiscard]]
-    bool ok() const;
+    Status(Err&& err);
 
     [[nodiscard]]
-    const char* get_msg() const;
+    bool is_ok() const;
+
+    [[nodiscard]]
+    Err err() const;
 
     void expect() const;
+
+    bool warn_is_ok() const;
 
     static constexpr int MAX_MSG_LEN = 200;
 };
