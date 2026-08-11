@@ -1,5 +1,6 @@
 #include "USB.h"
 
+#include "../../core/fb.h"
 #include "../../core/memory/memory.h"
 #include <kstring.h>
 
@@ -150,9 +151,9 @@ void USB::enumerate_device(const SharedPointer<xhci_device>& device)
     get_usb_string(xhci, device, dev_desc->product_idx, lang_id, product_name, sizeof(product_name));
     get_usb_string(xhci, device, dev_desc->manufacturer_idx, lang_id, manufacturer_name, sizeof(manufacturer_name));
 
-    printf_info("USB: slot %i product=\"%s\" manufacturer=\"%s\" vendor=0x%x product_id=0x%x class=0x%x configs=%i",
-                slot, product_name, manufacturer_name, dev_desc->vendor_id, dev_desc->product_id,
-                dev_desc->device_class, dev_desc->num_configurations);
+    // printf_info("USB: slot %i product=\"%s\" manufacturer=\"%s\" vendor=0x%x product_id=0x%x class=0x%x configs=%i",
+    //             slot, product_name, manufacturer_name, dev_desc->vendor_id, dev_desc->product_id,
+    //             dev_desc->device_class, dev_desc->num_configurations);
 
     // --- Configuration Descriptor (index 0): header first to learn total_length ---
     void* cfg_header_buf = Memory::physically_aligned_malloc(sizeof(usb_config_descriptor), 8, PAGE_SIZE);
@@ -297,6 +298,5 @@ void USB::enumerate_device(const SharedPointer<xhci_device>& device)
     memcpy(msd.manufacturer_name, manufacturer_name, sizeof(msd.manufacturer_name));
     mass_storage_devices.push_back(msd);
 
-    printf_info("USB: mass storage device \"%s\" ready on slot %i (bulk in=0x%x out=0x%x)",
-                product_name, slot, bulk_in_ep, bulk_out_ep);
+    // printf_info("USB: mass storage device \"%s\", vendor \"%s\", ready",product_name, manufacturer_name);
 }

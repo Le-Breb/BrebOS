@@ -7,12 +7,7 @@
 #include "../../core/memory/memory.h"
 #include "../../processes/process.h"
 #include <kstring.h>
-
-[[noreturn]]
-extern int irrecoverable_error(const char* format, ...);
-
-__attribute__ ((format (printf, 1, 2)))
-extern int printf_info(const char* format, ...);
+#include "../../core/fb.h"
 
 xHCI::xHCI(const Device& device) : Device(device)
 {
@@ -827,8 +822,8 @@ void xHCI::setup_device(uint8_t port_num)
 
     devices.push_back(device);
 
-    printf_info("USB device ready on port %i: slot=%i speed=%s max_packet_size0=%i",
-                port_num, slot_id, _usb_speed_to_string(speed), device->get_input_control_ep_ctx()->max_packet_size);
+    // printf_info("USB device ready on port %i: slot=%i speed=%s max_packet_size0=%i",
+    //             port_num, slot_id, _usb_speed_to_string(speed), device->get_input_control_ep_ctx()->max_packet_size);
 }
 
 xHCI* xHCI::get_instance()
@@ -847,8 +842,6 @@ void xHCI::start()
     if (!start_host_controller())
         irrecoverable_error("xHCI controller failed to start");
 
-    printf_info("xHCI controller started successfully");
-
     // for (uint8_t port = 0; port < m_max_ports; port++)
     //     printf_info("Port %u: %s", port + 1, is_usb3_port(port) ? "USB2" : "USB3");
 
@@ -864,7 +857,7 @@ void xHCI::handle_port_connect_change(uint8_t port_num)
     {
         if (reset_port(port_num))
         {
-            printf_info("Device connected on port %i - %s", port_num, _usb_speed_to_string(portsc.port_speed));
+            // printf_info("Device connected on port %i - %s", port_num, _usb_speed_to_string(portsc.port_speed));
             setup_device(port_num);
         }
         else

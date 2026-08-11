@@ -93,6 +93,8 @@ private:
 
 	[[nodiscard]]
 	static SharedPointer<Dentry> get_mnt_dentry();
+
+	static void display_ready_usb_devices();
 public:
 	static void init();
 

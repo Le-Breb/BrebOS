@@ -9,6 +9,10 @@
 #include <errno.h>
 #include <fcntl.h>
 
+#include "USB/SCSI.h"
+#include "USB/USB.h"
+#include "USB/xHCI.h"
+
 std::unordered_set<SharedPointer<Dentry>, VFS::dentry_hash, VFS::cached_dentry_equality, Memory::SlabAllocatorSTL<SharedPointer<Dentry>>>* VFS::dentries = nullptr;
 uint VFS::num_path = 0;
 SharedPointer<Dentry>* VFS::path[PATH_CAPACITY] = {};
@@ -19,6 +23,9 @@ void VFS::init()
 {
 	FS::init();
 	FAT_drive::init();
+	xHCI::get_instance()->start();
+	USB::get_instance()->enumerate_devices();
+	display_ready_usb_devices();
 
 	dentries = new std::unordered_set<SharedPointer<Dentry>, dentry_hash, cached_dentry_equality, Memory::SlabAllocatorSTL<SharedPointer<Dentry>>>();
 	FS** main_fs = FS::fs_list->get(0);
@@ -654,6 +661,23 @@ SharedPointer<Dentry> VFS::get_root_dentry()
 SharedPointer<Dentry> VFS::get_mnt_dentry()
 {
 	return find_expect(*dentries, dentry_cache_key{"mnt", get_root_dentry().get()}, "%s: couldn't find root", __func__);
+}
+
+void VFS::display_ready_usb_devices()
+{
+	for (const auto& msd : USB::get_instance()->get_mass_storage_devices())
+	{
+		const auto [last_lba, block_length] = SCSI::send_read_capacity_10(&msd).expect();
+		const uint device_capacity = (last_lba + 1) * block_length;
+		printf(" USB drive ");
+		FB::set_fg(FB_LIGHTMAGENTA);
+		printf("%i", msd.device->get_slot());
+		FB::set_fg(FB_WHITE);
+		printf(": Mass Storage %uMB - ",  device_capacity / 1024 / 1024);
+		FB::set_fg(FB_LIGHTRED);
+		printf("%s %s\n", msd.manufacturer_name, msd.product_name);
+		FB::set_fg(FB_WHITE);
+	}
 }
 
 bool VFS::mount(FS* fs)
