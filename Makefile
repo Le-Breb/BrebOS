@@ -148,40 +148,40 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(programs) bootloader busybox
 	@mkdir -p isodir/boot/grub
 	@mkdir -p isodir/modules
 
-	@echo "$(CYAN)Creating disk$(WHITE)"
+	@echo "$(CYAN)Creating disks$(WHITE)"
 	@#qemu-img create -f raw disk_image.img 1M
 	@dd if=/dev/zero of=disk_image.img bs=1M count=50 # Can't go a lot lower than 35, otherwise drive would be interpreted as FAT16
 	@#Install FAT32 on it
 	@mkfs.vfat -F 32 -v disk_image.img -s 1 # FAT 32, one sector per cluster (as the driver only supports that for now)
+
+	@qemu-img create -f raw usb_disk.img 64M
+	@mkfs.vfat -F 32 -v usb_disk.img -s 1 # FAT 32, one sector per cluster (as the driver only supports that for now)
+
 	@#cp disk_image.img2 disk_image.img
 	@echo "$(CYAN)Populating disk$(WHITE)"
-	@mmd -i disk_image.img ::/fold
-	@mmd -i disk_image.img ::/fold2
-	@mmd -i disk_image.img ::/bin
-	@mmd -i disk_image.img ::/downloads
-	@mmd -i disk_image.img ::/usr
-	@mmd -i disk_image.img ::/usr/lib
-	@mmd -i disk_image.img ::/mnt
-	@mmd -i disk_image.img ::/mnt/1
-	@mcopy -i disk_image.img ./sysroot/usr/lib/ld.so ::/usr/lib
-	@mcopy -i disk_image.img ./sysroot/usr/lib/libc.so ::/usr/lib
-	@mcopy -i disk_image.img ./sysroot/usr/lib/libm.so ::/usr/lib
-	@mcopy -i disk_image.img ./toolchain/usr/i686-brebos/lib/libgcc_s.so.1 ::/usr/lib
-	@mcopy -i disk_image.img ./toolchain/usr/i686-brebos/lib/libstdc++.so.6 ::/usr/lib
-	@mcopy -i disk_image.img ./src/libk/build/libk.so ::/usr/lib
-	#@mcopy -i disk_image.img $(LIBC_BUILD_DIR)/libc.so ::/bin
-	@mcopy -i disk_image.img $(LIBK_BUILD_DIR)/libk.so ::/bin
-	@echo "this is a text file :D" | mcopy -i disk_image.img - ::/"text-file.txt"
+	@mmd -i usb_disk.img ::/fold
+	@mmd -i usb_disk.img ::/fold2
+	@mmd -i usb_disk.img ::/bin
+	@mmd -i usb_disk.img ::/downloads
+	@mmd -i usb_disk.img ::/usr
+	@mmd -i usb_disk.img ::/usr/lib
+	@mmd -i usb_disk.img ::/mnt
+	@mmd -i usb_disk.img ::/mnt/1
+	@mcopy -i usb_disk.img ./sysroot/usr/lib/ld.so ::/usr/lib
+	@mcopy -i usb_disk.img ./sysroot/usr/lib/libc.so ::/usr/lib
+	@mcopy -i usb_disk.img ./sysroot/usr/lib/libm.so ::/usr/lib
+	@mcopy -i usb_disk.img ./toolchain/usr/i686-brebos/lib/libgcc_s.so.1 ::/usr/lib
+	@mcopy -i usb_disk.img ./toolchain/usr/i686-brebos/lib/libstdc++.so.6 ::/usr/lib
+	@mcopy -i usb_disk.img ./src/libk/build/libk.so ::/usr/lib
+	@mcopy -i usb_disk.img $(LIBK_BUILD_DIR)/libk.so ::/bin
+	@echo "this is a text file :D" | mcopy -i usb_disk.img - ::/"text-file.txt"
 	@for prog in $(shell find $(SRC_DIR)/programs/build -type f ! -name "*.*"); do \
-    		mcopy -i disk_image.img $$prog ::/bin; \
+    		mcopy -i usb_disk.img $$prog ::/bin; \
 	done
 	@for prog in $(busybox_programs); do \
-    		mcopy -i disk_image.img ./busybox/0_lib/$$prog ::/bin; \
+    		mcopy -i usb_disk.img ./busybox/0_lib/$$prog ::/bin; \
 	done
-	mcopy -i disk_image.img ./busybox/0_lib/libbusybox.so.1.36.1 ::/usr/lib
-
-	qemu-img create -f raw usb_disk.img 64M
-	@mkfs.vfat -F 32 -v usb_disk.img -s 1 # FAT 32, one sector per cluster (as the driver only supports that for now)
+	mcopy -i usb_disk.img ./busybox/0_lib/libbusybox.so.1.36.1 ::/usr/lib
 
 	@echo "set timeout=$(GRUB_TIMEOUT)" > grub.cfg
 	@echo "set default=0" >> grub.cfg
@@ -220,19 +220,20 @@ busybox: $(BUSYBOX_DIR)/.config
 
 run: $(OS_ISO)
 	@#	bochs -f bochsrc.txt -q
-	@mdeltree -i disk_image.img ::/downloads/ # make sure downloads folder is cleanup up
-	@mmd -i disk_image.img ::/downloads # Recreate it
+	@mdeltree -i usb_disk.img ::/downloads/ # make sure downloads folder is cleanup up
+	@mmd -i usb_disk.img ::/downloads # Recreate it
 	@echo "$(CYAN)Initializing NAT$(WHITE)"
 	@sudo ./utils/net_setup.sh
 	#qemu-system-i386 \
 #      -device isa-debug-exit \
-#      -drive file=disk_image2.img,format=raw,if=ide -boot c \
+#      -drive if=none,id=bootdisk,file=disk_image2.img,format=raw \
 #      -drive file=disk_image.img,format=raw,if=ide \
 #      -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
 #      -device e1000,netdev=net0 \
 #      -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap \
 #      -m 512M \
 #      -device qemu-xhci,id=xhci,p3=0 \
+#      -device usb-storage,bus=xhci.0,drive=bootdisk,bootindex=0 \
 #	  -drive if=none,id=usbstick,file=usb_disk.img,format=raw \
 #	  -device usb-storage,bus=xhci.0,drive=usbstick \
 #	  -trace "usb_xhci_*" -D qemu_trace.log \

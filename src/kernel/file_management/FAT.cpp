@@ -280,6 +280,18 @@ void FAT_drive::init()
 
     drives = new list<FAT_drive*>;
 
+    // Add USB devices
+    for (auto& usb_device : USB::get_instance()->get_mass_storage_devices())
+    {
+        if (const auto drive = from_block_device(
+                                    new USB_Drive(
+                                        FAT_SECTOR_SIZE,
+                                        MKDEV(DEV_USB_MASS_STORAGE_MAJOR, usb_device.interface_number),
+                                        &usb_device)
+                                ).expect())
+            fs_list->add(drive);
+    }
+
     // Add ATA devices
     for (uint i = 0; i < 4; ++i)
     {
@@ -290,18 +302,6 @@ void FAT_drive::init()
                                            MKDEV(DEV_ATA_PRIMARY_MASTER_MAJOR, i))
                                    ).expect()
                                    : nullptr)
-            fs_list->add(drive);
-    }
-
-    // Add USB devices
-    for (auto& usb_device : USB::get_instance()->get_mass_storage_devices())
-    {
-        if (const auto drive = from_block_device(
-                                    new USB_Drive(
-                                        FAT_SECTOR_SIZE,
-                                        MKDEV(DEV_USB_MASS_STORAGE_MAJOR, usb_device.interface_number),
-                                        &usb_device)
-                                ).expect())
             fs_list->add(drive);
     }
 }
