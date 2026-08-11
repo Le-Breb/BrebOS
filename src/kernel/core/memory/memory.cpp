@@ -109,18 +109,15 @@ namespace Memory
         }
         frame_rc = (uint*)VIRT_ADDR(771, 0, 0);
 
-        memset(frame_rc, 0, 767 * PT_ENTRIES * sizeof(uint));
-        memset(frame_rc + 771 * PT_ENTRIES, 0, (PDT_ENTRIES - 771) * PT_ENTRIES * sizeof(uint));
+        memset(frame_rc, 0, PDT_ENTRIES * PT_ENTRIES * sizeof(uint));
 
         // Fill frame_rc
-        for (uint pde = 768; pde < 771; pde++)
+        for (uint pde = 768; pde <= 771; pde++)
         {
-            uint frame_off = PDT_ENTRIES * pde;
+            uint page_id_off = PDT_ENTRIES * pde;
+            uint frame_off = PDT_ENTRIES * (pde - 768);
             for (uint pte = 0; pte < PT_ENTRIES; pte++)
-            {
-                uint frame_id = frame_off + pte;
-                frame_rc[frame_id] = PTE_USED(page_tables, frame_id);
-            }
+                frame_rc[frame_off + pte] = PTE_USED(page_tables, page_id_off + pte);
         }
     }
 
