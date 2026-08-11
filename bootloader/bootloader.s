@@ -1,7 +1,7 @@
 [bits 16]
 [org 0x7C00] ; this is where the BIOS loads this bootloader
 
-N_SECTORS equ 0x14 ; Number of sectors to load
+N_SECTORS equ 0x14 ; Number of sectors to load: must be >= byte_size(bootloader2.bin) / SECTOR_SIZE
 
 STAGE2_ADDR equ  0x1000
 STAGE2_SEG equ   0x0000
@@ -47,7 +47,7 @@ enable_a20_fast:
 ; -------------------------------------------
 read_from_disk:
     mov ah, 0x02         ; Read
-    mov al, N_SECTORS    ; Number of secotrs to read
+    mov al, N_SECTORS    ; Number of sectors to read
     xor ch, ch           ; Cylinder 0
     mov cl, 0x02         ; Sector 2 (sector 1 is boot sector)
     xor dh, dh           ; Head 0
