@@ -14,8 +14,11 @@ KERNEL_STACK_SIZE equ 4096          ; size of stack in bytes
 MAGIC_NUMBER    equ 0xE85250D6      ; define the magic number constant
 I386            equ 0x00000000      ; i386 architecture
 
+; Magic value GRUB (or any multiboot2-compliant loader) places in EAX at kernel entry.
+MULTIBOOT2_BOOTLOADER_MAGIC equ 0x36D76289
+
 ; calculate the checksum (all options + checksum should equal 0)
-CHECKSUM        equ -(MAGIC_NUMBER + 0 + (header_end - header_start))
+CHECKSUM        equ -(MAGIC_NUMBER + I386 + (header_end - multiboot_header_start))
 
 KERNEL_VIRTUAL_BASE equ 0xC0000000  ; the virtual address where the kernel is loaded
 
@@ -41,28 +44,29 @@ section .multiboot2
 align 8
 
     ; === Multiboot2 magic header ===
-;    dd MAGIC_NUMBER
-;    dd I386
-;    dd header_end - header_start
-;    dd CHECKSUM
+multiboot_header_start:
+    dd MAGIC_NUMBER
+    dd I386
+    dd header_end - multiboot_header_start
+    dd CHECKSUM
 
 align 8
 header_start:
 
     ; === Framebuffer tag ===
-;    dw 5                      ; type = framebuffer
-;    dw 0                      ; flags
-;    dd 20                     ; size of this tag (must be 20 bytes)
-;    dd SCREEN_WIDTH_VAL       ; width
-;    dd SCREEN_HEIGHT_VAL      ; height
-;    dd SCREEN_DEPTH_VAL       ; depth (bits per pixel)
+    dw 5                      ; type = framebuffer
+    dw 0                      ; flags
+    dd 20                     ; size of this tag (must be 20 bytes)
+    dd SCREEN_WIDTH_VAL       ; width
+    dd SCREEN_HEIGHT_VAL      ; height
+    dd SCREEN_DEPTH_VAL       ; depth (bits per pixel)
 
 align 8
 
     ; === End tag ===
-;    dw 0                      ; type = end tag
-;    dw 0                      ; flags
-;    dd 8                      ; size of end tag (must be 8 bytes)
+    dw 0                      ; type = end tag
+    dw 0                      ; flags
+    dd 8                      ; size of end tag (must be 8 bytes)
 
 header_end:
 
@@ -79,6 +83,12 @@ global boot_page_table1
 boot_page_table1:
     resb 4096
 
+; EAX/EBX as set by the bootloader at kernel entry, saved before _start clobbers them.
+multiboot_magic:
+    resd 1
+multiboot_ptr:
+    resd 1
+
 ; Allocate the initial stack.
 align 4
 stack_bottom:
@@ -91,6 +101,12 @@ stack_top:
 section .text
 global _start
 _start:
+    ; Save the bootloader's entry state before it gets clobbered below. Per the multiboot2 spec,
+    ; a GRUB-like loader sets EAX to MULTIBOOT2_BOOTLOADER_MAGIC and EBX to a pointer to the
+    ; multiboot2 info structure; a non-multiboot2 loader leaves them as whatever it last used.
+    mov [multiboot_magic - KERNEL_VIRTUAL_BASE], eax
+    mov [multiboot_ptr - KERNEL_VIRTUAL_BASE], ebx
+
     ; Physical address of boot_page_table1.
     mov edi, boot_page_table1 - KERNEL_VIRTUAL_BASE
 
@@ -147,7 +163,6 @@ done_mapping:
     mov cr0, ecx
 
     ; Jump to higher half with an absolute jump.
-    call set_main_args
     lea ecx, [rel higher_half]
     jmp ecx
 
@@ -167,21 +182,23 @@ higher_half:
 
     ; Enter the high-level kernel.
     call set_main_args
+    push eax
     call kmain
+    add esp, 4
 
     ; Infinite loop if the system has nothing more to do.
     cli
 
 ; Set arguments of main:
-; EBX = 0 if multiboot2 not used, else multiboot2 structure pointer
+; EAX (returned) = 0 if multiboot2 not used, else multiboot2 info structure pointer
 set_main_args:
+    mov eax, [multiboot_magic]
+    cmp eax, MULTIBOOT2_BOOTLOADER_MAGIC
+    jne not_multiboot2
+    mov eax, [multiboot_ptr]
+    ret
+not_multiboot2:
     xor eax, eax
-    mov eax, [loader_start]
-    cmp eax, MAGIC_NUMBER
-    jne exit_set_main_args
-    mov eax, ebx
-    xor ebx, ebx
-exit_set_main_args:
     ret
 
 halt_loop:
