@@ -318,6 +318,7 @@ Status FAT_drive::load_file_to_buf(void* buf, const char* file_name, SharedPoint
 {
     ctx ctx{};
     uint file_entry_id;
+    loaded_bytes = 0;
     if ((file_entry_id = TRY(get_child_dir_entry_id(parent_dentry, file_name, ctx))) == ENTRY_NOT_FOUND)
         return Status::failure("File not found");
     DirEntry* file_entry = &entries[file_entry_id];
@@ -337,34 +338,52 @@ Status FAT_drive::load_file_to_buf(void* buf, const char* file_name, SharedPoint
     if (co < n_offset_clusters)
         return Status::failure("Offset exceeds file size");
 
-    // If offset is 0 and length is greater than a sector, we can read the entire sector directly
-    if (cluster_offset == 0 && length >= FAT_SECTOR_SIZE)
+    if (cluster_offset != 0 || length < FAT_SECTOR_SIZE)
     {
-        TRY(change_active_cluster(next_cluster, ctx, buf));
-        loaded_bytes = FAT_SECTOR_SIZE;
-    }
-    else // If offset is not 0, we need to load the sector and copy the meaningful data to buf
-    {
+        // Offset isn't sector-aligned (or we need less than a full sector): load the sector and
+        // copy only the meaningful data to buf
         TRY(change_active_cluster(next_cluster, ctx, this->buf));
-        auto n = min(length, FAT_SECTOR_SIZE - cluster_offset);
+        const auto n = min(length, FAT_SECTOR_SIZE - cluster_offset);
         memcpy(buf, this->buf + cluster_offset, n);
         loaded_bytes = n;
+        next_cluster = ctx.table_value;
     }
+
+    // Position the cursor on the first cluster to be bulk-loaded
+    TRY(change_active_cluster(next_cluster, ctx, nullptr));
     next_cluster = ctx.table_value;
 
-    //loaded_bytes = 0;
-    auto b  = (char*)buf;
-    while (loaded_bytes < length && next_cluster < CLUSTER_MIN_EOC)
+    const auto b = (char*)buf;
+    // Load file. Load by groups of contiguous entire clusters
+    while (loaded_bytes + FAT_SECTOR_SIZE <= length && next_cluster < CLUSTER_MIN_EOC)
     {
-        // Load data into buffer. If there is more than ATA_SECTOR_SIZE data left to load, copy directly to b, otherwise
-        // copy an entire sector to buf and copy the meaningful data to b
-        uint rem = length - loaded_bytes;
-        void* load_buf = rem < FAT_SECTOR_SIZE ? this->buf : b + loaded_bytes;
-        TRY(change_active_cluster(next_cluster, ctx, load_buf));
-        if (rem < FAT_SECTOR_SIZE) // Entire sector has been loaded to buf, copy meaningful data to b
-            memcpy(b + loaded_bytes, this->buf, rem);
-        loaded_bytes += rem > FAT_SECTOR_SIZE ? FAT_SECTOR_SIZE : rem;
+        const uint start_cluster = ctx.active_cluster;
+        uint n_clusters = 1;
+
+        // Walk the chain as long as we need more sectors and as long as they are contiguous
+        while (loaded_bytes + (n_clusters + 1) * FAT_SECTOR_SIZE <= length &&
+               next_cluster == start_cluster + n_clusters)
+        {
+            TRY(change_active_cluster(next_cluster, ctx, nullptr));
+            next_cluster = ctx.table_value;
+            n_clusters++;
+        }
+
+        const uint start_sector = FIRST_SECTOR_OF_CLUSTER(start_cluster, bs.sectors_per_cluster, first_data_sector);
+        TRY(dev->read_blocks(start_sector, n_clusters, b + loaded_bytes));
+        loaded_bytes += n_clusters * FAT_SECTOR_SIZE;
+
+        // Advance the cursor
+        TRY(change_active_cluster(next_cluster, ctx, nullptr));
         next_cluster = ctx.table_value;
+    }
+
+    // Handle last bytes
+    if (const uint rem = length - loaded_bytes; rem > 0)
+    {
+        TRY(change_active_cluster(ctx.active_cluster, ctx, this->buf));
+        memcpy(b + loaded_bytes, this->buf, rem);
+        loaded_bytes += rem;
     }
 
     return Status::success();
