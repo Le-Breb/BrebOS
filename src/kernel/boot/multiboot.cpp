@@ -9,8 +9,7 @@ bool Multiboot::is_used = false;
 void Multiboot::init(const multiboot_info_t* multiboot_info)
 {
 	Multiboot::multiboot_info = (multiboot_info_t*)multiboot_info;
-	if (multiboot_info == nullptr)
-		is_used = false;
+	is_used = multiboot_info != nullptr;
 }
 
 void* Multiboot::get_tag(uint32_t type)
