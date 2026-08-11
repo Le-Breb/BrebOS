@@ -13,7 +13,8 @@
 #include "USB/USB.h"
 #include "USB/xHCI.h"
 
-std::unordered_set<SharedPointer<Dentry>, VFS::dentry_hash, VFS::cached_dentry_equality, Memory::SlabAllocatorSTL<SharedPointer<Dentry>>>* VFS::dentries = nullptr;
+std::unordered_set<SharedPointer<Dentry>, VFS::dentry_hash, VFS::cached_dentry_equality>* VFS::dentries = nullptr;
+std::unordered_set<SharedPointer<Dentry>, VFS::dentry_hash, VFS::cached_dentry_equality>* VFS::mount_points = nullptr;
 uint VFS::num_path = 0;
 SharedPointer<Dentry>* VFS::path[PATH_CAPACITY] = {};
 FileInterface* VFS::file_descriptors[MAX_FD] = {};
@@ -23,24 +24,14 @@ void VFS::init()
 {
 	FS::init();
 	FAT_drive::init();
-	xHCI::get_instance()->start();
-	USB::get_instance()->enumerate_devices();
 	display_ready_usb_devices();
 
-	dentries = new std::unordered_set<SharedPointer<Dentry>, dentry_hash, cached_dentry_equality, Memory::SlabAllocatorSTL<SharedPointer<Dentry>>>();
+	dentries = new std::unordered_set<SharedPointer<Dentry>, dentry_hash, cached_dentry_equality>();
+	mount_points = new std::unordered_set<SharedPointer<Dentry>, dentry_hash, cached_dentry_equality>();
 	FS** main_fs = FS::fs_list->get(0);
 	if (main_fs == nullptr)
 		irrecoverable_error("Couldn't get main file system");
 	mount_rootfs(*main_fs);
-
-	// Create /mnt
-	Inode* mnt_node = new Inode(nullptr, 0, 0, Inode::Dir, 1, 1, 0, 0, 0, 1, 0, 0, 0);
-	auto mnt_dentry = SharedPointer<Dentry>(new Dentry{mnt_node, get_root_dentry(), "mnt"});
-	if (!cache_dentry(mnt_dentry))
-	{
-		printf_error("Couldn't mount mnt");
-		return;
-	}
 
 	// FS limit check
 	if (FS::fs_list->size()/* + num_inodes*/ >= MAX_FS)
@@ -50,8 +41,9 @@ void VFS::init()
 	}
 
 	// Mount other File Systems
-	for (const auto fs : *FS::fs_list)
-		mount(fs);
+	if (FS::fs_list->size() > 1)
+		for (auto it = ++FS::fs_list->begin(); it != FS::fs_list->end(); ++it)
+			mount(*it);
 
 	if (!add_to_path("/bin"))
 		printf_error("Failed to add /bin to path");
@@ -72,6 +64,11 @@ void VFS::init()
 
 void VFS::shutdown()
 {
+	delete mount_points;
+	printf_info("Shutting down VFS, %zu dentries still cached", dentries->size());
+	for (uint i = 0; i < 10 && dentries->size(); i++)
+		free_unused_dentry_cache_entries();
+	printf_info("%zu dentries still cached after cleanup", dentries->size());
 	delete dentries;
 }
 
@@ -231,7 +228,7 @@ SharedPointer<Dentry> VFS::browse_to(const char* path, const SharedPointer<Dentr
 	const TmpString p(strlen(path) + 1);
 	strcpy(*p, path);
 	char* token = strtok_r(*p, "/", &svptr);
-	SharedPointer<Dentry> dentry = starting_point;
+	SharedPointer<Dentry> dentry = Dentry::follow_mount(starting_point);
 
 	// Browse cached dentries as much as possible
 	while (token)
@@ -243,7 +240,7 @@ SharedPointer<Dentry> VFS::browse_to(const char* path, const SharedPointer<Dentr
 		if (!next_entry) //  Nothing found in cache
 			break;
 
-		dentry = next_entry;
+		dentry = Dentry::follow_mount(next_entry);
 		token = strtok_r(nullptr, "/", &svptr);
 		if (next_entry->inode->type != Inode::Dir) // Stop browsing if we hit a file's cached dentry
 			break;
@@ -268,6 +265,7 @@ SharedPointer<Dentry> VFS::browse_to(const char* path, const SharedPointer<Dentr
 			: dentry;
 		if (!dentry)
 			error("%s: no such directory", path);
+		dentry = Dentry::follow_mount(dentry);
 
 		if (!cache_dentry(dentry))
 		{
@@ -604,8 +602,9 @@ int VFS::getdents(int fd, void* buffer, size_t max_size, size_t* bytes_read)
 	const auto dir = (File*)sys_fd;
 	if (dir->dentry->inode->type != Inode::Dir)
 		return -ENOTDIR;
+	auto dentry = Dentry::follow_mount(dir->dentry);
 
-	if (!dir->dentry->inode->superblock->get_fs()->getdents(dir->dentry, buffer, max_size, bytes_read, sys_fd->offset).warn_is_ok())
+	if (!dir->dentry->inode->superblock->get_fs()->getdents(dentry, buffer, max_size, bytes_read, sys_fd->offset).warn_is_ok())
 		return -EIO;
 
 	return 0;
@@ -683,24 +682,33 @@ void VFS::display_ready_usb_devices()
 bool VFS::mount(FS* fs)
 {
 	// Compute mount point
-	char mount_point[] = {'m', 'n', 't', '/', 'x', '\0'};
-	mount_point[4] = '0' + Superblock::get_num_devices();
+	char mount_point[] = {'/', 'm', 'n', 't', '/', 'x', '\0'};
+	const char mount_id = '0' + Superblock::get_num_devices();
+	constexpr auto id_off = 5;
+	mount_point[id_off] = mount_id;
+
+	if (!browse_to("/mnt"))
+		if (!mkdir("/mnt"))
+			irrecoverable_error("%s: mkdir /mnt failed", __PRETTY_FUNCTION__);
+	if (!browse_to(mount_point, false, false))
+		if (!mkdir(mount_point))
+			irrecoverable_error("%s: mkdir '%s' failed", __PRETTY_FUNCTION__, mount_point);
 
 	// Create FS superblock
 	if (!Superblock::add(mount_point, fs))
 		return false;
 
 	// Get and register FS root
-	auto n = fs->get_root_node();
-	Dentry* d = new Dentry(n, get_mnt_dentry(), mount_point + 4);
+	const auto n = fs->get_root_node();
+	SharedPointer<Dentry> d = new Dentry(n, get_mnt_dentry(), mount_point + id_off);
 
-	if (!cache_dentry(d))
-	{
-		delete d;
-		delete n;
-
+	// If there's a cached dentry at that path, update it
+	if (const auto it = dentries->find(dentry_cache_key{mount_point + id_off, get_mnt_dentry().get()}); it != dentries->end())
+		(*it)->mount_at(d);
+	// Otherwise, insert new dentry in cache
+	else if (!cache_dentry(d))
 		return false;
-	}
+	mount_points->emplace(d);
 
 	return true;
 }
@@ -718,17 +726,13 @@ bool VFS::mount_rootfs(FS* fs)
 		return false;
 
 	// Get and register FS root
-	Inode* n = fs->get_root_node();
+	SharedPointer<Inode> n = fs->get_root_node();
 	SharedPointer<Dentry> null_parent = {nullptr};
-	auto d = new Dentry(n, null_parent, mount_point);
+	SharedPointer<Dentry> d = new Dentry(n, null_parent, mount_point);
 
 	if (!cache_dentry(d))
-	{
-		delete d;
-		delete n;
-
 		return false;
-	}
+	mount_points->emplace(d);
 
 	return true;
 }

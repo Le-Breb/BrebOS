@@ -12,6 +12,7 @@
 class Superblock;
 
 #define DEV_ATA_PRIMARY_MASTER_MAJOR 3
+#define DEV_USB_MASS_STORAGE_MAJOR   7
 
 class FS
 {
@@ -56,7 +57,7 @@ public:
 	virtual Status resize(SharedPointer<Dentry>& dentry, uint new_size) = 0;
 
 	[[nodiscard]]
-	virtual Inode* get_root_node() = 0;
+	virtual SharedPointer<Inode> get_root_node() = 0;
 
 	[[nodiscard]]
 	blksize_t get_block_size() const;

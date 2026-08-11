@@ -85,19 +85,23 @@ Result<T> make_ok(T value)
     return Result<T>::ok(value);
 }
 
+__attribute__ ((format (printf, 3, 4)))
 inline Err make_err_at(const char* file, int line, const char* format, ...)
 {
     char msg[Status::MAX_MSG_LEN];
     va_list list;
     va_start(list, format);
-    int n = sprintf_aux(msg, format, list);
-    va_end(list);
-    if (n > Status::MAX_MSG_LEN)
+    const int n = sprintf_aux(msg, format, list);
+    if (n >= Status::MAX_MSG_LEN)
         irrecoverable_error("make_err: message too long");
+    msg[n] = '\0';
+    va_end(list);
 
     char* full = new char[Status::MAX_MSG_LEN];
-    if (sprintf(full, "%s:%d: %s", file, line, msg) > Status::MAX_MSG_LEN)
+    const int n2 = sprintf(full, "%s:%d: %s", file, line, msg);
+    if (n2 >= Status::MAX_MSG_LEN)
         irrecoverable_error("make_err: message too long");
+    full[n2] = '\0';
 
     return Err(full);
 }

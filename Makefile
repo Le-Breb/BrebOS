@@ -161,6 +161,8 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(programs) bootloader busybox
 	@mmd -i disk_image.img ::/downloads
 	@mmd -i disk_image.img ::/usr
 	@mmd -i disk_image.img ::/usr/lib
+	@mmd -i disk_image.img ::/mnt
+	@mmd -i disk_image.img ::/mnt/1
 	@mcopy -i disk_image.img ./sysroot/usr/lib/ld.so ::/usr/lib
 	@mcopy -i disk_image.img ./sysroot/usr/lib/libc.so ::/usr/lib
 	@mcopy -i disk_image.img ./sysroot/usr/lib/libm.so ::/usr/lib
@@ -179,6 +181,7 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(programs) bootloader busybox
 	mcopy -i disk_image.img ./busybox/0_lib/libbusybox.so.1.36.1 ::/usr/lib
 
 	qemu-img create -f raw usb_disk.img 64M
+	@mkfs.vfat -F 32 -v usb_disk.img -s 1 # FAT 32, one sector per cluster (as the driver only supports that for now)
 
 	@echo "set timeout=$(GRUB_TIMEOUT)" > grub.cfg
 	@echo "set default=0" >> grub.cfg

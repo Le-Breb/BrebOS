@@ -15,6 +15,9 @@ class Optional
 public:
     Optional(const T& t); // NOLINT(*-explicit-constructor)
     Optional(const nullopt_t& nullopt);
+    Optional(const Optional& other);
+    Optional& operator=(const Optional& other);
+    ~Optional();
 
     T& operator*();
     T* operator->();

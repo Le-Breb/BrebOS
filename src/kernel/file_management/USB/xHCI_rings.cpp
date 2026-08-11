@@ -2,6 +2,7 @@
 
 #include "xHCI_common.h"
 #include "../../core/memory/memory.h"
+#include "../kernel/processes/scheduler.h"
 
 xhci_command_ring::xhci_command_ring(size_t max_trbs) {
     m_max_trb_count = max_trbs;
@@ -19,7 +20,7 @@ xhci_command_ring::xhci_command_ring(size_t max_trbs) {
     if (!m_trbs)
         irrecoverable_error("%s: physically_aligned_malloc failed", __func__);
 
-    m_physical_base = PHYS_ADDR(Memory::page_tables, (uintptr_t)m_trbs);
+    m_physical_base = PHYS_ADDR(Scheduler::get_current_page_tables(), (uintptr_t)m_trbs);
 
     // Set the last TRB as a link TRB to point back to the first TRB
     m_trbs[m_max_trb_count - 1].parameter = m_physical_base;
@@ -70,7 +71,7 @@ xhci_event_ring::xhci_event_ring(
     );
 
     // Store the physical DMA base
-    m_physical_base = PHYS_ADDR(Memory::page_tables, (uintptr_t)m_trbs);
+    m_physical_base = PHYS_ADDR(Scheduler::get_current_page_tables(), (uintptr_t)m_trbs);
 
     // Create the event ring segment table
     m_segment_table = (xhci_erst_entry*)Memory::physically_aligned_malloc(
@@ -95,7 +96,7 @@ xhci_event_ring::xhci_event_ring(
     update_erdp();
 
     // Write to ERSTBA register
-    m_interrupter_regs->erstba = PHYS_ADDR(Memory::page_tables, (uintptr_t)m_segment_table);
+    m_interrupter_regs->erstba = PHYS_ADDR(Scheduler::get_current_page_tables(), (uintptr_t)m_segment_table);
 }
 
 bool xhci_event_ring::has_unprocessed_events() const

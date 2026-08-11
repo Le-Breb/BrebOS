@@ -10,6 +10,7 @@
 #include "../../core/interrupt_handler.h"
 #include "../../core/PCI.h"
 #include "../../utils/shared_pointer.h"
+#include "../../utils/Status.h"
 
 class xHCI : public PCI::Device, public Interrupt_handler
 {
@@ -129,8 +130,8 @@ public:
     // physically-contiguous, identity-mapped memory. Transparently splits `length` into
     // multiple chained Normal TRBs if needed. actual_length, if given, receives the number of
     // bytes actually transferred (may be less than length on a short packet).
-    bool bulk_transfer(const SharedPointer<xhci_device>& device, uint8_t endpoint_address,
-                        void* data, uint32_t length, uint32_t* actual_length = nullptr);
+    Status bulk_transfer(const SharedPointer<xhci_device>& device, uint8_t endpoint_address,
+                         void* data, uint32_t length, uint32_t* actual_length = nullptr);
 };
 
 

@@ -45,7 +45,9 @@ else \
 Memory::frame_rc[(i)] = 0;}\
 Memory::lowest_free_frame = min(Memory::lowest_free_frame, (i)); \
 }
-#define PHYS_ADDR(page_tables, virt_addr) ((page_tables[(virt_addr) >> 22].entries[((virt_addr) >> 12) & 0x3FF] & ~0x3FF) | ((virt_addr) & 0xFFF))
+#define CORRECT_PT_FOR_HIGHER_HALF(page_table, virt_addr) (((virt_addr) >= KERNEL_VIRTUAL_BASE) ? Memory::page_tables : page_table)
+#define __PHYS_ADDR(page_tables, virt_addr) ((page_tables[(virt_addr) >> 22].entries[((virt_addr) >> 12) & 0x3FF] & ~0x3FF) | ((virt_addr) & 0xFFF))
+#define PHYS_ADDR(page_tables, virt_addr) __PHYS_ADDR(CORRECT_PT_FOR_HIGHER_HALF(page_tables, virt_addr), virt_addr)
 #define PAGE_ADDR(page_id) ((page_id) << 12)
 #define ADDR_PAGE_OFF(addr) ((addr) & (PAGE_SIZE - 1))
 #define IS_PAGE_ALIGNED(addr) (ADDR_PAGE_OFF(addr) == 0)

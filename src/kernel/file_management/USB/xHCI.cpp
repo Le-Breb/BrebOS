@@ -8,6 +8,7 @@
 #include "../../processes/process.h"
 #include <kstring.h>
 #include "../../core/fb.h"
+#include "../../processes/scheduler.h"
 
 xHCI::xHCI(const Device& device) : Device(device)
 {
@@ -151,11 +152,11 @@ void xHCI::setup_dcbaa()
                 XHCI_SCRATCHPAD_BUFFERS_BOUNDARY
             );
 
-            scratchpad_array[i] = PHYS_ADDR(Memory::page_tables, (uintptr_t)scratchpad);
+            scratchpad_array[i] = PHYS_ADDR(Scheduler::get_current_page_tables(), (uintptr_t)scratchpad);
         }
 
         // Set the first slot in the DCBAA to point to the scratchpad array
-        dcbaa[0] = PHYS_ADDR(Memory::page_tables, (uintptr_t)scratchpad_array);
+        dcbaa[0] = PHYS_ADDR(Scheduler::get_current_page_tables(), (uintptr_t)scratchpad_array);
     }
 
     // Set DCBAA pointer in the operational registers
@@ -552,7 +553,7 @@ bool xHCI::create_device_context(uint8_t slot_id)
 
     // Ownership of the Output Device Context passes to the xHC once the doorbell is rung for
     // the first Address Device Command targeting this slot (xHci Spec Section 6.2.1)
-    dcbaa[slot_id] = PHYS_ADDR(Memory::page_tables, (uintptr_t)ctx);
+    dcbaa[slot_id] = PHYS_ADDR(Scheduler::get_current_page_tables(), (uintptr_t)ctx);
 
     return true;
 }
@@ -626,7 +627,7 @@ bool xHCI::control_transfer(const SharedPointer<xhci_device>& device, const usb_
     if (has_data)
     {
         xhci_trb_t data_trb{};
-        data_trb.parameter = PHYS_ADDR(Memory::page_tables, (uintptr_t)data);
+        data_trb.parameter = PHYS_ADDR(Scheduler::get_current_page_tables(), (uintptr_t)data);
         data_trb.status = request.w_length;
         data_trb.trb_type = XHCI_TRB_TYPE_DATA_STAGE;
         if (device_to_host)
@@ -707,14 +708,14 @@ bool xHCI::configure_endpoints(const SharedPointer<xhci_device>& device, const v
     return send_command_trb(&trb) != nullptr;
 }
 
-bool xHCI::bulk_transfer(const SharedPointer<xhci_device>& device, uint8_t endpoint_address,
-                          void* data, uint32_t length, uint32_t* actual_length)
+Status xHCI::bulk_transfer(const SharedPointer<xhci_device>& device, uint8_t endpoint_address,
+                           void* data, uint32_t length, uint32_t* actual_length)
 {
     if (actual_length)
         *actual_length = 0;
 
     if (length == 0)
-        return false;
+        return MAKE_ERR("empty length");
 
     const uint8_t ep_num = endpoint_address & 0xF;
     const bool is_in = (endpoint_address & 0x80) != 0;
@@ -722,9 +723,10 @@ bool xHCI::bulk_transfer(const SharedPointer<xhci_device>& device, uint8_t endpo
 
     const SharedPointer<xhci_transfer_ring>& ring = device->get_transfer_ring(dci);
     if (!ring)
-        return false;
+        return MAKE_ERR("failed to get transfer ring");
 
-    const uintptr_t phys_base = PHYS_ADDR(Memory::page_tables, (uintptr_t)data);
+    const auto pt = Scheduler::get_current_page_tables();
+    const uintptr_t phys_base = PHYS_ADDR(pt, (uintptr_t)data);
 
     uint32_t offset = 0;
     while (offset < length)
@@ -750,16 +752,16 @@ bool xHCI::bulk_transfer(const SharedPointer<xhci_device>& device, uint8_t endpo
 
     const xhci_transfer_event_trb_t* event = wait_for_transfer_event();
     if (!event)
-        return false;
+        return MAKE_ERR("transfer event not received");
 
     if (event->completion_code != XHCI_TRB_COMPLETION_CODE_SUCCESS &&
         event->completion_code != XHCI_TRB_COMPLETION_CODE_SHORT_PACKET)
-        return false;
+        return MAKE_ERR("invalid completion code, got 0x%x", event->completion_code);
 
     if (actual_length)
         *actual_length = length - event->trb_transfer_length;
 
-    return true;
+    return Status::success();
 }
 
 void xHCI::setup_device(uint8_t port_num)

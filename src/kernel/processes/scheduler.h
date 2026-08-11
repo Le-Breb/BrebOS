@@ -181,6 +181,9 @@ public:
 
 	[[noreturn]]
 	static void resume_process(Process* p);
+
+	[[nodiscard]]
+	static Memory::page_table_t* get_current_page_tables();
 };
 
 

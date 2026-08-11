@@ -57,7 +57,8 @@ private:
 		}
 	};
 
-	static std::unordered_set<SharedPointer<Dentry>, dentry_hash, cached_dentry_equality, Memory::SlabAllocatorSTL<SharedPointer<Dentry>>>* dentries;
+	static std::unordered_set<SharedPointer<Dentry>, dentry_hash, cached_dentry_equality>* dentries;
+	static std::unordered_set<SharedPointer<Dentry>, dentry_hash, cached_dentry_equality>* mount_points; // Mount point dentries, maintaining ref cout >=1 preventing cache evicition
 	static SharedPointer<Dentry>* path[PATH_CAPACITY];
 	static uint num_path;
 	static int lowest_free_fd;

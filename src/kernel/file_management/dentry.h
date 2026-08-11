@@ -2,6 +2,7 @@
 #define BREBOS_DENTRY_H
 
 #include "inode.h"
+#include "../utils/optional.h"
 #include "../utils/shared_pointer.h"
 #include "../utils/TmpString.h"
 
@@ -18,6 +19,10 @@ public:
 	[[nodiscard]]
 	TmpString get_absolute_path_tmp() const;
 
+	void mount_at(const SharedPointer<Dentry>& mount_point);
+
+	// If this entry is a mount point, return the mounted directory. Otherwise returns self.
+	static SharedPointer<Dentry> follow_mount(const SharedPointer<Dentry>& dentry);
 private:
 	[[nodiscard]]
 	size_t absolute_path_length() const;
@@ -28,6 +33,7 @@ public:
 	SharedPointer<Inode> inode;
 	SharedPointer<Dentry> parent;
 	const char* name;
+	Optional<SharedPointer<Dentry>> mount_pointer = nullopt;
 };
 
 

@@ -3,6 +3,7 @@
 #include "xHCI_mem.h"
 #include "../../core/memory/memory.h"
 #include <kstring.h>
+#include "../kernel/processes/scheduler.h"
 
 [[noreturn]]
 extern int irrecoverable_error(const char* format, ...);
@@ -27,7 +28,7 @@ void xhci_device::alloc_input_ctx()
 
     memset(m_input_ctx, 0, input_ctx_size);
 
-    m_input_ctx_phys = PHYS_ADDR(Memory::page_tables, (uintptr_t)m_input_ctx);
+    m_input_ctx_phys = PHYS_ADDR(Scheduler::get_current_page_tables(), (uintptr_t)m_input_ctx);
 }
 
 xhci_input_control_context32* xhci_device::get_input_control_ctx()

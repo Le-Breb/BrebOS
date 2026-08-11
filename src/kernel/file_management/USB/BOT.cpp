@@ -29,17 +29,17 @@ Status BOT::send_in(const usb_mass_storage_device* device, const cdb_t& cdb, voi
     cbw.cb_length = cdb.length;
     memcpy(cbw.cb, cdb.bytes, cdb.length);
 
-    if (!xHCI->bulk_transfer(device->device, device->bulk_out_endpoint, &cbw, sizeof(cbw)))
-        return Status::failure("Failed to send CBW");
+    if (const Status s = xHCI->bulk_transfer(device->device, device->bulk_out_endpoint, &cbw, sizeof(cbw)); !s.is_ok())
+        return Status::failure("Failed to send CBW: %s", s.err().what());
 
     if (length > 0) {
-        if (!xHCI->bulk_transfer(device->device, device->bulk_in_endpoint, data, length))
-            return Status::failure("Failed to read data stage");
+        if (const Status s = xHCI->bulk_transfer(device->device, device->bulk_in_endpoint, data, length); !s.is_ok())
+            return Status::failure("Failed to read data stage: %s", s.err().what());
     }
 
     bot_csw csw{};
-    if (!xHCI->bulk_transfer(device->device, device->bulk_in_endpoint, &csw, sizeof(csw)))
-        return Status::failure("Failed to read CSW");
+    if (const Status s = xHCI->bulk_transfer(device->device, device->bulk_in_endpoint, &csw, sizeof(csw)); !s.is_ok())
+        return Status::failure("Failed to read CSW: %s", s.err().what());
 
     return check_csw_against_cbw(csw, cbw);
 }
@@ -57,17 +57,17 @@ Status BOT::send_out(const usb_mass_storage_device* device, const cdb_t& cdb, vo
     cbw.cb_length = cdb.length;
     memcpy(cbw.cb, cdb.bytes, cdb.length);
 
-    if (!xHCI->bulk_transfer(device->device, device->bulk_out_endpoint, &cbw, sizeof(cbw)))
-        return Status::failure("Failed to send CBW");
+    if (const Status s = xHCI->bulk_transfer(device->device, device->bulk_out_endpoint, &cbw, sizeof(cbw)); !s.is_ok())
+        return Status::failure("Failed to send CBW: %s", s.err().what());
 
     if (length > 0) {
-        if (!xHCI->bulk_transfer(device->device, device->bulk_out_endpoint, data, length))
-            return Status::failure("Failed to send data stage");
+        if (const Status s = xHCI->bulk_transfer(device->device, device->bulk_out_endpoint, data, length); !s.is_ok())
+            return Status::failure("Failed to send data stage: %s", s.err().what());
     }
 
     bot_csw csw{};
-    if (!xHCI->bulk_transfer(device->device, device->bulk_in_endpoint, &csw, sizeof(csw)))
-        return Status::failure("Failed to read CSW");
+    if (const Status s = xHCI->bulk_transfer(device->device, device->bulk_in_endpoint, &csw, sizeof(csw)); !s.is_ok())
+        return Status::failure("Failed to read CSW: %s", s.err().what());
 
     return check_csw_against_cbw(csw, cbw);
 }

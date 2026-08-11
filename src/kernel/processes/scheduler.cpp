@@ -240,6 +240,13 @@ void Scheduler::resume_process(Process* p)
     switch_stack_and_call_process_function(stack_switch_stack_top, resume_process_, p);
 }
 
+Memory::page_table_t* Scheduler::get_current_page_tables()
+{
+    if (const Process* curr_proc = get_running_process())
+        return curr_proc->page_tables;
+    irrecoverable_error("%s: no process is running", __func__);
+}
+
 [[noreturn]]
 void Scheduler::schedule()
 {

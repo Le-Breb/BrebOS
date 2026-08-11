@@ -64,32 +64,35 @@ namespace Memory
         void free(T* t);
     };
 
-    template <typename T>
-    class SlabAllocatorSTL
-    {
-    public:
-        using value_type = T;
-
-        SlabAllocatorSTL() noexcept = default;
-
-        template <typename U>
-        constexpr SlabAllocatorSTL(const SlabAllocatorSTL<U>&) noexcept
-        {
-        }
-
-        T* allocate(std::size_t n)
-        {
-            if (n > std::numeric_limits<std::size_t>::max() / sizeof(T))
-                std::__throw_bad_alloc();
-
-            return SlabAllocator<T>::get_instance()->alloc();
-        }
-
-        void deallocate(T* ptr, std::size_t /*n*/) noexcept
-        {
-            SlabAllocator<T>::get_instance()->free(ptr);
-        }
-    };
+    // Wrapper to make SlabAllocator STL compatible. Currently unusable as allocate param 'n' is not accounted for.
+    // If 'n' never changes, then writing an optimized fixed-size array allocator seems a great idea, otherwise I
+    // I don't see any utility to using custom allocators with STL containers for now
+    // template <typename T>
+    // class SlabAllocatorSTL
+    // {
+    // public:
+    //     using value_type = T;
+    //
+    //     SlabAllocatorSTL() noexcept = default;
+    //
+    //     template <typename U>
+    //     constexpr SlabAllocatorSTL(const SlabAllocatorSTL<U>&) noexcept
+    //     {
+    //     }
+    //
+    //     T* allocate(std::size_t n)
+    //     {
+    //         if (n > std::numeric_limits<std::size_t>::max() / sizeof(T))
+    //             std::__throw_bad_alloc();
+    //
+    //         return SlabAllocator<T>::get_instance()->alloc();
+    //     }
+    //
+    //     void deallocate(T* ptr, std::size_t /*n*/) noexcept
+    //     {
+    //         SlabAllocator<T>::get_instance()->free(ptr);
+    //     }
+    // };
 }
 
 

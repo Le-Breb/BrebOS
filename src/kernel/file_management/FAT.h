@@ -33,6 +33,8 @@
 
 #define ENTRY_NOT_FOUND ((uint)-1)
 
+#define FAT_SECTOR_SIZE 512
+
 enum FAT_type
 {
 	ExFAT,
@@ -151,10 +153,10 @@ struct ctx
 	// For FAT, FAT_drive->FAT is the only buffer used to modify the FAT table, so the in-memory buffer is always up to date
 };
 
-/* FAT32 ATA drive handler */
+/* FAT32 driver */
 class FAT_drive : public FS
 {
-	static FAT_drive* drives[4];
+	static list<FAT_drive*>* drives;
 
 	const fat_BS_t bs; // BPB
 	const fat_extBS_32_t extBS_32; // Extended BPB
@@ -171,7 +173,7 @@ class FAT_drive : public FS
 	DirEntry* entries; // Pointer to buf to read directories entries in it
 	unsigned char* FAT; // Buffer to store FAT
 
-	Inode* root_node = nullptr;
+	SharedPointer<Inode> root_node = nullptr;
 
 	explicit FAT_drive(BlockDevice* dev, fat_BS_t* bs);
 
@@ -226,7 +228,7 @@ public:
 	~FAT_drive() override;
 
 	[[nodiscard]]
-	Inode* get_root_node() override;
+	SharedPointer<Inode> get_root_node() override;
 
 	Status write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length) override;
 

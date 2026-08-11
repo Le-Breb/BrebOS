@@ -2,6 +2,7 @@
 
 #include "optional.h"
 #include <stdarg.h>
+#include <new>
 
 #define __opt_ptr reinterpret_cast<T*>(data)
 
@@ -15,6 +16,34 @@ template <typename T>
 Optional<T>::Optional([[maybe_unused]] const nullopt_t& nullopt) : is_null(true)
 {
 
+}
+
+template <typename T>
+Optional<T>::Optional(const Optional& other) : is_null(other.is_null)
+{
+    if (!is_null)
+        new (&data)T(*reinterpret_cast<const T*>(other.data));
+}
+
+template <typename T>
+Optional<T>& Optional<T>::operator=(const Optional& other)
+{
+    if (this == &other)
+        return *this;
+
+    if (!is_null)
+        __opt_ptr->~T();
+    is_null = other.is_null;
+    if (!is_null)
+        new (&data)T(*reinterpret_cast<const T*>(other.data));
+    return *this;
+}
+
+template <typename T>
+Optional<T>::~Optional()
+{
+    if (!is_null)
+        __opt_ptr->~T();
 }
 
 template <typename T>
