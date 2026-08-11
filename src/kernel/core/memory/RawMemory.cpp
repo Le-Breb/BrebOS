@@ -86,7 +86,7 @@ namespace Memory
     {
         // Write PTE
         PTE(page_tables, page_id) = FRAME_ID_ADDR(frame_id) | policy;
-        __asm__ volatile("invlpg (%0)" : : "r" (frame_id << 12));
+        __asm__ volatile("invlpg (%0)" : : "r" (PAGE_ADDR(page_id)));
 
         if (policy & PAGE_PRESENT)
             MARK_FRAME_USED(frame_id);
