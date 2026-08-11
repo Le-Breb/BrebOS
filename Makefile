@@ -224,24 +224,35 @@ run: $(OS_ISO)
 	@mmd -i disk_image.img ::/downloads # Recreate it
 	@echo "$(CYAN)Initializing NAT$(WHITE)"
 	@sudo ./utils/net_setup.sh
+	#qemu-system-i386 \
+#      -device isa-debug-exit \
+#      -drive file=disk_image2.img,format=raw,if=ide -boot c \
+#      -drive file=disk_image.img,format=raw,if=ide \
+#      -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
+#      -device e1000,netdev=net0 \
+#      -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap \
+#      -m 512M \
+#      -device qemu-xhci,id=xhci,p3=0 \
+#	  -drive if=none,id=usbstick,file=usb_disk.img,format=raw \
+#	  -device usb-storage,bus=xhci.0,drive=usbstick \
+#	  -trace "usb_xhci_*" -D qemu_trace.log \
+#      || true
 	qemu-system-i386 \
       -device isa-debug-exit \
-      -drive file=disk_image2.img,format=raw,if=ide -boot c \
-      -drive file=disk_image.img,format=raw,if=ide \
-      -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
-      -device e1000,netdev=net0 \
-      -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap \
-      -m 512M \
-      -device qemu-xhci,id=xhci,p3=0 \
-	  -drive if=none,id=usbstick,file=usb_disk.img,format=raw \
-	  -device usb-storage,bus=xhci.0,drive=usbstick \
-	  -trace "usb_xhci_*" -D qemu_trace.log \
-      || true
+	   -cdrom os.iso -boot d \
+	   -drive file=disk_image.img,format=raw,if=ide \
+	   -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
+	   -device e1000,netdev=net0 \
+	   -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap \
+	   -m 512M \
+	   -device qemu-xhci,id=xhci,p3=0 \
+	   -drive if=none,id=usbstick,file=usb_disk.img,format=raw \
+	   -device usb-storage,bus=xhci.0,drive=usbstick \
+	   -trace "usb_xhci_*" -D qemu_trace.log \
+	   || true
 	@echo "$(CYAN)Restoring default network configuration...$(WHITE)"
 	@sudo ./utils/net_cleanup.sh
 	@echo "$(CYAN)Done$(WHITE)"
-	@# -device isa-debug-exit -cdrom os.iso -gdb tcp::26000 -S -drive file=disk_image.img,format=raw,if=ide,index=0 -boot d -device e1000,netdev=net0 -netdev user,id=net0 -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap
-	@# -device isa-debug-exit -cdrom os.iso -gdb tcp::26000 -S -drive file=disk_image.img,format=raw,if=ide,index=0 -boot d -device e1000,netdev=net0 -netdev tap,id=net0,ifname=tap0,script=no,downscript=no -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap
 ifdef PROFILING
 	@bash ./utils/run_prof.sh
 endif
