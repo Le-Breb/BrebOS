@@ -30,6 +30,7 @@ bool System::irrecoverable_error_happened = false;
 	else
 	{
 		printf_info("System halted (Hardware shutdown not implemented)");
+		FB::flush();
 		while (true)
 		{
 		};

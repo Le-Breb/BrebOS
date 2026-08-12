@@ -1135,7 +1135,7 @@ void irrecoverable_error_aux(const char* format, va_list list)
 	kvprintf(format, output_funcs(kprintf_output), list);
 	FB::putchar(' ');
 	FB::fatal_error();
-	FB::write("Press any key to continue...");
+	FB::write("Press any key to continue...\n");
 	FB::flush();
 
 	System::irrecoverable_error_happened = true;
