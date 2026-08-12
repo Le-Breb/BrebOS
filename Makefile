@@ -207,7 +207,7 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(programs) bootloader busybox
     # write kernel right after boot sector (seek=1 = sector 2 when BIOS counts sectors from 1 in CHS)
 	dd if=$(BOOTLOADER_BUILD_DIR)/bootloader2.bin of=disk_image2.img bs=512 seek=1 count=21 conv=notrunc status=none
 	dd if=build/kernel.elf of=disk_image2.img bs=512 seek=22 conv=notrunc status=none
-	@grub-mkrescue -o $(OS_ISO) isodir
+	@grub-mkrescue -d /usr/lib/grub/i386-pc/ -o $(OS_ISO) isodir
 
 bootloader:
 	+$(MAKE) -C bootloader
