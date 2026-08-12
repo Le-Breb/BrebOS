@@ -144,6 +144,8 @@ extern "C"
 __attribute__((no_instrument_function))
 void interrupt_handler(uint kesp, cpu_state_t cpu_state, uint interrupt, stack_state_t stack_state)
 {
+	if (PIC::is_spurious(interrupt))
+		return; // Do not acknowledge — no real interrupt was in service
 	switch (interrupt)
 	{
 		case 0x01:

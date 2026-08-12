@@ -1,4 +1,7 @@
 #include "PIC.h"
+
+#include <stdint.h>
+
 #include "IO.h"
 
 bool PIC::preemptive_scheduling_enabled = false;
@@ -78,4 +81,25 @@ void PIC::disable_preemptive_scheduling()
 	outb(PIC1_DATA, a);
 
 	preemptive_scheduling_enabled = false;
+}
+
+bool PIC::is_spurious(int interrupt)
+{
+	// IRQ7 -> vector 39 (master), IRQ15 -> vector 47 (slave)
+	if (interrupt != 39 && interrupt != 47)
+		return false;
+
+	uint8_t isr;
+	if (interrupt == 39)
+	{
+		outb(PIC1_COMMAND, PIC_READ_ISR);
+		isr = inb(PIC1_COMMAND);
+		return !(isr & (1 << 7)); // bit 7 not set => spurious IRQ7
+	}
+	else
+	{
+		outb(PIC2_COMMAND, PIC_READ_ISR);
+		isr = inb(PIC2_COMMAND);
+		return !(isr & (1 << 7)); // bit 7 not set => spurious IRQ15
+	}
 }
