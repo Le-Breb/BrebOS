@@ -835,7 +835,7 @@ xHCI* xHCI::get_instance()
     if (instance)
         return instance;
     if (PCI::xCHI.bus == (uint8_t)-1u)
-        return nullptr;
+        irrecoverable_error("No xCHI controller found, cannot continue");
     return instance = new xHCI(PCI::xCHI);
 }
 
