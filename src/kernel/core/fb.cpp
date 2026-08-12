@@ -202,6 +202,57 @@ void FB::clear_screen()
 	dirty_end_y = characters_per_col;
 }
 
+void FB::draw_fullscreen_message(const char* message, uint32_t fg, uint32_t bg)
+{
+	set_fg(fg);
+	set_bg(bg);
+	clear_screen();
+
+	auto len = (uint)strlen(message);
+	uint box_w = len + 4; // borders + 1 space padding on each side
+	if (box_w > characters_per_line)
+		box_w = characters_per_line;
+	uint box_h = 5; // top border, blank, text, blank, bottom border
+	uint box_x = (characters_per_line - box_w) / 2;
+	uint box_y = (characters_per_col - box_h) / 2;
+
+	caret_x = box_x;
+	caret_y = box_y;
+	putchar('+');
+	for (uint i = 0; i < box_w - 2; i++)
+		putchar('-');
+	putchar('+');
+
+	caret_x = box_x;
+	caret_y = box_y + 1;
+	putchar('|');
+	caret_x = box_x + box_w - 1;
+	putchar('|');
+
+	caret_x = box_x;
+	caret_y = box_y + 2;
+	putchar('|');
+	putchar(' ');
+	write(message);
+	putchar(' ');
+	putchar('|');
+
+	caret_x = box_x;
+	caret_y = box_y + 3;
+	putchar('|');
+	caret_x = box_x + box_w - 1;
+	putchar('|');
+
+	caret_x = box_x;
+	caret_y = box_y + 4;
+	putchar('+');
+	for (uint i = 0; i < box_w - 2; i++)
+		putchar('-');
+	putchar('+');
+
+	flush();
+}
+
 void FB::write(const char* buf)
 {
 	auto len = strlen(buf);

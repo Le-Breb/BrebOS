@@ -130,6 +130,16 @@ public:
     /** Clear the screen */
     static void clear_screen();
 
+    /**
+     * Clears the screen and draws a message inside a bordered box, centered both horizontally and vertically, then
+     * flushes it to the display. Intended for full-screen notices (eg. shutdown screen) rather than regular console
+     * output.
+     * @param message message to display
+     * @param fg text/border color
+     * @param bg background color
+     */
+    static void draw_fullscreen_message(const char* message, uint32_t fg = FB_LIGHTGREY, uint32_t bg = FB_BLACK);
+
     /** Write a string
      *
      * @param buf String to print

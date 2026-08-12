@@ -29,8 +29,7 @@ bool System::irrecoverable_error_happened = false;
 	}
 	else
 	{
-		printf_info("System halted (Hardware shutdown not implemented)");
-		FB::flush();
+		FB::draw_fullscreen_message("It's now safe to turn off your computer");
 		while (true)
 		{
 		};
