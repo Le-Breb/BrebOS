@@ -308,8 +308,11 @@ void FAT_drive::init()
 
 void FAT_drive::shutdown()
 {
-    for (const auto drive : *drives)
-        delete drive;
+    if (drives) // May be nullptr if initialization did not complete
+    {
+        for (const auto drive : *drives)
+            delete drive;
+    }
     delete drives;
 }
 

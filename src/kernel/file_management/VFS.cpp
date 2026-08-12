@@ -65,10 +65,13 @@ void VFS::init()
 void VFS::shutdown()
 {
 	delete mount_points;
-	printf_info("Shutting down VFS, %zu dentries still cached", dentries->size());
-	for (uint i = 0; i < 10 && dentries->size(); i++)
-		free_unused_dentry_cache_entries();
-	printf_info("%zu dentries still cached after cleanup", dentries->size());
+	if (dentries) // May be nullptr if initialization did not run entirely
+	{
+		printf_info("Shutting down VFS, %zu dentries still cached", dentries->size());
+		for (uint i = 0; i < 10 && dentries->size(); i++)
+			free_unused_dentry_cache_entries();
+		printf_info("%zu dentries still cached after cleanup", dentries->size());
+	}
 	delete dentries;
 }
 
