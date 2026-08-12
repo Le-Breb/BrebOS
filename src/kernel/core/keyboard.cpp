@@ -59,13 +59,13 @@ unsigned char Keyboard::read_scan_code()
 
 void Keyboard::handle_char(unsigned char c)
 {
+    // When a fatal error occurs, the system shuts down whenever a key is pressed
+    if (System::irrecoverable_error_happened)
+        System::shutdown();
+
     //printf("%d\n", c);
     if (c < 128)
     {
-        // When a fatal error occurs, the system shuts down whenever a key is pressed
-        if (System::irrecoverable_error_happened)
-            System::shutdown();
-
         c = kbd_US[c];
         if (c == CTRL_PRESSED)
         {
