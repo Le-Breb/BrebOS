@@ -199,6 +199,10 @@ class FAT_drive : public FS
 
 	static Result<FAT_drive*> from_block_device(BlockDevice* dev);
 
+	static bool is_FAT(const fat_BS_t* fat_boot);
+
+	static FAT_type get_FAT_type(const fat_BS_t* fat_boot);
+
 	Result<uint> get_child_dir_entry_id(const SharedPointer<Dentry>& parent_dentry, const char* name, ctx& ctx);
 
 	SharedPointer<Dentry> get_child_dentry(SharedPointer<Dentry>& parent_dentry, const char* name) override;

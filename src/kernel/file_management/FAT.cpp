@@ -93,9 +93,107 @@ Result<FAT_drive*> FAT_drive::from_block_device(BlockDevice* dev)
         return MAKE_ERR("FAT driver only supports device with a block size of %u bytes for now, got %u", ATA_SECTOR_SIZE, dev->get_block_size());
 
     TRY(dev->read_blocks(0, 1, buf));
-    auto* fat_boot = new fat_BS_t;
-    memcpy(fat_boot, buf, sizeof(*fat_boot));
+    const auto* fat_boot = (fat_BS_t*)buf;
 
+    // First ensure that there's a FAT FS on this block device
+    if (!is_FAT(fat_boot))
+        return make_ok((FAT_drive*)nullptr);
+
+    if (get_FAT_type(fat_boot) != FAT32)
+        return make_ok((FAT_drive*)nullptr);
+
+    // Copy header in owned memory instead of relying on the current content of buf, which will be modified during
+    // driver execution
+    const auto owned_fat_boot = new fat_BS_t;
+    memcpy(owned_fat_boot, buf, sizeof(fat_BS_t));
+
+    return make_ok(new FAT_drive(dev, owned_fat_boot));
+}
+
+static bool is_power_of_two(unsigned int x)
+{
+    return x != 0 && (x & (x - 1)) == 0;
+}
+
+bool FAT_drive::is_FAT(const fat_BS_t* fat_boot)
+{
+    // 1. Jump instruction: EB xx 90 (short jump) or E9 xx xx (near jump)
+    const unsigned char* jmp = fat_boot->bootjmp;
+    if (const bool jmp_ok = (jmp[0] == 0xEB && jmp[2] == 0x90) || (jmp[0] == 0xE9); !jmp_ok)
+        return false;
+
+    // 2. bytes_per_sector must be one of the valid sizes
+    switch (fat_boot->bytes_per_sector)
+    {
+        case 512: case 1024: case 2048: case 4096:
+            break;
+        default:
+            return false;
+    }
+
+    // 3. sectors_per_cluster must be a nonzero power of two, and the resulting
+    //    cluster size shouldn't be absurd (spec caps at 32K bytes/cluster)
+    if (!is_power_of_two(fat_boot->sectors_per_cluster))
+        return false;
+    if ((unsigned)fat_boot->bytes_per_sector * fat_boot->sectors_per_cluster > 32 * 1024)
+        return false;
+
+    // 4. reserved_sector_count must be nonzero (FAT12/16 usually 1, FAT32 usually 32)
+    if (fat_boot->reserved_sector_count == 0)
+        return false;
+
+    // 5. table_count: virtually always 1 or 2
+    if (fat_boot->table_count != 1 && fat_boot->table_count != 2)
+        return false;
+
+    // 6. media_type must be a recognized value (0xF0 or 0xF8-0xFF)
+    if (const unsigned char media = fat_boot->media_type; media != 0xF0 && media < 0xF8)
+        return false;
+
+    // 7. exactly one of total_sectors_16 / total_sectors_32 should be set
+    const bool has16 = fat_boot->total_sectors_16 != 0;
+    const bool has32 = fat_boot->total_sectors_32 != 0;
+    if (has16 == has32) // both zero, or both nonzero -> invalid
+        return false;
+
+    // 8. table_size: 16-bit field, or fall through to extBS_32 if zero
+    //    (table_size_16 == 0 is spec-guaranteed only on FAT32; if it's zero
+    //    here we require a nonzero 32-bit table size to accept it)
+    uint32_t fat_size;
+    if (fat_boot->table_size_16 != 0)
+        fat_size = fat_boot->table_size_16;
+    else
+    {
+        const fat_extBS_32* extBS_32 =
+            reinterpret_cast<const fat_extBS_32*>(fat_boot->extended_section);
+        if (extBS_32->table_size_32 == 0)
+            return false;
+        fat_size = extBS_32->table_size_32;
+    }
+    if (fat_size == 0)
+        return false;
+
+    // 9. root_entry_count: must be 0 for FAT32, nonzero for FAT12/16, and if
+    //    nonzero must pack evenly into sectors
+    if (fat_boot->table_size_16 == 0) // FAT32 case
+    {
+        if (fat_boot->root_entry_count != 0)
+            return false;
+    }
+    else if (fat_boot->root_entry_count == 0)
+        return false;
+
+    // 10. boot sector signature 0x55AA at bytes 510-511 of the sector.
+    //     fat_boot must point at a buffer at least 512 bytes long.
+    const unsigned char* raw = reinterpret_cast<const unsigned char*>(fat_boot);
+    if (raw[510] != 0x55 || raw[511] != 0xAA)
+        return false;
+
+    return true;
+}
+
+FAT_type FAT_drive::get_FAT_type(const fat_BS_t* fat_boot)
+{
     auto* extBS_32 = (fat_extBS_32*)&fat_boot->extended_section;
     uint total_sectors = (fat_boot->total_sectors_16 == 0) ? fat_boot->total_sectors_32 : fat_boot->total_sectors_16;
     uint root_dir_sectors =
@@ -104,20 +202,14 @@ Result<FAT_drive*> FAT_drive::from_block_device(BlockDevice* dev)
     uint data_sectors =
         total_sectors - (fat_boot->reserved_sector_count + (fat_boot->table_count * fat_size) + root_dir_sectors);
     uint total_clusters = data_sectors / fat_boot->sectors_per_cluster;
-    FAT_type fat_type;
+
     if (fat_boot->bytes_per_sector == 0)
-        fat_type = ExFAT;
-    else if (total_clusters < 4085)
-        fat_type = FAT12;
-    else if (total_clusters < 65525)
-        fat_type = FAT16;
-    else
-        fat_type = FAT32;
-
-    if (fat_type != FAT32)
-        return make_ok((FAT_drive*)nullptr);
-
-    return make_ok(new FAT_drive(dev, fat_boot));
+        return ExFAT;
+    if (total_clusters < 4085)
+        return FAT12;
+    if (total_clusters < 65525)
+        return FAT16;
+    return FAT32;
 }
 
 const char** FAT_drive::split_at_slashes(const char* str, uint* num_tokens)
