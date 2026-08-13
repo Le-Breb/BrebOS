@@ -31,29 +31,47 @@ void pit_set_reload_value(uint16_t value)
 
 uint32_t PIT::calibrate_tsc()
 {
-    pit_set_reload_value(0xFFFF); // Set PIT to max count
-
-    uint64_t tsc_start = System::rdtsc();
-
-    // Wait for the PIT counter to reach 0
-    uint16_t prev = pit_read_counter();
-    while (true)
+    // A stall (e.g. firmware SMI activity) between arming the PIT and taking the first sample
+    // can make the wraparound-detection loop below observe only a fraction of the intended
+    // ~54.9ms window (or catch a wrap that already happened), yielding an implausibly small -
+    // even zero - result that would silently break every PIT::sleep() in the kernel afterward.
+    // Retry a few times and sanity-check the result rather than trust a single measurement.
+    for (int attempt = 0; attempt < 5; attempt++)
     {
-        uint16_t curr = pit_read_counter();
-        if (curr > prev) break; // Wrapped around
-        prev = curr;
+        pit_set_reload_value(0xFFFF); // Set PIT to max count
+
+        uint64_t tsc_start = System::rdtsc();
+
+        // Wait for the PIT counter to reach 0
+        uint16_t prev = pit_read_counter();
+        while (true)
+        {
+            uint16_t curr = pit_read_counter();
+            if (curr > prev) break; // Wrapped around
+            prev = curr;
+        }
+
+        uint64_t tsc_end = System::rdtsc();
+
+        uint64_t elapsed = tsc_end - tsc_start;
+
+        // PIT counts at 1.193182 MHz (ticks per second)
+        // 0xFFFF is 65535 ticks, so time elapsed is:
+        double pit_time_us = 65535.0 * 1000000.0 / 1193182.0; // in microseconds
+
+        // TSC ticks per microsecond:
+        const uint32_t result = (uint32_t)(elapsed / pit_time_us);
+
+        // Any real x86 CPU clocks well above 100MHz, so a sane result is at least ~100
+        // ticks/us; anything lower means this attempt's measurement window was corrupted.
+        if (result >= 100)
+            return result;
+
+        printf_warn("PIT: calibrate_tsc: implausible result %u on attempt %i, retrying", result, attempt);
     }
 
-    uint64_t tsc_end = System::rdtsc();
-
-    uint64_t elapsed = tsc_end - tsc_start;
-
-    // PIT counts at 1.193182 MHz (ticks per second)
-    // 0xFFFF is 65535 ticks, so time elapsed is:
-    double pit_time_us = 65535.0 * 1000000.0 / 1193182.0; // in microseconds
-
-    // TSC ticks per microsecond:
-    return (uint32_t)(elapsed / pit_time_us);
+    printf_warn("PIT: calibrate_tsc: all attempts failed, falling back to a conservative default");
+    return 1000;
 }
 
 void PIT::init()
