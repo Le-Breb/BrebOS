@@ -20,10 +20,23 @@ uint16_t pit_read_counter()
     return ((uint16_t)hi << 8) | lo;
 }
 
-void pit_set_reload_value(uint16_t value)
+/**
+ * Reads channel 0's status byte through the read-back command. The bit we care about is Null
+ * Count: the PIT sets it when a reload value has been written but not yet transferred into the
+ * counting element, and clears it once the transfer happens (one input clock, ~838ns, later).
+ */
+uint8_t pit_read_status()
 {
-    // Command byte: channel 0, access lobyte/hibyte, mode 0 (one-shot), binary mode
-    outb(PIT_COMMAND_PORT, 0b00110110);
+    // Read-back command: latch status only (bit 5 set = don't latch the count), channel 0
+    outb(PIT_COMMAND_PORT, 0b11100010);
+
+    return inb(PIT_CHANNEL0_PORT);
+}
+
+void pit_set_reload_value(uint16_t value, uint8_t mode)
+{
+    // Command byte: channel 0, access lobyte/hibyte, given mode, binary counting
+    outb(PIT_COMMAND_PORT, 0b00110000 | mode);
 
     outb(PIT_CHANNEL0_PORT, value & 0xFF); // Send low byte of divider
     outb(PIT_CHANNEL0_PORT, (value >> 8) & 0xFF); // Send high byte of divider
@@ -31,40 +44,63 @@ void pit_set_reload_value(uint16_t value)
 
 uint32_t PIT::calibrate_tsc()
 {
-    // A stall (e.g. firmware SMI activity) between arming the PIT and taking the first sample
-    // can make the wraparound-detection loop below observe only a fraction of the intended
-    // ~54.9ms window (or catch a wrap that already happened), yielding an implausibly small -
-    // even zero - result that would silently break every PIT::sleep() in the kernel afterward.
-    // Retry a few times and sanity-check the result rather than trust a single measurement.
+    // Rather than assume the measurement covered a fixed window, both endpoints of the PIT counter
+    // are sampled and the elapsed time derived from the difference. That makes the result immune to
+    // when the window actually opened and closed: if a stall (firmware SMI activity, say) delays
+    // us, it inflates the TSC delta and the PIT delta alike and the ratio still holds.
+    constexpr uint16_t start_count = 0xFFFF;
+
+    // Stop short of 0 so the counter can't run past the end of the window and wrap while we're
+    // sampling it. The remaining span is still ~53ms, far more than needed for a stable ratio.
+    constexpr uint16_t end_count = 0x1000;
+
     for (int attempt = 0; attempt < 5; attempt++)
     {
-        pit_set_reload_value(0xFFFF); // Set PIT to max count
+        // Mode 0: one decrement per input clock. Mode 3 (what the kernel tick uses) decrements by
+        // two, which would silently halve the real duration of the window measured below.
+        pit_set_reload_value(start_count, PIT_MODE_ONE_SHOT);
 
-        uint64_t tsc_start = System::rdtsc();
+        // Writing the reload value does not load the counting element straight away. Until it does,
+        // the counter still reads whatever it held before - so sampling now would compare a stale
+        // value against the freshly loaded one, see a jump, and mistake it for a completed window.
+        while (pit_read_status() & PIT_STATUS_NULL_COUNT);
 
-        // Wait for the PIT counter to reach 0
-        uint16_t prev = pit_read_counter();
-        while (true)
+        const uint16_t begin = pit_read_counter();
+        const uint64_t tsc_begin = System::rdtsc();
+
+        uint16_t curr = begin;
+        bool wrapped = false;
+        while (curr > end_count)
         {
-            uint16_t curr = pit_read_counter();
-            if (curr > prev) break; // Wrapped around
-            prev = curr;
+            const uint16_t sample = pit_read_counter();
+
+            // The counter only ever counts down within a window, so an increase means it ran
+            // through 0 and reloaded - the window is longer than we think and the delta is useless.
+            if (sample > curr)
+            {
+                wrapped = true;
+                break;
+            }
+
+            curr = sample;
         }
 
-        uint64_t tsc_end = System::rdtsc();
+        const uint64_t tsc_end = System::rdtsc();
 
-        uint64_t elapsed = tsc_end - tsc_start;
+        if (wrapped)
+        {
+            printf_warn("PIT: calibrate_tsc: counter wrapped on attempt %i, retrying", attempt);
+            continue;
+        }
 
-        // PIT counts at 1.193182 MHz (ticks per second)
-        // 0xFFFF is 65535 ticks, so time elapsed is:
-        double pit_time_us = 65535.0 * 1000000.0 / 1193182.0; // in microseconds
+        const uint32_t pit_ticks = begin - curr;
+        const double elapsed_us = pit_ticks * 1000000.0 / PIT_FREQUENCY;
+        const uint32_t result = (uint32_t)((tsc_end - tsc_begin) / elapsed_us);
 
-        // TSC ticks per microsecond:
-        const uint32_t result = (uint32_t)(elapsed / pit_time_us);
-
-        // Any real x86 CPU clocks well above 100MHz, so a sane result is at least ~100
-        // ticks/us; anything lower means this attempt's measurement window was corrupted.
-        if (result >= 100)
+        // Sanity-check both ends: any x86 running this kernel clocks between roughly 100MHz and
+        // 10GHz. Bounding only the low end would let a systematically inflated result (an
+        // undetected mode 3 window, for instance) through unnoticed.
+        if (result >= 100 && result <= 10000)
             return result;
 
         printf_warn("PIT: calibrate_tsc: implausible result %u on attempt %i, retrying", result, attempt);
@@ -79,7 +115,8 @@ void PIT::init()
     tsc_ticks_per_us = calibrate_tsc();
     uint divider = ms_to_pit_divider(CLOCK_TICK_MS);
 
-    pit_set_reload_value(divider);
+    // Calibration leaves channel 0 in one-shot mode, so re-arm it as a periodic source for the tick
+    pit_set_reload_value(divider, PIT_MODE_SQUARE_WAVE);
 }
 
 void sleep_cycles(uint64_t cycles)
@@ -117,7 +154,7 @@ uint PIT::ms_to_pit_divider(uint ms)
     // => div / 1193192 = 1 / f
     // => 1000 * div / 1193182 = 1000 / f = ms
     // div = 1193182ms / 1000
-    return (uint)(1193182.0 * ms / 1000);
+    return (uint)(PIT_FREQUENCY * ms / 1000);
 }
 
 uint PIT::ticks = 0;

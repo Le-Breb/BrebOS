@@ -8,6 +8,18 @@
 #define PIT_COMMAND_PORT 0x43
 #define PIT_CHANNEL0_PORT 0x40
 
+// Operating modes, already shifted into the position the command byte expects (bits 3-1).
+// Mode 0 decrements the counter once per input clock; mode 3 decrements it by two to build a
+// square wave, so a given reload value covers half as much wall time there as it does in mode 0.
+#define PIT_MODE_ONE_SHOT       (0 << 1) // Interrupt on terminal count, counts down once
+#define PIT_MODE_SQUARE_WAVE    (3 << 1) // Periodic, used for the kernel tick
+
+// Status byte bit (see pit_read_status): reload value written but not yet loaded into the counter
+#define PIT_STATUS_NULL_COUNT   (1 << 6)
+
+// PIT input clock frequency, in Hz
+#define PIT_FREQUENCY 1193182.0
+
 #define CLOCK_TICK_MS 10
 #define TICKS_PER_SEC (1000 / CLOCK_TICK_MS)
 
