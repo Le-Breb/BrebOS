@@ -360,8 +360,8 @@ void xHCI::process_events()
         }
     }
 
-    command_irq_completed = command_completion_status;
-    transfer_irq_completed = transfer_completion_status;
+    command_irq_completed |= command_completion_status;
+    transfer_irq_completed |= transfer_completion_status;
 }
 
 bool xHCI::is_usb3_port(uint8_t port) const
