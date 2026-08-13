@@ -18,11 +18,23 @@ uint32_t inl(uint16_t port)
     return value;
 }
 
+uint32_t PCI::config_read_dword(uint8_t bus, uint8_t device, uint8_t function, uint8_t offset)
+{
+    const uint32_t address = (uint32_t)((bus << 16) | (device << 11) | (function << 8) | (offset & 0xFC) | 0x80000000);
+    outl(0xCF8, address);
+    return inl(0xCFC);
+}
+
+void PCI::config_write_dword(uint8_t bus, uint8_t device, uint8_t function, uint8_t offset, uint32_t value)
+{
+    const uint32_t address = (uint32_t)((bus << 16) | (device << 11) | (function << 8) | (offset & 0xFC) | 0x80000000);
+    outl(0xCF8, address);
+    outl(0xCFC, value);
+}
+
 uint16_t PCI::pciConfigReadWord(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset)
 {
-    uint32_t address = (uint32_t)((bus << 16) | (slot << 11) | (func << 8) | (offset & 0xFC) | 0x80000000);
-    outl(0xCF8, address);
-    return (uint16_t)((inl(0xCFC) >> ((offset & 2) * 8)) & 0xFFFF);
+    return (uint16_t)((config_read_dword(bus, slot, func, offset) >> ((offset & 2) * 8)) & 0xFFFF);
 }
 
 uint16_t PCI::pciCheckVendor(uint8_t bus, uint8_t slot)
@@ -123,15 +135,23 @@ uint32_t PCI::getPCIBarType(uint8_t bus, uint8_t device, uint8_t function, uint8
 
 void PCI::enableBusMaster(uint8_t bus, uint8_t device, uint8_t function)
 {
-    // Read the PCI command register (offset 0x04)
-    uint16_t command = pciConfigReadWord(bus, device, function, 0x04);
+    // Command and Status share a dword, so read-modify-write the whole thing rather than writing a
+    // zero-extended 16-bit value (which would blow away the Status half). Status bits are all
+    // write-1-to-clear, so writing back exactly what we read leaves them untouched.
+    uint32_t command_status = config_read_dword(bus, device, function, PCI_COMMAND);
 
-    // Set the bus mastering bit (bit 2)
-    command |= 0x04;
+    command_status |= PCI_COMMAND_BUS_MASTER;
 
-    // Write the updated value back to the command register
-    outl(0xCF8, (uint32_t)((bus << 16) | (device << 11) | (function << 8) | 0x04 | 0x80000000));
-    outl(0xCFC, command);
+    config_write_dword(bus, device, function, PCI_COMMAND, command_status);
+}
+
+void PCI::enableInterrupts(uint8_t bus, uint8_t device, uint8_t function)
+{
+    uint32_t command_status = config_read_dword(bus, device, function, PCI_COMMAND);
+
+    command_status &= ~(uint32_t)PCI_COMMAND_INTERRUPT_DISABLE;
+
+    config_write_dword(bus, device, function, PCI_COMMAND, command_status);
 }
 
 uint32_t PCI::getPCIBarSize(uint8_t bus, uint8_t device, uint8_t function, uint8_t barIndex)
@@ -160,8 +180,14 @@ uint32_t PCI::getPCIBarSize(uint8_t bus, uint8_t device, uint8_t function, uint8
 uint8_t PCI::getIntLine(uint8_t bus, uint8_t device, uint8_t function)
 {
     // The interrupt line is located at offset 0x3C in the PCI configuration space
-    uint16_t value = pciConfigReadWord(bus, device, function, 0x3C);
+    uint16_t value = pciConfigReadWord(bus, device, function, PCI_INTERRUPT_LINE);
 
     // The interrupt line is in the lower 8 bits of the word
     return (uint8_t)(value & 0xFF);
+}
+
+uint8_t PCI::getIntPin(uint8_t bus, uint8_t device, uint8_t function)
+{
+    // Interrupt Pin sits in the upper byte of the same word as Interrupt Line
+    return (uint8_t)((pciConfigReadWord(bus, device, function, PCI_INTERRUPT_LINE) >> 8) & 0xFF);
 }
