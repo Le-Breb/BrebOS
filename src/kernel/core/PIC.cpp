@@ -83,6 +83,16 @@ void PIC::disable_preemptive_scheduling()
 	preemptive_scheduling_enabled = false;
 }
 
+void PIC::unmask_irq(uint8_t irq_line)
+{
+	uint16_t port = irq_line < 8 ? PIC1_DATA : PIC2_DATA;
+	uint8_t bit = irq_line < 8 ? irq_line : irq_line - 8;
+
+	uint8_t mask = inb(port);
+	mask &= ~(1 << bit);
+	outb(port, mask);
+}
+
 bool PIC::is_spurious(int interrupt)
 {
 	// IRQ7 -> vector 39 (master), IRQ15 -> vector 47 (slave)

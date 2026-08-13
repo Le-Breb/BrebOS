@@ -2,6 +2,7 @@
 #define CUSTOM_OS_PIC_H
 
 #include <kstddef.h>
+#include <stdint.h>
 
 #define ICW1_INIT    0x10
 #define ICW1_ICW4    0x01
@@ -50,6 +51,17 @@ public:
 	static void enable_preemptive_scheduling();
 
 	static void disable_preemptive_scheduling();
+
+	/**
+	 * Unmasks a single IRQ line (0-15) so the PIC actually forwards it to the CPU.
+	 * init() only unmasks the lines known to be needed at boot (keyboard, cascade,
+	 * the hardcoded networking IRQ) - any other device's IRQ line must be unmasked
+	 * individually once it's known, otherwise its interrupts are silently dropped
+	 * at the PIC regardless of IDT/dispatch table setup.
+	 *
+	 * @param irq_line The IRQ line to unmask (0-7 = master PIC, 8-15 = slave PIC)
+	 */
+	static void unmask_irq(uint8_t irq_line);
 
 	static bool is_spurious(int interrupt);
 };

@@ -226,6 +226,11 @@ bool Interrupts::register_interrupt(uint interrupt_id, Interrupt_handler* handle
 		return false;
 
 	handlers[interrupt_id] = handler;
+
+	// We need to unmask the IRQ as PIC::init() only unmasks the lines known to be needed at boot
+	if (interrupt_id >= PIC1_START_INTERRUPT && interrupt_id <= PIC2_END_INTERRUPT)
+		PIC::unmask_irq(interrupt_id - PIC1_START_INTERRUPT);
+
 	return true;
 }
 
