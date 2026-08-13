@@ -2,7 +2,25 @@
 
 #include "BOT.h"
 #include "../../utils/Endianness.h"
+#include "../../core/memory/memory.h"
 #include "kstring.h"
+
+/*
+The xHC DMAs directly into this buffer, so it needs to be a reliably DMA-safe allocation rather
+than a plain stack buffer (see BOT::send_in/send_out). physically_aligned_malloc has no matching
+deallocator and hands out whole pages, so allocate it once and reuse it rather than leaking a page
+per command. Safe because the driver only ever has a single transfer in flight.
+*/
+
+static scsi_read_capacity_10_data* get_read_capacity_10_dma_buf()
+{
+    static scsi_read_capacity_10_data* read_capacity_10_dma_buf = nullptr;
+    if (!read_capacity_10_dma_buf)
+        read_capacity_10_dma_buf = static_cast<scsi_read_capacity_10_data*>(
+            Memory::physically_aligned_malloc(sizeof(scsi_read_capacity_10_data), 8, PAGE_SIZE));
+
+    return read_capacity_10_dma_buf;
+}
 
 Result<scsi_read_capacity_10_data> SCSI::send_read_capacity_10(const usb_mass_storage_device* device)
 {
@@ -18,14 +36,18 @@ Result<scsi_read_capacity_10_data> SCSI::send_read_capacity_10(const usb_mass_st
     cdb_t bot_cdb;
     memcpy(bot_cdb.bytes, &cdb, sizeof(cdb));
     bot_cdb.length = sizeof(cdb);
-    scsi_read_capacity_10_data data;
-    if (const Status send_status = BOT::send_in(device, bot_cdb, &data, sizeof(data)); !send_status.is_ok())
+
+    scsi_read_capacity_10_data* data = get_read_capacity_10_dma_buf();
+    if (!data)
+        return MAKE_ERR("Failed to allocate READ CAPACITY (10) response buffer");
+
+    if (const Status send_status = BOT::send_in(device, bot_cdb, data, sizeof(*data)); !send_status.is_ok())
         return MAKE_ERR("Failed to send READ CAPACITY (10) command: %s", send_status.err().what());
 
-    data.last_lba = Endianness::switch32(data.last_lba);
-    data.block_length = Endianness::switch32(data.block_length);
+    data->last_lba = Endianness::switch32(data->last_lba);
+    data->block_length = Endianness::switch32(data->block_length);
 
-    return Result<scsi_read_capacity_10_data>::ok(data);
+    return Result<scsi_read_capacity_10_data>::ok(*data);
 }
 
 Status SCSI::send_read_10(const usb_mass_storage_device* device, uint32_t lba, uint16_t transfer_length,
