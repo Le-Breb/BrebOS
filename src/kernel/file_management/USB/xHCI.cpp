@@ -493,10 +493,10 @@ xhci_command_completion_trb_t* xHCI::send_command_trb(xhci_trb_t* cmd_trb, uint3
     command_irq_completed = 0;
 
     if (!completion_trb)
-        irrecoverable_error("Failed to find completion TRB for command %i\n", cmd_trb->trb_type);
+        irrecoverable_error("Failed to find completion TRB for command %i", cmd_trb->trb_type);
 
     if (completion_trb->completion_code != XHCI_TRB_COMPLETION_CODE_SUCCESS)
-        irrecoverable_error("Command TRB failed with error: %s\n", trb_completion_code_to_string(completion_trb->completion_code));
+        irrecoverable_error("Command TRB failed with error: %s", trb_completion_code_to_string(completion_trb->completion_code));
 
     return completion_trb;
 }
