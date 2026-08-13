@@ -160,7 +160,7 @@ void xHCI::setup_dcbaa()
     }
 
     // Set DCBAA pointer in the operational registers
-    op_regs->dcbaap = reinterpret_cast<uintptr_t>(dcbaa);
+    op_regs->dcbaap = PHYS_ADDR(Scheduler::get_current_page_tables(), (uintptr_t)dcbaa);
 }
 
 void xHCI::parse_capability_registers()
