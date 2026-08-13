@@ -42,7 +42,28 @@ class xHCI : public PCI::Device, public Interrupt_handler
     void configure_runtime_registers();
     void acknowledge_irq(uint8_t interrupter) const;
     bool start_host_controller() const;
+
+    // Drains the event ring, recording completions for whoever is waiting on them. Never enumerates
+    // a port itself - see pending_port_changes. Clears EHB on the way out, which re-arms the
+    // interrupter, so it must run *after* the interrupt has been acknowledged - use poll_events()
+    // rather than calling this directly from outside the interrupt handler.
     void process_events();
+
+    // Acknowledge-then-drain, for use outside interrupt context
+    void poll_events();
+
+    // Ports whose Port Status Change Event we've seen but not acted on yet, as a bitmask of port
+    // numbers. Enumerating a port synchronously drives commands and transfers of its own, so doing
+    // it straight from process_events() would re-enter the driver while an outer command is still
+    // waiting on the very bookkeeping that enumeration would overwrite. Instead events are only
+    // recorded here, and acted on at a point where nothing else is in flight.
+    uint32_t pending_port_changes = 0;
+
+    // Nesting depth of send_command_trb()/wait_for_transfer_event(). Non-zero means a transfer is
+    // in flight and it is not safe to start enumerating a port.
+    int wait_depth = 0;
+
+    void drain_port_changes();
     bool is_usb3_port(uint8_t port) const;
     xhci_portsc_register read_portsc_reg(uint8_t port_num) const;
     void write_portsc_reg(xhci_portsc_register reg, uint8_t port_num);

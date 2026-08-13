@@ -25,6 +25,13 @@ xHCI::xHCI(const Device& device) : Device(device)
     if (!Memory::identity_map((uint32_t)mmio, bar_size))
         irrecoverable_error("Couldn't identity map xHCI controller MMIO");
 
+    // The controller DMAs into the DCBAA, the rings and every transfer buffer, so it needs to be a
+    // bus master.
+    PCI::enableBusMaster(device.bus, device.device, device.function);
+
+    // Allow the controller to actually drive its legacy INTx line (see PCI::enableInterrupts)
+    PCI::enableInterrupts(device.bus, device.device, device.function);
+
     parse_capability_registers();
     parse_extended_capabilities();
     if (!reset_controller())
@@ -32,11 +39,20 @@ xHCI::xHCI(const Device& device) : Device(device)
     configure_operational_registers();
     configure_runtime_registers();
 
-    if (!Interrupts::register_interrupt(
-            PIC1_START_INTERRUPT + PCI::getIntLine(device.bus, device.device, device.function),
-            this
-        ))
-        irrecoverable_error("xHCI controller interrupt registration failed");
+    const uint8_t irq_line = PCI::getIntLine(device.bus, device.device, device.function);
+    const uint8_t int_pin = PCI::getIntPin(device.bus, device.device, device.function);
+
+    // Interrupt Line only means something to the 8259s when it names one of the 16 PIC IRQs.
+    // Firmware that assumes the OS will run in APIC mode may leave it unrouted (0xFF) or fill in an
+    // APIC GSI (>= 16) instead, neither of which the PIC can deliver. None of these cases are fatal
+    // - the waits in send_command_trb()/wait_for_transfer_event() fall back to polling the event
+    // ring - but they do make the driver much slower, so say so rather than failing silently.
+    if (int_pin == 0)
+        printf_warn("xHCI: controller reports no INTx pin, falling back to polling");
+    else if (irq_line >= 16)
+        printf_warn("xHCI: interrupt line %u is not a PIC IRQ, falling back to polling", irq_line);
+    else if (!Interrupts::register_interrupt(PIC1_START_INTERRUPT + irq_line, this))
+        printf_warn("xHCI: interrupt registration failed on IRQ %u, falling back to polling", irq_line);
 }
 
 bool xHCI::reset_controller() const
@@ -269,6 +285,12 @@ void xHCI::configure_runtime_registers()
     iman |= XHCI_IMAN_INTERRUPT_ENABLE;
     interrupter_regs->iman = iman;
 
+    // Disable interrupt moderation. It defaults to 4000 (x 250ns = 1ms), which throttles the
+    // interrupter to at most one interrupt per millisecond - fine for throughput under load, but
+    // here it just adds up to a millisecond of latency to every single command and transfer we
+    // wait on, since the driver only ever has one in flight at a time.
+    interrupter_regs->imod = 0;
+
     // Setup the event ring and write to interrupter
     // registers to set ERSTSZ, ERSDP, and ERSTBA.
     event_ring = {new xhci_event_ring(XHCI_EVENT_RING_TRB_COUNT, interrupter_regs)};
@@ -327,10 +349,12 @@ bool xHCI::start_host_controller() const
 
 void xHCI::process_events()
 {
-    // Poll the event ring for any events
+    // Drain the event ring. Called unconditionally, even with nothing pending: dequeue_events()
+    // also clears EHB, and EHB is set by the controller every time it sets IP. Leaving it set on a
+    // pass that happened to find no events (a shared or spurious interrupt, or events a poll
+    // already consumed) would leave the interrupter permanently disarmed.
     vector<xhci_trb_t*> events;
-    if (event_ring->has_unprocessed_events())
-        event_ring->dequeue_events(events);
+    event_ring->dequeue_events(events);
 
     uint8_t command_completion_status = 0;
     uint8_t transfer_completion_status = 0;
@@ -349,9 +373,13 @@ void xHCI::process_events()
                 break;
             case XHCI_TRB_TYPE_PORT_STATUS_CHANGE_EVENT:
             {
+                // Only record it - enumerating from here would re-enter the driver. See
+                // pending_port_changes / drain_port_changes().
                 const auto* psc_event = (xhci_port_status_change_trb_t*)event;
                 // Port IDs in the event are 1-based; read_portsc_reg()/reset_port() expect a 0-based index
-                handle_port_connect_change(psc_event->port_id - 1);
+                const uint8_t port = psc_event->port_id - 1;
+                if (port < m_max_ports && port < 32) // The bitmask only has room for 32 ports
+                    pending_port_changes |= 1u << port;
                 break;
             }
             default:
@@ -362,6 +390,43 @@ void xHCI::process_events()
 
     command_irq_completed |= command_completion_status;
     transfer_irq_completed |= transfer_completion_status;
+}
+
+// Drains the event ring from normal (non-interrupt) context, doing the same acknowledgement fire()
+// does. Skipping that acknowledgement is not harmless: the events we consume here left IP set, and
+// the controller will not raise a new interrupt while IP is still pending - so one un-acknowledged
+// poll silently kills interrupt delivery for the rest of the driver's life.
+void xHCI::poll_events()
+{
+    // Interrupts off so this cannot interleave with fire() doing the same sequence
+    Interrupts::disable_asm();
+    acknowledge_irq(0);
+    process_events();
+    Interrupts::enable_asm();
+}
+
+// Enumerates every port the interrupt handler recorded a change for. Must be called from normal
+// context with interrupts enabled - never from fire() (see the note there).
+void xHCI::drain_port_changes()
+{
+    // Must not run nested inside a command/transfer wait: enumeration issues its own commands and
+    // would overwrite the completion bookkeeping the outer wait is about to read.
+    if (wait_depth != 0)
+        return;
+
+    // Enumerating a port can itself produce further port change events, so keep going until the
+    // set is empty rather than snapshotting it once.
+    while (pending_port_changes)
+    {
+        Interrupts::disable_asm();
+        const uint32_t pending = pending_port_changes;
+        pending_port_changes = 0;
+        Interrupts::enable_asm();
+
+        for (uint8_t port = 0; port < 32; port++)
+            if (pending & (1u << port))
+                handle_port_connect_change(port);
+    }
 }
 
 bool xHCI::is_usb3_port(uint8_t port) const
@@ -423,8 +488,8 @@ bool xHCI::reset_port(uint8_t port_num)
     write_portsc_reg(portsc, port_num);
 
     // Wait for the reset to complete. The spec's nominal reset duration is ~100ms, but some real
-    // hardware (particularly internal, firmware-backed USB2 devices) takes noticeably longer to
-    // finish the chirp/reset handshake and assert PRC/WRC than an emulator's virtual port does.
+    // hardware takes longer to finish the chirp/reset handshake and assert PRC/WRC than an emulator's virtual port
+    // does.
     int timeout = 500;
     while (timeout > 0) {
         portsc = read_portsc_reg(port_num);
@@ -474,16 +539,21 @@ xhci_command_completion_trb_t* xHCI::send_command_trb(xhci_trb_t* cmd_trb, uint3
     // Ring the command doorbell
     doorbell_manager->ring_command_doorbell();
 
-    // Wait for the IRQ and let the host controller process the command
+    // Wait for the completion interrupt. Nothing is polled on the normal path - fire() records the
+    // completion for us.
+    wait_depth++;
     uint64_t sleep_passed = 0;
-    while (!command_irq_completed) {
+    while (!command_irq_completed && sleep_passed <= timeout_ms * 1000) {
         PIT::spin_sleep(10);
         sleep_passed += 10;
-
-        if (sleep_passed > timeout_ms * 1000) {
-            break;
-        }
     }
+
+    // Safety net for hardware where the interrupt never arrives (a firmware that won't route this
+    // controller's INTx to the PIC, say): check the ring ourselves rather than failing a command
+    // whose event is sitting there unread.
+    if (!command_irq_completed)
+        poll_events();
+    wait_depth--;
 
     // ** Important Assumption **
     //  - Only one command is being sent to the controller at a time
@@ -507,15 +577,17 @@ xhci_transfer_event_trb_t* xHCI::wait_for_transfer_event(uint32_t timeout_ms)
 {
     // ** Important Assumption **
     //  - Only one transfer is in flight at a time, same assumption as send_command_trb()
+    wait_depth++;
     uint64_t sleep_passed = 0;
-    while (!transfer_irq_completed) {
+    while (!transfer_irq_completed && sleep_passed <= timeout_ms * 1000) {
         PIT::spin_sleep(10);
         sleep_passed += 10;
-
-        if (sleep_passed > timeout_ms * 1000) {
-            break;
-        }
     }
+
+    // Same last-resort ring check as send_command_trb()
+    if (!transfer_irq_completed)
+        poll_events();
+    wait_depth--;
 
     xhci_transfer_event_trb_t* event =
         transfer_completion_events.get_size() ? transfer_completion_events[0] : nullptr;
@@ -884,6 +956,9 @@ void xHCI::start()
 
     for (uint8_t port = 0; port < m_max_ports; port++)
         handle_port_connect_change(port);
+
+    // Pick up anything the interrupt handler recorded while the scan above was mid-command
+    drain_port_changes();
 }
 
 void xHCI::handle_port_connect_change(uint8_t port_num)
@@ -904,6 +979,18 @@ void xHCI::handle_port_connect_change(uint8_t port_num)
 
 void xHCI::fire([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] stack_state_t* stack_state)
 {
-    process_events();
+    // Order matters, and it is the reverse of what reads naturally. Acknowledging first means that
+    // if the controller enqueues an event while we're still draining the ring below, it sets IP
+    // again after our clear and we get another interrupt for it. Draining first and acknowledging
+    // afterwards would clear that fresh IP and lose the event permanently - and because
+    // process_events() re-arms the interrupter (clearing EHB) on its way out, the controller would
+    // never raise it again either. See acknowledge_irq()/process_events().
     acknowledge_irq(0);
+    process_events();
+
+    // Deliberately no drain_port_changes() here. Enumerating a port issues commands and waits for
+    // their completion interrupts - but we're inside the handler for this very IRQ, which the PIC
+    // keeps in-service (and therefore blocked) until interrupt_handler() sends the EOI on the way
+    // out. Those waits could only ever complete via the polling safety net, one full timeout each.
+    // The change stays recorded in pending_port_changes for a caller that can drain it safely.
 }
