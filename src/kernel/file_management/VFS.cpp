@@ -665,17 +665,48 @@ SharedPointer<Dentry> VFS::get_mnt_dentry()
 	return find_expect(*dentries, dentry_cache_key{"mnt", get_root_dentry().get()}, "%s: couldn't find root", __func__);
 }
 
+/**
+ * Prints a byte count in the largest unit that keeps it >= 1, with one decimal place.
+ * Stays in integer arithmetic as the kernel's printf has no floating point conversion.
+ */
+static void print_capacity(uint64_t bytes)
+{
+	static const char* units[] = {"B", "KB", "MB", "GB", "TB"};
+	constexpr size_t last_unit = sizeof(units) / sizeof(*units) - 1;
+
+	size_t unit = 0;
+	uint64_t scaled = bytes;
+	uint64_t remainder = 0; // Whatever the last division dropped, used for the decimal place
+
+	while (scaled >= 1024 && unit < last_unit)
+	{
+		remainder = scaled % 1024;
+		scaled /= 1024;
+		unit++;
+	}
+
+	if (unit == 0)
+		printf("%llu %s", scaled, units[unit]);
+	else
+		printf("%llu.%llu %s", scaled, remainder * 10 / 1024, units[unit]);
+}
+
 void VFS::display_ready_usb_devices()
 {
 	for (const auto& msd : USB::get_instance()->get_mass_storage_devices())
 	{
 		const auto [last_lba, block_length] = SCSI::send_read_capacity_10(&msd).expect();
-		const uint device_capacity = (last_lba + 1) * block_length;
+
+		// 64-bit: both operands are 32 bit, so the product overflows for any device >= 4GB.
+		// last_lba is the address of the last block, hence the +1 to get a block count.
+		const uint64_t device_capacity = (uint64_t)(last_lba + 1) * block_length;
 		printf(" USB drive ");
 		FB::set_fg(FB_LIGHTMAGENTA);
 		printf("%i", msd.device->get_slot());
 		FB::set_fg(FB_WHITE);
-		printf(": Mass Storage %uMB - ",  device_capacity / 1024 / 1024);
+		printf(": Mass Storage ");
+		print_capacity(device_capacity);
+		printf(" - ");
 		FB::set_fg(FB_LIGHTRED);
 		printf("%s %s\n", msd.manufacturer_name, msd.product_name);
 		FB::set_fg(FB_WHITE);
