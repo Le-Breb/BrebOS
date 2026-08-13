@@ -1244,6 +1244,10 @@ Controller during status update if the associated error condition is detected.
     (XHCI_LEGACY_SMI_ENABLE | XHCI_LEGACY_SMI_ON_OS_OWNERSHIP | XHCI_LEGACY_SMI_ON_HOST_ERROR | \
      XHCI_LEGACY_SMI_ON_PCI_COMMAND | XHCI_LEGACY_SMI_ON_BAR)
 
+// Upper 16 bits of USBLEGCTLSTS are R/W1C status bits mirroring the enables above.
+// Writing 1 to all of them clears any SMI status left over from BIOS ownership.
+#define XHCI_LEGACY_SMI_STATUS_BITS_MASK     0xFFFF0000
+
 /*
 // xHci Spec Section 7.0 Table 7-1: Format of xHCI Extended Capability Pointer Register
 */

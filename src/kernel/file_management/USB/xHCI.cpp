@@ -220,10 +220,43 @@ void xHCI::parse_extended_capabilities()
                         usb3_ports.push_back(port);
             }
         }
+        else if (node->id() == xhci_extended_capability_code::usb_legacy_support)
+            acquire_legacy_ownership(node->base());
 
         // Advance to the next node
         node = node->next();
     }
+}
+
+void xHCI::acquire_legacy_ownership(volatile uint32_t* legsup)
+{
+    // xHci Spec Section 7.1.1: on real hardware, firmware may still own the controller at boot
+    // (servicing it via SMI, e.g. for legacy USB keyboard emulation). Writing registers like
+    // PORTSC/USBCMD before requesting ownership can race against the firmware's SMI handler,
+    // causing unreliable behavior such as port reset timeouts. QEMU has no such firmware, so
+    // this is a no-op there, but it's required for correct operation on real machines.
+    if (!(*legsup & XHCI_LEGACY_BIOS_OWNED_SEMAPHORE))
+        return; // BIOS doesn't currently own the controller
+
+    // Request OS ownership
+    *legsup |= XHCI_LEGACY_OS_OWNED_SEMAPHORE;
+
+    // Wait for the BIOS to relinquish ownership
+    int timeout = 5000; // ms; some firmware is slow to respond to the ownership request
+    while (timeout > 0 && (*legsup & XHCI_LEGACY_BIOS_OWNED_SEMAPHORE))
+    {
+        PIT::sleep(1);
+        timeout--;
+    }
+
+    if (*legsup & XHCI_LEGACY_BIOS_OWNED_SEMAPHORE)
+        printf_warn("xHCI: BIOS did not release USB ownership in time, continuing anyway");
+
+    // Disable further SMI generation for this controller and clear any pending SMI status left
+    // over from BIOS ownership (xHci Spec Section 7.1.2, USBLEGCTLSTS - the dword right after
+    // USBLEGSUP)
+    volatile uint32_t* legctlsts = legsup + 1;
+    *legctlsts = (*legctlsts & ~XHCI_LEGACY_SMI_ENABLE_BITS) | XHCI_LEGACY_SMI_STATUS_BITS_MASK;
 }
 
 void xHCI::configure_runtime_registers()

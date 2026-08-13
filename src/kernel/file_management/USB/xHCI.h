@@ -38,6 +38,7 @@ class xHCI : public PCI::Device, public Interrupt_handler
     void setup_dcbaa();
     void parse_capability_registers();
     void parse_extended_capabilities();
+    static void acquire_legacy_ownership(volatile uint32_t* legsup);
     void configure_runtime_registers();
     void acknowledge_irq(uint8_t interrupter) const;
     bool start_host_controller() const;
