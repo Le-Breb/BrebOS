@@ -2,11 +2,11 @@
 
 # Written by Claude Code
 
-# Writes os.iso to a USB stick, with device auto-detection/confirmation and a post-write verification
+# Writes stick.img to a USB stick, with device auto-detection/confirmation and a post-write verification
 # so silent "wrong device" / "incomplete write" failures don't masquerade as "the OS didn't update".
 set -euo pipefail
 
-ISO="${1:-os.iso}"
+ISO="${1:-stick.img}"
 DEV_ARG="${2:-}"
 if [ ! -f "$ISO" ]; then
     echo "error: $ISO not found (build it first with 'make')" >&2

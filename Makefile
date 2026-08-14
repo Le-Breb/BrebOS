@@ -155,33 +155,6 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(programs) bootloader busybox
 	@mkfs.vfat -F 32 -v disk_image.img -s 1 # FAT 32, one sector per cluster (as the driver only supports that for now)
 
 	@qemu-img create -f raw usb_disk.img 64M
-	@mkfs.vfat -F 32 -v usb_disk.img -s 1 # FAT 32, one sector per cluster (as the driver only supports that for now)
-
-	@#cp disk_image.img2 disk_image.img
-	@echo "$(CYAN)Populating disk$(WHITE)"
-	@mmd -i usb_disk.img ::/fold
-	@mmd -i usb_disk.img ::/fold2
-	@mmd -i usb_disk.img ::/bin
-	@mmd -i usb_disk.img ::/downloads
-	@mmd -i usb_disk.img ::/usr
-	@mmd -i usb_disk.img ::/usr/lib
-	@mmd -i usb_disk.img ::/mnt
-	@mmd -i usb_disk.img ::/mnt/1
-	@mcopy -i usb_disk.img ./sysroot/usr/lib/ld.so ::/usr/lib
-	@mcopy -i usb_disk.img ./sysroot/usr/lib/libc.so ::/usr/lib
-	@mcopy -i usb_disk.img ./sysroot/usr/lib/libm.so ::/usr/lib
-	@mcopy -i usb_disk.img ./toolchain/usr/i686-brebos/lib/libgcc_s.so.1 ::/usr/lib
-	@mcopy -i usb_disk.img ./toolchain/usr/i686-brebos/lib/libstdc++.so.6 ::/usr/lib
-	@mcopy -i usb_disk.img ./src/libk/build/libk.so ::/usr/lib
-	@mcopy -i usb_disk.img $(LIBK_BUILD_DIR)/libk.so ::/bin
-	@echo "this is a text file :D" | mcopy -i usb_disk.img - ::/"text-file.txt"
-	@for prog in $(shell find $(SRC_DIR)/programs/build -type f ! -name "*.*"); do \
-    		mcopy -i usb_disk.img $$prog ::/bin; \
-	done
-	@for prog in $(busybox_programs); do \
-    		mcopy -i usb_disk.img ./busybox/0_lib/$$prog ::/bin; \
-	done
-	mcopy -i usb_disk.img ./busybox/0_lib/libbusybox.so.1.36.1 ::/usr/lib
 
 	@echo "set timeout=$(GRUB_TIMEOUT)" > grub.cfg
 	@echo "set default=0" >> grub.cfg
@@ -208,6 +181,40 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(programs) bootloader busybox
 	dd if=$(BOOTLOADER_BUILD_DIR)/bootloader2.bin of=disk_image2.img bs=512 seek=1 count=21 conv=notrunc status=none
 	dd if=build/kernel.elf of=disk_image2.img bs=512 seek=22 conv=notrunc status=none
 	@grub-mkrescue -d /usr/lib/grub/i386-pc/ -o $(OS_ISO) isodir
+
+	ISO_SIZE=$$(stat -c%s os.iso); \
+	ISO_SECTORS=$$(( (ISO_SIZE + 511) / 512 )); \
+	ALIGN=2048; \
+	ISO_SECTORS_ALIGNED=$$(( ( (ISO_SECTORS + ALIGN - 1) / ALIGN ) * ALIGN )); \
+	truncate -s $$(( ISO_SECTORS_ALIGNED * 512 )) os.iso; \
+	echo "$(CYAN)Creating USB disk$(WHITE)"; \
+	mkfs.vfat -F 32 -v usb_disk.img -s 1 -h $$ISO_SECTORS_ALIGNED; \
+	echo "$(CYAN)Populating USB disk$(WHITE)"; \
+	mmd -i usb_disk.img ::/fold; \
+	mmd -i usb_disk.img ::/fold2; \
+	mmd -i usb_disk.img ::/bin; \
+	mmd -i usb_disk.img ::/downloads; \
+	mmd -i usb_disk.img ::/usr; \
+	mmd -i usb_disk.img ::/usr/lib; \
+	mmd -i usb_disk.img ::/mnt; \
+	mmd -i usb_disk.img ::/mnt/1; \
+	mcopy -i usb_disk.img ./sysroot/usr/lib/ld.so ::/usr/lib; \
+	mcopy -i usb_disk.img ./sysroot/usr/lib/libc.so ::/usr/lib; \
+	mcopy -i usb_disk.img ./sysroot/usr/lib/libm.so ::/usr/lib; \
+	mcopy -i usb_disk.img ./toolchain/usr/i686-brebos/lib/libgcc_s.so.1 ::/usr/lib; \
+	mcopy -i usb_disk.img ./toolchain/usr/i686-brebos/lib/libstdc++.so.6 ::/usr/lib; \
+	mcopy -i usb_disk.img ./src/libk/build/libk.so ::/usr/lib; \
+	mcopy -i usb_disk.img $(LIBK_BUILD_DIR)/libk.so ::/bin; \
+	echo "this is a text file :D" | mcopy -i usb_disk.img - ::/"text-file.txt"; \
+	for prog in $(shell find $(SRC_DIR)/programs/build -type f ! -name "*.*"); do \
+		mcopy -i usb_disk.img $$prog ::/bin; \
+	done; \
+	for prog in $(busybox_programs); do \
+		mcopy -i usb_disk.img ./busybox/0_lib/$$prog ::/bin; \
+	done; \
+	mcopy -i usb_disk.img ./busybox/0_lib/libbusybox.so.1.36.1 ::/usr/lib; \
+	cat os.iso usb_disk.img > stick.img; \
+	echo "$${ISO_SECTORS_ALIGNED},,0c" | sfdisk --append stick.img 2>&1 | grep -v "recommended to wipe"
 
 bootloader:
 	+$(MAKE) -C bootloader
@@ -240,16 +247,15 @@ run: $(OS_ISO)
 #      || true
 	qemu-system-i386 \
       -device isa-debug-exit \
-	   -cdrom os.iso -boot d \
-	   -drive file=disk_image.img,format=raw,if=ide \
-	   -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
-	   -device e1000,netdev=net0 \
-	   -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap \
-	   -m 512M \
-	   -device qemu-xhci,id=xhci,p3=0 \
-	   -drive if=none,id=usbstick,file=usb_disk.img,format=raw \
-	   -device usb-storage,bus=xhci.0,drive=usbstick \
-	   -trace "usb_xhci_*" -D qemu_trace.log \
+      -drive file=disk_image.img,format=raw,if=ide \
+      -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
+      -device e1000,netdev=net0 \
+      -object filter-dump,id=dump0,netdev=net0,file=vm_traffic.pcap \
+      -m 512M \
+      -device qemu-xhci,id=xhci,p3=0 \
+      -drive if=none,id=usbstick,file=stick.img,format=raw \
+      -device usb-storage,bus=xhci.0,drive=usbstick,bootindex=1 \
+      -trace "usb_xhci_*" -D qemu_trace.log \
 	   || true
 	@echo "$(CYAN)Restoring default network configuration...$(WHITE)"
 	@sudo ./utils/net_cleanup.sh
