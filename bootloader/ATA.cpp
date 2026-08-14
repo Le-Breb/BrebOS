@@ -1,4 +1,7 @@
 #include "ATA.h"
+
+#include <stdint.h>
+
 #include "IO.h"
 
 volatile unsigned char IDE::irq_invoked = 0;
@@ -434,7 +437,7 @@ void ATA::init()
     IDE::init();
 }
 
-uint ATA::get_drive_size(unsigned char drive)
+uint64_t ATA::get_drive_size(unsigned char drive)
 {
     if (drive > 3 || IDE::devices[drive].Reserved == 0)
         return 0; // Drive Not Found!

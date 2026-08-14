@@ -1,6 +1,8 @@
 #ifndef BREBOS_ATA_H
 #define BREBOS_ATA_H
 
+#include <stdint.h>
+
 #include "config.h"
 
 // Most of the code comes from https://wiki.osdev.org/PCI_IDE_Controller
@@ -114,13 +116,13 @@ typedef struct
 	unsigned char Model[41]; // Model in string.
 } ide_device;
 
-class FAT_drive;
+class FAT;
 
 class IDE
 {
 	friend class ATA;
 
-	friend class FAT_drive;
+	friend class FAT;
 
 	static IDEChannelRegisters channels[2];
 	static volatile unsigned char irq_invoked;
@@ -142,7 +144,7 @@ class IDE
 
 class ATA
 {
-	friend class FAT_drive;
+	friend class FAT;
 
 	/**Read/Write an ATA device
 	 *
@@ -168,7 +170,7 @@ public:
 	static int write_sectors(unsigned char drive, unsigned char numsects, uint lba,
 	                         unsigned short es, uint edi);
 
-	static uint get_drive_size(unsigned char drive);
+	static uint64_t get_drive_size(unsigned char drive);
 
 	static bool drive_present(unsigned char drive);
 };

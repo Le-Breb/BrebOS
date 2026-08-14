@@ -154,9 +154,9 @@ struct ctx
 };
 
 /* FAT32 driver */
-class FAT_drive : public FS
+class FAT : public FS
 {
-	static list<FAT_drive*>* drives;
+	static list<FAT*>* drives;
 
 	const fat_BS_t bs; // BPB
 	const fat_extBS_32_t extBS_32; // Extended BPB
@@ -171,11 +171,11 @@ class FAT_drive : public FS
 
 	char* buf; // Buffer used to browse directories entries
 	DirEntry* entries; // Pointer to buf to read directories entries in it
-	unsigned char* FAT; // Buffer to store FAT
+	unsigned char* _FAT; // Buffer to store FAT
 
 	SharedPointer<Inode> root_node = nullptr;
 
-	explicit FAT_drive(BlockDevice* dev, fat_BS_t* bs);
+	explicit FAT(BlockDevice* dev, fat_BS_t* bs);
 
 	/**Splits a string based on '/' separator
 	 *
@@ -196,8 +196,6 @@ class FAT_drive : public FS
 	 */
 	Status
 	change_active_cluster(uint new_active_cluster, ctx& ctx, void* buffer) const;
-
-	static Result<FAT_drive*> from_block_device(BlockDevice* dev);
 
 	static bool is_FAT(const fat_BS_t* fat_boot);
 
@@ -222,14 +220,12 @@ public:
 
 	[[nodiscard]] static bool drive_present(uint drive_id);
 
-	static void init();
-
 	static void shutdown();
 
 	Status load_file_to_buf(void* buf, const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset,
 	                        uint length, uint& loaded_bytes) override;
 
-	~FAT_drive() override;
+	~FAT() override;
 
 	[[nodiscard]]
 	SharedPointer<Inode> get_root_node() override;
@@ -240,6 +236,8 @@ public:
 
 	Status getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t max_size, size_t* bytes_read,
 	                uint& fd_off) override;
+
+	static Result<FAT*> from_block_device(BlockDevice* dev, uint first_lba);
 };
 
 

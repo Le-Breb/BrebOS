@@ -511,12 +511,12 @@ void ATA::init()
     IDE::init();
 }
 
-uint ATA::get_drive_size(unsigned char drive)
+uint64_t ATA::get_drive_size(unsigned char drive)
 {
     if (drive > 3 || IDE::devices[drive].Reserved == 0)
         return 0; // Drive Not Found!
 
-    return IDE::devices[drive].Size * ATA_SECTOR_SIZE;
+    return static_cast<uint64_t>(IDE::devices[drive].Size) * ATA_SECTOR_SIZE;
 }
 
 bool ATA::drive_present(unsigned char drive)

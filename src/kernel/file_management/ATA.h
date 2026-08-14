@@ -6,6 +6,7 @@
 #pragma region defines
 
 #include <kstddef.h>
+#include <stdint.h>
 
 #define BAR0 (0x1F0) // start of the I/O ports used by the primary channel.
 #define BAR1 (0x3F6) // start of the I/O ports which control the primary channel.
@@ -114,13 +115,11 @@ typedef struct
 	unsigned char Model[41]; // Model in string.
 } ide_device;
 
-class FAT_drive;
+class FAT;
 
 class IDE
 {
 	friend class ATA;
-
-	friend class FAT_drive;
 
 	static IDEChannelRegisters channels[2];
 	static volatile unsigned char irq_invoked;
@@ -142,7 +141,7 @@ class IDE
 
 class ATA
 {
-	friend class FAT_drive;
+	friend class FAT;
 
 	/**Read/Write an ATA device
 	 *
@@ -156,9 +155,6 @@ class ATA
 	 */
 	static unsigned char access(unsigned char direction, unsigned char drive, uint lba,
 	                            unsigned char numsects, unsigned short selector, uint edi);
-
-	static void init();
-
 public:
 	static int read_sectors(unsigned char drive, unsigned char numsects, uint lba,
 	                        unsigned short es, uint edi);
@@ -166,9 +162,11 @@ public:
 	static int write_sectors(unsigned char drive, unsigned char numsects, uint lba,
 	                         unsigned short es, uint edi);
 
-	static uint get_drive_size(unsigned char drive);
+	static uint64_t get_drive_size(unsigned char drive);
 
 	static bool drive_present(unsigned char drive);
+
+	static void init();
 };
 
 

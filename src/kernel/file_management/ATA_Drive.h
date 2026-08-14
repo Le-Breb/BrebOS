@@ -6,8 +6,8 @@ class ATA_Drive : public BlockDevice
     static constexpr unsigned short ES = 0x10;
     const unsigned char id;
 public:
-    ATA_Drive(uint32_t block_size, dev_t dev, unsigned char id)
-        : BlockDevice(block_size, dev), id(id)
+    ATA_Drive(uint32_t block_size, dev_t dev, uint64_t total_size, unsigned char id)
+        : BlockDevice(block_size, dev, total_size), id(id)
     {
     }
 

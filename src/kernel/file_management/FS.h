@@ -26,6 +26,13 @@ protected:
 
 	explicit FS(blksize_t block_size, BlockDevice* dev);
 
+	/**
+	 * Enumerates file systems on specified block device and adds them to fs_list.
+	 * @param block_device block device to enumerate
+	 * @return whether the provided block_device is referenced by a filesystem or is safe to be deleted
+	 */
+	static bool enumerate_block_device(BlockDevice* block_device);
+
 public:
 	typedef void (*ls_printer)(const Dentry& dentry);
 

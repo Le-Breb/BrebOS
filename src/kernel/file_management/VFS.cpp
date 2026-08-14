@@ -9,9 +9,11 @@
 #include <errno.h>
 #include <fcntl.h>
 
+#include "Disk.h"
 #include "USB/SCSI.h"
 #include "USB/USB.h"
 #include "USB/xHCI.h"
+#include "ATA.h"
 
 std::unordered_set<SharedPointer<Dentry>, VFS::dentry_hash, VFS::cached_dentry_equality>* VFS::dentries = nullptr;
 std::unordered_set<SharedPointer<Dentry>, VFS::dentry_hash, VFS::cached_dentry_equality>* VFS::mount_points = nullptr;
@@ -22,9 +24,11 @@ int VFS::lowest_free_fd = 0;
 
 void VFS::init()
 {
-	FS::init();
-	FAT_drive::init();
+	ATA::init();
+	xHCI::get_instance()->start();
+	USB::get_instance()->enumerate_devices();
 	display_ready_usb_devices();
+	FS::init();
 
 	dentries = new std::unordered_set<SharedPointer<Dentry>, dentry_hash, cached_dentry_equality>();
 	mount_points = new std::unordered_set<SharedPointer<Dentry>, dentry_hash, cached_dentry_equality>();

@@ -17,7 +17,7 @@ bool System::irrecoverable_error_happened = false;
 	Profiling::save_data();
 #endif
 	VFS::shutdown();
-	FAT_drive::shutdown();
+	FAT::shutdown();
 	Socket::close_all_connections();
 	Scheduler::shutdown();
 

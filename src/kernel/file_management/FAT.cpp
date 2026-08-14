@@ -10,15 +10,13 @@
 #include "../utils/TmpString.h"
 #include <dirent.h>
 
-#include "ATA_Drive.h"
 #include "BlockDevice.h"
-#include "USB_Drive.h"
-#include "USB/USB.h"
+#include "Disk.h"
 #include "USB/xHCI.h"
 
 #define ALIGN_UP(x, align) (((x) + (align) - 1) & ~((align) - 1))
 
-list<FAT_drive*>* FAT_drive::drives = nullptr;
+list<FAT*>* FAT::drives = nullptr;
 
 #define ERR_RET_FALSE(err_msg) \
     {                          \
@@ -86,36 +84,12 @@ bool LongDirEntry::is_EOF() const
     return order & LAST_LONG_ENTRY;
 }
 
-Result<FAT_drive*> FAT_drive::from_block_device(BlockDevice* dev)
-{
-    unsigned char buf[FAT_SECTOR_SIZE];
-    if (dev->get_block_size() != FAT_SECTOR_SIZE)
-        return MAKE_ERR("FAT driver only supports device with a block size of %u bytes for now, got %u", ATA_SECTOR_SIZE, dev->get_block_size());
-
-    TRY(dev->read_blocks(0, 1, buf));
-    const auto* fat_boot = (fat_BS_t*)buf;
-
-    // First ensure that there's a FAT FS on this block device
-    if (!is_FAT(fat_boot))
-        return make_ok((FAT_drive*)nullptr);
-
-    if (get_FAT_type(fat_boot) != FAT32)
-        return make_ok((FAT_drive*)nullptr);
-
-    // Copy header in owned memory instead of relying on the current content of buf, which will be modified during
-    // driver execution
-    const auto owned_fat_boot = new fat_BS_t;
-    memcpy(owned_fat_boot, buf, sizeof(fat_BS_t));
-
-    return make_ok(new FAT_drive(dev, owned_fat_boot));
-}
-
 static bool is_power_of_two(unsigned int x)
 {
     return x != 0 && (x & (x - 1)) == 0;
 }
 
-bool FAT_drive::is_FAT(const fat_BS_t* fat_boot)
+bool FAT::is_FAT(const fat_BS_t* fat_boot)
 {
     // 1. Jump instruction: EB xx 90 (short jump) or E9 xx xx (near jump)
     const unsigned char* jmp = fat_boot->bootjmp;
@@ -192,7 +166,7 @@ bool FAT_drive::is_FAT(const fat_BS_t* fat_boot)
     return true;
 }
 
-FAT_type FAT_drive::get_FAT_type(const fat_BS_t* fat_boot)
+FAT_type FAT::get_FAT_type(const fat_BS_t* fat_boot)
 {
     auto* extBS_32 = (fat_extBS_32*)&fat_boot->extended_section;
     uint total_sectors = (fat_boot->total_sectors_16 == 0) ? fat_boot->total_sectors_32 : fat_boot->total_sectors_16;
@@ -212,7 +186,7 @@ FAT_type FAT_drive::get_FAT_type(const fat_BS_t* fat_boot)
     return FAT32;
 }
 
-const char** FAT_drive::split_at_slashes(const char* str, uint* num_tokens)
+const char** FAT::split_at_slashes(const char* str, uint* num_tokens)
 {
     uint num_slashes = 0;
     uint l = strlen(str);
@@ -251,7 +225,7 @@ const char** FAT_drive::split_at_slashes(const char* str, uint* num_tokens)
     return (const char**)res;
 }
 
-Result<uint*> FAT_drive::get_free_clusters(size_t n) const
+Result<uint*> FAT::get_free_clusters(size_t n) const
 {
     if (n == 0)
         return make_ok((uint*)calloc(1, sizeof(uint)));
@@ -259,7 +233,7 @@ Result<uint*> FAT_drive::get_free_clusters(size_t n) const
     auto free_cluster_list = new uint[n];
     size_t free_clusters_found = 0;
     size_t num_fat_entries_per_sector = FAT_SECTOR_SIZE / sizeof(uint32_t);
-    for (uint sector = first_fat_sector; sector < total_sectors; ++sector)
+    for (uint sector = first_fat_sector; sector < bs.hidden_sector_count + total_sectors; ++sector)
     {
         // Get FAT sector
         uint32_t fat_buf[num_fat_entries_per_sector];
@@ -283,7 +257,7 @@ Result<uint*> FAT_drive::get_free_clusters(size_t n) const
     return MAKE_ERR("Not enough free clusters found, requested %zu, found %zu", n, free_clusters_found);
 }
 
-FAT_drive::FAT_drive(BlockDevice* dev, fat_BS_t* bs) : FS(FAT_SECTOR_SIZE, dev),
+FAT::FAT(BlockDevice* dev, fat_BS_t* bs) : FS(FAT_SECTOR_SIZE, dev),
                                                        bs(*bs),
                                                        extBS_32(*(fat_extBS_32*)this->bs.extended_section),
                                                        total_sectors((bs->total_sectors_16 == 0)
@@ -296,10 +270,12 @@ FAT_drive::FAT_drive(BlockDevice* dev, fat_BS_t* bs) : FS(FAT_SECTOR_SIZE, dev),
                                                                (bs->bytes_per_sector - 1)) /
                                                            bs->bytes_per_sector),
                                                        first_data_sector(
+                                                           bs->hidden_sector_count +
                                                            bs->reserved_sector_count +
                                                            (bs->table_count * fat_size) +
                                                            root_dir_sectors),
-                                                       first_fat_sector(bs->reserved_sector_count),
+                                                       first_fat_sector(bs->hidden_sector_count +
+                                                           bs->reserved_sector_count),
                                                        data_sectors(
                                                            total_sectors -
                                                            (bs->reserved_sector_count +
@@ -308,7 +284,7 @@ FAT_drive::FAT_drive(BlockDevice* dev, fat_BS_t* bs) : FS(FAT_SECTOR_SIZE, dev),
                                                        total_clusters(data_sectors / bs->sectors_per_cluster),
                                                        buf(new char[FAT_SECTOR_SIZE]),
                                                        entries((DirEntry*)buf),
-                                                       FAT(new unsigned char[FAT_SECTOR_SIZE])
+                                                       _FAT(new unsigned char[FAT_SECTOR_SIZE])
 {
     if (bs->sectors_per_cluster != 1)
         irrecoverable_error("FAT driver only supports 1 sector per cluster, current value: %d.\n"
@@ -319,15 +295,15 @@ FAT_drive::FAT_drive(BlockDevice* dev, fat_BS_t* bs) : FS(FAT_SECTOR_SIZE, dev),
                      ". Drive accesses could misbehave.", FAT_SECTOR_SIZE, bs->bytes_per_sector);
 }
 
-FAT_drive::~FAT_drive()
+FAT::~FAT()
 {
-    delete[] FAT;
+    delete[] _FAT;
     delete[] buf;
 
     fs_list->remove(this);
 }
 
-Status FAT_drive::change_active_cluster(uint new_active_cluster, ctx& ctx, void* buffer) const
+Status FAT::change_active_cluster(uint new_active_cluster, ctx& ctx, void* buffer) const
 {
     if (!buffer)
     {
@@ -353,10 +329,10 @@ Status FAT_drive::change_active_cluster(uint new_active_cluster, ctx& ctx, void*
     if (new_FAT_sector != ctx.FAT_sector)
     {
         ctx.FAT_sector = new_FAT_sector;
-        TRY(dev->read_blocks(ctx.FAT_sector, 1, FAT));
+        TRY(dev->read_blocks(ctx.FAT_sector, 1, _FAT));
     }
 
-    ctx.table_value = *(uint*)&FAT[ctx.FAT_entry_offset];
+    ctx.table_value = *(uint*)&_FAT[ctx.FAT_entry_offset];
     /*if (fat32) */
     ctx.table_value &= 0x0FFFFFFF;
     ctx.dir_entry_id = 0;
@@ -364,41 +340,51 @@ Status FAT_drive::change_active_cluster(uint new_active_cluster, ctx& ctx, void*
     return Status::success();
 }
 
-void FAT_drive::init()
+static const char* FAT_type_str(FAT_type type)
 {
-    ATA::init();
-    xHCI::get_instance()->start();
-    USB::get_instance()->enumerate_devices();
-
-    drives = new list<FAT_drive*>;
-
-    // Add USB devices
-    for (auto& usb_device : USB::get_instance()->get_mass_storage_devices())
+    switch (type)
     {
-        if (const auto drive = from_block_device(
-                                    new USB_Drive(
-                                        FAT_SECTOR_SIZE,
-                                        MKDEV(DEV_USB_MASS_STORAGE_MAJOR, usb_device.interface_number),
-                                        &usb_device)
-                                ).expect())
-            fs_list->add(drive);
-    }
-
-    // Add ATA devices
-    for (uint i = 0; i < 4; ++i)
-    {
-        if (const auto drive = ATA::drive_present(i) && IDE::devices[i].Type == IDE_ATA
-                                   ? from_block_device(
-                                       new ATA_Drive(
-                                           FAT_SECTOR_SIZE, MKDEV(DEV_ATA_PRIMARY_MASTER_MAJOR, i),
-                                           MKDEV(DEV_ATA_PRIMARY_MASTER_MAJOR, i))
-                                   ).expect()
-                                   : nullptr)
-            fs_list->add(drive);
+        case ExFAT:
+            return "ExFAT";
+        case FAT12:
+            return "FAT12";
+        case FAT16:
+            return "FAT16";
+        case FAT32:
+            return "FAT32";
+        default:
+            return "Unknown";
     }
 }
 
-void FAT_drive::shutdown()
+Result<FAT*> FAT::from_block_device(BlockDevice* dev, uint start_lba)
+{
+    unsigned char buf[FAT_SECTOR_SIZE];
+
+    const auto block_size = dev->get_block_size();
+    if (block_size < sizeof(fat_BS_t))
+        return make_ok((FAT*)nullptr);
+
+    TRY(dev->read_blocks(start_lba, 1, buf));
+    const auto fat_boot = (fat_BS_t*)buf;
+    if (!is_FAT(fat_boot))
+        return make_ok((FAT*)nullptr);
+
+    if (const auto type = get_FAT_type(fat_boot); type != FAT32)
+        return MAKE_ERR("FAT driver only supports FAT32 for now, got %s", FAT_type_str(type));
+
+    if (block_size != FAT_SECTOR_SIZE)
+        return MAKE_ERR("FAT driver only supports device with a block size of %u bytes for now, got %u", FAT_SECTOR_SIZE, block_size);
+
+    // Copy header in owned memory instead of relying on the current content of buf, which will be modified during
+    // driver execution
+    const auto owned_fat_boot = new fat_BS_t;
+    memcpy(owned_fat_boot, fat_boot, sizeof(fat_BS_t));
+
+    return make_ok(new FAT(dev, owned_fat_boot));
+}
+
+void FAT::shutdown()
 {
     if (drives) // May be nullptr if initialization did not complete
     {
@@ -408,7 +394,7 @@ void FAT_drive::shutdown()
     delete drives;
 }
 
-Status FAT_drive::load_file_to_buf(void* buf, const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset,
+Status FAT::load_file_to_buf(void* buf, const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset,
                                    uint length, uint& loaded_bytes)
 {
     ctx ctx{};
@@ -484,7 +470,7 @@ Status FAT_drive::load_file_to_buf(void* buf, const char* file_name, SharedPoint
     return Status::success();
 }
 
-Result<uint> FAT_drive::get_child_dir_entry_id(const SharedPointer<Dentry>& parent_dentry, const char* name, ctx& ctx)
+Result<uint> FAT::get_child_dir_entry_id(const SharedPointer<Dentry>& parent_dentry, const char* name, ctx& ctx)
 {
     // Make sure path makes sense
     if (!name || name[0] == '/')
@@ -535,7 +521,7 @@ Result<uint> FAT_drive::get_child_dir_entry_id(const SharedPointer<Dentry>& pare
     return make_ok(ENTRY_NOT_FOUND);
 }
 
-SharedPointer<Dentry> FAT_drive::get_child_dentry(SharedPointer<Dentry>& parent_dentry, const char* name)
+SharedPointer<Dentry> FAT::get_child_dentry(SharedPointer<Dentry>& parent_dentry, const char* name)
 {
     uint entry_id;
     if (ctx ctx{}; (entry_id = get_child_dir_entry_id(parent_dentry, name, ctx).expect()) == ENTRY_NOT_FOUND)
@@ -543,7 +529,7 @@ SharedPointer<Dentry> FAT_drive::get_child_dentry(SharedPointer<Dentry>& parent_
     return dir_entry_to_dentry(entries[entry_id], parent_dentry, name).expect();
 }
 
-Result<SharedPointer<Dentry>> FAT_drive::dir_entry_to_dentry(const DirEntry& dir_entry,
+Result<SharedPointer<Dentry>> FAT::dir_entry_to_dentry(const DirEntry& dir_entry,
                                                              const SharedPointer<Dentry>& parent_dentry,
                                                              const char* name)
 {
@@ -575,13 +561,13 @@ Result<SharedPointer<Dentry>> FAT_drive::dir_entry_to_dentry(const DirEntry& dir
     return make_ok<SharedPointer<Dentry>>(new Dentry(inode, parent_dentry, name));
 }
 
-Status FAT_drive::write_fat(const ctx& ctx) const
+Status FAT::write_fat(const ctx& ctx) const
 {
-    TRY(dev->write_blocks(ctx.FAT_sector, 1, FAT)); // Write new FAT
+    TRY(dev->write_blocks(ctx.FAT_sector, 1, _FAT)); // Write new FAT
     return Status::success();
 }
 
-Status FAT_drive::write_data_sectors(uint numsects, uint lba, const void* buffer, ctx& ctx) const
+Status FAT::write_data_sectors(uint numsects, uint lba, const void* buffer, ctx& ctx) const
 {
     TRY(dev->write_blocks(lba, numsects, buffer));
 
@@ -593,7 +579,7 @@ Status FAT_drive::write_data_sectors(uint numsects, uint lba, const void* buffer
     return Status::success();
 }
 
-Result<SharedPointer<Dentry>> FAT_drive::touch(SharedPointer<Dentry>& parent_dentry, const char* entry_name)
+Result<SharedPointer<Dentry>> FAT::touch(SharedPointer<Dentry>& parent_dentry, const char* entry_name)
 {
     // Make sure path makes sense
     if (!entry_name || entry_name[0] == '/')
@@ -629,7 +615,7 @@ Result<SharedPointer<Dentry>> FAT_drive::touch(SharedPointer<Dentry>& parent_den
     return dir_entry_to_dentry(new_entry, parent_dentry, entry_name);
 }
 
-Result<SharedPointer<Dentry>> FAT_drive::mkdir(SharedPointer<Dentry>& parent_dentry, const char* entry_name)
+Result<SharedPointer<Dentry>> FAT::mkdir(SharedPointer<Dentry>& parent_dentry, const char* entry_name)
 {
     uint l = strlen(entry_name);
     if (l >= 12 - 3)
@@ -673,7 +659,7 @@ Result<SharedPointer<Dentry>> FAT_drive::mkdir(SharedPointer<Dentry>& parent_den
     uint dir_content_sector = ctx.active_sector;
 
     // Indicate that dir content cluster is the end of the cluster chain it belongs to
-    *(uint*)&FAT[ctx.FAT_entry_offset] = CLUSTER_EOC;
+    *(uint*)&_FAT[ctx.FAT_entry_offset] = CLUSTER_EOC;
     TRY(write_fat(ctx));
 
     // Note: I guess this is unnecessary since dir content cluster is supposed to be empty
@@ -691,7 +677,7 @@ Result<SharedPointer<Dentry>> FAT_drive::mkdir(SharedPointer<Dentry>& parent_den
     return dir_entry_to_dentry(new_entry, parent_dentry, entry_name);
 }
 
-Status FAT_drive::ls(const SharedPointer<Dentry>& dentry, ls_printer printer)
+Status FAT::ls(const SharedPointer<Dentry>& dentry, ls_printer printer)
 {
     uint parent_sector = dentry->inode->lba;
     uint parent_cluster = parent_sector * bs.sectors_per_cluster;
@@ -726,19 +712,19 @@ Status FAT_drive::ls(const SharedPointer<Dentry>& dentry, ls_printer printer)
     return Status::success();
 }
 
-bool FAT_drive::drive_present(uint drive_id)
+bool FAT::drive_present(uint drive_id)
 {
     return drives->get(drive_id);
 }
 
-SharedPointer<Inode> FAT_drive::get_root_node()
+SharedPointer<Inode> FAT::get_root_node()
 {
     if (!root_node)
         root_node = new Inode(superblock, 0, extBS_32.root_cluster, Inode::Dir, 0, 1, 0, 0, 1, 0, 0, 0, 0);
     return root_node;
 }
 
-Status FAT_drive::write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length)
+Status FAT::write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length)
 {
     if (dentry->inode->type != Inode::File)
         Status::failure("Trying to write data on something which is not a file");
@@ -780,7 +766,7 @@ Status FAT_drive::write_buf_to_file(SharedPointer<Dentry>& dentry, const void* b
     return Status::success();
 }
 
-Status FAT_drive::resize(SharedPointer<Dentry>& dentry, uint new_size)
+Status FAT::resize(SharedPointer<Dentry>& dentry, uint new_size)
 {
     ctx ctx{};
 
@@ -818,15 +804,15 @@ Status FAT_drive::resize(SharedPointer<Dentry>& dentry, uint new_size)
         // 2 - Indicate EOC
         TRY(change_active_cluster(curr_sector, ctx, this->buf));
         uint next_sect = ctx.table_value;
-        *(uint*)&FAT[ctx.FAT_entry_offset] = ctx.table_value = new_size == 0 ? 0 : CLUSTER_EOC;
+        *(uint*)&_FAT[ctx.FAT_entry_offset] = ctx.table_value = new_size == 0 ? 0 : CLUSTER_EOC;
         TRY(write_fat(ctx)); // Write new FAT // Update FAT on disk
         curr_sector = next_sect;
         // 3 - Clear the rest of the chain
         for (uint i = 0; i < curr_num_data_sectors - new_num_data_sectors - 1; i++)
         {
             TRY(change_active_cluster(curr_sector, ctx, this->buf));
-            uint next_sector = *(uint*)&FAT[ctx.FAT_entry_offset];
-            *(uint*)&FAT[ctx.FAT_entry_offset] = ctx.table_value = 0;
+            uint next_sector = *(uint*)&_FAT[ctx.FAT_entry_offset];
+            *(uint*)&_FAT[ctx.FAT_entry_offset] = ctx.table_value = 0;
             TRY(write_fat(ctx)); // Write new FAT // Update FAT on disk
             curr_sector = next_sector;
         }
@@ -872,13 +858,13 @@ Status FAT_drive::resize(SharedPointer<Dentry>& dentry, uint new_size)
         for (uint i = clusters_to_be_registered_start_idx; i < num_added_clusters; i++)
         {
             TRY(change_active_cluster(curr_sector, ctx, this->buf));
-            *(uint*)&FAT[ctx.FAT_entry_offset] = ctx.table_value = free_cluster_list[i];
+            *(uint*)&_FAT[ctx.FAT_entry_offset] = ctx.table_value = free_cluster_list[i];
             TRY(write_fat(ctx)); // Write new FAT // Update FAT on disk
             curr_sector = free_cluster_list[i];
         }
         // 3- Indicate EOC
         TRY(change_active_cluster(curr_sector, ctx, this->buf));
-        *(uint*)&FAT[ctx.FAT_entry_offset] = ctx.table_value = CLUSTER_EOC;
+        *(uint*)&_FAT[ctx.FAT_entry_offset] = ctx.table_value = CLUSTER_EOC;
         TRY(write_fat(ctx)); // Write new FAT // Update FAT on disk
 
         delete[] free_cluster_list;
@@ -893,7 +879,7 @@ Status FAT_drive::resize(SharedPointer<Dentry>& dentry, uint new_size)
     return Status::success();
 }
 
-Status FAT_drive::getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t max_size, size_t* bytes_read,
+Status FAT::getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t max_size, size_t* bytes_read,
                            uint& fd_off)
 
 {
