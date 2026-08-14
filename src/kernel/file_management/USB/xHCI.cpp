@@ -487,10 +487,8 @@ bool xHCI::reset_port(uint8_t port_num)
     }
     write_portsc_reg(portsc, port_num);
 
-    // Wait for the reset to complete. The spec's nominal reset duration is ~100ms, but some real
-    // hardware takes longer to finish the chirp/reset handshake and assert PRC/WRC than an emulator's virtual port
-    // does.
-    int timeout = 500;
+    // Wait for the reset to complete.
+    int timeout = 100;
     while (timeout > 0) {
         portsc = read_portsc_reg(port_num);
 
