@@ -80,6 +80,9 @@ void Interrupts::gpf_handler(const stack_state* stack_state)
 {
 	printf_error("General protection fault");
 	printf("Segment selector: %x\n", stack_state->error_code);
+	printf("Faulting instruction at 0x%x, cs=%x, esp=%x, ss=%x\n", stack_state->eip, stack_state->cs,
+	       stack_state->esp, stack_state->ss);
+	FB::flush();
 
 	Scheduler::get_running_process()->terminate_with_signal(SIGSEGV);
 }
@@ -268,6 +271,7 @@ void Interrupts::invalid_opcode(const stack_state_t* stack_state)
 	if (const char* bin_path = running_process->bin_path; bin_path)
 	{
 		printf_error("Invalid opcode at address 0x%x by program '%s'. Aborting", stack_state->eip, bin_path);
+		FB::flush();
 		running_process->kill(SIGKILL);
 		TRIGGER_TIMER_INTERRUPT
 		irrecoverable_error("%s: unreachable code reached!", __PRETTY_FUNCTION__);
