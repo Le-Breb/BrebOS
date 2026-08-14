@@ -25,6 +25,12 @@ resume_user_process_asm_:
     mov ebx, [eax + 04]
     push ebx
 
+.set_user_data_segments:
+    mov ax, 0x23
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+
 .restore_regs:
     mov eax, [esp + 24] ; get cpu_state ptr
 
@@ -132,6 +138,11 @@ common_interrupt_handler:               ; the common parts of the generic interr
     ; save the registers
     save_regs
 
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+
     ; push kesp, i.e. ESP value before the interrupt was fired. Useful when CPU doesn't push ESP (nor SS) because the
     ; interrupt did not involve a privilege level change
     mov eax, esp
@@ -143,6 +154,22 @@ common_interrupt_handler:               ; the common parts of the generic interr
 
     ; pop kesp
     add esp, 4
+
+    ; Restore the data segments of the context we are returning to, picked from the RPL of the saved CS.
+    ; Returning to ring 3 requires the user data selector: a privilege-changing iret nulls any of DS/ES/FS whose
+    ; DPL is below the target CPL, so leaving the kernel ones loaded would drop userland back with NULL segments.
+    ; Stack here: cpu_state (28) | int number (4) | error code (4) | eip (4) | cs
+    mov eax, [esp + 40]                 ; saved CS
+    and eax, 3                          ; RPL == target CPL
+    jz  .kernel_data_segments
+    mov ax, 0x23                        ; user data selector
+    jmp .load_data_segments
+.kernel_data_segments:
+    mov ax, 0x10                        ; kernel data selector
+.load_data_segments:
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
 
     ; restore the registers
     restore_regs
