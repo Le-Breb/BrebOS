@@ -133,7 +133,7 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             case 19:
                 return tcbset(p);
             case 20:
-                return execve(p, false);
+                return execve(p);
             case 21:
                 return feh(p);
             case 22:
@@ -186,8 +186,6 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
                 return dup(p);
             case 41:
                 return pipe(p);
-            case 42: // Execvp
-                return execve(p, true);
             case 43:
                 getcwd(p);
                 return SyscallResult::ReturnToUser;
@@ -540,14 +538,14 @@ Syscall::SyscallResult Syscall::mprotect(Process* p)
     return SyscallResult::ReturnToUser;
 }
 
-Syscall::SyscallResult Syscall::execve(Process* p, bool use_path_if_no_heading_slash)
+Syscall::SyscallResult Syscall::execve(Process* p)
 {
     const auto path = (char*)p->cpu_state.ebx;
     const auto argc = (int)p->cpu_state.ecx;
     const auto argv = (const char**)p->cpu_state.edx;
     const auto envp = (const char**)p->cpu_state.esi;
 
-    if (Scheduler::execve(p, path, argc, argv, envp, use_path_if_no_heading_slash))
+    if (Scheduler::execve(p, path, argc, argv, envp))
         return SyscallResult::ScheduleExit;
 
     p->cpu_state.eax = -1;

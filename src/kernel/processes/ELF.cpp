@@ -155,7 +155,7 @@ ELF* ELF::is_valid(uint start_address, ELF_type expected_type)
         is_valid_exit_err
     }
 
-    if (!VFS::browse_to(elf->interpreter_name, true, false))
+    if (!VFS::browse_to(elf->interpreter_name, false))
     {
         printf_error("Missing interpreter: %s", elf->interpreter_name);
         is_valid_exit_err

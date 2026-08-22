@@ -7,7 +7,6 @@
 #define MAX_FS 10
 #define MAX_OPEN_FILES 100
 #define MAX_DENTRIES 200
-#define PATH_CAPACITY 1024
 #define MAX_FD 100
 #define MAX_FD_PER_PROCESS 20
 
@@ -57,10 +56,10 @@ private:
 		}
 	};
 
-	static std::unordered_set<SharedPointer<Dentry>, dentry_hash, cached_dentry_equality>* dentries;
-	static std::unordered_set<SharedPointer<Dentry>, dentry_hash, cached_dentry_equality>* mount_points; // Mount point dentries, maintaining ref cout >=1 preventing cache evicition
-	static SharedPointer<Dentry>* path[PATH_CAPACITY];
-	static uint num_path;
+	using dentry_cache_t = std::unordered_set<SharedPointer<Dentry>, dentry_hash, cached_dentry_equality>;
+
+	static dentry_cache_t* dentries;
+	static dentry_cache_t* mount_points; // Mount point dentries, maintaining ref cout >=1 preventing cache evicition
 	static int lowest_free_fd;
 
 	/**
@@ -137,11 +136,10 @@ public:
 	/**
 	 * Browses file system to the folder located at path
 	 * @param path path to browse to
-	 * @param use_path_if_no_starting_slash whether to look for program in path entries if path does not start with '/'
 	 * @param print_errors whether the kernel should print errors when path is not found
 	 * @return Dentry of folder at path, nullptr if something went wront
 	 */
-	static SharedPointer<Dentry> browse_to(const char* path, bool use_path_if_no_starting_slash = true, bool print_errors = true);
+	static SharedPointer<Dentry> browse_to(const char* path, bool print_errors = true);
 
 	static void* load_file(const char* path, uint offset = 0, uint length = 0);
 

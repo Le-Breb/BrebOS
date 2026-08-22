@@ -15,10 +15,8 @@
 #include "USB/xHCI.h"
 #include "ATA.h"
 
-std::unordered_set<SharedPointer<Dentry>, VFS::dentry_hash, VFS::cached_dentry_equality>* VFS::dentries = nullptr;
-std::unordered_set<SharedPointer<Dentry>, VFS::dentry_hash, VFS::cached_dentry_equality>* VFS::mount_points = nullptr;
-uint VFS::num_path = 0;
-SharedPointer<Dentry>* VFS::path[PATH_CAPACITY] = {};
+VFS::dentry_cache_t* VFS::dentries = nullptr;
+VFS::dentry_cache_t* VFS::mount_points = nullptr;
 FileInterface* VFS::file_descriptors[MAX_FD] = {};
 int VFS::lowest_free_fd = 0;
 
@@ -30,8 +28,8 @@ void VFS::init()
 	display_ready_usb_devices();
 	FS::init();
 
-	dentries = new std::unordered_set<SharedPointer<Dentry>, dentry_hash, cached_dentry_equality>();
-	mount_points = new std::unordered_set<SharedPointer<Dentry>, dentry_hash, cached_dentry_equality>();
+	dentries = new dentry_cache_t();
+	mount_points = new dentry_cache_t();
 	FS** main_fs = FS::fs_list->get(0);
 	if (main_fs == nullptr)
 		irrecoverable_error("Couldn't get main file system");
@@ -218,8 +216,6 @@ bool VFS::add_to_path(const char* path)
 	if (!dentry || dentry->inode->type != Inode::Dir)
 		return false;
 
-	VFS::path[num_path++] = new SharedPointer<Dentry>(dentry);
-
 	return true;
 }
 
@@ -334,7 +330,7 @@ SharedPointer<Dentry> VFS::get_file_parent_dentry(const char* pathname, const ch
 		return nullptr;
 	}
 
-	SharedPointer<Dentry> dentry = browse_to(*p, true, print_errors);
+	SharedPointer<Dentry> dentry = browse_to(*p, print_errors);
 	if (!dentry || dentry->inode->type != Inode::Dir)
 	{
 		if (print_errors)
@@ -355,7 +351,7 @@ SharedPointer<Dentry> VFS::get_file_dentry(const char* pathname, bool print_erro
 
 	const char* file_name;
 	const SharedPointer<Dentry> parent_dentry = is_path_abs ?
-		get_file_parent_dentry(pathname, file_name, print_errors) : browse_to(work_dir, false, print_errors);
+		get_file_parent_dentry(pathname, file_name, print_errors) : browse_to(work_dir, print_errors);
 	if (!is_path_abs)
 		file_name = pathname;
 	if (!parent_dentry)
@@ -364,7 +360,7 @@ SharedPointer<Dentry> VFS::get_file_dentry(const char* pathname, bool print_erro
 	return browse_to(file_name, parent_dentry, print_errors);
 }
 
-SharedPointer<Dentry> VFS::browse_to(const char* path, bool use_path_if_no_starting_slash, bool print_errors)
+SharedPointer<Dentry> VFS::browse_to(const char* path, bool print_errors)
 {
 	if (path[0] == '\0')
 	{
@@ -373,16 +369,6 @@ SharedPointer<Dentry> VFS::browse_to(const char* path, bool use_path_if_no_start
 	}
 	if (path[0] == '/')
 		return browse_to(path, get_root_dentry(), print_errors);
-
-	if (!use_path_if_no_starting_slash)
-		return nullptr;
-
-	for (uint i = 0; i < num_path; ++i)
-	{
-		SharedPointer<Dentry> d = browse_to(path, *VFS::path[i], print_errors);
-		if (d)
-			return d;
-	}
 
 	return nullptr;
 }
@@ -728,7 +714,7 @@ bool VFS::mount(FS* fs)
 	if (!browse_to("/mnt"))
 		if (!mkdir("/mnt"))
 			irrecoverable_error("%s: mkdir /mnt failed", __PRETTY_FUNCTION__);
-	if (!browse_to(mount_point, false, false))
+	if (!browse_to(mount_point, false))
 		if (!mkdir(mount_point))
 			irrecoverable_error("%s: mkdir '%s' failed", __PRETTY_FUNCTION__, mount_point);
 

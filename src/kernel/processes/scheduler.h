@@ -64,7 +64,7 @@ private:
 
 	static void* idle_stack_top;
 
-	static Process* load_process(const char* path, pid_t pid, pid_t ppid, int argc, const char** argv, const char** envp, bool use_path_if_no_beginning_slash);
+	static Process* load_process(const char* path, pid_t pid, pid_t ppid, int argc, const char** argv, const char** envp);
 
 	static void wake_up_process_parent(pid_t process_pid);
 
@@ -163,8 +163,7 @@ public:
 
 	static pid_t get_free_pid();
 
-	static bool execve(Process* p, const char* path, int argc, const char** argv, const char** envp,
-	                   bool use_path_if_no_beginning_slash);
+	static bool execve(Process* p, const char* path, int argc, const char** argv, const char** envp);
 
 	[[nodiscard]]
 	static Process* get_process(pid_t pid);

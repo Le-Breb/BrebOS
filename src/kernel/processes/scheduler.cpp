@@ -155,11 +155,10 @@ void Scheduler::resume_process_(Process* p)
     resume_user_process(p);
 }
 
-bool Scheduler::execve(Process* p, const char* path, int argc, const char** argv, const char** envp,
-                       bool use_path_if_no_beginning_slash)
+bool Scheduler::execve(Process* p, const char* path, int argc, const char** argv, const char** envp)
 {
     Process* proc;
-    if (!((proc = load_process(path, p->pid, p->ppid, argc, argv, envp, use_path_if_no_beginning_slash))))
+    if (!((proc = load_process(path, p->pid, p->ppid, argc, argv, envp))))
         return false;
     p->execve_transfer(proc);
     p->set_flag(P_EXEC);
@@ -316,7 +315,7 @@ int Scheduler::exec(const char* path, pid_t ppid, int argc, const char** argv, c
     }
 
     Process* proc;
-    if (!((proc = load_process(path, pid, ppid, argc, argv, envp, true))))
+    if (!((proc = load_process(path, pid, ppid, argc, argv, envp))))
         return -1;
 
     processes[proc->pid] = proc;
@@ -454,7 +453,7 @@ void Scheduler::check_for_processes_to_wake_up()
     }
 }
 
-Process* Scheduler::load_process(const char* path, pid_t pid, pid_t ppid, int argc, const char** argv, const char** envp, bool use_path_if_no_beginning_slash)
+Process* Scheduler::load_process(const char* path, pid_t pid, pid_t ppid, int argc, const char** argv, const char** envp)
 {
     if (ready_queue->full())
     {
@@ -462,7 +461,7 @@ Process* Scheduler::load_process(const char* path, pid_t pid, pid_t ppid, int ar
         return nullptr;
     }
 
-    const auto file = VFS::browse_to(path, use_path_if_no_beginning_slash);
+    const auto file = VFS::browse_to(path);
     if (!file)
         return nullptr;
 

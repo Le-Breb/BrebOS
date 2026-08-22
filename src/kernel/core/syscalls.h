@@ -127,7 +127,7 @@ class Syscall
 
 	static SyscallResult mprotect(Process* p);
 
-	static SyscallResult execve(Process* p, bool use_path_if_no_heading_slash);
+	static SyscallResult execve(Process* p);
 
 	static SyscallResult sleep(Process* p);
 
