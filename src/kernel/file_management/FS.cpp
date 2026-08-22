@@ -52,7 +52,7 @@ void FS::init()
 {
 	fs_list = new list<FS*>();
 
-	for (auto& usb_device : USB::get_instance()->get_mass_storage_devices())
+	for (auto& usb_device : USB::get_mass_storage_devices())
 	{
 		auto read_cap_res = SCSI::send_read_capacity_10(&usb_device);
 		if (!read_cap_res.is_ok())

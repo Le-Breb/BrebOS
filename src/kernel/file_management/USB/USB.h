@@ -25,25 +25,23 @@ struct usb_mass_storage_device
 class USB
 {
 public:
-    [[nodiscard]] static USB* get_instance();
-
     // Runs full enumeration (Device + Configuration descriptors, interface/endpoint parsing,
     // SET_CONFIGURATION, endpoint configuration) for every xHCI device that hasn't been
     // processed yet. Devices exposing a Bulk-Only Transport Mass Storage interface end up in
     // get_mass_storage_devices(), ready for BOT/SCSI command traffic. Safe to call again after
     // new devices show up (e.g. hotplug) - already-processed slots are skipped.
-    void enumerate_devices();
+    static void enumerate_devices();
 
-    [[nodiscard]] const vector<usb_mass_storage_device>& get_mass_storage_devices() const
+    [[nodiscard]] static const vector<usb_mass_storage_device>& get_mass_storage_devices()
     {
         return mass_storage_devices;
     }
 
 private:
-    vector<uint8_t> processed_slots;
-    vector<usb_mass_storage_device> mass_storage_devices;
+    static vector<uint8_t> processed_slots;
+    static vector<usb_mass_storage_device> mass_storage_devices;
 
-    void enumerate_device(const SharedPointer<xhci_device>& device);
+    static void enumerate_device(const SharedPointer<xhci_device>& device);
 };
 
 

@@ -7,6 +7,9 @@
 __attribute__ ((format (printf, 1, 2))) extern int printf_warn(const char* format, ...);
 __attribute__ ((format (printf, 1, 2))) extern int printf_info(const char* format, ...);
 
+vector<uint8_t> USB::processed_slots = {};
+vector<usb_mass_storage_device> USB::mass_storage_devices = {};
+
 // USB 2.0 Spec Section 9.6.7: fetches the device's supported-languages String Descriptor
 // (index 0) and returns its first Language ID, falling back to US English if that fails.
 static uint16_t get_usb_string_lang_id(xHCI* xhci, const SharedPointer<xhci_device>& device)
@@ -78,20 +81,6 @@ static bool get_usb_string(xHCI* xhci, const SharedPointer<xhci_device>& device,
     out[n] = '\0';
 
     return n > 0;
-}
-
-USB* USB::get_instance()
-{
-    static USB* instance = nullptr;
-
-    if (instance)
-        return instance;
-    if (!xHCI::get_instance())
-    {
-        printf_warn("Cannot get USB instance as no xCHI controller is available");
-        return nullptr;
-    }
-    return (instance = new USB());
 }
 
 void USB::enumerate_devices()

@@ -24,7 +24,7 @@ void VFS::init()
 {
 	ATA::init();
 	xHCI::get_instance()->start();
-	USB::get_instance()->enumerate_devices();
+	USB::enumerate_devices();
 	display_ready_usb_devices();
 	FS::init();
 
@@ -683,7 +683,7 @@ static void print_capacity(uint64_t bytes)
 
 void VFS::display_ready_usb_devices()
 {
-	for (const auto& msd : USB::get_instance()->get_mass_storage_devices())
+	for (const auto& msd : USB::get_mass_storage_devices())
 	{
 		const auto [last_lba, block_length] = SCSI::send_read_capacity_10(&msd).expect();
 
