@@ -13,6 +13,9 @@ public:
     inline uintptr_t get_physical_base() const { return m_physical_base; }
     inline uint8_t  get_cycle_bit() const { return m_rcs_bit; }
 
+    // TRBs a single enqueue burst may use, the LINK_TRB excluded
+    [[nodiscard]] inline size_t get_usable_trb_count() const { return m_max_trb_count - 1; }
+
     void enqueue(xhci_trb_t* trb);
 
 private:

@@ -813,6 +813,69 @@ bool xHCI::configure_endpoints(const SharedPointer<xhci_device>& device, const v
     return send_command_trb(&trb) != nullptr;
 }
 
+/*
+Describes [virt_base, virt_base + length) to the controller as a chain of Normal TRBs.
+
+A caller's buffer is only guaranteed to be contiguous in virtual memory - the controller DMAs to
+physical addresses, and nothing keeps the pages behind a multi-page buffer in adjacent frames. So
+each TRB may only cover one physically contiguous run of pages, and a run is split further whenever
+it would make a TRB buffer cross a 64 KiB boundary (xHci Spec Section 4.11.7.1).
+
+Enqueues into `ring` when given one, and only counts the TRBs the chain needs when passed nullptr.
+*/
+static uint32_t build_trb_chain(Memory::page_table_t* pt, uintptr_t virt_base, uint32_t length,
+                                xhci_transfer_ring* ring)
+{
+    uint32_t trb_count = 0;
+    uint32_t offset = 0;
+
+    while (offset < length)
+    {
+        const uintptr_t phys = PHYS_ADDR(pt, virt_base + offset);
+
+        // Extend the run for as long as the next page happens to follow this one physically
+        uint32_t run = PAGE_SIZE - ADDR_PAGE_OFF(virt_base + offset);
+        if (run > length - offset)
+            run = length - offset;
+        while (offset + run < length && PHYS_ADDR(pt, virt_base + offset + run) == phys + run)
+        {
+            const uint32_t remaining = length - offset - run;
+            run += remaining < PAGE_SIZE ? remaining : PAGE_SIZE;
+        }
+
+        uint32_t run_offset = 0;
+        while (run_offset < run)
+        {
+            const uintptr_t chunk_phys = phys + run_offset;
+            const uint32_t to_boundary = XHCI_MAX_NORMAL_TRB_TRANSFER_LENGTH
+                - (chunk_phys & (XHCI_MAX_NORMAL_TRB_TRANSFER_LENGTH - 1));
+            const uint32_t chunk = to_boundary < run - run_offset ? to_boundary : run - run_offset;
+
+            if (ring)
+            {
+                xhci_trb_t trb{};
+                trb.trb_type = XHCI_TRB_TYPE_NORMAL;
+                trb.parameter = chunk_phys;
+                trb.status = chunk;
+                // The chain must reach the controller as a single transfer, so every TRB but the
+                // last points at its successor and only the last one raises the completion event.
+                if (offset + run_offset + chunk == length)
+                    trb.interrupt_on_completion = 1;
+                else
+                    trb.chain_bit = 1;
+                ring->enqueue(&trb);
+            }
+
+            trb_count++;
+            run_offset += chunk;
+        }
+
+        offset += run;
+    }
+
+    return trb_count;
+}
+
 Status xHCI::bulk_transfer(const SharedPointer<xhci_device>& device, uint8_t endpoint_address,
                            void* data, uint32_t length, uint32_t* actual_length)
 {
@@ -831,27 +894,15 @@ Status xHCI::bulk_transfer(const SharedPointer<xhci_device>& device, uint8_t end
         return MAKE_ERR("failed to get transfer ring");
 
     const auto pt = Scheduler::get_current_page_tables();
-    const uintptr_t phys_base = PHYS_ADDR(pt, (uintptr_t)data);
 
-    uint32_t offset = 0;
-    while (offset < length)
-    {
-        const uint32_t chunk = length - offset > XHCI_MAX_NORMAL_TRB_TRANSFER_LENGTH
-            ? XHCI_MAX_NORMAL_TRB_TRANSFER_LENGTH : length - offset;
-        const bool last_chunk = offset + chunk == length;
+    // A single doorbell ring runs the whole chain, so it has to sit in the ring all at once. How
+    // many TRBs that takes depends on how badly the buffer is scattered, hence the counting pass.
+    const uint32_t trb_count = build_trb_chain(pt, (uintptr_t)data, length, nullptr);
+    if (trb_count > ring->get_usable_trb_count())
+        return MAKE_ERR("transfer of %u bytes needs %u TRBs, ring holds %u", length, trb_count,
+                        (uint32_t)ring->get_usable_trb_count());
 
-        xhci_trb_t trb{};
-        trb.trb_type = XHCI_TRB_TYPE_NORMAL;
-        trb.parameter = phys_base + offset;
-        trb.status = chunk;
-        if (last_chunk)
-            trb.interrupt_on_completion = 1;
-        else
-            trb.chain_bit = 1;
-        ring->enqueue(&trb);
-
-        offset += chunk;
-    }
+    build_trb_chain(pt, (uintptr_t)data, length, ring.get());
 
     doorbell_manager->ring_doorbell(device->get_slot(), dci);
 
