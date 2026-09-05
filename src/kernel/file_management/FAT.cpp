@@ -431,8 +431,11 @@ Status FAT::load_file_to_buf(void* buf, const char* file_name, SharedPointer<Den
     }
 
     // Position the cursor on the first cluster to be bulk-loaded
-    TRY(change_active_cluster(next_cluster, ctx, nullptr));
-    next_cluster = ctx.table_value;
+    if (next_cluster < CLUSTER_MIN_EOC)
+    {
+        TRY(change_active_cluster(next_cluster, ctx, nullptr));
+        next_cluster = ctx.table_value;
+    }
 
     const auto b = (char*)buf;
     // Load file. Load by groups of contiguous entire clusters
