@@ -180,7 +180,7 @@ public:
     explicit E1000(PCI::Device pci_device);
     // Constructor. takes as a parameter a pointer to an object that encapsulate all he PCI configuration data of the device
     bool start(); // perform initialization tasks and starts the driver
-    void fire(cpu_state_t* cpu_state, stack_state_t* stack_state) override;
+    bool fire(cpu_state_t* cpu_state, stack_state_t* stack_state) override;
     // This method should be called by the interrupt handler
     uint8_t* getMacAddress(); // Returns the MAC address
     int sendPacket(const Ethernet::packet_info* packet); // Send a packet

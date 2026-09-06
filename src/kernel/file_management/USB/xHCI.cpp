@@ -1026,8 +1026,13 @@ void xHCI::handle_port_connect_change(uint8_t port_num)
     }
 }
 
-void xHCI::fire([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] stack_state_t* stack_state)
+bool xHCI::fire([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] stack_state_t* stack_state)
 {
+    // The IRQ line is shared: EINT is only set when this controller actually raised it. Peeking it
+    // is non-destructive (only writing '1' to it clears it, see acknowledge_irq()).
+    if (!(op_regs->usbsts & XHCI_USBSTS_EINT))
+        return false;
+
     // Order matters, and it is the reverse of what reads naturally. Acknowledging first means that
     // if the controller enqueues an event while we're still draining the ring below, it sets IP
     // again after our clear and we get another interrupt for it. Draining first and acknowledging
@@ -1042,4 +1047,5 @@ void xHCI::fire([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] stack_
     // keeps in-service (and therefore blocked) until interrupt_handler() sends the EOI on the way
     // out. Those waits could only ever complete via the polling safety net, one full timeout each.
     // The change stays recorded in pending_port_changes for a caller that can drain it safely.
+    return true;
 }

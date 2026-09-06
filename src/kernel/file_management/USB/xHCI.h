@@ -129,7 +129,7 @@ public:
     [[nodiscard]] static xHCI* get_instance();
 
     void start();
-    void fire(cpu_state_t* cpu_state, stack_state_t* stack_state) override;
+    bool fire(cpu_state_t* cpu_state, stack_state_t* stack_state) override;
 
     // Devices that completed Address Device (and are sitting on a working default control
     // pipe). Populated automatically as ports connect.

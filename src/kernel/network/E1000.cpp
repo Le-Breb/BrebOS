@@ -277,7 +277,7 @@ bool E1000::start()
     return false;
 }
 
-void E1000::fire([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] stack_state_t* stack_state)
+bool E1000::fire([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] stack_state_t* stack_state)
 {
     /* This might be needed here if your handler doesn't clear interrupts from each device and must be done before EOI if using the PIC.
            Without this, the card will spam interrupts as the int-line will stay high. */
@@ -285,6 +285,9 @@ void E1000::fire([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] stack
     // this does not appear to be required
 
     const uint32_t status = readCommand(0xc0);
+    if (status == 0)
+        return false; // The IRQ line is shared and this interrupt wasn't raised by us
+
     writeCommand(0xC0, status); // Write the value back to clear the interrupts
     //printf_info("e1000 int: status: 0x%02X", status);
 
@@ -325,6 +328,7 @@ void E1000::fire([[maybe_unused]] cpu_state_t* cpu_state, [[maybe_unused]] stack
     // In other words, by executing pollRx on each interrupt, we ensure we do not report the processing of received
     // packets to the next time fire will be called.
     pollRx();
+    return true;
 }
 
 uint8_t* E1000::getMacAddress()

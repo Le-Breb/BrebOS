@@ -11,7 +11,7 @@
 #include "system.h"
 
 
-Interrupt_handler* Interrupts::handlers[256] = {nullptr};
+list<Interrupt_handler*> Interrupts::handlers[256] = {};
 
 /**
  * Changes current pdt
@@ -225,10 +225,10 @@ void Interrupts::change_pdt_asm(uint pdt_phys_addr)
 
 bool Interrupts::register_interrupt(uint interrupt_id, Interrupt_handler* handler)
 {
-	if (handlers[interrupt_id])
+	if (handlers[interrupt_id].contains(handler))
 		return false;
 
-	handlers[interrupt_id] = handler;
+	handlers[interrupt_id].add(handler);
 
 	// We need to unmask the IRQ as PIC::init() only unmasks the lines known to be needed at boot
 	if (interrupt_id >= PIC1_START_INTERRUPT && interrupt_id <= PIC2_END_INTERRUPT)
@@ -239,11 +239,22 @@ bool Interrupts::register_interrupt(uint interrupt_id, Interrupt_handler* handle
 
 void Interrupts::dynamic_interrupt_dispatcher(uint interrupt, cpu_state_t* cpu_state, stack_state_t* stack_state)
 {
-	Interrupt_handler* handler = handlers[interrupt];
-	if (handler)
-		handler->fire(cpu_state, stack_state);
-	else
+	list<Interrupt_handler*>& interrupt_handlers = handlers[interrupt];
+	if (interrupt_handlers.size() == 0)
+	{
 		printf_error("Received unknown interrupt: %u", interrupt);
+		return;
+	}
+
+	// The line may be shared by several PCI devices: fire every handler and let each one report,
+	// via its return value, whether it was actually the source (mirrors Linux's IRQF_SHARED
+	// contract: every handler on the line is called, each returns IRQ_HANDLED/IRQ_NONE).
+	bool handled = false;
+	for (Interrupt_handler* handler : interrupt_handlers)
+		handled |= handler->fire(cpu_state, stack_state);
+
+	if (!handled)
+		printf_error("Unclaimed interrupt: %u", interrupt);
 }
 
 void Interrupts::debug_handler([[maybe_unused]] const cpu_state_t* cpu_state, const stack_state_t* stack_state)

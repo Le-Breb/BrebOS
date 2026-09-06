@@ -2,6 +2,7 @@
 #define INCLUDE_INTERRUPTS_H
 
 #include "PIC.h"
+#include "../utils/list.h"
 
 #define TRIGGER_TIMER_INTERRUPT {if (Scheduler::preemption_lock && !Scheduler::critical_section_preempt_exit) \
 	{irrecoverable_error("%s:%d TRIGGER_TIMER_INTERRUPT called while preemption lock is on", __FILE__, __LINE__);}; \
@@ -37,7 +38,8 @@ class Interrupt_handler;
 class Interrupts
 {
 public:
-	static Interrupt_handler* handlers[256];
+	// Several PCI devices may share the same legacy INTx line, so each vector can have several handlers.
+	static list<Interrupt_handler*> handlers[256];
 	/**
 	 * Handles a page fault
 	 *
