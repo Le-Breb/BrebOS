@@ -423,20 +423,9 @@ void HTTP::on_connection_terminated(const char* error_message)
         // Response body completely received
         if (buf_size == buf_capacity && state == State::RESPONSE_COMPLETE)
         {
-            // Build file path
-            const char save_path[] = "/downloads/";
-            const char* file_name = "res.txt"; // request->uri;
-            auto pathname_length = sizeof(save_path) + strlen(file_name);
-            char pathname[pathname_length + 1];
-            pathname[pathname_length] = '\0';
-            strcpy(pathname, save_path);
-            strcat(pathname, file_name);
-
-            // Save file
-            if (VFS::write_buf_to_file(pathname, buf, buf_size))
-                printf_info("%s downloaded and saved at %s", request->uri, pathname);
-            else
-                printf_error("Error while saving downloaded file %s at %s", request->uri, pathname);
+            for (uint i = 0; i < buf_size; i++)
+                printf("%c", buf[i]);
+            FB::putchar('\n');
         }
         else
             printf_error("HTTP closed with incomplete response: %d/%d", buf_size, buf_capacity);
