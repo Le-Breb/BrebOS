@@ -243,7 +243,7 @@ Memory::page_table_t* Scheduler::get_current_page_tables()
 {
     if (const Process* curr_proc = get_running_process())
         return curr_proc->page_tables;
-    irrecoverable_error("%s: no process is running", __func__);
+    return Memory::page_tables; // No process is currently running, this means we are in the kernel
 }
 
 [[noreturn]]
