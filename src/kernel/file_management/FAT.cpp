@@ -911,7 +911,7 @@ Status FAT::getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t m
                 else
                 {
                     TmpString entry_name = prev_is_lfn() ? prev_lfn : entry->get_name();
-                    const auto dirent_size = ALIGN_UP(offsetof(struct dirent, d_name) + strlen(*entry_name), sizeof(struct dirent));
+                    const auto dirent_size = ALIGN_UP(offsetof(struct dirent, d_name) + strlen(*entry_name) + 1, sizeof(struct dirent));
                     if (remaining_bytes() < dirent_size)
                         return Status::success(); // No more room available in buffer, exit
                     if (strlen(*entry_name) > __MLIBC_NAME_MAX)
