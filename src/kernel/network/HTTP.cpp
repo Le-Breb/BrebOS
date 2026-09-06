@@ -288,6 +288,17 @@ void HTTP::on_data_received(void* packet, uint16_t packet_size)
     }
 }
 
+static constexpr uint hex_char_to_uint(char c)
+{
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    return -1U;
+}
+
 void HTTP::handle_response_descriptor(const void* packet, uint16_t packet_size)
 {
     response = new response_t(packet, packet_size);
@@ -363,7 +374,7 @@ void HTTP::handle_response_descriptor(const void* packet, uint16_t packet_size)
             for (size_t i = 0; i < content_len_len; i++)
             {
                 content_len *= 16;
-                content_len += ((char*)end_of_headers)[i] - '0';
+                content_len += hex_char_to_uint(((char*)end_of_headers)[i]);
             }
             current_chunk_size = content_len;
             content_start = (char*)end_of_content_len + sizeof(end_of_content_len_len_signature) - 1;
