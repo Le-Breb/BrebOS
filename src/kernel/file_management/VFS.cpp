@@ -367,8 +367,14 @@ SharedPointer<Dentry> VFS::browse_to(const char* path, bool print_errors)
 		printf_error("Attempting to browse to an empty path");
 		return nullptr;
 	}
+	// Absolute path
 	if (path[0] == '/')
 		return browse_to(path, get_root_dentry(), print_errors);
+	// Relative path
+	if (Scheduler::get_running_process()) // Ensure we're in a process
+		if (const auto work_dir = Scheduler::get_running_process()->get_work_dir()) // Ensure there's a wd (ie not in kernel)
+			if (const auto work_dir_dentry = browse_to(work_dir, print_errors)) // Get wd
+				return browse_to(path, work_dir_dentry, print_errors);
 
 	return nullptr;
 }
