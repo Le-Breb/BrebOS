@@ -484,7 +484,7 @@ void FB::init(uint fps)
 	uint framebuffer_addr = 0;
 	if (Multiboot::is_used)
 	{
-		auto fb_tag = (multiboot_tag_framebuffer*)Multiboot::get_tag(MULTIBOOT_FRAMEBUFFER_TAG);
+		auto fb_tag = (multiboot_tag_framebuffer*)Multiboot::get_tag(MULTIBOOT_TAG_TYPE_FRAMEBUFFER);
 
 		if (!fb_tag)
 			irrecoverable_error("Cannot find framebuffer multiboot tag");

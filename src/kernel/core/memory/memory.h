@@ -106,6 +106,11 @@ namespace Memory
 	 *  @return A pointer to a contiguous block of n bytes or NULL if memory is full
 	 */
 	void* sbrk(uint num_pages_requested, const page_info& page_info, const hint_info& hint_info, Process* process);
+
+	/**
+	 * Parses multiboot2 mmap and mark frames lying in non-available memory regions as used
+	 */
+	void register_multiboot_mem_regions();
 }
 
 class Process;

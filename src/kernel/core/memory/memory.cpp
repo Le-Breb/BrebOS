@@ -283,7 +283,9 @@ namespace Memory
         // Todo: register allocations in kernel process
 
         Multiboot::init(register_multiboot_info(multiboot_info));
-        if (multiboot_info == nullptr)
+        if (Multiboot::is_used)
+            register_multiboot_mem_regions();
+        else
         {
             if (!phys_to_virt_addr(FB_MODE_INFO_ADDR_WHEN_CUSTOM_BOOTLOADER_USED))
                 register_physical_data(FB_MODE_INFO_ADDR_WHEN_CUSTOM_BOOTLOADER_USED, sizeof(FB::vbe_mode_info_structure));
@@ -427,6 +429,26 @@ namespace Memory
 
         // Allocated memory block virtually starts at page b. Return it.
         return (void*)PAGE_ADDR(b);
+    }
+
+    void register_multiboot_mem_regions()
+    {
+        const auto multiboot_mmap = Multiboot::get_mmap();
+        for (const auto& mem_region : multiboot_mmap)
+        {
+            if (mem_region.type == MULTIBOOT_MEMORY_AVAILABLE)
+                continue;
+
+            const uint num_frames = (mem_region.len + PAGE_SIZE - 1) / PAGE_SIZE;
+            const uintptr_t base_aligned_addr = PAGE_ALIGN(mem_region.addr);
+            const uint base_aligned_frame_id = base_aligned_addr / PAGE_SIZE;
+
+            for (uint i = 0; i < num_frames; i++)
+            {
+                if (const uint frame_id = base_aligned_frame_id + i; FRAME_FREE(frame_id))
+                    MARK_FRAME_USED(frame_id);
+            }
+        }
     }
 
     void* malloca(uint size)

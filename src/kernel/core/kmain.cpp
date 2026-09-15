@@ -29,8 +29,6 @@ extern "C" bool fpu_init_asm_();
 //Todo: unify mlibc and brebos syscalls numbers (via header file)
 // Todo: Some TERM or CORE signals should be catchable by processes. For example, SIGTERM simply asks processes
 // to shut down, and OS terminates them only after a while if the process does not do it by itself
-// Todo: parse memory map from BIOS (to be aware of available regions and RAM size)
-// Todo: fix example.com wget
 // Todo: make signals be able to interrupt sleep
 // Todo: compile libstdc++ non-hosted for kernel usage (also ensure -fno-excepts (and -no-rtti ?))
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer

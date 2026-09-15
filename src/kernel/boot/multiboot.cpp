@@ -6,6 +6,58 @@
 const multiboot_info_t* Multiboot::multiboot_info = nullptr;
 bool Multiboot::is_used = false;
 
+void Multiboot::print_mmap()
+{
+	for (const auto& mmap_entry : get_mmap())
+	{
+		printf("[0x%08llx-0x%08llx] - ", mmap_entry.addr, mmap_entry.addr + mmap_entry.len);
+		switch (mmap_entry.type)
+		{
+			case MULTIBOOT_MEMORY_AVAILABLE:
+				FB::write("AVAILABLE");
+				break;
+			case MULTIBOOT_MEMORY_RESERVED:
+				FB::write("RESERVED");
+				break;
+			case MULTIBOOT_MEMORY_ACPI_RECLAIMABLE:
+				FB::write("ACPI_RECLAIMABLE");
+				break;
+			case MULTIBOOT_MEMORY_NVS:
+				FB::write("NVS");
+				break;
+			case MULTIBOOT_MEMORY_BADRAM:
+				FB::write("BADRAM");
+				break;
+			default:
+				FB::write("UNKNOWN");
+		}
+
+		FB::putchar('\n');
+	}
+}
+
+vector<multiboot_memory_map_t> Multiboot::get_mmap()
+{
+	vector<multiboot_memory_map_t> entries;
+
+	if (!is_used)
+		irrecoverable_error("%s called while multiboot not used (or not Multiboot::init not called)", __PRETTY_FUNCTION__);
+
+	void* mmap_ptr = get_tag(MULTIBOOT_TAG_TYPE_MMAP);
+	if (!mmap_ptr)
+	{
+		printf_error("%s: cannot find mmap tag", __PRETTY_FUNCTION__);
+		return {};
+	}
+
+	multiboot_tag_mmap_t* mmap = (multiboot_tag_mmap_t*)mmap_ptr;
+	for (multiboot_mmap_entry* mmap_entry = mmap->entries; (uint32_t)((uint8_t*)mmap_entry - (uint8_t*)mmap) < mmap->
+		 size; mmap_entry = (multiboot_mmap_entry*)((uint8_t*)mmap_entry + mmap->entry_size))
+		entries.push_back(*mmap_entry);
+
+	return entries;
+}
+
 void Multiboot::init(const multiboot_info_t* multiboot_info)
 {
 	Multiboot::multiboot_info = (multiboot_info_t*)multiboot_info;
@@ -28,37 +80,3 @@ void* Multiboot::get_tag(uint32_t type)
 
 	return nullptr;
 }
-
-// ===================================== MULTIBOOT1=================================
-
-/*void Multiboot::print_mmap(uint ebx)
-{
-	multiboot_info* mboot_header = (multiboot_info*) (ebx + KERNEL_VIRTUAL_BASE);
-	uint memory_slots = mboot_header->mmap_length / sizeof(multiboot_memory_map_t);
-
-	uint mem_map_start = (uint) mboot_header->mmap_addr + KERNEL_VIRTUAL_BASE;
-	uint mem_map_size = (uint) mboot_header->mmap_length;
-	//uint mem_map_end = (uint) mboot_header->mmap_addr + (uint) mboot_header->mmap_length;
-
-	multiboot_memory_map_t* mmap_entries = new multiboot_memory_map_t[memory_slots];
-	memcpy((char*) mmap_entries, (char*) mem_map_start, mem_map_size);
-
-	printf("Memory map:\n");
-	for (uint i = 0; i < memory_slots; ++i)
-	{
-		printf("[%08x-%08x] - ", (uint) mmap_entries[i].addr,
-			   (uint) (mmap_entries[i].addr + mmap_entries[i].len - 1));
-		switch (mmap_entries[i].type)
-		{
-			case MULTIBOOT_MEMORY_AVAILABLE:
-				printf("Available");
-				break;
-			case MULTIBOOT_MEMORY_RESERVED:
-				printf("Reserved");
-				break;
-			default:
-				printf("%u", mmap_entries[i].type);
-		}
-		printf("\n");
-	}
-}*/
