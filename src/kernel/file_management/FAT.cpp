@@ -419,7 +419,7 @@ Status FAT::load_file_to_buf(void* buf, const char* file_name, SharedPointer<Den
     if (co < n_offset_clusters)
         return Status::failure("Offset exceeds file size");
 
-    if (cluster_offset != 0 || length < FAT_SECTOR_SIZE)
+    if ((cluster_offset != 0 || length < FAT_SECTOR_SIZE) && next_cluster < CLUSTER_MIN_EOC)
     {
         // Offset isn't sector-aligned (or we need less than a full sector): load the sector and
         // copy only the meaningful data to buf
@@ -458,8 +458,11 @@ Status FAT::load_file_to_buf(void* buf, const char* file_name, SharedPointer<Den
         loaded_bytes += n_clusters * FAT_SECTOR_SIZE;
 
         // Advance the cursor
-        TRY(change_active_cluster(next_cluster, ctx, nullptr));
-        next_cluster = ctx.table_value;
+        if (next_cluster < CLUSTER_MIN_EOC)
+        {
+            TRY(change_active_cluster(next_cluster, ctx, nullptr));
+            next_cluster = ctx.table_value;
+        }
     }
 
     // Handle last bytes
