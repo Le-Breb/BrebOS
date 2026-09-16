@@ -211,6 +211,23 @@ class FAT : public FS
 	Status write_fat(const ctx& ctx) const;
 
 	Status write_data_sectors(uint numsects, uint lba, const void* buffer, ctx& ctx) const;
+
+	[[nodiscard]]
+	Status advance_in_cluster_chain(uint n_clusters, ctx& ctx, void* buffer) const;
+
+	/**
+	 * Updates part of the active sector with new data on disk
+	 * @param ctx context struct
+	 * @param buffer data to be written to the active sector
+	 * @param offset offset in active sector to write the data to
+	 * @param length number of bytes to write
+	 * @return status of the operation
+	 */
+	[[nodiscard]]
+	Status update_active_sector(ctx& ctx, const void* buffer, uint offset, uint length) const;
+
+	[[nodiscard]]
+	Status read_from_active_sector(ctx& ctx, void* buffer, uint offset, uint length) const;
 public:
 	Result<SharedPointer<Dentry>> touch(SharedPointer<Dentry>& parent_dentry, const char* entry_name) override;
 
