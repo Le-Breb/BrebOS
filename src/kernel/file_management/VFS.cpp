@@ -179,16 +179,6 @@ char* VFS::get_absolute_path(const char* path)
 	return dentry->get_absolute_path();
 }
 
-bool VFS::write_buf_to_file(const char* pathname, const void* buf, uint length)
-{
-	SharedPointer<Dentry> dentry = get_file_dentry(pathname, false, nullptr);
-	if (!dentry)
-		if (!((dentry = touch(pathname))))
-			return false;
-
-	return dentry->inode->superblock->get_fs()->write_buf_to_file(dentry, buf, length).warn_is_ok();
-}
-
 void VFS::ls_printer(const Dentry& dentry)
 {
 	bool is_dir = dentry.inode->type == Inode::Dir;
@@ -485,7 +475,7 @@ FileInterface* VFS::open_file(const char* pathname, int flags, mode_t mode, int&
 	}
 
 	if ((flags & O_CREAT || flags & O_TMPFILE) && mode != 0777)
-		printf_warn("Open called on '%s' with the following unsupported mode: 0%o. File will be created, "
+		printf_warn("Open called on '%s' with the following unsupported mode: 0%o. File will be opened, "
 			  "but with 0777 mode", pathname, mode);
 
 
@@ -511,7 +501,7 @@ FileInterface* VFS::open_file(const char* pathname, int flags, mode_t mode, int&
 
 	// Truncate file if asked and permitted by flags
 	if (flags & O_TRUNC && (flags & O_WRONLY || flags & O_RDWR))
-		if (const auto res = dentry->inode->superblock->get_fs()->write_buf_to_file(dentry, nullptr, 0); !res.warn_is_ok())
+		if (const auto res = dentry->inode->superblock->get_fs()->resize(dentry, 0); !res.warn_is_ok())
 			open_file_leave_with_error(-EIO) // IO error (I did not check if this whether it's man compliant)
 	file_descriptors[system_fd] = new File(system_fd, flags, 0, dentry);
 

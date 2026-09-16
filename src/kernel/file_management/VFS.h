@@ -111,15 +111,6 @@ public:
 	static SharedPointer<Dentry> get_file_parent_dentry(const char* pathname, const char*& file_name, bool print_errors = true);
 
 	/**
-	 * Writes a buffer to a file. If the file already exists, it is resized to length. If it doesn't exist, it is created.
-	 * @param pathname path of the file
-	 * @param buf data buffer
-	 * @param length length of buffer
-	 * @return boolean indicating success state
-	 */
-	static bool write_buf_to_file(const char* pathname, const void* buf, uint length);
-
-	/**
 	 * Mounts a file system at /mnt/FS_index
 	 * @param fs File System to mount
 	 * @return boolean indicating success state

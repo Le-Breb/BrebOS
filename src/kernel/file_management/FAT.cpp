@@ -730,13 +730,14 @@ SharedPointer<Inode> FAT::get_root_node()
     return root_node;
 }
 
-Status FAT::write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length)
+Status FAT::write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length, uint offset)
 {
     if (dentry->inode->type != Inode::File)
         Status::failure("Trying to write data on something which is not a file");
     // Resize file if necessary
-    if (dentry->inode->size != length)
-        TRY(resize(dentry, length));
+    const auto min_size = offset + length;
+    if (dentry->inode->size < min_size)
+        TRY(resize(dentry, min_size));
     if (length == 0)
         return Status::success();
 
@@ -744,29 +745,73 @@ Status FAT::write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, ui
     uint entry_id;
     if ((entry_id = TRY(get_child_dir_entry_id(dentry->parent, dentry->name, ctx))) == ENTRY_NOT_FOUND)
         return Status::failure("couldn't find file");
-    DirEntry* file_entry = &entries[entry_id];
+    const DirEntry* file_entry = &entries[entry_id];
 
     uint next_cluster = file_entry->first_cluster_addr();
     size_t wrote_bytes = 0;
 
-    // Write file content cluster by cluster
-    while (wrote_bytes < length && next_cluster < CLUSTER_MIN_EOC)
+    // Skip whole clusters in offset
+    const uint N_OFFSET_CLUSTERS = offset / FAT_SECTOR_SIZE;
+    for (uint i = 0; i < N_OFFSET_CLUSTERS && next_cluster < CLUSTER_MIN_EOC; i++)
     {
-        TRY(change_active_cluster(next_cluster, ctx, this->buf));
-
-        // If there is more than ATA_SECTOR_SIZE bytes to write, use provided buffer, otherwise copy remaining data to buf
-        // and use buf, as its size is ATA_SECTOR_SIZE
-        auto b = this->buf;
-        uint rem = length - wrote_bytes;
-        if (rem >= FAT_SECTOR_SIZE)
-            b = (char*)buf + wrote_bytes;
-        else
-            memcpy(b, (char*)buf + wrote_bytes, length - wrote_bytes);
-        TRY(write_data_sectors(1, ctx.active_sector, b, ctx));
-
-        uint num = rem < FAT_SECTOR_SIZE ? rem : FAT_SECTOR_SIZE;
-        wrote_bytes += num;
+        TRY(change_active_cluster(next_cluster, ctx, nullptr));
         next_cluster = ctx.table_value;
+    }
+
+    const uint cluster_offset = offset - N_OFFSET_CLUSTERS * FAT_SECTOR_SIZE;
+    if ((cluster_offset || length < FAT_SECTOR_SIZE) && next_cluster < CLUSTER_MIN_EOC)
+    {
+        // Offset isn't sector-aligned (or we need less than a full sector): load the sector and
+        // copy only the meaningful data to buf
+        TRY(change_active_cluster(next_cluster, ctx, this->buf));
+        next_cluster = ctx.table_value;
+        const auto n = min(length, FAT_SECTOR_SIZE - cluster_offset);
+        memcpy(this->buf + cluster_offset, buf, n);
+        TRY(write_data_sectors(1, ctx.active_sector, this->buf, ctx));
+        wrote_bytes += n;
+    }
+
+    // Position the cursor on the first cluster to be bulk-written
+    if (next_cluster < CLUSTER_MIN_EOC)
+    {
+        TRY(change_active_cluster(next_cluster, ctx, nullptr));
+        next_cluster = ctx.table_value;
+    }
+
+    // Write by groups of contiguous entire clusters
+    while (wrote_bytes + FAT_SECTOR_SIZE <= length && next_cluster < CLUSTER_MIN_EOC)
+    {
+        const uint start_cluster = ctx.active_cluster;
+        uint n_clusters = 1;
+
+        // Walk the chain as long as we need more sectors and as long as they are contiguous
+        while (wrote_bytes + (n_clusters + 1) * FAT_SECTOR_SIZE <= length &&
+               next_cluster == start_cluster + n_clusters)
+        {
+            TRY(change_active_cluster(next_cluster, ctx, nullptr));
+            next_cluster = ctx.table_value;
+            n_clusters++;
+        }
+
+        const uint start_sector = FIRST_SECTOR_OF_CLUSTER(start_cluster, bs.sectors_per_cluster, first_data_sector);
+        TRY(write_data_sectors(n_clusters, start_sector, (char*)buf + wrote_bytes, ctx));
+        wrote_bytes += n_clusters * FAT_SECTOR_SIZE;
+
+        // Advance the cursor
+        if (next_cluster < CLUSTER_MIN_EOC)
+        {
+            TRY(change_active_cluster(next_cluster, ctx, nullptr));
+            next_cluster = ctx.table_value;
+        }
+    }
+
+    // Handle last bytes
+    if (const uint rem = length - wrote_bytes; rem > 0)
+    {
+        TRY(change_active_cluster(ctx.active_cluster, ctx, this->buf));
+        memcpy(this->buf, (char*)buf + wrote_bytes, rem);
+        TRY(write_data_sectors(1, ctx.active_sector, this->buf, ctx));
+        wrote_bytes += rem;
     }
 
     return Status::success();

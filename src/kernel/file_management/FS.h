@@ -59,7 +59,7 @@ public:
 	virtual Status load_file_to_buf(void* buf, const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset,
 	                                uint length, uint& loaded_bytes) = 0;
 
-	virtual Status write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length) = 0;
+	virtual Status write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length, uint offset) = 0;
 
 	virtual Status resize(SharedPointer<Dentry>& dentry, uint new_size) = 0;
 

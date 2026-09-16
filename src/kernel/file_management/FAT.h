@@ -230,7 +230,7 @@ public:
 	[[nodiscard]]
 	SharedPointer<Inode> get_root_node() override;
 
-	Status write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length) override;
+	Status write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length, uint offset) override;
 
 	Status resize(SharedPointer<Dentry>& dentry, uint new_size) override;
 

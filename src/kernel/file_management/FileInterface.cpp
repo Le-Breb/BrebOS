@@ -63,34 +63,17 @@ int File::lseek(int offset, int whence)
     return new_offset;
 }
 
-// Todo: optimize that cause reading the whole file then writing it entirely is kinda insanely bad
 int File::write(void* buf, uint count)
 {
     if (dentry->inode->type != Inode::File)
         return -EINVAL; // Not a regular file
 
-    uint file_size = dentry->inode->size;
-    uint loaded_bytes = 0;
-    auto file_res = dentry->inode->superblock->get_fs()->load_file_to_buf(dentry->name, dentry->parent, 0, file_size, loaded_bytes);
-    if (!file_res.warn_is_ok())
-        return -EIO; // IO error
-    auto file = std::move(file_res).expect();
-
-    auto nf = realloc(file, file_size + count);
-    if (!nf)
-        return -ENOMEM; // Out of memory
-    file = nf;
+    const uint file_size = dentry->inode->size;
 
     if (flags & O_APPEND)
         offset = file_size;
 
-    memmove((char*)file + offset + count, (char*)file + offset, file_size - offset);
-    memcpy((char*)file + offset, buf, count);
-
-    uint new_file_size = file_size + count;
-    const bool write_op = dentry->inode->superblock->get_fs()->write_buf_to_file(dentry, file, new_file_size).warn_is_ok();
-    delete (char*)file;
-    if (!write_op)
+    if (!dentry->inode->superblock->get_fs()->write_buf_to_file(dentry, buf, count, offset).warn_is_ok())
         return -EIO; // IO error
 
     offset += count;
