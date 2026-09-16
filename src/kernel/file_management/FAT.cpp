@@ -611,23 +611,22 @@ Result<SharedPointer<Dentry>> FAT::touch(SharedPointer<Dentry>& parent_dentry, c
     if (!entry_name || entry_name[0] == '/')
         return make_ok<SharedPointer<Dentry>>(nullptr);
 
-    uint parent_sector = parent_dentry->inode->lba;
-    uint parent_cluster = parent_sector * bs.sectors_per_cluster;
-    uint curr_cluster = parent_cluster;
+    const uint parent_sector = parent_dentry->inode->lba;
+    const uint parent_cluster = parent_sector * bs.sectors_per_cluster;
     ctx ctx{};
 
-    do
-    {
-        // ~= cd wd
-        TRY(change_active_cluster(curr_cluster, ctx, this->buf));
+    // ~= cd wd
+    TRY(change_active_cluster(parent_cluster, ctx, nullptr));
 
-        // Skip used dir entries, aka files/folders inside wd
-        while (ctx.dir_entry_id * sizeof(DirEntry) < FAT_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free() &&
-            strcmp(*entries[ctx.dir_entry_id].get_name(), entry_name) != 0)
-            ctx.dir_entry_id++;
+    while (ctx.table_value < CLUSTER_MIN_EOC)
+        TRY(advance_in_cluster_chain(1, ctx, nullptr));
 
-        curr_cluster = ctx.table_value;
-    } while (curr_cluster < CLUSTER_MIN_EOC);
+    TRY(change_active_cluster(ctx.active_cluster, ctx, this->buf)); // Reached last cluster, load its data
+
+    // Skip used dir entries, aka files/folders inside wd
+    while (ctx.dir_entry_id * sizeof(DirEntry) < FAT_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free() &&
+        strcmp(*entries[ctx.dir_entry_id].get_name(), entry_name) != 0)
+        ctx.dir_entry_id++;
 
     // No free entry in wd cluster
     if (ctx.dir_entry_id * sizeof(DirEntry) == bs.bytes_per_sector * bs.sectors_per_cluster)
@@ -647,22 +646,21 @@ Result<SharedPointer<Dentry>> FAT::mkdir(SharedPointer<Dentry>& parent_dentry, c
     if (l >= 12 - 3)
         MAKE_ERR("Dir name requires LFN support");
 
-    uint parent_sector = parent_dentry->inode->lba;
-    uint parent_cluster = parent_sector * bs.sectors_per_cluster;
-    uint curr_cluster = parent_cluster;
+    const uint parent_sector = parent_dentry->inode->lba;
+    const uint parent_cluster = parent_sector * bs.sectors_per_cluster;
     ctx ctx{};
 
-    do
-    {
-        // ~= cd wd
-        TRY(change_active_cluster(curr_cluster, ctx, this->buf));
+    // ~= cd wd
+    TRY(change_active_cluster(parent_cluster, ctx, nullptr));
 
-        // Skip used dir entries, aka files/folders inside wd
-        while (ctx.dir_entry_id * sizeof(DirEntry) < FAT_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free())
-            ctx.dir_entry_id++;
+    while (ctx.table_value < CLUSTER_MIN_EOC)
+        TRY(advance_in_cluster_chain(1, ctx, nullptr));
 
-        curr_cluster = ctx.table_value;
-    } while (curr_cluster < CLUSTER_MIN_EOC);
+    TRY(change_active_cluster(ctx.active_cluster, ctx, this->buf)); // Reach last cluster, load its data
+
+    // Skip used dir entries, aka files/folders inside wd
+    while (ctx.dir_entry_id * sizeof(DirEntry) < FAT_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free())
+        ctx.dir_entry_id++;
 
     // No free entry in wd cluster
     if (ctx.dir_entry_id * sizeof(DirEntry) == bs.bytes_per_sector * bs.sectors_per_cluster)
