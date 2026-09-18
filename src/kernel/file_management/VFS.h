@@ -6,7 +6,7 @@
 
 #define MAX_FS 10
 #define MAX_OPEN_FILES 100
-#define MAX_DENTRIES 200
+#define MAX_DENTRIES 256
 #define MAX_FD 100
 #define MAX_FD_PER_PROCESS 20
 
@@ -56,7 +56,7 @@ private:
 		}
 	};
 
-	using dentry_cache_t = std::unordered_set<SharedPointer<Dentry>, dentry_hash, cached_dentry_equality>;
+	using dentry_cache_t = UnorderedSet<SharedPointer<Dentry>, MAX_DENTRIES, dentry_hash, cached_dentry_equality>;
 
 	static dentry_cache_t* dentries;
 	static dentry_cache_t* mount_points; // Mount point dentries, maintaining ref cout >=1 preventing cache evicition

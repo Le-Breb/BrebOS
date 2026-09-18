@@ -41,7 +41,7 @@ class HashMap
     requires std::invocable<hash_func, const K&>
     size_t bucket(const K& key) const;
     template <typename K>
-    requires kdetail::FindCompatible<hash_func, equal_func, T, K>
+    requires kdetail::HashCompatible<hash_func, equal_func, T, K>
     size_t get_index(const K& element) const;
     static void advance_index(uint32_t& index);
 public:
@@ -53,7 +53,7 @@ public:
     bool is_present(const T& t) const;
     void remove(const T& element);
     template <typename K>
-    requires kdetail::FindCompatible<hash_func, equal_func, T, K>
+    requires kdetail::HashCompatible<hash_func, equal_func, T, K>
     Optional<const T*> find(const K& element) const;
     [[nodiscard]]
     uint32_t get_size() const;

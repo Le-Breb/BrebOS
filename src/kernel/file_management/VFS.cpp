@@ -69,10 +69,10 @@ void VFS::shutdown()
 	delete mount_points;
 	if (dentries) // May be nullptr if initialization did not run entirely
 	{
-		printf_info("Shutting down VFS, %zu dentries still cached", dentries->size());
+		printf_info("Shutting down VFS, %u dentries still cached", dentries->size());
 		for (uint i = 0; i < 10 && dentries->size(); i++)
 			free_unused_dentry_cache_entries();
-		printf_info("%zu dentries still cached after cleanup", dentries->size());
+		printf_info("%u dentries still cached after cleanup", dentries->size());
 	}
 	delete dentries;
 }
@@ -283,7 +283,7 @@ bool VFS::cache_dentry(const SharedPointer<Dentry>& dentry)
 	if (dentries->size() == MAX_DENTRIES)
 		return false;
 
- 	dentries->emplace(dentry);
+ 	dentries->emplace(dentry).expect(); // Should never throw since number of dentries is checked above
 
 	return true;
 }
@@ -728,7 +728,9 @@ bool VFS::mount(FS* fs)
 	// Otherwise, insert new dentry in cache
 	else if (!cache_dentry(d))
 		return false;
-	mount_points->emplace(d);
+
+	if (!mount_points->emplace(d).is_ok())
+		irrecoverable_error("%s: cannot mount as mount_points is full! (%u elements)", __PRETTY_FUNCTION__, mount_points->size());
 
 	return true;
 }
@@ -752,7 +754,8 @@ bool VFS::mount_rootfs(FS* fs)
 
 	if (!cache_dentry(d))
 		return false;
-	mount_points->emplace(d);
+	if (!mount_points->emplace(d).is_ok())
+		irrecoverable_error("%s: failed to mount rootfs as mount_points is full! (%u elements)", __PRETTY_FUNCTION__, mount_points->size());
 
 	return true;
 }

@@ -17,7 +17,7 @@ size_t UnorderedSet<T, capacity, hash_func, equal_func>::bucket(const K& key) co
 
 template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
 template <typename K>
-requires kdetail::FindCompatible<hash_func, equal_func, T, K>
+requires kdetail::HashCompatible<hash_func, equal_func, T, K>
 size_t UnorderedSet<T, capacity, hash_func, equal_func>::get_index(const K& element) const
 {
     uint32_t n = 0;
@@ -40,45 +40,8 @@ void UnorderedSet<T, capacity, hash_func, equal_func>::advance_index(uint32_t& i
 }
 
 template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
-UnorderedSet<T, capacity, hash_func, equal_func>::~UnorderedSet()
+void UnorderedSet<T, capacity, hash_func, equal_func>::erase_at_index(uint32_t i)
 {
-    for (auto& e : elements)
-        if (e.used)
-            std::destroy_at(&e.value());
-}
-
-template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
-Status UnorderedSet<T, capacity, hash_func, equal_func>::add(const T& element)
-{
-    if (size == capacity)
-        return Status::failure("set is full!");
-
-    uint32_t index = bucket(element);
-    while (elements[index].used)
-    {
-        if (equal(const_cast<const T&>(elements[index].value()), element))
-            return Status::success(); // Element already present
-        advance_index(index);
-    }
-
-    std::construct_at(elements[index].ptr(), element);
-    elements[index].used = true;
-    size++;
-
-    return Status::success();
-}
-
-
-template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
-bool UnorderedSet<T, capacity, hash_func, equal_func>::is_present(const T& t) const
-{
-    return get_index(t) != capacity;
-}
-
-template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
-void UnorderedSet<T, capacity, hash_func, equal_func>::remove(const T& element)
-{
-    uint32_t i = get_index(element);
     if (i == capacity)
         irrecoverable_error("%s: element is not present", __PRETTY_FUNCTION__);
 
@@ -107,46 +70,128 @@ void UnorderedSet<T, capacity, hash_func, equal_func>::remove(const T& element)
         j = (j + 1) & (capacity - 1);
     }
 
-    --size;
+    --_size;
+}
+
+template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
+UnorderedSet<T, capacity, hash_func, equal_func>::~UnorderedSet()
+{
+    for (auto& e : elements)
+        if (e.used)
+            std::destroy_at(&e.value());
+}
+
+template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
+template <typename... Args>
+Status UnorderedSet<T, capacity, hash_func, equal_func>::emplace(Args&&... args)
+{
+    if (_size == capacity)
+        return Status::failure("set is full!");
+
+    // Constructing the element here kinda defeats the whole purpose of emplacing,
+    // but for now theres no other way to do it. To do it properly, a hashmap implementation with a linked list
+    // is required: the element can then be constructed on the heap, and inserting it would only require updating the
+    // list pointers. To date, i tried to minimize the performance downsize by moving the element when constructing it
+    // for the second time, in elements
+    auto element = T(std::forward<Args>(args)...);
+
+    uint32_t index = bucket(element);
+    while (elements[index].used)
+    {
+        if (equal(const_cast<const T&>(elements[index].value()), element))
+            return Status::success(); // Element already present
+        advance_index(index);
+    }
+
+    std::construct_at(elements[index].ptr(), std::move(element));
+    elements[index].used = true;
+    _size++;
+
+    return Status::success();
+}
+
+
+template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
+bool UnorderedSet<T, capacity, hash_func, equal_func>::contains(const T& t) const
+{
+    return get_index(t) != capacity;
+}
+
+template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
+template <typename K> requires kdetail::HashCompatible<hash_func, equal_func, T, K>
+bool UnorderedSet<T, capacity, hash_func, equal_func>::contains(const K& element) const
+{
+    return get_index(element) != capacity;
+}
+
+template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
+void UnorderedSet<T, capacity, hash_func, equal_func>::erase(const T& element)
+{
+    uint32_t i = get_index(element);
+
+    erase_at_index(i);
+}
+
+template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
+typename UnorderedSet<T, capacity, hash_func, equal_func>::Iterator UnorderedSet<T, capacity, hash_func, equal_func>::
+erase(const Iterator& it)
+{
+    erase_at_index(it.get_index());
+
+    return elements[it.get_index()].used ? it : ++(Iterator(it.get_index(), elements));
 }
 
 
 template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
 template <typename K>
-requires kdetail::FindCompatible<hash_func, equal_func, T, K>
-Optional<const T*> UnorderedSet<T, capacity, hash_func, equal_func>::find(const K& element) const
+requires kdetail::HashCompatible<hash_func, equal_func, T, K>
+typename UnorderedSet<T, capacity, hash_func, equal_func>::ConstIterator UnorderedSet<
+    T, capacity, hash_func, equal_func>::find(const K& element) const
 {
     uint32_t n = 0;
     uint32_t index = bucket(element);
     while (n < capacity && elements[index].used)
     {
         if (equal(elements[index].value(), element))
-            return {elements[index].ptr()};
+            return ConstIterator(index, elements);
         advance_index(index);
         n++;
     }
 
-    return nullopt;
+    return end();
 }
 
 template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
 [[nodiscard]]
-uint32_t UnorderedSet<T, capacity, hash_func, equal_func>::get_size() const
+uint32_t UnorderedSet<T, capacity, hash_func, equal_func>::size() const
 {
-    return size;
+    return _size;
 }
 
 template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
 bool UnorderedSet<T, capacity, hash_func, equal_func>::is_full() const
 {
-    return size == capacity;
+    return _size == capacity;
 }
 
 template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
 typename UnorderedSet<T, capacity, hash_func, equal_func>::Iterator UnorderedSet<T, capacity, hash_func, equal_func>::
 begin()
 {
-    return Iterator(0, elements);
+    uint32_t index = 0;
+    while (index < capacity && !elements[index].used)
+        ++index;
+    return Iterator(index, elements);
+}
+
+template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
+typename UnorderedSet<T, capacity, hash_func, equal_func>::ConstIterator UnorderedSet<T, capacity, hash_func, equal_func>::
+begin() const
+{
+    uint32_t index = 0;
+    while (index < capacity && !elements[index].used)
+        ++index;
+    return ConstIterator(index, elements);
 }
 
 template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
@@ -154,4 +199,11 @@ typename UnorderedSet<T, capacity, hash_func, equal_func>::Iterator UnorderedSet
 end()
 {
     return Iterator(capacity, elements);
+}
+
+template <typename T, uint32_t capacity, typename hash_func, typename equal_func>
+typename UnorderedSet<T, capacity, hash_func, equal_func>::ConstIterator UnorderedSet<T, capacity, hash_func, equal_func>::
+end() const
+{
+    return ConstIterator(capacity, elements);
 }
