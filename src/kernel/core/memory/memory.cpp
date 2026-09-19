@@ -714,7 +714,7 @@ namespace Memory
             for (uint i = 0; i < n_pages; i++)
             {
                 allocate_page(frame_base + i, b + i, DEFAULT_K_POLICY);
-                frame_to_page[frame_base + i] = b + i; // Todo: add a way to deregister physical data
+                frame_to_page[frame_base + i] = b + i;
             }
 
             return (void*)(PAGE_ADDR(b) + (ADDR_PAGE_OFF(physical_address)));

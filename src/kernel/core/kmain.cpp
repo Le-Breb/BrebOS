@@ -25,11 +25,15 @@ extern "C" bool fpu_init_asm_();
 //Todo: Syscall concurrent safety (that's a goddamn huge task)
 //Todo: Sanitize syscalls inputs (address ranges and permissions, value ranges)
 //Todo: run 42sh in interactive mode (so that $PWD is preserved across commands)
-//Todo: pass every syscall to Linux parameter passing convention
 // Todo: Some TERM or CORE signals should be catchable by processes. For example, SIGTERM simply asks processes
 // to shut down, and OS terminates them only after a while if the process does not do it by itself
 // Todo: make signals be able to interrupt sleep
-// Todo: compile libstdc++ non-hosted for kernel usage (also ensure -fno-excepts (and -no-rtti ?))
+// Todo: refactor scheduler
+// Todo: more robust TCP stack
+// Todo: optimize ELF loading
+// Todo: add a deallocator for register_physical_data and identity_map and physically_aligned_malloc
+// Todo: simplify VFS, especially path manipulation operations
+// Todo: investigate the segfault that happens after running 'tester'
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {
     Interrupts::disable_asm();
