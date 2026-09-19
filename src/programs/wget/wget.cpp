@@ -12,7 +12,7 @@ struct wget_args
 
 void wget(const wget_args* args)
 {
-    __asm__ volatile("int $0x80" :  : "a"(15), "D"(args->uri), "S"(args->hostname), "d"(args->port));
+    __asm__ volatile("int $0x80" :  : "a"(15), "b"(args->uri), "c"(args->hostname), "d"(args->port));
 }
 
 void usage_err()

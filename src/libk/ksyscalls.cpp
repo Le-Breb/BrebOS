@@ -11,7 +11,12 @@ char get_keystroke()
 unsigned int get_file_size(const char* path)
 {
 	unsigned int file_size;
-	__asm__ volatile ("int $0x80" : "=a"(file_size) : "a"(29), "D"(path));
+	__asm__ volatile ("xchg %%ebx, %%edi;"
+		"int $0x80;"
+		"xchg %%edi, %%ebx;"
+		: "=a"(file_size)
+		: "a"(29), "D"(path)
+		: "memory");
 	return file_size;
 }
 

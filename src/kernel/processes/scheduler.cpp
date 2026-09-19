@@ -509,7 +509,7 @@ void Scheduler::wake_up_process_parent(pid_t process_pid)
     if (ppid != curr_pid)
         ready_queue->enqueue(ppid);
     // waitpid return value.
-    if (auto wstatus_addr = (int*)waiting_process->cpu_state.esi)
+    if (auto wstatus_addr = (int*)waiting_process->cpu_state.ecx)
         waiting_process->values_to_write.add({wstatus_addr, processes[process_pid]->ret_status});
     // Clear flag
     waiting_process->flags &= ~P_WAITING_PROCESS;

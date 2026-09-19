@@ -34,28 +34,28 @@ Syscall::SyscallResult Syscall::terminate_process(Process* p, int ret_val)
 
 Syscall::SyscallResult Syscall::malloc(Process* p)
 {
-    p->cpu_state.eax = (uint)p->malloc(p->cpu_state.edi);
+    p->cpu_state.eax = (uint)p->malloc(p->cpu_state.ebx);
 
     return SyscallResult::ReturnToUser;
 }
 
 Syscall::SyscallResult Syscall::calloc(Process* p)
 {
-    p->cpu_state.eax = (uint)p->calloc(p->cpu_state.edi, p->cpu_state.esi);
+    p->cpu_state.eax = (uint)p->calloc(p->cpu_state.ebx, p->cpu_state.ecx);
 
     return SyscallResult::ReturnToUser;
 }
 
 Syscall::SyscallResult Syscall::free(Process* p)
 {
-    p->free((void*)p->cpu_state.edi);
+    p->free((void*)p->cpu_state.ebx);
 
     return SyscallResult::ReturnToUser;
 }
 
 Syscall::SyscallResult Syscall::realloc(Process* p)
 {
-    p->cpu_state.eax = (uint)p->realloc((void*)p->cpu_state.edi, (size_t)p->cpu_state.esi);
+    p->cpu_state.eax = (uint)p->realloc((void*)p->cpu_state.ebx, (size_t)p->cpu_state.ecx);
 
     return SyscallResult::ReturnToUser;
 }
@@ -85,16 +85,16 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
         switch (cpu_state->eax)
         {
             case SyscallNumber::TERMINATE_PROCESS:
-                return terminate_process(p, (int)cpu_state->edi);
+                return terminate_process(p, (int)cpu_state->ebx);
             case SyscallNumber::PRINTF:
-                FB::write((char*)cpu_state->esi);
+                FB::write((char*)cpu_state->ebx);
                 return SyscallResult::ReturnToUser;
             case SyscallNumber::GDB_NOTIFY_ELF:
             {
-                if (const bool load = (bool)p->cpu_state.edx; load)
-                    GDB::get_instance()->load_elf((const char*)cpu_state->esi);
+                if (const bool load = (bool)p->cpu_state.ecx; load)
+                    GDB::get_instance()->load_elf((const char*)cpu_state->ebx);
                 else
-                    GDB::get_instance()->unload_elf((const char*)cpu_state->esi);
+                    GDB::get_instance()->unload_elf((const char*)cpu_state->ebx);
                 return SyscallResult::ReturnToUser;
             }
             case SyscallNumber::GET_KEY:
@@ -158,7 +158,7 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
                 return SyscallResult::ReturnToUser;
             case SyscallNumber::GET_FILE_SIZE:
             {
-                const SharedPointer<Dentry> file = VFS::browse_to((char*)p->cpu_state.edi);
+                const SharedPointer<Dentry> file = VFS::browse_to((char*)p->cpu_state.ebx);
                 p->cpu_state.eax = file ? file->inode->size : (uint)-1;
                 return SyscallResult::ReturnToUser;
             }
@@ -203,13 +203,13 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             case SyscallNumber::MPROTECT:
                 return mprotect(p);
             case SyscallNumber::GDB_UNLOAD_ELF:
-                GDB::get_instance()->unload_elf((const char*)p->cpu_state.edx);
+                GDB::get_instance()->unload_elf((const char*)p->cpu_state.ebx);
                 return SyscallResult::ReturnToUser;
             case SyscallNumber::GETDENTS:
                 return getdents(p);
             case SyscallNumber::DEBUG_PRINT:
                 FB::flush();
-                printf_info("%d | 0x%x", p->cpu_state.edi, p->cpu_state.edi);
+                printf_info("%d | 0x%x", p->cpu_state.ebx, p->cpu_state.ebx);
                 return SyscallResult::ReturnToUser;
             default:
                 printf_error("Received unknown syscall id: 0x%x", cpu_state->eax);
@@ -234,8 +234,8 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
 
 Syscall::SyscallResult Syscall::wget(const cpu_state_t* cpu_state)
 {
-    const char* uri = (const char*)cpu_state->edi;
-    const char* hostname = (const char*)cpu_state->esi;
+    const char* uri = (const char*)cpu_state->ebx;
+    const char* hostname = (const char*)cpu_state->ecx;
     const auto port = (uint16_t)cpu_state->edx;
     auto http = new HTTP{hostname, port};
     http->send_get(uri);
@@ -245,7 +245,7 @@ Syscall::SyscallResult Syscall::wget(const cpu_state_t* cpu_state)
 
 Syscall::SyscallResult Syscall::mkdir(cpu_state_t* cpu_state)
 {
-    const char* path = (const char*)cpu_state->edi;
+    const char* path = (const char*)cpu_state->ebx;
     cpu_state->eax = (uint)(VFS::mkdir(path) ? 1 : 0);
 
     return SyscallResult::ReturnToUser;
@@ -253,7 +253,7 @@ Syscall::SyscallResult Syscall::mkdir(cpu_state_t* cpu_state)
 
 Syscall::SyscallResult Syscall::touch(cpu_state_t* cpu_state)
 {
-    const char* path = (const char*)cpu_state->edi;
+    const char* path = (const char*)cpu_state->ebx;
     cpu_state->eax = (uint)(VFS::touch(path) ? 1 : 0);
 
     return SyscallResult::ReturnToUser;
@@ -261,7 +261,7 @@ Syscall::SyscallResult Syscall::touch(cpu_state_t* cpu_state)
 
 Syscall::SyscallResult Syscall::ls(cpu_state_t* cpu_state)
 {
-    const char* path = (const char*)cpu_state->edi;
+    const char* path = (const char*)cpu_state->ebx;
     cpu_state->eax = (uint)VFS::ls(path);
 
     return SyscallResult::ReturnToUser;
@@ -269,8 +269,8 @@ Syscall::SyscallResult Syscall::ls(cpu_state_t* cpu_state)
 
 Syscall::SyscallResult Syscall::lseek(Process* p)
 {
-    int fd = (int)p->cpu_state.edi;
-    int offset = (int)p->cpu_state.esi;
+    int fd = (int)p->cpu_state.ebx;
+    int offset = (int)p->cpu_state.ecx;
     int whence = (int)p->cpu_state.edx;
 
     p->cpu_state.eax = p->lseek(fd, offset, whence);
@@ -280,8 +280,8 @@ Syscall::SyscallResult Syscall::lseek(Process* p)
 Syscall::SyscallResult Syscall::feh(Process* p)
 {
     // Gather args
-    auto rgb = (unsigned char*)p->cpu_state.edi;
-    uint x = p->cpu_state.esi;
+    auto rgb = (unsigned char*)p->cpu_state.ebx;
+    uint x = p->cpu_state.ecx;
     uint y = p->cpu_state.edx;
 
     // Display image and set process asleep
@@ -304,7 +304,7 @@ Syscall::SyscallResult Syscall::get_screen_dimensions(Process* p)
 Syscall::SyscallResult Syscall::load_file(Process* p)
 {
     // Get path
-    auto path = (const char*)p->cpu_state.edi;
+    auto path = (const char*)p->cpu_state.ebx;
 
     // Get file
     SharedPointer<Dentry> dentry = VFS::browse_to(path);
@@ -323,7 +323,7 @@ Syscall::SyscallResult Syscall::load_file(Process* p)
         p->cpu_state.eax = 0;
         return SyscallResult::ReturnToUser;
     }
-    memcpy((void*)p->cpu_state.esi, f, size);
+    memcpy((void*)p->cpu_state.ecx, f, size);
 
     // Write return values
     p->cpu_state.eax = 1;
@@ -336,8 +336,8 @@ Syscall::SyscallResult Syscall::load_file(Process* p)
 
 Syscall::SyscallResult Syscall::write(Process* p)
 {
-    int fd = (int)p->cpu_state.edi;
-    void* buf = (void*)p->cpu_state.esi;
+    int fd = (int)p->cpu_state.ebx;
+    void* buf = (void*)p->cpu_state.ecx;
     uint count = p->cpu_state.edx;
 
     p->cpu_state.eax = p->write(fd, count, buf);
@@ -346,8 +346,8 @@ Syscall::SyscallResult Syscall::write(Process* p)
 
 Syscall::SyscallResult Syscall::open(Process* p)
 {
-    const char* pathname = (const char*)p->cpu_state.edi;
-    int flags = (int)p->cpu_state.esi;
+    const char* pathname = (const char*)p->cpu_state.ebx;
+    int flags = (int)p->cpu_state.ecx;
     mode_t mode = (int)p->cpu_state.edx;
 
     p->cpu_state.eax = p->open(pathname, flags, mode);
@@ -356,8 +356,8 @@ Syscall::SyscallResult Syscall::open(Process* p)
 
 Syscall::SyscallResult Syscall::read(Process* p)
 {
-    int fd = (int)p->cpu_state.edi;
-    void* buf = (void*)p->cpu_state.esi;
+    int fd = (int)p->cpu_state.ebx;
+    void* buf = (void*)p->cpu_state.ecx;
     uint len = p->cpu_state.edx;
 
     p->cpu_state.eax = buf == nullptr ? -EFAULT : p->read(fd, buf, len);
@@ -366,7 +366,7 @@ Syscall::SyscallResult Syscall::read(Process* p)
 
 Syscall::SyscallResult Syscall::close(Process* p)
 {
-    int fd = (int)p->cpu_state.edi;
+    int fd = (int)p->cpu_state.ebx;
 
     p->cpu_state.eax = p->close(fd);
     return SyscallResult::ReturnToUser;
@@ -392,8 +392,8 @@ Syscall::SyscallResult Syscall::fstat(Process* p)
 
 Syscall::SyscallResult Syscall::kill(Process* p)
 {
-    int pid = (int)p->cpu_state.edi;
-    int signal = (int)p->cpu_state.esi;
+    int pid = (int)p->cpu_state.ebx;
+    int signal = (int)p->cpu_state.ecx;
 
     Process* proc = Scheduler::get_process(pid);
     p->cpu_state.eax = !proc ? -ESRCH : proc->kill(signal);
@@ -403,8 +403,8 @@ Syscall::SyscallResult Syscall::kill(Process* p)
 
 Syscall::SyscallResult Syscall::signal(Process* p)
 {
-    int signal = (int)p->cpu_state.edi;
-    auto handler = (__sighandler)p->cpu_state.esi;
+    int signal = (int)p->cpu_state.ebx;
+    auto handler = (__sighandler)p->cpu_state.ecx;
 
     p->cpu_state.eax = (uint)p->register_signal_handler(signal, handler);
     return SyscallResult::ReturnToUser;
@@ -418,8 +418,8 @@ Syscall::SyscallResult Syscall::signal_return(Process* p)
 
 Syscall::SyscallResult Syscall::fcntl(Process* p)
 {
-    int fd = (int)p->cpu_state.edi;
-    int op = (int)p->cpu_state.esi;
+    int fd = (int)p->cpu_state.ebx;
+    int op = (int)p->cpu_state.ecx;
     auto arg = (va_list)p->cpu_state.edx;
 
     p->cpu_state.eax = p->fcntl(fd, op, arg);
@@ -428,7 +428,7 @@ Syscall::SyscallResult Syscall::fcntl(Process* p)
 
 Syscall::SyscallResult Syscall::dup(Process* p)
 {
-    int fd = p->cpu_state.edi;
+    int fd = p->cpu_state.ebx;
 
     p->cpu_state.eax = p->dup(fd);
     return SyscallResult::ReturnToUser;
@@ -436,8 +436,8 @@ Syscall::SyscallResult Syscall::dup(Process* p)
 
 Syscall::SyscallResult Syscall::dup2(Process* p)
 {
-    int oldfd = p->cpu_state.edi;
-    int newfd = p->cpu_state.esi;
+    int oldfd = p->cpu_state.ebx;
+    int newfd = p->cpu_state.ecx;
 
     p->cpu_state.eax = p->dup2(oldfd, newfd);
     return SyscallResult::ReturnToUser;
@@ -445,7 +445,7 @@ Syscall::SyscallResult Syscall::dup2(Process* p)
 
 Syscall::SyscallResult Syscall::pipe(Process* p)
 {
-    int* pipefd = (int*)p->cpu_state.edi;
+    int* pipefd = (int*)p->cpu_state.ebx;
 
     p->cpu_state.eax = p->pipe(pipefd);
     return SyscallResult::ReturnToUser;
@@ -455,8 +455,8 @@ Syscall::SyscallResult Syscall::getcwd(Process* p)
 {
 #define getcwd_ret_err(err) { p->cpu_state.eax = 0; p->cpu_state.edi = err; return SyscallResult::ReturnToUser;; }
 
-    auto buf = (char*)p->cpu_state.edi;
-    auto size = (size_t)p->cpu_state.esi;
+    auto buf = (char*)p->cpu_state.ebx;
+    auto size = (size_t)p->cpu_state.ecx;
 
     if (size == 0 || !buf)
         getcwd_ret_err(EINVAL)
@@ -470,7 +470,7 @@ Syscall::SyscallResult Syscall::getcwd(Process* p)
 
 Syscall::SyscallResult Syscall::chdir(Process* p)
 {
-    const auto path = (const char*)p->cpu_state.edi;
+    const auto path = (const char*)p->cpu_state.ebx;
 
     p->cpu_state.eax = p->chdir(path);
     return SyscallResult::ReturnToUser;
@@ -478,7 +478,7 @@ Syscall::SyscallResult Syscall::chdir(Process* p)
 
 Syscall::SyscallResult Syscall::tcbset(Process* p)
 {
-    void* addr = (void*)p->cpu_state.edi;
+    void* addr = (void*)p->cpu_state.ebx;
     p->tls_base = addr;
     GDT::set_tls(addr);
 
@@ -488,15 +488,15 @@ Syscall::SyscallResult Syscall::tcbset(Process* p)
 
 Syscall::SyscallResult Syscall::isatty(Process* process)
 {
-    int fd = process->cpu_state.edi;
+    int fd = process->cpu_state.ebx;
     process->cpu_state.eax = process->isatty(fd);
     return SyscallResult::ReturnToUser;
 }
 
 Syscall::SyscallResult Syscall::sigaction(Process* p)
 {
-    int signum = p->cpu_state.edi;
-    const auto* act = (const struct sigaction*)p->cpu_state.esi;
+    int signum = p->cpu_state.ebx;
+    const auto* act = (const struct sigaction*)p->cpu_state.ecx;
     auto* old_act = (struct sigaction*)p->cpu_state.edx;
 
     p->cpu_state.eax = p->sigaction(signum, act, old_act);
@@ -505,8 +505,8 @@ Syscall::SyscallResult Syscall::sigaction(Process* p)
 
 Syscall::SyscallResult Syscall::sigprocmask(Process* p)
 {
-    int how = p->cpu_state.edi;
-    const auto* set = (const sigset_t*)p->cpu_state.esi;
+    int how = p->cpu_state.ebx;
+    const auto* set = (const sigset_t*)p->cpu_state.ecx;
     auto* oldset = (sigset_t*)p->cpu_state.edx;
 
     p->cpu_state.eax = p->sigprogmask(how, set, oldset);
@@ -624,7 +624,7 @@ Syscall::SyscallResult Syscall::getdents(Process* p)
 
 Syscall::SyscallResult Syscall::wait_pid(Process* p)
 {
-    const int waited_for_process = (int)p->cpu_state.edi;
+    const int waited_for_process = (int)p->cpu_state.ebx;
     const int flags = (int)p->cpu_state.edx;
 
     if (constexpr int supported_flags = WNOHANG; flags & ~supported_flags)
@@ -644,7 +644,7 @@ Syscall::SyscallResult Syscall::wait_pid(Process* p)
         {
             Process* waited_for_proc = Scheduler::get_process(wait);
 
-            int* wstatus = (int*)p->cpu_state.esi;
+            int* wstatus = (int*)p->cpu_state.ecx;
             *wstatus = waited_for_proc->get_ret_status();
 
             if (waited_for_proc->is_zombie())

@@ -19,7 +19,7 @@
 namespace mlibc {
 
 void SysdepImpl<Exit>::operator()(int status) {
-    __asm__ volatile("int $0x80" : : "a"(SyscallNumber::TERMINATE_PROCESS), "D"(status));
+    do_syscall(SyscallNumber::TERMINATE_PROCESS, status);
     __builtin_unreachable();
 }
 
@@ -37,8 +37,7 @@ int SysdepImpl<Open>::operator()(const char *pathname, int flags, mode_t mode, i
     if (!(flags & O_CREAT || flags & O_TMPFILE))
         mode = 0;
 
-    sc_result_t ret;
-    __asm__ volatile("int $0x80" : "=a"(ret) : "a"(SyscallNumber::OPEN), "D"(pathname), "S"(flags), "d"(mode));
+    const auto ret = do_syscall(SyscallNumber::OPEN, pathname, flags, mode);
 
 	if (const int e = sc_error(ret); e)
 		return e;
@@ -48,8 +47,7 @@ int SysdepImpl<Open>::operator()(const char *pathname, int flags, mode_t mode, i
 }
 
 int SysdepImpl<Read>::operator()(int fd, void *buf, size_t count, ssize_t *bytes_read) {
-  sc_result_t ret;
-  __asm__ volatile("int $0x80" : "=a"(ret) : "a"(SyscallNumber::READ), "D"(fd), "S"(buf), "d"(count));
+  const auto ret = do_syscall(SyscallNumber::READ, fd, buf, count);
 
 	if (const int e = sc_error(ret); e)
 		return e;
@@ -59,8 +57,7 @@ int SysdepImpl<Read>::operator()(int fd, void *buf, size_t count, ssize_t *bytes
 }
 
 int SysdepImpl<Write>::operator()(int fd, const void *buf, size_t count, ssize_t *bytes_written) {
-    sc_result_t ret;
-    __asm__ volatile("int $0x80" : "=a"(ret) : "a"(SyscallNumber::WRITE), "D"(fd), "S"((int)buf), "d"(count));
+    const auto ret = do_syscall(SyscallNumber::WRITE, fd, buf, count);
 
 	if (const int e = sc_error(ret); e)
 		return e;
@@ -70,8 +67,7 @@ int SysdepImpl<Write>::operator()(int fd, const void *buf, size_t count, ssize_t
 }
 
 int SysdepImpl<Seek>::operator()(int fd, off_t offset, int whence, off_t *new_offset) {
-    sc_result_t ret;
-    __asm__ volatile("int $0x80" : "=a"(ret) : "a"(SyscallNumber::LSEEK), "D"(fd), "S"((int)offset), "d"(whence));
+    const auto ret = do_syscall(SyscallNumber::LSEEK, fd, offset, whence);
 
 	if (const int e = sc_error(ret); e)
 		return e;
@@ -81,8 +77,7 @@ int SysdepImpl<Seek>::operator()(int fd, off_t offset, int whence, off_t *new_of
 }
 
 int SysdepImpl<Close>::operator()(int fd) {
-    sc_result_t ret;
-    __asm__ volatile("int $0x80" : "=a"(ret) : "a"(SyscallNumber::CLOSE), "D"(fd));
+    const auto ret = do_syscall(SyscallNumber::CLOSE, fd);
 
 	if (const int e = sc_error(ret); e)
 		return e;
@@ -109,8 +104,8 @@ void SysdepImpl<LibcPanic>::operator()() {
 }
 
 int SysdepImpl<AnonAllocate>::operator()(size_t size, void **pointer) {
-    int mem;
-    __asm__ volatile("int $0x80" : "=a"(mem) : "a"(SyscallNumber::CALLOC), "D"(1), "S"(size));
+    const auto ret = do_syscall(SyscallNumber::CALLOC, 1, size);
+    const auto mem = sc_int_result<int>(ret);
 
     *pointer = (void*)mem;
     
@@ -118,7 +113,7 @@ int SysdepImpl<AnonAllocate>::operator()(size_t size, void **pointer) {
 }
 
 int SysdepImpl<AnonFree>::operator()(void *pointer, [[maybe_unused]] size_t size) {
-    __asm__ volatile("int $0x80" :  : "a"(SyscallNumber::FREE), "D"(pointer));
+    do_syscall(SyscallNumber::FREE, pointer);
 
     return 0;
 }
@@ -139,8 +134,7 @@ int SysdepImpl<VmUnmap>::operator()(void *pointer, size_t size) {
 }
 
 int SysdepImpl<TcbSet>::operator()(void *pointer) {
-    int gdt_entry_num;
-    __asm__ volatile("int $0x80" : "=a"(gdt_entry_num) : "a"(SyscallNumber::TCBSET), "D"(pointer));
+    do_syscall(SyscallNumber::TCBSET, pointer);
 
     // Commented as this is done in the kernel
     // asm volatile ("movw %w0, %%gs" : : "q"(gdt_entry_num * 8 + 3) :);
@@ -169,8 +163,7 @@ int SysdepImpl<FdToPath>::operator()(int fd, char **path) {
 }
 
 int SysdepImpl<Fork>::operator()(int *child) {
-    pid_t pid;
-    __asm__ volatile("int $0x80" : "=a"(pid) : "a"(SyscallNumber::FORK));
+    const pid_t pid = sc_int_result<pid_t>(do_syscall(SyscallNumber::FORK));
 
     if (pid == -1)
         return EAGAIN;
@@ -184,14 +177,11 @@ pid_t SysdepImpl<FutexTid>::operator()() {
 }
 
 pid_t SysdepImpl<GetPid>::operator()() {
-    sc_result_t ret;
-    __asm__ volatile("int $0x80" : "=a"(ret) : "a"(SyscallNumber::GET_PID));
-    return sc_int_result<pid_t>(ret);
+    return sc_int_result<pid_t>(do_syscall(SyscallNumber::GET_PID));
 }
 
 int SysdepImpl<Isatty>::operator()(int fd) {
-    sc_result_t ret;
-    __asm__ volatile("int $0x80" : "=a"(ret) : "a"(SyscallNumber::ISATTY), "D"(fd));
+    const auto ret = do_syscall(SyscallNumber::ISATTY, fd);
 
 	if (const int e = sc_error(ret); e)
 		return e;
@@ -200,8 +190,7 @@ int SysdepImpl<Isatty>::operator()(int fd) {
 }
 
 int SysdepImpl<Kill>::operator()(int pid, int sig) {
-    sc_result_t ret;
-    __asm__ volatile("int $0x80" : "=a"(ret) : "a"(SyscallNumber::KILL), "D"(pid), "S"(sig));
+    const auto ret = do_syscall(SyscallNumber::KILL, pid, sig);
 
 	if (const int e = sc_error(ret); e)
 		return e;
@@ -248,8 +237,7 @@ int SysdepImpl<Sigaction>::operator()(int sig,
 
     // mlibc::infoLogger() << "act flags: " << frg::hex_fmt{act->sa_flags} << ", kact flags: " << frg::hex_fmt{kact.sa_flags} << "\n" << frg::endlog;
 
-    sc_result_t ret;
-    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SyscallNumber::SIGACTION), "D"(sig), "S"(&kact), "d"(oldact) : "memory");
+    const auto ret = do_syscall(SyscallNumber::SIGACTION, sig, &kact, oldact);
 
 	if (const int e = sc_error(ret); e)
 		return e;
@@ -261,8 +249,7 @@ int SysdepImpl<Sigaction>::operator()(int sig,
 
 int SysdepImpl<Sigprocmask>::operator()(int how,
         const sigset_t *set, sigset_t *retrieve) {
-    sc_result_t ret;
-    __asm__ volatile ("int $0x80" : "=a"(ret) : "a"(SyscallNumber::SIGPROCMASK), "D"(how), "S"(set), "d"(retrieve));
+    const auto ret = do_syscall(SyscallNumber::SIGPROCMASK, how, set, retrieve);
 
 	if (const int e = sc_error(ret); e)
 		return e;
@@ -332,8 +319,7 @@ int SysdepImpl<Waitpid>::operator()(int pid, int *status,
     if (ru)
         mlibc::panicLogger() << "waitpid called with non-null ru, this is not supported yet\n" << frg::endlog;
 
-    sc_result_t ret;
-    __asm__ volatile("int $0x80" : "=a"(ret) : "a"(SyscallNumber::WAIT_PID), "D"(pid), "S"(status), "d"(flags));
+    const auto ret = do_syscall(SyscallNumber::WAIT_PID, pid, status, flags);
 
 	if (const int e = sc_error(ret); e)
 		return e;
@@ -348,8 +334,7 @@ int SysdepImpl<Access>::operator()(const char *path, int mode) {
 }
 
 int SysdepImpl<Chdir>::operator()(const char *path) {
-    sc_result_t ret;
-    __asm__ volatile("int $0x80" : "=a"(ret): "a"(SyscallNumber::CHDIR), "D"(path));
+    const auto ret = do_syscall(SyscallNumber::CHDIR, path);
 
 	if (const int e = sc_error(ret); e)
 		return e;
@@ -371,8 +356,7 @@ int SysdepImpl<Dup>::operator()(int fd, int flags, int *newfd) {
     if (flags)
         mlibc::panicLogger() << "dup called with non-zero flags, this is not supported yet\n" << frg::endlog;
 
-    sc_result_t ret;
-    __asm__ volatile("int $0x80" : "=a"(ret) : "a"(SyscallNumber::DUP), "D"(fd));
+    const auto ret = do_syscall(SyscallNumber::DUP, fd);
 
 	if (const int e = sc_error(ret); e)
 		return e;
@@ -386,8 +370,7 @@ int SysdepImpl<Dup2>::operator()(int fd, int flags, int newfd) {
         mlibc::panicLogger() << "Dup2 called with non-zero flags (probably due to a call to dup3. This is not supported yet\n" << frg::endlog;
 
 
-    sc_result_t ret;
-    __asm__ volatile("int $0x80" : "=a"(ret) : "a"(SyscallNumber::DUP2), "D"(fd), "S"(newfd));
+    const auto ret = do_syscall(SyscallNumber::DUP2, fd, newfd);
 
 	if (const int e = sc_error(ret); e)
 		return e;
@@ -431,8 +414,7 @@ int SysdepImpl<Fchownat>::operator()(int dirfd, const char *pathname, uid_t owne
 }
 
 int SysdepImpl<Fcntl>::operator()(int fd, int request, va_list args, int *result) {
-    sc_result_t ret;
-    __asm__ volatile("int $0x80" : "=a"(ret) : "a"(SyscallNumber::FCNTL), "D"(fd), "S"(request), "d"(args));
+    const auto ret = do_syscall(SyscallNumber::FCNTL, fd, request, args);
 
 	if (const int e = sc_error(ret); e)
 		return e;
@@ -464,7 +446,15 @@ int SysdepImpl<Ftruncate>::operator()(int fd, size_t size) {
 int SysdepImpl<GetCwd>::operator()(char *buffer, size_t size) {
     char* ret;
     int err;
-    __asm__ volatile("int $0x80" : "=a"(ret), "=D"(err) : "a"(SyscallNumber::GETCWD), "D"(buffer), "S"(size));
+    __asm__ volatile("push %3;"
+        "push %%ebx;"
+        "mov 4(%%esp), %%ebx;"
+        "int $0x80;"
+        "pop %%ebx;"
+        "add $4, %%esp;"
+        : "=a"(ret), "=D"(err)
+        : "a"(SyscallNumber::GETCWD), "g"(buffer), "c"(size)
+        : "memory");
 
     if (ret == nullptr)
         return err;
@@ -555,10 +545,7 @@ int SysdepImpl<Mkdir>::operator()(const char *path, mode_t mode) {
         mlibc::panicLogger() << "mkdir called with mode != O777, this is not supported yet\n" << frg::endlog;
 
 
-    int ret;
-    __asm__ volatile("int $0x80" : "=a"(ret) : "a"(SyscallNumber::MKDIR), "D"(path));
-
-    if (ret)
+    if (sc_int_result<int>(do_syscall(SyscallNumber::MKDIR, path)))
         return 0;
 
     return EIO;
@@ -597,8 +584,7 @@ int SysdepImpl<Pipe>::operator()(int *fds, int flags) {
     if (flags)
         mlibc::panicLogger() << "pipe2 not supported yet\n" << frg::endlog;
 
-    sc_result_t ret;
-    __asm__ volatile("int $0x80" : "=a"(ret) : "a"(SyscallNumber::PIPE), "D"(fds));
+    const auto ret = do_syscall(SyscallNumber::PIPE, fds);
 
 	if (const int e = sc_error(ret); e)
 		return e;

@@ -25,7 +25,7 @@ int main([[maybe_unused]] int argc, char** argv)
         usage_err();
 
 
-    __asm__ volatile("int $0x80" : : "a"(3), "d"(mode_is_load), "S"(argv[2]));
+    __asm__ volatile("int $0x80" : : "a"(3), "b"(argv[2]), "c"(mode_is_load));
 
     return 0;
 }

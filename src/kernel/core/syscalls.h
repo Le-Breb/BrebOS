@@ -77,7 +77,7 @@ class Syscall
 
 	/**
 	 * Loads a file into memory
-	 * EDI = path
+	 * EBX = path
 	 *
 	 * Returns:
 	 * EAX = pointer to file in memory, null if error
