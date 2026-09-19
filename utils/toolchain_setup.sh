@@ -174,6 +174,53 @@ libstdcpp_build()
 
 }
 
+libstdcpp_kernel_build()
+{
+    cyan_echo "kernel-freestanding libstdc++-v3 build"
+    cd "$TOOLCHAIN_SOURCES_DIR"
+
+    export LD_LIBRARY_PATH="$TOOLCHAIN_DIR/usr/x86_64-pc-linux-gnu/i686-brebos/lib:${LD_LIBRARY_PATH}"
+    export PATH="$TOOLCHAIN_DIR/usr/bin:${PATH}"
+    export LD_LIBRARY_PATH="$TOOLCHAIN_DIR/usr/lib:${LD_LIBRARY_PATH}"
+    export PATH="$TOOLCHAIN_SOURCES_DIR/autoconf-2.69/install/bin:$PATH"
+
+    # Separate, unpatched source copy: reuses the gcc-15.1.0.tar.gz already
+    # downloaded by gcc_setup_and_build, but must NOT share that build's
+    # brebos*-as-linux configure patch (this build wants generic/freestanding
+    # defaults instead) or its build directory (the hosted i686-brebos-gcc
+    # install must stay untouched, since it's reused here as CC/CXX).
+    rm -rf gcc-15.1.0-kernel-libstdcxx
+    mkdir gcc-15.1.0-kernel-libstdcxx
+    tar xf gcc-15.1.0.tar.gz -C gcc-15.1.0-kernel-libstdcxx --strip-components=1
+
+    cd gcc-15.1.0-kernel-libstdcxx
+    cp -r "$BREBOS"/src/gcc-config/. ./   # needed so config.sub accepts i686-brebos
+
+    cd libstdc++-v3
+    autoconf
+
+    mkdir build && cd build
+    ../configure \
+        --host=i686-brebos \
+        --prefix="$TOOLCHAIN_DIR/kernel/usr" \
+        --disable-hosted-libstdcxx \
+        --disable-shared --enable-static \
+        --disable-libstdcxx-verbose \
+        --disable-libstdcxx-filesystem-ts \
+        --disable-libstdcxx-time \
+        --disable-libstdcxx-pch \
+        --disable-nls \
+        CC=i686-brebos-gcc \
+        CXX=i686-brebos-g++ \
+        CFLAGS="-ffreestanding -fno-exceptions" \
+        CXXFLAGS="-ffreestanding -fno-exceptions -fno-threadsafe-statics"
+
+    make -j "$NUM_JOBS"
+    make install
+
+    find "$TOOLCHAIN_DIR/kernel/usr" -type f -name '*.a' -exec i686-brebos-strip --strip-debug {} \;
+}
+
 mlibc_build()
 {
     cyan_echo "mlibc build"
@@ -216,5 +263,6 @@ gcc_setup_and_build
 mlibc_build
 autoconf_setup_and_build
 libstdcpp_build
+libstdcpp_kernel_build
 busybox_setup
 gen_clangd_config

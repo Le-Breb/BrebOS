@@ -58,11 +58,15 @@ endif
 ifdef PROFILING
 	CFLAGS += -finstrument-functions -DPROFILING
 endif
-CXXFLAGS = -std=c++20
+KERNEL_LIBSTDCXX_DIR=$(CURDIR)/toolchain/kernel/usr
+CXXFLAGS = -std=c++20 -nostdinc++ \
+-I$(KERNEL_LIBSTDCXX_DIR)/include/c++/15.1.0 \
+-I$(KERNEL_LIBSTDCXX_DIR)/include/c++/15.1.0/i686-brebos
 
 CC_PATH=$(TOOLCHAIN_DIR)/usr/bin/$(CC)
 libgcc=$(shell $(CC_PATH) $(CFLAGS) -print-libgcc-file-name)
-libstdcpp=$(CURDIR)/toolchain/usr/i686-brebos/lib/libstdc++.a
+libstdcpp=$(KERNEL_LIBSTDCXX_DIR)/lib/libstdc++.a
+libsupcpp=$(KERNEL_LIBSTDCXX_DIR)/lib/libsupc++.a
 CRTI_OBJ=$(GCC_BUILD_DIR)/crti.o
 CRTBEGIN_OBJ:=$(shell $(CC_PATH) $(CFLAGS) -print-file-name=crtbegin.o)
 CRTEND_OBJ:=$(shell $(CC_PATH) $(CFLAGS) -print-file-name=crtend.o)
@@ -139,7 +143,7 @@ $(FONT_OBJ): $(FONT_FILE)
 	objcopy -I binary -O elf32-i386 -B i386 $(FONT_FILE) $(FONT_OBJ)
 
 $(BUILD_DIR)/kernel.elf: $(BUILD_DIR)/.dir_timestamp $(FONT_OBJ) $(INTERNAL_OBJS) $(libc) $(gcc)
-	i686-brebos-ld $(LDFLAGS) $(OBJ_LIST) $(libc) $(FONT_OBJ) -o $(BUILD_DIR)/kernel.elf $(libstdcpp) $(libgcc)
+	i686-brebos-ld $(LDFLAGS) $(OBJ_LIST) $(libc) $(FONT_OBJ) -o $(BUILD_DIR)/kernel.elf $(libstdcpp) $(libsupcpp) $(libgcc)
 
 $(OS_ISO): $(BUILD_DIR)/kernel.elf $(programs) bootloader busybox
 	@#Create directories
