@@ -30,7 +30,7 @@ extern "C" bool fpu_init_asm_();
 // Todo: make signals be able to interrupt sleep
 // Todo: refactor scheduler
 // Todo: more robust TCP stack
-// Todo: optimize ELF loading
+// Todo: optimize ELF loading (investigate all possible sources of poor performance. FAT can be sped up with FAT cache)
 // Todo: add a deallocator for register_physical_data and identity_map and physically_aligned_malloc
 // Todo: simplify VFS, especially path manipulation operations
 // Todo: investigate the segfault that happens after running 'tester'
