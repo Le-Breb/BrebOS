@@ -10,8 +10,6 @@
 #define MAX_FD 100
 #define MAX_FD_PER_PROCESS 20
 
-#include <unordered_set>
-
 #include "FileInterface.h"
 #include "FS.h"
 #include "../utils/UnorderedSet.h"

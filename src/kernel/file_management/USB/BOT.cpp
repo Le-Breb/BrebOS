@@ -1,6 +1,5 @@
 #include "BOT.h"
 
-#include <cstring>
 #include "../../core/memory/memory.h"
 
 uint32_t BOT::tag_ctr = 0;
