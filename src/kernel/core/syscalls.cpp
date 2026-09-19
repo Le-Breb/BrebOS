@@ -1,4 +1,5 @@
 #include "syscalls.h"
+#include "syscall_numbers.h"
 #include "interrupts.h"
 #include "../processes/scheduler.h"
 #include "system.h"
@@ -83,12 +84,12 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
     {
         switch (cpu_state->eax)
         {
-            case 1:
+            case SyscallNumber::TERMINATE_PROCESS:
                 return terminate_process(p, (int)cpu_state->edi);
-            case 2:
+            case SyscallNumber::PRINTF:
                 FB::write((char*)cpu_state->esi);
                 return SyscallResult::ReturnToUser;
-            case 3:
+            case SyscallNumber::GDB_NOTIFY_ELF:
             {
                 if (const bool load = (bool)p->cpu_state.edx; load)
                     GDB::get_instance()->load_elf((const char*)cpu_state->esi);
@@ -96,117 +97,117 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
                     GDB::get_instance()->unload_elf((const char*)cpu_state->esi);
                 return SyscallResult::ReturnToUser;
             }
-            case 4:
+            case SyscallNumber::GET_KEY:
                 get_key();
                 return SyscallResult::Schedule;
-            case 5:
+            case SyscallNumber::GET_PID:
                 get_pid(p);
                 return SyscallResult::ReturnToUser;
-            case 6:
+            case SyscallNumber::SHUTDOWN:
                 System::shutdown();
-            case 7:
+            case SyscallNumber::SLEEP:
                 return sleep(p);
-            case 8:
+            case SyscallNumber::MALLOC:
                 return malloc(p);
-            case 9:
+            case SyscallNumber::FREE:
                 return free(p);
-            case 10:
+            case SyscallNumber::MKDIR:
                 return mkdir(&p->cpu_state);
-            case 11:
+            case SyscallNumber::TOUCH:
                 return touch(&p->cpu_state);
-            case 12:
+            case SyscallNumber::LS:
                 return ls(&p->cpu_state);
-            case 13:
+            case SyscallNumber::CLEAR_SCREEN:
                 FB::clear_screen();
                 return SyscallResult::ReturnToUser;
-            case 14:
+            case SyscallNumber::WAIT_PID:
                 return wait_pid(p);
-            case 15:
+            case SyscallNumber::WGET:
                 wget(&p->cpu_state);
                 return SyscallResult::ReturnToUser;
-            case 16:
+            case SyscallNumber::STAT:
                 return stat(p);
-            case 17:
+            case SyscallNumber::CALLOC:
                 return calloc(p);
-            case 18:
+            case SyscallNumber::REALLOC:
                 return realloc(p);
-            case 19:
+            case SyscallNumber::TCBSET:
                 return tcbset(p);
-            case 20:
+            case SyscallNumber::EXECVE:
                 return execve(p);
-            case 21:
+            case SyscallNumber::FEH:
                 return feh(p);
-            case 22:
+            case SyscallNumber::LOCK_FLUSHING:
                 FB::lock_flushing();
                 return SyscallResult::ReturnToUser;
-            case 23:
+            case SyscallNumber::UNLOCK_FLUSHING:
                 FB::unlock_flushing();
                 return SyscallResult::ReturnToUser;
-            case 24:
+            case SyscallNumber::GET_SCREEN_DIMENSIONS:
                 get_screen_dimensions(p);
                 return SyscallResult::ReturnToUser;
-            case 25:
+            case SyscallNumber::LOAD_FILE:
                 load_file(p);
                 return SyscallResult::ReturnToUser;
-            case 26:
+            case SyscallNumber::WRITE:
                 return write(p);
-            case 27:
+            case SyscallNumber::OPENDIR:
                 return opendir(p);
-            case 28:
+            case SyscallNumber::FORK:
                 p->cpu_state.eax = p->fork();
                 return SyscallResult::ReturnToUser;
-            case 29:
+            case SyscallNumber::GET_FILE_SIZE:
             {
                 const SharedPointer<Dentry> file = VFS::browse_to((char*)p->cpu_state.edi);
                 p->cpu_state.eax = file ? file->inode->size : (uint)-1;
                 return SyscallResult::ReturnToUser;
             }
-            case 30:
+            case SyscallNumber::OPEN:
                 return open(p);
-            case 31:
+            case SyscallNumber::READ:
                 return read(p);
-            case 32:
+            case SyscallNumber::CLOSE:
                 return close(p);
-            case 33:
+            case SyscallNumber::LSEEK:
                 return lseek(p);
-            case 34:
+            case SyscallNumber::FSTAT:
                 return fstat(p);
-            case 35:
+            case SyscallNumber::KILL:
                 return kill(p);
-            case 36:
+            case SyscallNumber::SIGNAL:
                 return signal(p);
-            case 37:
+            case SyscallNumber::SIGNAL_RETURN:
                 signal_return(p);
                 return SyscallResult::ReturnToUser;
-            case 38:
+            case SyscallNumber::FCNTL:
                 return fcntl(p);
-            case 39:
+            case SyscallNumber::DUP2:
                 return dup2(p);
-            case 40:
+            case SyscallNumber::DUP:
                 return dup(p);
-            case 41:
+            case SyscallNumber::PIPE:
                 return pipe(p);
-            case 43:
+            case SyscallNumber::GETCWD:
                 getcwd(p);
                 return SyscallResult::ReturnToUser;
-            case 44:
+            case SyscallNumber::CHDIR:
                 return chdir(p);
-            case 45:
+            case SyscallNumber::SIGPROCMASK:
                 return sigprocmask(p);;
-            case 46:
+            case SyscallNumber::ISATTY:
                 return isatty(p);
-            case 47:
+            case SyscallNumber::SIGACTION:
                 return sigaction(p);
-            case 48:
+            case SyscallNumber::MMAP:
                 return mmap(p);;
-            case 49:
+            case SyscallNumber::MPROTECT:
                 return mprotect(p);
-            case 50:
+            case SyscallNumber::GDB_UNLOAD_ELF:
                 GDB::get_instance()->unload_elf((const char*)p->cpu_state.edx);
                 return SyscallResult::ReturnToUser;
-            case 51:
+            case SyscallNumber::GETDENTS:
                 return getdents(p);
-            case 400: // dbg
+            case SyscallNumber::DEBUG_PRINT:
                 FB::flush();
                 printf_info("%d | 0x%x", p->cpu_state.edi, p->cpu_state.edi);
                 return SyscallResult::ReturnToUser;

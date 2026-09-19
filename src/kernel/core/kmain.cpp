@@ -26,7 +26,8 @@ extern "C" bool fpu_init_asm_();
 //Todo: Sanitize syscalls inputs (address ranges and permissions, value ranges)
 //Todo: run 42sh in interactive mode (so that $PWD is preserved across commands)
 //Todo: pass every syscall to Linux parameter passing convention
-//Todo: unify mlibc and brebos syscalls numbers (via header file)
+//Todo: use syscall_numbers.h on the mlibc side too (src/mlibc-config/sysdeps/brebos), to finish unifying
+// mlibc and brebos syscall numbers; kernel side (Syscall::dispatcher) already uses it
 // Todo: Some TERM or CORE signals should be catchable by processes. For example, SIGTERM simply asks processes
 // to shut down, and OS terminates them only after a while if the process does not do it by itself
 // Todo: make signals be able to interrupt sleep
