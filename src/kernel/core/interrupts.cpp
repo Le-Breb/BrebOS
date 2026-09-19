@@ -4,6 +4,7 @@
 #include "keyboard.h"
 
 #include "interrupt_handler.h"
+#include "interrupt_numbers.h"
 #include "../processes/scheduler.h"
 #include "syscalls.h"
 #include "PIT.h"
@@ -151,24 +152,24 @@ void interrupt_handler(uint kesp, cpu_state_t cpu_state, uint interrupt, stack_s
 		return; // Do not acknowledge — no real interrupt was in service
 	switch (interrupt)
 	{
-		case 0x01:
+		case InterruptNumber::DEBUG:
 			Interrupts::debug_handler(&cpu_state, &stack_state);
 			break;
-		case 0x06:
+		case InterruptNumber::INVALID_OPCODE:
 			Interrupts::invalid_opcode(&stack_state);
 			break;
-		case 0x20:
+		case InterruptNumber::TIMER:
 			Interrupts::interrupt_timer(kesp, &cpu_state, &stack_state);
-		case 0x21:
+		case InterruptNumber::KEYBOARD:
 			Keyboard::interrupt_handler();
 			break;
-		case 0x0e:
+		case InterruptNumber::PAGE_FAULT:
 			Interrupts::page_fault_handler(&stack_state);
 			break;
-		case 0xD:
+		case InterruptNumber::GPF:
 			Interrupts::gpf_handler(&stack_state);
 			break;
-		case 0x80:
+		case InterruptNumber::SYSCALL:
 			Syscall::dispatcher(&cpu_state, &stack_state);
 		default:
 			Interrupts::dynamic_interrupt_dispatcher(interrupt, &cpu_state, &stack_state);
