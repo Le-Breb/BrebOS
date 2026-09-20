@@ -12,3 +12,8 @@ namespace std
         irrecoverable_error("bad array length");
     }
 }
+
+extern "C" [[noreturn]] void abort()
+{
+    irrecoverable_error("abort called from %p", __builtin_return_address(0));
+}

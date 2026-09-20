@@ -13,6 +13,7 @@
 #include "FileInterface.h"
 #include "FS.h"
 #include "../utils/UnorderedSet.h"
+#include "../utils/Path.h"
 
 /**
  * Virtual File System. \n
@@ -70,7 +71,9 @@ private:
 
 	static bool add_to_path(const char* path);
 
-	static SharedPointer<Dentry> browse_to(const char* path, const SharedPointer<Dentry>& starting_point, bool print_errors = true);
+	static SharedPointer<Dentry> browse_to(const Path& path, const SharedPointer<Dentry>& starting_point, bool print_errors = true);
+
+	static SharedPointer<Dentry> browse_to(const char* pathname, const SharedPointer<Dentry>& starting_point, bool print_errors = true);
 
 	static bool cache_dentry(const SharedPointer<Dentry>& dentry);
 
@@ -82,9 +85,6 @@ private:
 
 	[[nodiscard]]
 	static int get_free_fd();
-
-	[[nodiscard]]
-	static const char* get_file_name(const char* pathname);
 
 	[[nodiscard]]
 	static SharedPointer<Dentry> get_root_dentry();

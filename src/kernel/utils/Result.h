@@ -27,6 +27,11 @@ class Result
     {
         new (data) T(value);
     }
+    template <typename... Args>
+    explicit Result(Args&&... args) : msg(nullptr), has_value(true)
+    {
+        new (data) T(args...);
+    }
 public:
     Result(const Status& status) : msg(status.is_ok() ? nullptr : strdup(status.err().what())), has_value(false)
     {
@@ -36,6 +41,8 @@ public:
     Result(Err&& err)  : msg(err.release()), has_value(false) {}
 
     static Result ok(const T& value) { return Result(value); }
+    template <typename... Args>
+    static Result ok(Args&&... args) { return Result(std::forward<Args>(args)...); };
 
     // Creates a result containing a formatted error. Do not use this function directly, instead use MAKE_ERROR
     static Result error(const char* format, va_list list)
@@ -83,6 +90,12 @@ template <typename T>
 Result<T> make_ok(T value)
 {
     return Result<T>::ok(value);
+}
+
+template<typename T, typename... Args>
+Result<T> make_ok(Args&&... args)
+{
+    return Result<T>::ok(std::forward<Args>(args)...);
 }
 
 __attribute__ ((format (printf, 3, 4)))

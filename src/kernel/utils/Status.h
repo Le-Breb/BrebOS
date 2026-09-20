@@ -8,6 +8,22 @@
         std::move(_try_res).expect();                \
     })
 
+#define TRY_OR(expr, alt)                          \
+    ({                                              \
+        auto&& _try_res = (expr);                  \
+        if (!_try_res.is_ok())                      \
+            return alt;                             \
+        std::move(_try_res).expect();                \
+    })
+
+#define WARN_TRY_OR(expr, alt)                     \
+    ({                                              \
+        auto&& _try_res = (expr);                  \
+        if (!_try_res.warn_is_ok())                 \
+            return alt;                             \
+        std::move(_try_res).expect();                \
+    })
+
 class Err
 {
     const char* msg;

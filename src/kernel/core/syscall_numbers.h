@@ -14,7 +14,7 @@ namespace SyscallNumber
     constexpr int FREE                   = 9;
     constexpr int MKDIR                  = 10;
     constexpr int TOUCH                  = 11;
-    constexpr int LS                     = 12;
+
     constexpr int CLEAR_SCREEN           = 13;
     constexpr int WAIT_PID               = 14;
     constexpr int WGET                   = 15;

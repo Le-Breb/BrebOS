@@ -115,8 +115,6 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
                 return mkdir(&p->cpu_state);
             case SyscallNumber::TOUCH:
                 return touch(&p->cpu_state);
-            case SyscallNumber::LS:
-                return ls(&p->cpu_state);
             case SyscallNumber::CLEAR_SCREEN:
                 FB::clear_screen();
                 return SyscallResult::ReturnToUser;

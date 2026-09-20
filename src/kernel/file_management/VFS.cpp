@@ -14,6 +14,7 @@
 #include "USB/USB.h"
 #include "USB/xHCI.h"
 #include "ATA.h"
+#include "../utils/Path.h"
 
 VFS::dentry_cache_t* VFS::dentries = nullptr;
 VFS::dentry_cache_t* VFS::mount_points = nullptr;
@@ -79,33 +80,22 @@ void VFS::shutdown()
 
 SharedPointer<Dentry> VFS::touch(const char* pathname)
 {
-	const char* file_name;
+	const char* file_name = nullptr;
 	SharedPointer<Dentry> parent_dentry = get_file_parent_dentry(pathname, file_name);
 	if (!parent_dentry)
-		return nullptr;
+		{ delete[] file_name; return nullptr; }
 
 	auto dentry_res = parent_dentry->inode->superblock->get_fs()->touch(parent_dentry, file_name);
-	if (dentry_res.warn_is_ok())
-	{
-		auto dentry = std::move(dentry_res).expect();
-		if (dentry)
-			cache_dentry(dentry);
-		return dentry;
-	}
-
-	return nullptr;
+	delete[] file_name;
+	auto dentry = WARN_TRY_OR(dentry_res, nullptr);
+	if (dentry)
+		cache_dentry(dentry);
+	return dentry;
 }
 
 bool VFS::ls(const char* pathname)
 {
-	// Basic path checks
-	if (!pathname || pathname[0] != '/')
-	{
-		printf_error("Invalid path");
-		return false;
-	}
-
-	SharedPointer<Dentry> dentry = browse_to(pathname);
+	const SharedPointer<Dentry> dentry = browse_to(pathname);
 
 	// Couldn't browse up to parent directory, abort
 	if (!dentry || dentry->inode->type != Inode::Dir)
@@ -119,33 +109,17 @@ bool VFS::ls(const char* pathname)
 
 bool VFS::mkdir(const char* pathname)
 {
-	// Basic path checks
-	if (!pathname || pathname[0] != '/' || !strcmp(pathname, "/"))
-	{
-		printf_error("Invalid path");
-		return false;
-	}
+	const Path path(TRY_OR(Path::build_path(pathname), false));
 
-	// Compute parent folder path
-	size_t path_length = strlen(pathname);
-	char* parent_dir_path = new char[path_length + 1];
-	strcpy(parent_dir_path, pathname);
-	// Ensure path ends with a '/'
-	if (pathname[path_length - 1] != '/')
-	{
-		parent_dir_path[path_length++] = '/';
-		parent_dir_path[path_length] = '\0';
-	}
-	// Erase folder name to only keep the path of its parent
-	uint i = path_length - 2;
-	while (pathname[i] != '/')
-		i--;
-	memset(parent_dir_path + i + 1, 0, path_length - i);
-	// Get dir name
-	const char* dir_name = pathname + i + 1;
+	if (pathname[0] != '/') // ensure this is an absolute path
+		return false;
+
+	const std::optional<Path> parent = path.get_parent();
+	if (!parent)
+		return false;
 
 	// ~cd parent
-	SharedPointer<Dentry> dentry = browse_to(parent_dir_path);
+	SharedPointer<Dentry> dentry = browse_to(**parent.value());
 	if (!dentry)
 		return false;
 	// Couldn't browse up to parent directory, abort
@@ -154,9 +128,8 @@ bool VFS::mkdir(const char* pathname)
 		printf_error("%s no such/not a directory", pathname);
 		return false;
 	}
-	delete[] parent_dir_path;
 
-	const auto dentry_res = dentry->inode->superblock->get_fs()->mkdir(dentry, dir_name);
+	const auto dentry_res = dentry->inode->superblock->get_fs()->mkdir(dentry, *--path.end());
 	if (dentry_res.warn_is_ok())
 	{
 		if (dentry)
@@ -209,55 +182,51 @@ bool VFS::add_to_path(const char* path)
 	return true;
 }
 
-SharedPointer<Dentry> VFS::browse_to(const char* path, const SharedPointer<Dentry>& starting_point, bool print_errors)
+SharedPointer<Dentry> VFS::browse_to(const Path& path, const SharedPointer<Dentry>& starting_point, bool print_errors)
 {
 #define error(...) {\
 	if (print_errors) \
 		printf_error(__VA_ARGS__); \
 	return nullptr; \
 }
-	char* svptr; // Internal pointer for strok_r calls
-
-	const TmpString p(strlen(path) + 1);
-	strcpy(*p, path);
-	char* token = strtok_r(*p, "/", &svptr);
 	SharedPointer<Dentry> dentry = Dentry::follow_mount(starting_point);
+	auto token = path.begin();
 
 	// Browse cached dentries as much as possible
-	while (token)
+	while (token != path.end())
 	{
-		SharedPointer<Dentry> next_entry = strcmp(".", token) ?
-			strcmp("..", token) ?
-				get_cached_dentry(dentry, token) : dentry->parent
+		SharedPointer<Dentry> next_entry = strcmp(".", *token) ?
+			strcmp("..", *token) ?
+				get_cached_dentry(dentry, *token) : dentry->parent
 			: dentry;
 		if (!next_entry) //  Nothing found in cache
 			break;
 
 		dentry = Dentry::follow_mount(next_entry);
-		token = strtok_r(nullptr, "/", &svptr);
+		++token;
 		if (next_entry->inode->type != Inode::Dir) // Stop browsing if we hit a file's cached dentry
 			break;
 	}
 
 	// Pure virtual node, cannot do anything there
 	if (!dentry->inode->superblock)
-		error("%s targets full virtual Inode", path);
+		error("%s targets full virtual Inode", **path);
 
 	// We browsed up to a file's cached dentry, but we haven't finished browsing (i.e., part of the path targets a file)
-	if (token && dentry->inode->type != Inode::Dir)
-		error("%s: no such directory", path);
+	if (token != path.end() && dentry->inode->type != Inode::Dir)
+		error("%s: no such directory", **path);
 
 	// Full path cannot be fully browsed only using cached entries, now manually browse
 	FS* fs = dentry->inode->superblock->get_fs();
-	while (token)
+	while (token != path.end())
 	{
 		if (dentry->inode->type != Inode::Dir)
-			error("%s not a directory", path);
-		dentry = strcmp(".", token) ?
-			strcmp("..", token) ? fs->get_child_dentry(dentry, token) : dentry->parent
+			error("%s not a directory", **path);
+		dentry = strcmp(".", *token) ?
+			strcmp("..", *token) ? fs->get_child_dentry(dentry, *token) : dentry->parent
 			: dentry;
 		if (!dentry)
-			error("%s: no such directory", path);
+			error("%s: no such directory", **path);
 		dentry = Dentry::follow_mount(dentry);
 
 		if (!cache_dentry(dentry))
@@ -267,10 +236,23 @@ SharedPointer<Dentry> VFS::browse_to(const char* path, const SharedPointer<Dentr
 			return nullptr;
 		}
 
-		token = strtok_r(nullptr, "/", &svptr);
+		++token;
 	}
 
 	return dentry;
+}
+
+SharedPointer<Dentry> VFS::browse_to(const char* pathname, const SharedPointer<Dentry>& starting_point,
+	bool print_errors)
+{
+	if (Result<Path> path_res = Path::build_path(pathname); !path_res.is_ok())
+	{
+		if (print_errors)
+			printf_error("%s", path_res.err().what());
+		return nullptr;
+	}
+	else
+		return browse_to(std::move(path_res).expect(), starting_point, print_errors);
 }
 
 bool VFS::cache_dentry(const SharedPointer<Dentry>& dentry)
@@ -301,26 +283,23 @@ void VFS::free_unused_dentry_cache_entries()
 
 SharedPointer<Dentry> VFS::get_file_parent_dentry(const char* pathname, const char*& file_name, bool print_errors)
 {
-	// Basic path checks
-	if (!pathname || pathname[0] != '/' || !strcmp(pathname, "/"))
-	{
-		printf_error("Invalid path");
-		return nullptr;
-	}
+#define get_file_parent_dentry_invalid_path {if (print_errors) {printf_error("invalid path '%s'", pathname); return nullptr; }}
+	Result<Path> path_res = Path::build_path(pathname);
+	if (!path_res.is_ok())
+		get_file_parent_dentry_invalid_path
+	const Path path(std::move(path_res).expect());
+
+	if (!strcmp(pathname, "/"))
+		get_file_parent_dentry_invalid_path
+
+	const auto parent = path.get_parent();
+	if (!parent)
+		get_file_parent_dentry_invalid_path
 
 	// Extract parent directory path
-	file_name = get_file_name(pathname);
-	const auto dir_len = file_name - pathname;
-	const TmpString p(dir_len + 1);
-	(*p)[dir_len] = '\0';
-	memcpy((*p), pathname, dir_len);
-	if (!strlen(file_name))
-	{
-		printf_error("Empty file name");
-		return nullptr;
-	}
+	file_name = strdup(*--path.end());
 
-	SharedPointer<Dentry> dentry = browse_to(*p, print_errors);
+	SharedPointer<Dentry> dentry = browse_to(parent.value(), get_root_dentry(), print_errors);
 	if (!dentry || dentry->inode->type != Inode::Dir)
 	{
 		if (print_errors)
@@ -339,7 +318,7 @@ SharedPointer<Dentry> VFS::get_file_dentry(const char* pathname, bool print_erro
 	if (!strcmp("/", pathname))
 		return get_root_dentry();
 
-	const char* file_name;
+	const char* file_name = nullptr;
 	const SharedPointer<Dentry> parent_dentry = is_path_abs ?
 		get_file_parent_dentry(pathname, file_name, print_errors) : browse_to(work_dir, print_errors);
 	if (!is_path_abs)
@@ -347,16 +326,15 @@ SharedPointer<Dentry> VFS::get_file_dentry(const char* pathname, bool print_erro
 	if (!parent_dentry)
 		return nullptr;
 
-	return browse_to(file_name, parent_dentry, print_errors);
+	const auto res = browse_to(file_name, parent_dentry, print_errors);
+	if (is_path_abs)
+		delete[] file_name;
+
+	return res;
 }
 
 SharedPointer<Dentry> VFS::browse_to(const char* path, bool print_errors)
 {
-	if (path[0] == '\0')
-	{
-		printf_error("Attempting to browse to an empty path");
-		return nullptr;
-	}
 	// Absolute path
 	if (path[0] == '/')
 		return browse_to(path, get_root_dentry(), print_errors);
@@ -373,7 +351,7 @@ void* VFS::load_file(const char* path, uint offset, uint length)
 {
 	if (!path)
 		return nullptr;
-	SharedPointer<Dentry> dentry = browse_to(path);
+	const SharedPointer<Dentry> dentry = browse_to(path);
 	if (!dentry || dentry->inode->type != Inode::File)
 	{
 		printf_error("%s: no such file", path);
@@ -389,12 +367,9 @@ void* VFS::load_file(const SharedPointer<Dentry>& file, uint offset, uint length
 		return nullptr;
 
 	uint loaded_bytes;
-	uint l = length ? min(length, file->inode->size) : file->inode->size;
-	Result<void*> res =  file->inode->superblock->get_fs()->load_file_to_buf(file->name, file->parent, offset, l,
-																	loaded_bytes);
-	if (!res.warn_is_ok())
-		return nullptr;
-	void* buf = std::move(res).expect();
+	const uint l = length ? min(length, file->inode->size) : file->inode->size;
+	void* buf = WARN_TRY_OR(file->inode->superblock->get_fs()->load_file_to_buf(file->name, file->parent, offset, l,
+																	loaded_bytes), nullptr);
 
 	if (loaded_bytes != l)
 	{
@@ -613,18 +588,6 @@ int VFS::get_free_fd()
 	}
 
 	return -1; // No free file descriptor
-}
-
-const char* VFS::get_file_name(const char* pathname)
-{
-	if (!pathname || pathname[0] != '/')
-		irrecoverable_error("Get file name expects absolute path, got '%s'", pathname);
-
-	auto len = strlen(pathname);
-	unsigned long i = len - 1;
-	for (; pathname[i] != '/'; i--) {};
-
-	return pathname + i + 1;
 }
 
 template <typename Container, typename Key>

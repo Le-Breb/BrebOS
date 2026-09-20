@@ -8,7 +8,7 @@ class vector
     static constexpr size_t DEFAULT_CAPACITY = 4;
 
     size_t capacity;
-    size_t size;
+    size_t _size;
     char* data;
 
     void expand_capacity();
@@ -33,10 +33,14 @@ class vector
     };
 public:
     vector();
+    vector(const vector& other);
+    vector(vector&& other);
     void push_back(const T& t);
+    template <typename... Args>
+    void emplace_back(Args&&... args);
     T& operator[](size_t index) const;
     void clear();
-    [[nodiscard]] size_t get_size() const;
+    [[nodiscard]] size_t size() const;
     Iterator begin() const;
     Iterator end() const;
 };

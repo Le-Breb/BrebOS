@@ -117,8 +117,9 @@ Process::Process(char* bin_path, uint num_elf_pages, Memory::page_table_t* page_
         if (file_descriptors[i] == nullptr)
             lowest_free_fd = i;
 
-    [[maybe_unused]] const char* file_name;
+    const char* file_name = nullptr;
     work_dir = bin_path ? VFS::get_file_parent_dentry(bin_path, file_name)->get_absolute_path() : nullptr;
+    delete[] file_name;
 
     for (int i = 0; i < HIGHEST_SIGNAL; i++)
         signal_action[i] = SIG_DFL;

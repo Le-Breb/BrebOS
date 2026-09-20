@@ -556,7 +556,7 @@ xhci_command_completion_trb_t* xHCI::send_command_trb(xhci_trb_t* cmd_trb, uint3
     // ** Important Assumption **
     //  - Only one command is being sent to the controller at a time
     xhci_command_completion_trb_t* completion_trb =
-        command_completion_events.get_size() ? command_completion_events[0] : nullptr;
+        command_completion_events.size() ? command_completion_events[0] : nullptr;
 
     // Reset the irq flag and clear out the command completion event queue
     command_completion_events.clear();
@@ -588,7 +588,7 @@ xhci_transfer_event_trb_t* xHCI::wait_for_transfer_event(uint32_t timeout_ms)
     wait_depth--;
 
     xhci_transfer_event_trb_t* event =
-        transfer_completion_events.get_size() ? transfer_completion_events[0] : nullptr;
+        transfer_completion_events.size() ? transfer_completion_events[0] : nullptr;
 
     transfer_completion_events.clear();
     transfer_irq_completed = 0;
