@@ -30,7 +30,7 @@ class Result
     template <typename... Args>
     explicit Result(Args&&... args) : msg(nullptr), has_value(true)
     {
-        new (data) T(args...);
+        new (data) T(std::forward<Args>(args)...);
     }
 public:
     Result(const Status& status) : msg(status.is_ok() ? nullptr : strdup(status.err().what())), has_value(false)
