@@ -4,7 +4,7 @@
 #include "inode.h"
 #include "../utils/optional.h"
 #include "../utils/shared_pointer.h"
-#include "../utils/TmpString.h"
+#include "../utils/string.h"
 
 class Dentry
 {
@@ -17,7 +17,7 @@ public:
 	char* get_absolute_path() const;
 
 	[[nodiscard]]
-	TmpString get_absolute_path_tmp() const;
+	string get_absolute_path_tmp() const;
 
 	void mount_at(const SharedPointer<Dentry>& mount_point);
 

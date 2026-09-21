@@ -5,12 +5,12 @@
 #include "kstring.h"
 #include "vector.h"
 #include "Result.h"
-#include "TmpString.h"
+#include "string.h"
 
 class Path
 {
     vector<const char*> elem;
-
+    const bool is_absolute;
 public:
     class Iterator
     {
@@ -27,7 +27,7 @@ public:
         size_t operator-(const Iterator& other) const { return index - other.index; }
     };
 
-    explicit Path(const vector<const char*>& elem) : elem(elem)
+    Path(const vector<const char*>& elem, bool is_absolute) : elem(elem), is_absolute(is_absolute)
     {
 
     };
@@ -36,7 +36,7 @@ public:
     // This is prevent just to shut up CLion who reports false positive compile errors when using TRY_OR
     Path(const Path& other);
 
-    explicit Path(Path&& other) noexcept : elem(std::move(other.elem))
+    explicit Path(Path&& other) noexcept : elem(std::move(other.elem)), is_absolute(other.is_absolute)
     {
 
     }
@@ -48,7 +48,7 @@ public:
 
     std::optional<Path> get_parent() const;
 
-    TmpString operator*() const;
+    string operator*() const;
 
     [[nodiscard]]
     Iterator begin() const;

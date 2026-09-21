@@ -138,7 +138,7 @@ bool File::preload_read(void* buf, uint offset, uint count, const SharedPointer<
     const auto abs_path = dentry->get_absolute_path_tmp();
     for (const auto& [path, data] : preloads_list)
     {
-        if (!strcmp(path, *abs_path))
+        if (path == abs_path)
         {
             memcpy(buf, static_cast<char*>(data) + offset, count);
             return true;

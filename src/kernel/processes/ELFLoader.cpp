@@ -208,7 +208,7 @@ Lptr<char> ELFLoader::write_auxv(const Lptr<char>& stack_top, void* const argv0_
 ELF* ELFLoader::load_elf(const SharedPointer<Dentry>& file, ELF_type expected_type, Process* proc)
 {
     const auto abs_path = file->get_absolute_path_tmp();
-    const int fd = current_process->open(*abs_path, O_RDONLY, 0777);
+    const int fd = current_process->open(abs_path.c_str(), O_RDONLY, 0777);
     if (fd < 0)
         return nullptr;
     const auto buf = new char[file->inode->size];

@@ -25,13 +25,12 @@ char* Dentry::get_absolute_path() const
 	return abs_name;
 }
 
-TmpString Dentry::get_absolute_path_tmp() const
+string Dentry::get_absolute_path_tmp() const
 {
-	auto abs_name = TmpString(absolute_path_length());
-	(*abs_name)[0] = '\0';
-	[[maybe_unused]] auto _ = write_name(*abs_name, true);
-
-	return abs_name;
+	const auto len = absolute_path_length();
+	string res(len - 1, '\0');
+	[[maybe_unused]] auto _ = write_name(res.data(), true);
+	return res;
 }
 
 void Dentry::mount_at(const SharedPointer<Dentry>& mount_point)
