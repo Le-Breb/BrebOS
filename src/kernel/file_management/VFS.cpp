@@ -119,7 +119,7 @@ bool VFS::mkdir(const char* pathname)
 		return false;
 
 	// ~cd parent
-	SharedPointer<Dentry> dentry = browse_to(**parent.value());
+	SharedPointer<Dentry> dentry = browse_to((*parent.value()).c_str());
 	if (!dentry)
 		return false;
 	// Couldn't browse up to parent directory, abort
@@ -210,23 +210,23 @@ SharedPointer<Dentry> VFS::browse_to(const Path& path, const SharedPointer<Dentr
 
 	// Pure virtual node, cannot do anything there
 	if (!dentry->inode->superblock)
-		error("%s targets full virtual Inode", **path);
+		error("%s targets full virtual Inode", (*path).c_str());
 
 	// We browsed up to a file's cached dentry, but we haven't finished browsing (i.e., part of the path targets a file)
 	if (token != path.end() && dentry->inode->type != Inode::Dir)
-		error("%s: no such directory", **path);
+		error("%s: no such directory", (*path).c_str());
 
 	// Full path cannot be fully browsed only using cached entries, now manually browse
 	FS* fs = dentry->inode->superblock->get_fs();
 	while (token != path.end())
 	{
 		if (dentry->inode->type != Inode::Dir)
-			error("%s not a directory", **path);
+			error("%s not a directory", (*path).c_str());
 		dentry = strcmp(".", *token) ?
 			strcmp("..", *token) ? fs->get_child_dentry(dentry, *token) : dentry->parent
 			: dentry;
 		if (!dentry)
-			error("%s: no such directory", **path);
+			error("%s: no such directory", (*path).c_str());
 		dentry = Dentry::follow_mount(dentry);
 
 		if (!cache_dentry(dentry))

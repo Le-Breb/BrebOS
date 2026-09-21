@@ -7,7 +7,7 @@
 #include "../core/fb.h"
 #include "../core/memory/memory.h"
 #include "../utils/comparison.h"
-#include "../utils/TmpString.h"
+#include "../utils/string.h"
 #include <dirent.h>
 
 #include "BlockDevice.h"
@@ -30,50 +30,53 @@ list<FAT*>* FAT::drives = nullptr;
         return nullptr;        \
     }
 
-TmpString LongDirEntry::utf16_to_utf8_cautionless_cast(const char* str, const uint length)
+string LongDirEntry::utf16_to_utf8_cautionless_cast(const char* str, const uint length)
 {
     const uint half_length = length / 2;
-    const uint n = half_length + 1;
-    TmpString tmp_string{n};
-    char* res = *tmp_string;;
-    for (uint i = 0; i < half_length; ++i)
-    {
-        res[i] = str[i * 2];
-        if (str[i * 2] == '\0' && str[i * 2 + 1] == '\0')
-        {
-            res[i] = '\0';
-            return tmp_string;
-        }
-    }
-    res[half_length] = '\0';
+
+    uint n = 0;
+    while (n < half_length && !(str[n * 2] == '\0' && str[n * 2 + 1] == '\0'))
+        ++n;
+
+    string tmp_string(n, '\0');
+    char* p = tmp_string.data();
+    for (uint i = 0; i < n; ++i)
+        p[i] = str[i * 2];
 
     return tmp_string;
 }
 
-TmpString LongDirEntry::get_uglily_converted_utf8_name() const
+string LongDirEntry::get_uglily_converted_utf8_name() const
 {
     const auto n1 = utf16_to_utf8_cautionless_cast(name1, 10);
 
-    TmpString full_name(10 + 12 + 4 + 1);
-    memset(*full_name, 0, 10 + 12 + 4 + 1);
-    uint p = 0, gp = 0;
-    while (p < 10 && (*n1)[p])
-        (*full_name)[gp++] = (*n1)[p++];
+    string n2, n3;
+    bool has_n2 = false, has_n3 = false;
 
-    if (strlen(*n1) >= 5)
+    if (n1.size() >= 5)
     {
-        const auto n2 = utf16_to_utf8_cautionless_cast(name2, 12);
-        p = 0;
-        while (p < 12 && (*n2)[p])
-            (*full_name)[gp++] = (*n2)[p++];
+        n2 = utf16_to_utf8_cautionless_cast(name2, 12);
+        has_n2 = true;
 
-        if (*n2 && strlen(*n2) >= 6)
+        if (n2.size() >= 6)
         {
-            const auto n3 = utf16_to_utf8_cautionless_cast(name3, 4);
-            p = 0;
-            while (p < 4 && (*n3)[p])
-                (*full_name)[gp++] = (*n3)[p++];
+            n3 = utf16_to_utf8_cautionless_cast(name3, 4);
+            has_n3 = true;
         }
+    }
+
+    const size_t total = n1.size() + (has_n2 ? n2.size() : 0) + (has_n3 ? n3.size() : 0);
+    string full_name(total, '\0');
+    char* p = full_name.data();
+
+    memcpy(p, n1.c_str(), n1.size());
+    p += n1.size();
+    if (has_n2)
+    {
+        memcpy(p, n2.c_str(), n2.size());
+        p += n2.size();
+        if (has_n3)
+            memcpy(p, n3.c_str(), n3.size());
     }
 
     return full_name;
@@ -477,25 +480,25 @@ Result<uint> FAT::get_child_dir_entry_id(const SharedPointer<Dentry>& parent_den
         TRY(change_active_cluster(curr_cluster, ctx, this->buf));
 
         bool found_in_lfn = false;
-        TmpString whole_name(1);
+        string whole_name;
         while (ctx.dir_entry_id * sizeof(DirEntry) < FAT_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free())
         {
             if (found_in_lfn) // File name matched in previous entry which is a fln entry referring to the current entry
                 return make_ok(ctx.dir_entry_id);
             const bool lfn = entries[ctx.dir_entry_id].is_LFN();
 
-            TmpString entry_name = lfn
+            string entry_name = lfn
                                    ? ((LongDirEntry*)&entries[ctx.dir_entry_id])->get_uglily_converted_utf8_name()
                                    : entries[ctx.dir_entry_id].get_name();
             if (lfn)
-                whole_name = entry_name.concat(whole_name);
+                whole_name = entry_name + whole_name;
             else
                 whole_name = entry_name;
 
-            const bool match = !strcmp(*whole_name, name);
+            const bool match = whole_name == name;
 
             if (!lfn)
-                whole_name = TmpString(1); // Erase whole_name
+                whole_name.clear();
             if (match)
             {
                 found_in_lfn = lfn;
@@ -625,7 +628,7 @@ Result<SharedPointer<Dentry>> FAT::touch(SharedPointer<Dentry>& parent_dentry, c
 
     // Skip used dir entries, aka files/folders inside wd
     while (ctx.dir_entry_id * sizeof(DirEntry) < FAT_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free() &&
-        strcmp(*entries[ctx.dir_entry_id].get_name(), entry_name) != 0)
+        entries[ctx.dir_entry_id].get_name() != entry_name)
         ctx.dir_entry_id++;
 
     // No free entry in wd cluster
@@ -713,19 +716,19 @@ Status FAT::ls(const SharedPointer<Dentry>& dentry, ls_printer printer)
         // ~= cd wd
         TRY(change_active_cluster(curr_cluster, ctx, this->buf));
 
-        TmpString prev_lfn(1);
-        auto prev_is_lfn = [&prev_lfn]() {return **prev_lfn != '\0';};
+        string prev_lfn;
+        auto prev_is_lfn = [&prev_lfn]() {return !prev_lfn.empty();};
         while (ctx.dir_entry_id * sizeof(DirEntry) < FAT_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free())
         {
             if (const auto entry = entries + ctx.dir_entry_id; entry->is_LFN())
-                prev_lfn = ((LongDirEntry*)entry)->get_uglily_converted_utf8_name().concat(prev_lfn);
+                prev_lfn = ((LongDirEntry*)entry)->get_uglily_converted_utf8_name() + prev_lfn;
             else
             {
-                TmpString entry_name = prev_is_lfn() ? prev_lfn : entry->get_name();
+                string entry_name = prev_is_lfn() ? prev_lfn : entry->get_name();
                 SharedPointer<Dentry> null_parent = {nullptr};
-                SharedPointer<Dentry> dir_dentry = TRY(dir_entry_to_dentry(*entry, null_parent, *entry_name));
+                SharedPointer<Dentry> dir_dentry = TRY(dir_entry_to_dentry(*entry, null_parent, entry_name.c_str()));
                 printer(*dir_dentry);
-                prev_lfn = TmpString(1);
+                prev_lfn.clear();
             }
 
             ctx.dir_entry_id++;
@@ -951,31 +954,31 @@ Status FAT::getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t m
         // ~= cd wd
         TRY(change_active_cluster(curr_cluster, ctx, this->buf));
 
-        TmpString prev_lfn(1);
-        auto prev_is_lfn = [&prev_lfn]() {return **prev_lfn != '\0';};
+        string prev_lfn;
+        auto prev_is_lfn = [&prev_lfn]() {return !prev_lfn.empty();};
         while (ctx.dir_entry_id * sizeof(DirEntry) < FAT_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free())
         {
             if (off >= fd_off)
             {
                 if (const auto entry = entries + ctx.dir_entry_id; entry->is_LFN())
-                    prev_lfn = ((LongDirEntry*)entry)->get_uglily_converted_utf8_name().concat(prev_lfn);
+                    prev_lfn = ((LongDirEntry*)entry)->get_uglily_converted_utf8_name() + prev_lfn;
                 else
                 {
-                    TmpString entry_name = prev_is_lfn() ? prev_lfn : entry->get_name();
-                    const auto dirent_size = ALIGN_UP(offsetof(struct dirent, d_name) + strlen(*entry_name) + 1, sizeof(struct dirent));
+                    string entry_name = prev_is_lfn() ? prev_lfn : entry->get_name();
+                    const auto dirent_size = ALIGN_UP(offsetof(struct dirent, d_name) + entry_name.size() + 1, sizeof(struct dirent));
                     if (remaining_bytes() < dirent_size)
                         return Status::success(); // No more room available in buffer, exit
-                    if (strlen(*entry_name) > __MLIBC_NAME_MAX)
-                        irrecoverable_error("%s: file name '%s' is too long to be supported by mlibc", __PRETTY_FUNCTION__, *entry_name);
+                    if (entry_name.size() > __MLIBC_NAME_MAX)
+                        irrecoverable_error("%s: file name '%s' is too long to be supported by mlibc", __PRETTY_FUNCTION__, entry_name.c_str());
                     dirent* dirent = (struct dirent*)buf;
                     dirent->d_ino = entry->get_inode();
                     dirent->d_off = off;
                     dirent->d_reclen = dirent_size;
                     dirent->d_type = entry->is_directory() ? DT_DIR : DT_REG;
-                    strcpy(dirent->d_name, *entry_name);
+                    strcpy(dirent->d_name, entry_name.c_str());
                     *bytes_read += dirent_size;
                     buf += dirent_size;
-                    prev_lfn = TmpString(1);
+                    prev_lfn.clear();
                 }
                 fd_off++;
             }
@@ -1003,12 +1006,12 @@ char* DirEntry::get_extension() const
 {
     char* extension = (char*)calloc(4, 1);
     uint dot_pos = 0;
-    const TmpString file_name = get_name();
-    const auto file_name_len = strlen(*file_name);
-    while (dot_pos < file_name_len && (*file_name)[dot_pos] != '.')
+    const string file_name = get_name();
+    const auto file_name_len = file_name.size();
+    while (dot_pos < file_name_len && file_name[dot_pos] != '.')
         dot_pos++;
     if (file_name_len != dot_pos) // If file has an extension
-        memcpy(extension, *file_name + dot_pos + 1, file_name_len - dot_pos - 1);
+        memcpy(extension, file_name.c_str() + dot_pos + 1, file_name_len - dot_pos - 1);
 
     return extension;
 }
@@ -1071,32 +1074,32 @@ DirEntry::DirEntry(const char* name, uint8_t attrs, uint32_t first_cluster_addr,
     }
 }
 
-TmpString DirEntry::get_name() const
+string DirEntry::get_name() const
 {
-    TmpString n(DIR_ENTRY_NAME_LEN + 2); // One for dot, one for '\0'
-    memset(*n, 0, DIR_ENTRY_NAME_LEN + 2);
-    uint i = 0;
-    for (int j = 0; j < 8; ++j)
-    {
-        if (name[j] == NAME_PADDING_BYTE)
-            break;
-        (*n)[i++] = name[j];
-    }
+    int base_len = 0;
+    while (base_len < 8 && name[base_len] != NAME_PADDING_BYTE)
+        ++base_len;
+
     // If entry is a file, and it has an extension, add .
-    if (!is_directory() && name[8] != NAME_PADDING_BYTE)
-        (*n)[i++] = '.';
-    for (int j = 8; j < 11; ++j)
-    {
-        if (name[j] == NAME_PADDING_BYTE)
-            break;
-        (*n)[i++] = name[j];
-    }
+    const bool has_dot = !is_directory() && name[8] != NAME_PADDING_BYTE;
+
+    int ext_len = 0;
+    while (ext_len < 3 && name[8 + ext_len] != NAME_PADDING_BYTE)
+        ++ext_len;
+
+    string n(base_len + (has_dot ? 1 : 0) + ext_len, '\0');
+    char* p = n.data();
+    memcpy(p, name, base_len);
+    p += base_len;
+    if (has_dot)
+        *p++ = '.';
+    memcpy(p, name + 8, ext_len);
 
     // Convert names to lowercase
-    for (int j = 0; j < 12; ++j)
+    for (size_t j = 0; j < n.size(); ++j)
     {
-        if ((*n)[j] >= 'A' && (*n)[j] <= 'Z')
-            (*n)[j] -= 'A' - 'a';
+        if (n[j] >= 'A' && n[j] <= 'Z')
+            n[j] -= 'A' - 'a';
     }
 
     return n;

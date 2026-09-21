@@ -1,7 +1,8 @@
 #include "Path.h"
 
 #include "kstring.h"
-#include "TmpString.h"
+#include "string.h"
+#include "../core/memory/c_memory.h"
 
 Path::~Path()
 {
@@ -15,12 +16,10 @@ Result<Path> Path::build_path(const char* pathname)
         return MAKE_ERR("Incorrect path (null or empty)");
 
     char* svptr; // strtok_r internal ptr
-    const auto len = strlen(pathname);
-    TmpString cpy(len + 1);
-    strcat(*cpy, pathname);
+    char* cpy = strdup(pathname);
 
     vector<const char*> elems{};
-    char* token = strtok_r(*cpy, "/", &svptr);
+    char* token = strtok_r(cpy, "/", &svptr);
 
     while (token)
     {
@@ -28,7 +27,10 @@ Result<Path> Path::build_path(const char* pathname)
         token = strtok_r(nullptr, "/", &svptr);
     }
 
-    return make_ok<Path>(elems);
+    free(cpy);
+
+    const bool is_absolute = pathname[0] == '/';
+    return make_ok<Path>(elems, is_absolute);
 }
 
 std::optional<Path> Path::get_parent() const
@@ -40,19 +42,27 @@ std::optional<Path> Path::get_parent() const
     for (size_t i = 0; i < elem.size() - 1; i++)
         parent_elem.push_back(strdup(elem[i]));
 
-    return std::optional{Path(parent_elem)};
+    return std::optional{Path(parent_elem, is_absolute)};
 }
 
-TmpString Path::operator*() const
+string Path::operator*() const
 {
-    auto tot_len = 2; // starting slash and trailing 0
+    size_t tot_len = is_absolute ? 1 : 0; // starting slash
     for (const auto el : elem)
         tot_len += strlen(el) + 1; // token + /
-    TmpString str(tot_len);
-    memset(*str, 0, tot_len);
-    (*str)[0] = '/';
+
+    string str(tot_len, '\0');
+    char* p = str.data();
+    if (is_absolute)
+        *p++ = '/';
     for (const auto el : elem)
-        strcat(strcat(*str, el), "/");
+    {
+        const size_t l = strlen(el);
+        memcpy(p, el, l);
+        p += l;
+        *p++ = '/';
+    }
+
     return str;
 }
 
