@@ -37,7 +37,6 @@ extern "C" bool fpu_init_asm_();
 // Todo: add `likely` usages whenever meaningful (on no memory available for example)
 // Todo: optimize FAT LFN constructor using LongDirEntry::order
 // Todo: geometric string capacity increase
-// Todo: refactor std::string, extracting common operations in dedicated functions
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {
     Interrupts::disable_asm();

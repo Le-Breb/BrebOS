@@ -3,21 +3,57 @@
 #include "kstring.h"
 #include "../core/memory/c_memory.h"
 
+// ReSharper disable once CppPossiblyUninitializedMember
+string::string(const char* str, size_t n) : m_size(n), m_data(should_use_loc_dat(n) ? loc_dat : (char*)malloc(n + 1))
+{
+    memcpy(m_data, str, n + 1);
+}
+
+void string::realloc_for(size_t new_size)
+{
+    if (should_use_loc_dat(new_size))
+    {
+        if (!uses_loc_dat())
+            free(m_data);
+        m_data = loc_dat;
+    }
+    else
+    {
+        if (uses_loc_dat())
+            m_data = (char*)malloc(new_size + 1);
+        else
+            m_data = (char*)realloc(m_data, new_size + 1);
+    }
+}
+
+void string::assign_from(const char* str, size_t n)
+{
+    realloc_for(n);
+    memcpy(m_data, str, n + 1);
+    m_size = n;
+}
+
+void string::append(const char* str, size_t n)
+{
+    const size_t new_size = m_size + n;
+    const bool was_loc_dat = uses_loc_dat();
+
+    realloc_for(new_size);
+
+    if (was_loc_dat && !uses_loc_dat())
+        strcpy(m_data, loc_dat); // prefix now lives on the heap, carry it over
+
+    strcpy(m_data + m_size, str);
+    m_size = new_size;
+}
+
 string::string() : m_size(0), m_data(loc_dat), loc_dat{}
 {
 }
 
-string::string(const char* str)
+// ReSharper disable once CppPossiblyUninitializedMember
+string::string(const char* str) : string(str, strlen(str))
 {
-    m_size = strlen(str);
-
-    if (should_use_loc_dat(m_size))
-    {
-        m_data = loc_dat;
-        strcpy(m_data, str);
-    }
-    else
-        m_data = strdup(str);
 }
 
 string::string(string&& other) noexcept : m_size(other.m_size)
@@ -35,15 +71,10 @@ string::string(string&& other) noexcept : m_size(other.m_size)
     other.m_data[0] = '\0';
 }
 
-string::string(const string& other) : m_size(other.m_size)
+// ReSharper disable once CppPossiblyUninitializedMember
+string::string(const string& other) : string(other.c_str(), other.size())
 {
-    if (should_use_loc_dat(m_size))
-    {
-        m_data = loc_dat;
-        memcpy(m_data, other.m_data, m_size + 1);
-    }
-    else
-        m_data = strdup(other.m_data);
+
 }
 
 string::string(size_t n, char c)
@@ -74,22 +105,7 @@ string& string::operator=(const string& other)
     if (this == &other)
         return *this;
 
-    if (other.uses_loc_dat())
-    {
-        if (!uses_loc_dat())
-            free(m_data);
-        m_data = loc_dat;
-    }
-    else
-    {
-        if (uses_loc_dat())
-            m_data = (char*)malloc(other.m_size + 1);
-        else
-            m_data = (char*)realloc(m_data, other.m_size + 1);
-    }
-
-    strcpy(m_data, other.m_data);
-    m_size = other.m_size;
+    assign_from(other.c_str(), other.size());
 
     return *this;
 }
@@ -110,16 +126,9 @@ string& string::operator=(string&& other) noexcept
     }
     else
     {
-        if (uses_loc_dat())
-        {
-            m_data = (char*)malloc(other.m_size + 1);
-            strcpy(m_data, other.m_data);
-        }
-        else
-        {
+        if (!uses_loc_dat())
             free(m_data);
-            m_data = other.m_data;
-        }
+        m_data = other.m_data;
     }
 
     m_size = other.m_size;
@@ -133,25 +142,7 @@ string& string::operator=(string&& other) noexcept
 
 string& string::operator=(const char* str)
 {
-    const size_t new_size = strlen(str);
-    if (should_use_loc_dat(new_size))
-    {
-        if (!uses_loc_dat())
-        {
-            free(m_data);
-            m_data = loc_dat;
-        }
-    }
-    else
-    {
-        if (uses_loc_dat())
-            m_data = (char*)malloc(new_size + 1);
-        else
-            m_data = (char*)realloc(m_data, new_size + 1);
-    }
-
-    strcpy(m_data, str);
-    m_size = new_size;
+    assign_from(str, strlen(str));
 
     return *this;
 }
@@ -244,90 +235,21 @@ char& string::operator[](size_t index)
 
 string& string::operator+=(char c)
 {
-    const size_t new_size = m_size + 1;
-
-    if (should_use_loc_dat(new_size))
-    {
-        if (!uses_loc_dat())
-        {
-            free(m_data);
-            m_data = loc_dat;
-        }
-    }
-    else
-    {
-        if (uses_loc_dat())
-        {
-            m_data = (char*)malloc(new_size + 1);
-            strcpy(m_data, loc_dat);
-        }
-        else
-            m_data = (char*)realloc(m_data, new_size + 1);
-    }
-
-    m_data[m_size] = c;
-    m_data[m_size + 1] = '\0';
-    m_size = new_size;
+    append((const char[]){c, '\0'}, 1);
 
     return *this;
 }
 
 string& string::operator+=(const char* str)
 {
-    const size_t other_len = strlen(str);
-    const size_t new_size = m_size + other_len;
-
-    if (should_use_loc_dat(new_size))
-    {
-        if (!uses_loc_dat())
-        {
-            free(m_data);
-            m_data = loc_dat;
-        }
-    }
-    else
-    {
-        if (uses_loc_dat())
-        {
-            m_data = (char*)malloc(new_size + 1);
-            strcpy(m_data, loc_dat);
-        }
-        else
-            m_data = (char*)realloc(m_data, new_size + 1);
-    }
-
-    strcpy(m_data + m_size, str);
-    m_size = new_size;
+    append(str, strlen(str));
 
     return *this;
 }
 
 string& string::operator+=(const string& other)
 {
-    const auto other_len = other.m_size;
-    const size_t new_size = m_size + other_len;
-
-    if (should_use_loc_dat(new_size))
-    {
-        if (!uses_loc_dat())
-        {
-            free(m_data);
-            m_data = loc_dat;
-        }
-    }
-    else
-    {
-        if (uses_loc_dat())
-        {
-            m_data = (char*)malloc(new_size + 1);
-            strcpy(m_data, loc_dat);
-        }
-        else
-            m_data = (char*)realloc(m_data, new_size + 1);
-    }
-
-    strcpy(m_data + m_size, other.m_data);
-    m_size = new_size;
+    append(other.c_str(), other.size());
 
     return *this;
 }
@@ -335,6 +257,7 @@ string& string::operator+=(const string& other)
 string string::operator+(const string& other) const
 {
     string result(*this);
+
     result += other;
     return result;
 }
