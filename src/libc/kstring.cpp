@@ -77,6 +77,15 @@ int strcmp(const char* str1, const char* str2)
 	return *str1 - *str2;
 }
 
+int strncmp(const char* str1, const char* str2, size_t n)
+{
+	for (size_t i = 0; i < n && *str1 && *str2; i++, str1++, str2++)
+		if (*str1 != *str2)
+			return *str1 - *str2;
+
+	return 0;
+}
+
 int in_set(const char* set, const char c)
 {
 	unsigned int i = 0;
