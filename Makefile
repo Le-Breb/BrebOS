@@ -30,8 +30,11 @@ GCC_BUILD_DIR=$(SRC_DIR)/gcc/build
 KERNEL_BUILD_DIR=$(SRC_DIR)/kernel/build
 PROGRAMS_BUILD_DIR=$(SRC_DIR)/programs/build
 BOOTLOADER_BUILD_DIR=./bootloader/build
+BOOTLOADER_BIN=$(BOOTLOADER_BUILD_DIR)/bootloader.bin
+BOOTLOADER2_BIN=$(BOOTLOADER_BUILD_DIR)/bootloader2.bin
 BUSYBOX_DIR=busybox
 BUSYBOX_PROGRAMS_LIST=src/busybox_config/programs.list
+BUSYBOX_LIB=$(BUSYBOX_DIR)/0_lib/libbusybox.so.1.36.1
 
 SRC=$(shell cd $(SRC_DIR)/kernel; find . -name '*.cpp' -o -name '*.s' | sed 's|^\./||')
 OBJECTS = $(patsubst %.cpp, $(KERNEL_BUILD_DIR)/%.o, $(filter %.cpp, $(SRC))) \
@@ -96,7 +99,7 @@ GRUB_TIMEOUT=0
 FONT_FILE=Lat15-VGA16.psf
 FONT_OBJ= $(BUILD_DIR)/$(FONT_FILE:%.psf=%.o)
 
-.PHONY: libc libk programs bootloader busybox
+.PHONY: libc libk programs
 
 all: init $(OS_ISO) compilation_ended
 
@@ -145,7 +148,7 @@ $(FONT_OBJ): $(FONT_FILE)
 $(BUILD_DIR)/kernel.elf: $(BUILD_DIR)/.dir_timestamp $(FONT_OBJ) $(INTERNAL_OBJS) $(libc) $(gcc)
 	i686-brebos-ld $(LDFLAGS) $(OBJ_LIST) $(libc) $(FONT_OBJ) -o $(BUILD_DIR)/kernel.elf $(libstdcpp) $(libsupcpp) $(libgcc)
 
-$(OS_ISO): $(BUILD_DIR)/kernel.elf $(programs) bootloader busybox
+$(OS_ISO): $(BUILD_DIR)/kernel.elf $(programs) $(BOOTLOADER_BIN) $(BOOTLOADER2_BIN) $(BUSYBOX_LIB)
 	@#Create directories
 	@mkdir -p isodir
 	@mkdir -p isodir/boot
@@ -220,13 +223,15 @@ $(OS_ISO): $(BUILD_DIR)/kernel.elf $(programs) bootloader busybox
 	cat os.iso usb_disk.img > stick.img; \
 	echo "$${ISO_SECTORS_ALIGNED},,0c" | sfdisk --append stick.img 2>&1 | grep -v "recommended to wipe"
 
-bootloader:
+BOOTLOADER_SRC=$(shell find bootloader -maxdepth 1 -type f \( -name '*.cpp' -o -name '*.s' -o -name '*.h' \)) bootloader/link.ld bootloader/Makefile
+
+$(BOOTLOADER_BIN) $(BOOTLOADER2_BIN) &: $(BOOTLOADER_SRC)
 	+$(MAKE) -C bootloader
 
 $(BUSYBOX_DIR)/.config: $(BUSYBOX_PROGRAMS_LIST) utils/gen_busybox_config.sh
 	+./utils/gen_busybox_config.sh
 
-busybox: $(BUSYBOX_DIR)/.config
+$(BUSYBOX_LIB): $(BUSYBOX_DIR)/.config
 	+$(MAKE) -C busybox ARCH=i386 CROSS_COMPILE=i686-brebos- CC=i686-brebos-gcc
 
 run: $(OS_ISO)
