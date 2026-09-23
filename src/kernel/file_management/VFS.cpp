@@ -93,20 +93,6 @@ SharedPointer<Dentry> VFS::touch(const char* pathname)
 	return dentry;
 }
 
-bool VFS::ls(const char* pathname)
-{
-	const SharedPointer<Dentry> dentry = browse_to(pathname);
-
-	// Couldn't browse up to parent directory, abort
-	if (!dentry || dentry->inode->type != Inode::Dir)
-	{
-		printf_error("%s no such/not a directory", pathname);
-		return false;
-	}
-
-	return dentry->inode->superblock->get_fs()->ls(dentry, ls_printer).warn_is_ok();
-}
-
 bool VFS::mkdir(const char* pathname)
 {
 	const Path path(TRY_OR(Path::build_path(pathname), false));

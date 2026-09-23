@@ -238,8 +238,6 @@ public:
 
 	Result<SharedPointer<Dentry>> mkdir(SharedPointer<Dentry>& parent_dentry, const char* entry_name) override;
 
-	Status ls(const SharedPointer<Dentry>& dentry, ls_printer printer) override;
-
 	[[nodiscard]] static bool drive_present(uint drive_id);
 
 	static void shutdown();
