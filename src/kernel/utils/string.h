@@ -6,21 +6,25 @@
 extern int irrecoverable_error(const char* format, ...);
 typedef unsigned int uint;
 
-// Todo: track capacity and avoid more than necessary to reduce the number of allocations needed
-
 /**
  * String classes that mimics std::string.
  *
  * Has a local field loc_dat to store short strings. If more than STRING_LOC_DAT_LENGTH bytes are needed, then data is
  * store on the heap.
  * The field `data` points to the string content in any case, eg either heap data either loc_dat
+ * When heap-allocated, m_capacity grows geometrically (factor 2) to amortize reallocations. m_capacity and loc_dat
+ * are never needed at the same time (heap buffer vs. local storage), so they share the same memory via a union.
  */
 class string
 {
     static constexpr size_t STRING_LOC_DAT_LENGTH = 16;
     size_t m_size; // Size of the string, excluding null terminator
     char* m_data;
-    char loc_dat[STRING_LOC_DAT_LENGTH];
+    union
+    {
+        size_t m_capacity; // Usable capacity excluding null terminator; valid only when !uses_loc_dat()
+        char loc_dat[STRING_LOC_DAT_LENGTH];
+    };
 
     [[nodiscard]]
     bool uses_loc_dat() const { return m_data == loc_dat; }
@@ -71,10 +75,12 @@ public:
 
     // Methods
     void clear();
+    void reserve(size_t new_cap);
 
     // Getters
     bool empty() const;
     size_t size() const;
+    size_t capacity() const;
     const char* c_str() const;
     char* data();
     const char* data() const;
