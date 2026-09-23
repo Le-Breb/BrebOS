@@ -6,7 +6,34 @@
 // ReSharper disable once CppPossiblyUninitializedMember
 string::string(const char* str, size_t n) : m_size(n), m_data(should_use_loc_dat(n) ? loc_dat : (char*)malloc(n + 1))
 {
+    if (!uses_loc_dat())
+        m_capacity = n;
     memcpy(m_data, str, n + 1);
+}
+
+void string::reserve(size_t new_cap)
+{
+    if (uses_loc_dat())
+    {
+        if (should_use_loc_dat(new_cap))
+            return;
+    }
+    else if (new_cap <= m_capacity)
+        return;
+
+    size_t grown_cap = uses_loc_dat() ? STRING_LOC_DAT_LENGTH - 1 : m_capacity;
+    while (grown_cap < new_cap)
+        grown_cap *= 2;
+
+    if (uses_loc_dat())
+    {
+        m_data = (char*)malloc(grown_cap + 1);
+        memcpy(m_data, loc_dat, m_size + 1);
+    }
+    else
+        m_data = (char*)realloc(m_data, grown_cap + 1);
+
+    m_capacity = grown_cap;
 }
 
 void string::realloc_for(size_t new_size)
@@ -18,12 +45,7 @@ void string::realloc_for(size_t new_size)
         m_data = loc_dat;
     }
     else
-    {
-        if (uses_loc_dat())
-            m_data = (char*)malloc(new_size + 1);
-        else
-            m_data = (char*)realloc(m_data, new_size + 1);
-    }
+        reserve(new_size);
 }
 
 void string::assign_from(const char* str, size_t n)
@@ -36,12 +58,8 @@ void string::assign_from(const char* str, size_t n)
 void string::append(const char* str, size_t n)
 {
     const size_t new_size = m_size + n;
-    const bool was_loc_dat = uses_loc_dat();
 
     realloc_for(new_size);
-
-    if (was_loc_dat && !uses_loc_dat())
-        strcpy(m_data, loc_dat); // prefix now lives on the heap, carry it over
 
     strcpy(m_data + m_size, str);
     m_size = new_size;
@@ -64,7 +82,10 @@ string::string(string&& other) noexcept : m_size(other.m_size)
         strcpy(m_data, other.m_data);
     }
     else
+    {
         m_data = other.m_data;
+        m_capacity = other.m_capacity;
+    }
 
     other.m_size = 0;
     other.m_data = other.loc_dat;
@@ -87,6 +108,7 @@ string::string(size_t n, char c)
     else
     {
         m_data = (char*)malloc(n + 1);
+        m_capacity = n;
         memset(m_data, c, n);
     }
 
@@ -129,6 +151,7 @@ string& string::operator=(string&& other) noexcept
         if (!uses_loc_dat())
             free(m_data);
         m_data = other.m_data;
+        m_capacity = other.m_capacity;
     }
 
     m_size = other.m_size;
@@ -200,6 +223,11 @@ bool string::empty() const
 size_t string::size() const
 {
     return m_size;
+}
+
+size_t string::capacity() const
+{
+    return uses_loc_dat() ? STRING_LOC_DAT_LENGTH - 1 : m_capacity;
 }
 
 const char* string::c_str() const
