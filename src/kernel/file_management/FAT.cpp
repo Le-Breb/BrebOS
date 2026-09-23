@@ -38,12 +38,12 @@ string LongDirEntry::utf16_to_utf8_cautionless_cast(const char* str, const uint 
     while (n < half_length && !(str[n * 2] == '\0' && str[n * 2 + 1] == '\0'))
         ++n;
 
-    string tmp_string(n, '\0');
-    char* p = tmp_string.data();
+    string casted_str(n, '\0');
+    char* p = casted_str.data();
     for (uint i = 0; i < n; ++i)
         p[i] = str[i * 2];
 
-    return tmp_string;
+    return casted_str;
 }
 
 string LongDirEntry::get_uglily_converted_utf8_name() const
