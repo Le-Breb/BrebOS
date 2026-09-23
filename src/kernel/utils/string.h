@@ -27,6 +27,13 @@ class string
     [[nodiscard]]
     static bool should_use_loc_dat(size_t size) { return size < STRING_LOC_DAT_LENGTH; }
 
+
+    string(const char* str, size_t n);
+
+    void realloc_for(size_t new_size);
+    void assign_from(const char* str, size_t n);
+    void append(const char* str, size_t n);
+
     class Iterator
     {
         friend class string;
