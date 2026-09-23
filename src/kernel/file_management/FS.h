@@ -34,8 +34,6 @@ protected:
 	static bool enumerate_block_device(BlockDevice* block_device);
 
 public:
-	typedef void (*ls_printer)(const Dentry& dentry);
-
 	virtual ~FS();
 
 	static void init();
@@ -47,8 +45,6 @@ public:
 	virtual Result<SharedPointer<Dentry>> touch(SharedPointer<Dentry>& parent_dentry, const char* entry_name) = 0;
 
 	virtual Result<SharedPointer<Dentry>> mkdir(SharedPointer<Dentry>& parent_dentry, const char* entry_name) = 0;
-
-	virtual Status ls(const SharedPointer<Dentry>& dentry, ls_printer printer) = 0;
 
 	virtual Status getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t max_size, size_t* bytes_read,
 	                        uint& fd_off) = 0;

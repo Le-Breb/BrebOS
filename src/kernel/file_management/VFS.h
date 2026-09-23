@@ -100,8 +100,6 @@ public:
 
 	static SharedPointer<Dentry> touch(const char* pathname);
 
-	static bool ls(const char* pathname);
-
 	static bool mkdir(const char* pathname);
 
 	static char* get_absolute_path(const char* path);

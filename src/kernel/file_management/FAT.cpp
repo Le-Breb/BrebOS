@@ -708,41 +708,6 @@ Result<SharedPointer<Dentry>> FAT::mkdir(SharedPointer<Dentry>& parent_dentry, c
     return dir_entry_to_dentry(new_entry, parent_dentry, entry_name);
 }
 
-Status FAT::ls(const SharedPointer<Dentry>& dentry, ls_printer printer)
-{
-    uint parent_sector = dentry->inode->lba;
-    uint parent_cluster = parent_sector * bs.sectors_per_cluster;
-    ctx ctx{};
-
-    uint curr_cluster = parent_cluster;
-    do
-    {
-        // ~= cd wd
-        TRY(change_active_cluster(curr_cluster, ctx, this->buf));
-
-        string prev_lfn;
-        auto prev_is_lfn = [&prev_lfn]() {return !prev_lfn.empty();};
-        while (ctx.dir_entry_id * sizeof(DirEntry) < FAT_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free())
-        {
-            if (const auto entry = entries + ctx.dir_entry_id; entry->is_LFN())
-                prev_lfn = ((LongDirEntry*)entry)->get_uglily_converted_utf8_name() + prev_lfn;
-            else
-            {
-                string entry_name = prev_is_lfn() ? prev_lfn : entry->get_name();
-                SharedPointer<Dentry> null_parent = {nullptr};
-                SharedPointer<Dentry> dir_dentry = TRY(dir_entry_to_dentry(*entry, null_parent, entry_name.c_str()));
-                printer(*dir_dentry);
-                prev_lfn.clear();
-            }
-
-            ctx.dir_entry_id++;
-        }
-        curr_cluster = ctx.table_value;
-    } while (curr_cluster < CLUSTER_MIN_EOC);
-
-    return Status::success();
-}
-
 bool FAT::drive_present(uint drive_id)
 {
     return drives->get(drive_id);

@@ -257,14 +257,6 @@ Syscall::SyscallResult Syscall::touch(cpu_state_t* cpu_state)
     return SyscallResult::ReturnToUser;
 }
 
-Syscall::SyscallResult Syscall::ls(cpu_state_t* cpu_state)
-{
-    const char* path = (const char*)cpu_state->ebx;
-    cpu_state->eax = (uint)VFS::ls(path);
-
-    return SyscallResult::ReturnToUser;
-}
-
 Syscall::SyscallResult Syscall::lseek(Process* p)
 {
     int fd = (int)p->cpu_state.ebx;

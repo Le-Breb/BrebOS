@@ -51,8 +51,6 @@ class Syscall
 
 	static SyscallResult touch(cpu_state_t* cpu_state);
 
-	static SyscallResult ls(cpu_state_t* cpu_state);
-
 	static SyscallResult dns(const cpu_state_t* cpu_state);
 
 	static SyscallResult wget(const cpu_state_t* cpu_state);
