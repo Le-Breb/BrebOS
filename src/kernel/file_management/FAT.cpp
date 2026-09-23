@@ -87,7 +87,12 @@ bool LongDirEntry::is_EOF() const
     return order & LAST_LONG_ENTRY;
 }
 
-static bool is_power_of_two(unsigned int x)
+ uint8_t LongDirEntry::get_order() const
+ {
+    return order & ~LAST_LONG_ENTRY;
+ }
+
+ static bool is_power_of_two(unsigned int x)
 {
     return x != 0 && (x & (x - 1)) == 0;
 }
@@ -473,37 +478,36 @@ Result<uint> FAT::get_child_dir_entry_id(const SharedPointer<Dentry>& parent_den
     uint parent_cluster = parent_sector * bs.sectors_per_cluster;
     uint curr_cluster = parent_cluster;
 
+    char lfn[LFN_MAX_TOTAL_LEN + 1];
+    lfn[0] = '\0';
+    bool prev_is_lfn = false;
+
     // Skip used dir entries, aka files/folders inside wd
     do
     {
         // ~= cd wd
         TRY(change_active_cluster(curr_cluster, ctx, this->buf));
 
-        bool found_in_lfn = false;
-        string whole_name;
         while (ctx.dir_entry_id * sizeof(DirEntry) < FAT_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free())
         {
-            if (found_in_lfn) // File name matched in previous entry which is a fln entry referring to the current entry
-                return make_ok(ctx.dir_entry_id);
-            const bool lfn = entries[ctx.dir_entry_id].is_LFN();
-
-            string entry_name = lfn
-                                   ? ((LongDirEntry*)&entries[ctx.dir_entry_id])->get_uglily_converted_utf8_name()
-                                   : entries[ctx.dir_entry_id].get_name();
-            if (lfn)
-                whole_name = entry_name + whole_name;
-            else
-                whole_name = entry_name;
-
-            const bool match = whole_name == name;
-
-            if (!lfn)
-                whole_name.clear();
-            if (match)
+            if (entries[ctx.dir_entry_id].is_LFN())
             {
-                found_in_lfn = lfn;
-                if (!lfn)
+                // Get substring of name
+                const auto ldr = (LongDirEntry*)&entries[ctx.dir_entry_id];
+                const string ldr_name = ldr->get_uglily_converted_utf8_name();
+
+                // Copy substring of name to its location
+                const size_t offset = (ldr->get_order() - 1) * LFN_MAX_LEN;
+                memcpy(lfn + offset, ldr_name.c_str(), ldr_name.size());
+                if (ldr->is_EOF()) // Add null terminator if needed
+                    lfn[offset + ldr_name.size()] = '\0';
+                prev_is_lfn = true;
+            }
+            else
+            {
+                if ((prev_is_lfn && !strcmp(lfn, name)) || !strcmp(entries[ctx.dir_entry_id].get_name().c_str(), name))
                     return make_ok( ctx.dir_entry_id);
+                prev_is_lfn = false;
             }
 
             ctx.dir_entry_id++;
@@ -947,6 +951,10 @@ Status FAT::getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t m
     auto remaining_bytes = [&]() {return max_size - *bytes_read;};
     char* buf = (char*)buffer;
 
+    char lfn[LFN_MAX_TOTAL_LEN + 1];
+    lfn[0] = '\0';
+    bool prev_is_lfn = false;
+
     uint curr_cluster = parent_cluster;
     off_t off = 0;
     do
@@ -954,17 +962,23 @@ Status FAT::getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t m
         // ~= cd wd
         TRY(change_active_cluster(curr_cluster, ctx, this->buf));
 
-        string prev_lfn;
-        auto prev_is_lfn = [&prev_lfn]() {return !prev_lfn.empty();};
         while (ctx.dir_entry_id * sizeof(DirEntry) < FAT_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free())
         {
             if (off >= fd_off)
             {
                 if (const auto entry = entries + ctx.dir_entry_id; entry->is_LFN())
-                    prev_lfn = ((LongDirEntry*)entry)->get_uglily_converted_utf8_name() + prev_lfn;
+                {
+                    const auto ldr = (LongDirEntry*)entry;
+                    const string ldr_name = ldr->get_uglily_converted_utf8_name();
+                    const size_t offset = (ldr->get_order() - 1) * LFN_MAX_LEN;
+                    memcpy(lfn + offset, ldr_name.c_str(), ldr_name.size());
+                    if (ldr->is_EOF())
+                        lfn[offset + ldr_name.size()] = '\0';
+                    prev_is_lfn = true;
+                }
                 else
                 {
-                    string entry_name = prev_is_lfn() ? prev_lfn : entry->get_name();
+                    string entry_name = prev_is_lfn ? lfn : entry->get_name();
                     const auto dirent_size = ALIGN_UP(offsetof(struct dirent, d_name) + entry_name.size() + 1, sizeof(struct dirent));
                     if (remaining_bytes() < dirent_size)
                         return Status::success(); // No more room available in buffer, exit
@@ -978,7 +992,7 @@ Status FAT::getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t m
                     strcpy(dirent->d_name, entry_name.c_str());
                     *bytes_read += dirent_size;
                     buf += dirent_size;
-                    prev_lfn.clear();
+                    prev_is_lfn = false;
                 }
                 fd_off++;
             }
