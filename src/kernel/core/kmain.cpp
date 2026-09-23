@@ -35,7 +35,6 @@ extern "C" bool fpu_init_asm_();
 // Todo: check if VFS print_error mechanism could be improved using Result
 // Todo: investigate the segfault that happens after running 'tester'
 // Todo: add `likely` usages whenever meaningful (on no memory available for example)
-// Todo: optimize FAT LFN constructor using LongDirEntry::order
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {
     Interrupts::disable_asm();

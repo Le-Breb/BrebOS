@@ -35,6 +35,9 @@
 
 #define FAT_SECTOR_SIZE 512
 
+#define LFN_MAX_TOTAL_LEN 255
+#define LFN_MAX_LEN 13
+
 enum FAT_type
 {
 	ExFAT,
@@ -87,7 +90,7 @@ class __attribute__((packed)) LongDirEntry
 	static string utf16_to_utf8_cautionless_cast(const char* str, const uint length);
 
 public:
-	uint8_t order; // Order of this entry in LFN chain
+	uint8_t order; // Order of this entry in LFN chain | 0x40 if last entry
 	char name1[10]; // Chars[1-5] of name in UTF16
 	uint8_t attr; // == LFN
 	uint8_t type;
@@ -99,6 +102,8 @@ public:
 	[[nodiscard]] string get_uglily_converted_utf8_name() const;
 
 	[[nodiscard]] bool is_EOF() const;
+
+	[[nodiscard]] uint8_t get_order() const;
 };
 
 class __attribute__((packed)) DirEntry
