@@ -72,6 +72,13 @@ public:
 
     Status(Err&& err);
 
+    Status(const Status& other);
+    Status(Status&& other) noexcept;
+    Status& operator=(const Status&) = delete;
+    Status& operator=(Status&&) = delete;
+
+    ~Status();
+
     [[nodiscard]]
     bool is_ok() const;
 
