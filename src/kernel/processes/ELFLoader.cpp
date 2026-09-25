@@ -56,7 +56,7 @@ bool ELFLoader::dynamic_loading(const ELF* elf, Process* proc)
         return true;
 
     // Load interpreter
-    auto interpreter = VFS::browse_to(elf->interpreter_name);
+    const auto interpreter = VFS::browse_to(elf->interpreter_name).expect();
     if (!load_elf(interpreter, SharedObject, proc))
         return false;
 

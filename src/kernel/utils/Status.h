@@ -8,7 +8,7 @@
         std::move(_try_res).expect();                \
     })
 
-#define TRY_OR(expr, alt)                          \
+#define TRY_OR_RETURN(expr, alt)                          \
     ({                                              \
         auto&& _try_res = (expr);                  \
         if (!_try_res.is_ok())                      \
@@ -16,12 +16,26 @@
         std::move(_try_res).expect();                \
     })
 
-#define WARN_TRY_OR(expr, alt)                     \
+#define TRY_OR(expr, alt)                                   \
+    ({                                                            \
+        auto&& _try_res = (expr);                                 \
+        _try_res.is_ok() ? std::move(_try_res).expect()           \
+                              : (alt);                            \
+    })
+
+#define WARN_TRY_OR_RETURN(expr, alt)                     \
     ({                                              \
         auto&& _try_res = (expr);                  \
         if (!_try_res.warn_is_ok())                 \
             return alt;                             \
         std::move(_try_res).expect();                \
+    })
+
+#define WARN_TRY_OR(expr, alt)                              \
+    ({                                                            \
+        auto&& _try_res = (expr);                                 \
+        _try_res.warn_is_ok() ? std::move(_try_res).expect()      \
+                              : (alt);                            \
     })
 
 class Err
@@ -37,7 +51,7 @@ public:
 
     ~Err() { delete msg; }
 
-    const char* what() const { return msg; }
+    const char* what() const { return msg ? msg : "(no error message)"; }
 
     // transfers ownership out; caller becomes responsible for freeing
     const char* release() { const char* m = msg; msg = nullptr; return m; }

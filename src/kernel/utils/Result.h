@@ -1,6 +1,7 @@
 #pragma once
 
 #include <utility>
+#include <type_traits>
 #include <cstdarg>
 #include <stddef.h>
 #include "Status.h"
@@ -27,12 +28,32 @@ class Result
     {
         new (data) T(value);
     }
+    // Constrained so it never hijacks copy/move construction from a non-const Result lvalue
+    // Example scenario:
+    // Result<SharedPointer<Dentry>> a = ...;
+    // Result<SharedPointer<Dentry>> b(a);   // a is a non-const lvalue
+    // In this scenario Args&& constructor beats the copy constructor, as copy constructor takes const T&, which requires
+    // adding const, which is more expansive than calling the exactly matching Args&& constructor.
+    // Yeah that's fucked up, C++ is a wonderful language!
     template <typename... Args>
+        requires (!(sizeof...(Args) == 1 && (std::is_same_v<std::remove_cvref_t<Args>, Result> && ...)))
     explicit Result(Args&&... args) : msg(nullptr), has_value(true)
     {
         new (data) T(std::forward<Args>(args)...);
     }
 public:
+    Result(const Result& other) : msg(other.msg ? strdup(other.msg) : nullptr), has_value(other.has_value)
+    {
+        if (has_value)
+            new (data) T(*reinterpret_cast<const T*>(other.data));
+    }
+    Result(Result&& other) noexcept : msg(other.msg), has_value(other.has_value)
+    {
+        other.msg = nullptr;
+        if (has_value)
+            new (data) T(std::move(*reinterpret_cast<T*>(other.data)));
+    }
+
     Result(const Status& status) : msg(status.is_ok() ? nullptr : strdup(status.err().what())), has_value(false)
     {
         if (status.is_ok())
@@ -77,7 +98,8 @@ public:
         return true;
     }
 
-    Err err() const { return Err(msg); }
+    // Returns an owning copy of the message, so that the Err and this Result can each free their own
+    Err err() const { return Err(msg ? strdup(msg) : nullptr); }
 
     [[nodiscard]]
     bool is_ok() const { return has_value; }

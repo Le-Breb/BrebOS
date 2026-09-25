@@ -71,15 +71,15 @@ private:
 
 	static bool add_to_path(const char* path);
 
-	static SharedPointer<Dentry> browse_to(const Path& path, const SharedPointer<Dentry>& starting_point, bool print_errors = true);
+	static Result<SharedPointer<Dentry>> browse_to(const Path& path, const SharedPointer<Dentry>& starting_point);
 
-	static SharedPointer<Dentry> browse_to(const char* pathname, const SharedPointer<Dentry>& starting_point, bool print_errors = true);
+	static Result<SharedPointer<Dentry>> browse_to(const char* pathname, const SharedPointer<Dentry>& starting_point);
 
 	static bool cache_dentry(const SharedPointer<Dentry>& dentry);
 
 	static void free_unused_dentry_cache_entries();
 
-	static SharedPointer<Dentry> get_file_dentry(const char* pathname, bool print_errors, const char* work_dir);
+	static Result<SharedPointer<Dentry>> get_file_dentry(const char* pathname, const char* work_dir);
 
 	static void ls_printer(const Dentry& dentry);
 
@@ -104,7 +104,7 @@ public:
 
 	static char* get_absolute_path(const char* path);
 
-	static SharedPointer<Dentry> get_file_parent_dentry(const char* pathname, const char*& file_name, bool print_errors = true);
+	static Result<SharedPointer<Dentry>> get_file_parent_dentry(const char* pathname, const char*& file_name);
 
 	/**
 	 * Mounts a file system at /mnt/FS_index
@@ -123,10 +123,9 @@ public:
 	/**
 	 * Browses file system to the folder located at path
 	 * @param path path to browse to
-	 * @param print_errors whether the kernel should print errors when path is not found
 	 * @return Dentry of folder at path, nullptr if something went wront
 	 */
-	static SharedPointer<Dentry> browse_to(const char* path, bool print_errors = true);
+	static Result<SharedPointer<Dentry>> browse_to(const char* path);
 
 	static void* load_file(const char* path, uint offset = 0, uint length = 0);
 

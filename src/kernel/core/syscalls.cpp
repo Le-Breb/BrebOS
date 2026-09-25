@@ -156,7 +156,7 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
                 return SyscallResult::ReturnToUser;
             case SyscallNumber::GET_FILE_SIZE:
             {
-                const SharedPointer<Dentry> file = VFS::browse_to((char*)p->cpu_state.ebx);
+                const SharedPointer<Dentry> file = TRY_OR(VFS::browse_to((char*)p->cpu_state.ebx), nullptr);
                 p->cpu_state.eax = file ? file->inode->size : (uint)-1;
                 return SyscallResult::ReturnToUser;
             }
@@ -297,7 +297,7 @@ Syscall::SyscallResult Syscall::load_file(Process* p)
     auto path = (const char*)p->cpu_state.ebx;
 
     // Get file
-    SharedPointer<Dentry> dentry = VFS::browse_to(path);
+    const SharedPointer<Dentry> dentry = TRY_OR(VFS::browse_to(path), nullptr);
     if (!dentry)
     {
         p->cpu_state.eax = 0;
