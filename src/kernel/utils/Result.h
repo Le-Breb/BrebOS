@@ -17,7 +17,7 @@ extern int sprintf_aux(char* str, const char* format, va_list list);
 extern int sprintf(char* str, const char* format, ...);
 
 template <typename T>
-class Result
+class [[nodiscard]] Result
 {
     const char* msg;
     const bool has_value;

@@ -57,7 +57,7 @@ public:
     const char* release() { const char* m = msg; msg = nullptr; return m; }
 };
 
-class Status
+class [[nodiscard]] Status
 {
 protected:
     bool success_;
