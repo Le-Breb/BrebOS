@@ -30,9 +30,11 @@ Status Status::failure(const char* format, ...)
     static char buffer[MAX_MSG_LEN];
     va_list list;
     va_start(list, format);
-    if (sprintf_aux(buffer, format, list) > MAX_MSG_LEN)
-        irrecoverable_error("Status::failure: message too long");
+    const int n = sprintf_aux(buffer, format, list);
     va_end(list);
+    if (n >= MAX_MSG_LEN)
+        irrecoverable_error("Status::failure: message too long");
+    buffer[n] = '\0'; // sprintf_aux does not null-terminate
 
     return Status(buffer);
 }

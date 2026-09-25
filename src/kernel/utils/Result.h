@@ -69,8 +69,10 @@ public:
     static Result error(const char* format, va_list list)
     {
         static char buffer[Status::MAX_MSG_LEN];
-        if (sprintf_aux(buffer, format, list) > Status::MAX_MSG_LEN)
+        const int n = sprintf_aux(buffer, format, list);
+        if (n >= Status::MAX_MSG_LEN)
             irrecoverable_error("Result::error: message too long");
+        buffer[n] = '\0'; // sprintf_aux does not null-terminate
         return Result(buffer);
     }
 
