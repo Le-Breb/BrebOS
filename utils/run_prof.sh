@@ -1,9 +1,12 @@
+#!/usr/bin/env bash
 tmp_prof_file=$(mktemp)
 rm -rf "$tmp_prof_file"
 
 echo "Profiling..."
 echo "Retrieving profile data from disk image..."
-mcopy -i disk_image.img ::/prof.txt "$tmp_prof_file"
+# QEMU runs on stick.img (os.iso + usb_disk.img), so read from its FAT partition rather than from usb_disk.img
+fat_start=$(sfdisk -d stick.img | awk '/^stick.img2/{gsub(",","",$4); print $4}')
+mcopy -i "stick.img@@$((fat_start*512))" ::/prof.txt "$tmp_prof_file"
 
 tmp_file=$(mktemp)
 tot=0
