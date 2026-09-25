@@ -1,4 +1,6 @@
 #ifdef PROFILING
+#include "abi-bits/fcntl.h"
+#include "../file_management/VFS.h"
 
 #include "profiling.h"
 
@@ -83,8 +85,12 @@ namespace Profiling
             sprintf(buf, " %016llu\n", ncycles[i]);
             buf += 18;
         }
-        if (!VFS::write_buf_to_file("/prof.txt", buf_beg, buf_len))
+        int err;
+        const FileInterface* fi = VFS::open_file("/prof.txt", O_RDWR | O_CREAT, 0777, err, nullptr);
+        if (!(fi && VFS::write(fi->fd, buf_beg, buf_len) == (int)buf_len))
             printf_error("Failed to write profiling data to file");
+        if (fi)
+            VFS::close(fi->fd);
 
         initialized = true;
     }
