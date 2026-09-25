@@ -4,8 +4,6 @@
 #include <stdarg.h>
 #include <new>
 
-#define __opt_ptr reinterpret_cast<T*>(data)
-
 template <typename T>
 Optional<T>::Optional(const T& t) : is_null(false)
 {
@@ -22,7 +20,7 @@ template <typename T>
 Optional<T>::Optional(const Optional& other) : is_null(other.is_null)
 {
     if (!is_null)
-        new (&data)T(*reinterpret_cast<const T*>(other.data));
+        new (&data)T(*other.ptr());
 }
 
 template <typename T>
@@ -32,10 +30,10 @@ Optional<T>& Optional<T>::operator=(const Optional& other)
         return *this;
 
     if (!is_null)
-        __opt_ptr->~T();
+        ptr()->~T();
     is_null = other.is_null;
     if (!is_null)
-        new (&data)T(*reinterpret_cast<const T*>(other.data));
+        new (&data)T(*other.ptr());
     return *this;
 }
 
@@ -43,19 +41,19 @@ template <typename T>
 Optional<T>::~Optional()
 {
     if (!is_null)
-        __opt_ptr->~T();
+        ptr()->~T();
 }
 
 template <typename T>
 T& Optional<T>::operator*()
 {
-    return *__opt_ptr;
+    return *ptr();
 }
 
 template <typename T>
 T* Optional<T>::operator->()
 {
-    return __opt_ptr;
+    return ptr();
 }
 
 template <typename T>
@@ -84,5 +82,5 @@ T& Optional<T>::expect(const char* format, ...)
         va_end(list);
     }
 
-    return *__opt_ptr;
+    return *ptr();
 }

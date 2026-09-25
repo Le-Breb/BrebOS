@@ -1,5 +1,7 @@
 #pragma once
 
+#include <new>
+
 struct nullopt_t {
     constexpr explicit nullopt_t(int) {}
 };
@@ -11,6 +13,9 @@ class Optional
 {
     alignas(T) char data[sizeof(T)];
     bool is_null;
+
+    T* ptr() { return std::launder(reinterpret_cast<T*>(data)); }
+    const T* ptr() const { return std::launder(reinterpret_cast<const T*>(data)); }
 
 public:
     Optional(const T& t); // NOLINT(*-explicit-constructor)

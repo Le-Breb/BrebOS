@@ -23,6 +23,9 @@ class [[nodiscard]] Result
     const bool has_value;
     alignas(T) char data[sizeof(T)];
 
+    T* ptr() { return std::launder(reinterpret_cast<T*>(data)); }
+    const T* ptr() const { return std::launder(reinterpret_cast<const T*>(data)); }
+
     explicit Result(const char* msg) : msg(strdup(msg)), has_value(false) {}
     explicit Result(const T& value) : msg(nullptr), has_value(true)
     {
@@ -45,13 +48,13 @@ public:
     Result(const Result& other) : msg(other.msg ? strdup(other.msg) : nullptr), has_value(other.has_value)
     {
         if (has_value)
-            new (data) T(*reinterpret_cast<const T*>(other.data));
+            new (data) T(*other.ptr());
     }
     Result(Result&& other) noexcept : msg(other.msg), has_value(other.has_value)
     {
         other.msg = nullptr;
         if (has_value)
-            new (data) T(std::move(*reinterpret_cast<T*>(other.data)));
+            new (data) T(std::move(*other.ptr()));
     }
 
     Result(const Status& status) : msg(status.is_ok() ? nullptr : strdup(status.err_msg())), has_value(false)
@@ -79,7 +82,7 @@ public:
     ~Result()
     {
         if (has_value)
-            reinterpret_cast<T*>(data)->~T();
+            ptr()->~T();
         delete msg;
     }
 
@@ -87,7 +90,7 @@ public:
     {
         if (!has_value)
             irrecoverable_error("Result::expect: %s", msg);
-        return std::move(*reinterpret_cast<T*>(data));
+        return std::move(*ptr());
     }
 
     bool warn_is_ok() const
