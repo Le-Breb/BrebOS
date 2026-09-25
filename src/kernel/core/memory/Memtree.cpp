@@ -247,19 +247,19 @@ namespace Memory
 
     void* MemTree::allocate(uint size, const page_info& page_info, Process* process, const hint_info& hint_info)
     {
-        if (busy)
+        if (busy) [[unlikely]]
             irrecoverable_error("reentrency detected");
         busy = 4;
 
 
         const int policy = page_info.policy;
-        if ((policy & PAGE_PRESENT && policy & PAGE_LAZY_ZERO) || !(policy & (PAGE_PRESENT | PAGE_LAZY_ZERO)))
+        if ((policy & PAGE_PRESENT && policy & PAGE_LAZY_ZERO) || !(policy & (PAGE_PRESENT | PAGE_LAZY_ZERO))) [[unlikely]]
             irrecoverable_error("%s: invalid policy", __PRETTY_FUNCTION__);
 
         // Find big enough free block
         Node* node = find_free_block(root, size, hint_info);
         if (node == nullptr) // Physically allocate if needed
-            if ((node = node_physical_alloc(size, page_info, hint_info, process)) == nullptr)
+            if ((node = node_physical_alloc(size, page_info, hint_info, process)) == nullptr) [[unlikely]]
                 {busy=false; return nullptr;}
 
         const uintptr_t ns = node_size(node);
@@ -285,7 +285,7 @@ namespace Memory
         if (!address) // realloc on null = malloc
         {
             const page_info page_info = process == kernel_process ? DEFAULT_K_PAGE_INFO : DEFAULT_U_PAGE_INFO;
-            if (const void* alloc = allocate(size, page_info, process))
+            if (const void* alloc = allocate(size, page_info, process)) [[likely]]
             {
                 new_address = reinterpret_cast<uintptr_t>(alloc);
                 return ReallocState::OK;
@@ -300,7 +300,7 @@ namespace Memory
 
         // Get header
         Node* node = search({address, address, DEFAULT_K_PAGE_INFO, false});
-        if (!node)
+        if (!node) [[unlikely]]
             return ReallocState::FAILED;
 
         const uint ns = node_size(node);
@@ -326,12 +326,12 @@ namespace Memory
 
         const allocation allocation = node->data;
         void* new_buffer = allocate(size, node->data.page_info, process);
-        if (!new_buffer)
+        if (!new_buffer) [[unlikely]]
             return ReallocState::NOMEM;
 
         memcpy(new_buffer, reinterpret_cast<void*>(address), ns);
         node = search(allocation); // Search for node, as allocate may have modified the tree
-        if (!node)
+        if (!node) [[unlikely]]
             irrecoverable_error("%s: node disappeared...", __PRETTY_FUNCTION__);
         free_node(node, process);
         new_address = reinterpret_cast<uintptr_t>(new_buffer);
@@ -345,21 +345,21 @@ namespace Memory
 
     MemTree::FreeState MemTree::free(uintptr_t address, const Process* process)
     {
-        if (busy)
+        if (busy) [[unlikely]]
             irrecoverable_error("reentrency detected");
         busy = 3;
         // printf_info("called on %x", address);
-        if (!address)
+        if (!address) [[unlikely]]
             { busy = false; return FreeState::OK; }
 
         const allocation dummy = {address, 0,DEFAULT_K_PAGE_INFO};
 
         Node* node = search(dummy);
 
-        if (!node)
+        if (!node) [[unlikely]]
             { busy = false; return FreeState::NOT_FOUND; };
 
-        if (node->data.used == false)
+        if (node->data.used == false) [[unlikely]]
             { busy = false; return FreeState::DOUBLE_FREE; }
 
         free_node(node, process);
@@ -378,10 +378,10 @@ namespace Memory
         if (!root)
             return;
 
-        if (root->parent)
+        if (root->parent) [[unlikely]]
             irrecoverable_error("root parent != nullptr");
 
-        if (root->color != BLACK)
+        if (root->color != BLACK) [[unlikely]]
             irrecoverable_error("root is red");
 #if ENSURE_VALIDITY > 1
         ensure_validity_aux(root, root);
@@ -390,7 +390,7 @@ namespace Memory
 
     void MemTree::free_all(const Process* process)
     {
-        if (busy)
+        if (busy) [[unlikely]]
             irrecoverable_error("reentrency detected");
         busy = 2;
         while (root)
@@ -411,7 +411,7 @@ namespace Memory
             }
 
             const uintptr_t region_size = region_end - region_start;
-            if (!IS_PAGE_SIZE_MUL(region_size) || !IS_PAGE_ALIGNED(region_start))
+            if (!IS_PAGE_SIZE_MUL(region_size) || !IS_PAGE_ALIGNED(region_start)) [[unlikely]]
                 irrecoverable_error("%s: memory region size is not a multiple of PAGE_SIZE or region start is not page aligned", __PRETTY_FUNCTION__);
 
             const uint num_pages = region_size / PAGE_SIZE;
@@ -424,7 +424,7 @@ namespace Memory
 
     void MemTree::register_external_allocation(const allocation& allocation)
     {
-        if (busy)
+        if (busy) [[unlikely]]
             irrecoverable_error("reentrency detected");
         busy = 1;
 #if not ENSURE_VALIDITY

@@ -426,7 +426,7 @@ typename RBTree<T>::Node* RBTree<T>::insert_aux(const T& data)
     {
         Node* temp = search_or_get_last(data);
 
-        if (compare_func(temp->data, data) == 0)
+        if (compare_func(temp->data, data) == 0) [[unlikely]]
             irrecoverable_error("%s: value already exists", __PRETTY_FUNCTION__);
 
         // if value is not found, search returns the node
@@ -561,7 +561,7 @@ void RBTree<T>::deleteByVal(const T& data)
 
     Node* v = search_or_get_last(data);
 
-    if (compare_func(v->data, data))
+    if (compare_func(v->data, data)) [[unlikely]]
     {
         irrecoverable_error("%s: node not found", __PRETTY_FUNCTION__);
         return;
@@ -576,26 +576,26 @@ int RBTree<T>::check_invariants_aux(Node* node, Node* expected_parent) const
     if (!node)
         return 0; // black-height contribution of a null leaf
 
-    if (node->parent != expected_parent)
+    if (node->parent != expected_parent) [[unlikely]]
         irrecoverable_error("RBTree: parent link mismatch (node=%p, node->parent=%p, expected=%p)",
                              node, node->parent, expected_parent);
 
-    if (node->left && node->left->parent != node)
+    if (node->left && node->left->parent != node) [[unlikely]]
         irrecoverable_error("RBTree: node->left->parent broken (node=%p)", node);
-    if (node->right && node->right->parent != node)
+    if (node->right && node->right->parent != node) [[unlikely]]
         irrecoverable_error("RBTree: node->right->parent broken (node=%p)", node);
 
     if (node->color == RED)
     {
         if ((node->left && node->left->color == RED) ||
-            (node->right && node->right->color == RED))
+            (node->right && node->right->color == RED)) [[unlikely]]
             irrecoverable_error("RBTree: red-red violation at node=%p", node);
     }
 
     int bh_left = check_invariants_aux(node->left, node);
     int bh_right = check_invariants_aux(node->right, node);
 
-    if (bh_left != bh_right)
+    if (bh_left != bh_right) [[unlikely]]
         irrecoverable_error("RBTree: black-height mismatch at node=%p (%d vs %d)",
                              node, bh_left, bh_right);
 
@@ -607,9 +607,9 @@ void RBTree<T>::check_invariants() const
 {
     if (!root)
         return;
-    if (root->parent != nullptr)
+    if (root->parent != nullptr) [[unlikely]]
         irrecoverable_error("RBTree: root->parent is not null (root=%p, parent=%p)", root, root->parent);
-    if (root->color != BLACK)
+    if (root->color != BLACK) [[unlikely]]
         irrecoverable_error("RBTree: root is red");
     check_invariants_aux(root, nullptr);
 }
