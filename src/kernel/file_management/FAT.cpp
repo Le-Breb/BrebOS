@@ -723,7 +723,7 @@ SharedPointer<Inode> FAT::get_root_node()
 Status FAT::write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length, uint offset)
 {
     if (dentry->inode->type != Inode::File)
-        Status::failure("Trying to write data on something which is not a file");
+        return Status::failure("Trying to write data on something which is not a file");
     // Resize file if necessary
     const auto min_size = offset + length;
     if (dentry->inode->size < min_size)
