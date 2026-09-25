@@ -54,7 +54,7 @@ public:
             new (data) T(std::move(*reinterpret_cast<T*>(other.data)));
     }
 
-    Result(const Status& status) : msg(status.is_ok() ? nullptr : strdup(status.err().what())), has_value(false)
+    Result(const Status& status) : msg(status.is_ok() ? nullptr : strdup(status.err_msg())), has_value(false)
     {
         if (status.is_ok())
             irrecoverable_error("Cannot build a result out of a successful status");
@@ -100,8 +100,18 @@ public:
         return true;
     }
 
-    // Returns an owning copy of the message, so that the Err and this Result can each free their own
-    Err err() const { return Err(msg ? strdup(msg) : nullptr); }
+    [[nodiscard]]
+    const char* err_msg() const { return msg; }
+
+    [[nodiscard]]
+    Err take_err() &&
+    {
+        if (has_value)
+            irrecoverable_error("Result::take_err: called on a successful Result");
+        const char* m = msg;
+        msg = nullptr;
+        return Err(m);
+    }
 
     [[nodiscard]]
     bool is_ok() const { return has_value; }

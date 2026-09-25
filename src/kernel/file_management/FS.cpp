@@ -20,7 +20,7 @@ bool FS::enumerate_block_device(BlockDevice* block_device)
 	if (!partitionning_info_res.is_ok())
 	{
 		printf_warn("Failed to get disk info for USB device %u:%u. Excluding it of FS enumeration. Reason: %s",
-				   block_device->get_major(), block_device->get_minor(), partitionning_info_res.err().what());
+				   block_device->get_major(), block_device->get_minor(), partitionning_info_res.err_msg());
 		return false;
 	}
 
@@ -38,7 +38,7 @@ bool FS::enumerate_block_device(BlockDevice* block_device)
 		}
 		else // Error occurred while parsing FAT FS
 			printf_warn("Failed to parse FAT file system on device %u:%u partition starting at LBA %u. Excluding it of FS enumeration. Reason: %s",
-						block_device->get_major(), block_device->get_minor(), partition.lba_first, FAT.err().what());
+						block_device->get_major(), block_device->get_minor(), partition.lba_first, FAT.err_msg());
 	}
 
 	return device_used;
@@ -58,7 +58,7 @@ void FS::init()
 		if (!read_cap_res.is_ok())
 		{
 			printf_warn("Failed to get capacity for USB device %u:%u. Excluding it of FS enumeration. Reason: %s",
-						usb_device.device->get_slot(), usb_device.interface_number, read_cap_res.err().what());
+						usb_device.device->get_slot(), usb_device.interface_number, read_cap_res.err_msg());
 			continue;
 		}
 		const auto [last_lba, block_length] = std::move(read_cap_res).expect();

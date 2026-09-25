@@ -42,7 +42,7 @@ Result<scsi_read_capacity_10_data> SCSI::send_read_capacity_10(const usb_mass_st
         return MAKE_ERR("Failed to allocate READ CAPACITY (10) response buffer");
 
     if (const Status send_status = BOT::send_in(device, bot_cdb, data, sizeof(*data)); !send_status.is_ok())
-        return MAKE_ERR("Failed to send READ CAPACITY (10) command: %s", send_status.err().what());
+        return MAKE_ERR("Failed to send READ CAPACITY (10) command: %s", send_status.err_msg());
 
     data->last_lba = Endianness::switch32(data->last_lba);
     data->block_length = Endianness::switch32(data->block_length);
@@ -63,7 +63,7 @@ Status SCSI::send_read_10(const usb_mass_storage_device* device, uint32_t lba, u
 
     const size_t data_length = static_cast<size_t>(transfer_length) * block_length;
     if (const Status send_status = BOT::send_in(device, BOT::build_cdb(cdb), buffer, data_length); !send_status.is_ok())
-        return Status::failure("Failed to send READ (10) command: %s", send_status.err().what());
+        return Status::failure("Failed to send READ (10) command: %s", send_status.err_msg());
 
     return Status::success();
 }
@@ -81,7 +81,7 @@ Status SCSI::send_write_10(const usb_mass_storage_device* device, uint32_t lba, 
 
     const size_t data_length = static_cast<size_t>(transfer_length) * block_length;
     if (const Status send_status = BOT::send_out(device, BOT::build_cdb(cdb), (void*)buffer, data_length); !send_status.is_ok())
-        return Status::failure("Failed to send WRITE (10) command: %s", send_status.err().what());
+        return Status::failure("Failed to send WRITE (10) command: %s", send_status.err_msg());
 
     return Status::success();
 }
