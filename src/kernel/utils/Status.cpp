@@ -63,9 +63,18 @@ bool Status::is_ok() const
     return success_;
 }
 
-Err Status::err() const
+const char* Status::err_msg() const
 {
-    return Err(msg ? strdup(msg) : nullptr);
+    return msg;
+}
+
+Err Status::take_err() &&
+{
+    if (success_)
+        irrecoverable_error("Status::take_err: called on a successful Status");
+    const char* m = msg;
+    msg = nullptr;
+    return Err(m);
 }
 
 void Status::expect() const

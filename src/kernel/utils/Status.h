@@ -4,7 +4,7 @@
     ({                                              \
         auto&& _try_res = (expr);                  \
         if (!_try_res.is_ok())                      \
-            return _try_res.err();                  \
+            return std::move(_try_res).take_err();  \
         std::move(_try_res).expect();                \
     })
 
@@ -83,7 +83,10 @@ public:
     bool is_ok() const;
 
     [[nodiscard]]
-    Err err() const;
+    const char* err_msg() const;
+
+    [[nodiscard]]
+    Err take_err() &&;
 
     void expect() const;
 

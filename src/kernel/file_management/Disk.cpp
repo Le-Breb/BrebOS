@@ -28,7 +28,7 @@ Result<Disk::disk_info> Disk::get_partitioning_info(BlockDevice* dev)
     if (const auto read_res = dev->read_blocks(0, num_blocks_to_read, buf); !read_res.is_ok())
     {
         delete[] buf;
-        return MAKE_ERR("Failed to read MBR from device %u:%u. Reason: %s", dev->get_major(), dev->get_minor(), read_res.err().what());
+        return MAKE_ERR("Failed to read MBR from device %u:%u. Reason: %s", dev->get_major(), dev->get_minor(), read_res.err_msg());
     }
 
     // Superfloppy if no MBR signature
