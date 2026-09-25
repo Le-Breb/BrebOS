@@ -461,9 +461,7 @@ Process* Scheduler::load_process(const char* path, pid_t pid, pid_t ppid, int ar
         return nullptr;
     }
 
-    const auto file = VFS::browse_to(path);
-    if (!file)
-        return nullptr;
+    const auto file = TRY_OR_RETURN(VFS::browse_to(path), nullptr);
 
     return ELFLoader::setup_elf_process(pid, ppid, argc, argv, envp, file, 1);
 }

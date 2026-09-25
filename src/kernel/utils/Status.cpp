@@ -49,7 +49,7 @@ bool Status::is_ok() const
 
 Err Status::err() const
 {
-    return Err(msg);
+    return Err(msg ? strdup(msg) : nullptr);
 }
 
 void Status::expect() const

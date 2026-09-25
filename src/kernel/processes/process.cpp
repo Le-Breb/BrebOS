@@ -118,7 +118,7 @@ Process::Process(char* bin_path, uint num_elf_pages, Memory::page_table_t* page_
             lowest_free_fd = i;
 
     const char* file_name = nullptr;
-    work_dir = bin_path ? VFS::get_file_parent_dentry(bin_path, file_name)->get_absolute_path() : nullptr;
+    work_dir = bin_path ? std::move(VFS::get_file_parent_dentry(bin_path, file_name)).expect()->get_absolute_path() : nullptr;
     delete[] file_name;
 
     for (int i = 0; i < HIGHEST_SIGNAL; i++)
@@ -777,10 +777,7 @@ int Process::pipe(int pipefd[2])
 
 int Process::chdir(const char* path)
 {
-    const auto dir = VFS::browse_to(path);
-
-    if (!dir)
-        return -ENOTDIR;
+    const auto dir = TRY_OR_RETURN(VFS::browse_to(path), -ENOTDIR);
 
     delete[] work_dir;
     work_dir = dir->get_absolute_path();
