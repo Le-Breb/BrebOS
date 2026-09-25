@@ -808,7 +808,7 @@ void operator delete [](void* p, [[maybe_unused]] unsigned int n)
 
 void* malloc(uint n, const page_info& page_info, Process* process)
 {
-    if (!n)
+    if (!n) [[unlikely]]
         return nullptr;
 
     MemTree& mem_tree = process->memtree;
@@ -818,7 +818,7 @@ void* malloc(uint n, const page_info& page_info, Process* process)
 extern "C" void* malloc(uint n)
 {
     void* addr = malloc(n, DEFAULT_K_PAGE_INFO, kernel_process);
-    if (!addr)
+    if (!addr) [[unlikely]]
         printf_warn("malloc returned null");
 
     return addr;
@@ -826,23 +826,23 @@ extern "C" void* malloc(uint n)
 
 void* calloc(size_t nmemb, size_t size, const page_info& page_info, Process* process, const hint_info& hint_info)
 {
-    if (!(page_info.policy & PAGE_WRITE))
+    if (!(page_info.policy & PAGE_WRITE)) [[unlikely]]
         irrecoverable_error("calloc called without PAGE_WRITE");
 
     MemTree& mem_tree = process->memtree;
 
     // Check edge cases according to man page
-    if (!nmemb || !size)
+    if (!nmemb || !size) [[unlikely]]
         return mem_tree.allocate(1, page_info, process, hint_info);
 
     // Check for overflow
     size_t total_size;
-    if (__builtin_mul_overflow(nmemb, size, &total_size))
+    if (__builtin_mul_overflow(nmemb, size, &total_size)) [[unlikely]]
         return nullptr;
 
     // Get memory
     void* mem = mem_tree.allocate(total_size, page_info, process, hint_info);
-    if (!mem)
+    if (!mem) [[unlikely]]
         return nullptr;
 
     // Zero out memory which isn't in lazily allocated pages
@@ -862,7 +862,7 @@ MemTree::FreeState free(void* ptr, Process* process)
     const auto free_state = mem_tree.free(reinterpret_cast<uintptr_t>(ptr), process);
 
     // Treat free errors in kernel as irrecoverable
-    if (process == kernel_process && free_state != MemTree::FreeState::OK)
+    if (process == kernel_process && free_state != MemTree::FreeState::OK) [[unlikely]]
     {
         switch (free_state) {
             case MemTree::FreeState::DOUBLE_FREE:
@@ -878,7 +878,7 @@ MemTree::FreeState free(void* ptr, Process* process)
 
 extern "C" void free(void* ptr)
 {
-    if (free(ptr, kernel_process) != MemTree::FreeState::OK)
+    if (free(ptr, kernel_process) != MemTree::FreeState::OK) [[unlikely]]
         irrecoverable_error("free failed");
 }
 
@@ -893,7 +893,7 @@ void* realloc(void* ptr, size_t size)
 {
     void* new_address;
     // ReSharper disable once CppDFAMemoryLeak
-    if (realloc(ptr, size, kernel_process, new_address) != MemTree::ReallocState::OK)
+    if (realloc(ptr, size, kernel_process, new_address) != MemTree::ReallocState::OK) [[unlikely]]
         irrecoverable_error("realloc failed");
     return new_address;
 }

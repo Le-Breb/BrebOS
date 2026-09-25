@@ -24,7 +24,7 @@ namespace Memory
     {
         const uint target_pte_id = ADDR_PAGE(target_address);
         const uint target_start_pte = PTE(target_process->page_tables, target_pte_id);
-        if (!(target_start_pte & PAGE_PRESENT)) // Cannot point to a page that is not present
+        if (!(target_start_pte & PAGE_PRESENT)) [[unlikely]] // Cannot point to a page that is not present
             return CONVERSION_ERROR;
 
         const uint offset = ADDR_PAGE_OFF(target_address);
@@ -42,7 +42,7 @@ namespace Memory
         }
         else // No mapping exists, let's create one
         {
-            if ((current_pte_id = current_process->new_proc_mapping(target_pte_id, num_pages, target_process, true)) == -1U)
+            if ((current_pte_id = current_process->new_proc_mapping(target_pte_id, num_pages, target_process, true)) == -1U) [[unlikely]]
                 return CONVERSION_ERROR;
 
             // Register mapping
