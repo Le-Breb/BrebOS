@@ -43,6 +43,20 @@ Status::Status(Err&& err) : success_(false), msg(err.release())
 {
 }
 
+Status::Status(const Status& other) : success_(other.success_), msg(other.msg ? strdup(other.msg) : nullptr)
+{
+}
+
+Status::Status(Status&& other) noexcept : success_(other.success_), msg(other.msg)
+{
+    other.msg = nullptr;
+}
+
+Status::~Status()
+{
+    delete msg;
+}
+
 
 bool Status::is_ok() const
 {
