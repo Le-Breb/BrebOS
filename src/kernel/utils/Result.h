@@ -65,7 +65,7 @@ public:
     template <typename... Args>
     static Result ok(Args&&... args) { return Result(std::forward<Args>(args)...); };
 
-    // Creates a result containing a formatted error. Do not use this function directly, instead use MAKE_ERROR
+    // Creates a result containing a formatted error. Do not use this function directly, instead use MAKE_ERR
     static Result error(const char* format, va_list list)
     {
         static char buffer[Status::MAX_MSG_LEN];
@@ -86,7 +86,7 @@ public:
     T&& expect() &&
     {
         if (!has_value)
-            irrecoverable_error("Result::except: %s", msg);
+            irrecoverable_error("Result::expect: %s", msg);
         return std::move(*reinterpret_cast<T*>(data));
     }
 
@@ -94,7 +94,7 @@ public:
     {
         if (!has_value)
         {
-            printf_warn("Result::warn_if_err: %s", msg);
+            printf_warn("Result::warn_is_ok: %s", msg);
             return false;
         }
         return true;

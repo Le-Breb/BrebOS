@@ -87,7 +87,7 @@ bool Status::warn_is_ok() const
 {
     if (!success_)
     {
-        printf_warn("Result::warn_if_err: %s", msg);
+        printf_warn("Status::warn_is_ok: %s", msg);
         return false;
     }
     return true;
