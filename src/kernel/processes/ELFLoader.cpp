@@ -11,8 +11,8 @@
 using namespace ELFTools;
 
 ELFLoader::ELFLoader(): current_process(Scheduler::get_running_process()), elf_dep_list(new list<elf_dependence>),
-                        page_tables((Memory::page_table_t*)Memory::calloca(768, sizeof(Memory::page_table_t))),
-                        pdt((Memory::pdt_t*)Memory::calloca(1, sizeof(Memory::pdt_t))),
+                        page_tables((Memory::page_table_t*)Memory::calloca(768, sizeof(Memory::page_table_t), true)),
+                        pdt((Memory::pdt_t*)Memory::calloca(1, sizeof(Memory::pdt_t), false)),
                         address_space_bridge(nullptr)
 {
 }

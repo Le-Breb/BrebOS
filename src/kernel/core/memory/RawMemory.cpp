@@ -63,7 +63,18 @@ namespace Memory
             irrecoverable_error("huh");
 
         PTE(pt, page_id) = val;
-        uint pde = page_id >> 10;
+
+        // Increase frame reference count if we are actually mapping a frame
+        // This MUST be done before dealing with PDT. Indeed, the latter may be lazily allocated. Reading it would then
+        // page fault again, and selected frame wouldn't have been marked used yet. The frame would then be used for
+        // both the current faulting page and the PDT
+        if (val & PAGE_PRESENT && !(val & PAGE_LAZY_ZERO))
+        {
+            uint frame_id = val >> 12;
+            frame_rc[frame_id]++;
+        }
+
+        const uint pde = page_id >> 10;
         if (!pdt->entries[pde])
         {
             pdt->entries[pde] = PHYS_ADDR(Memory::page_tables, (uint) &pt[pde]) | PAGE_USER | PAGE_WRITE |
@@ -73,13 +84,6 @@ namespace Memory
         }
         else if (update_cache)
             INVALIDATE_PAGE(pde, page_id);
-
-        // Increase frame reference count if we are actually mapping a frame
-        if (val & PAGE_PRESENT && !(val & PAGE_LAZY_ZERO))
-        {
-            uint frame_id = val >> 12;
-            frame_rc[frame_id]++;
-        }
     }
 
     void allocate_page(uint frame_id, uint page_id, int policy)
@@ -94,7 +98,7 @@ namespace Memory
 
     void allocate_page(uint page_id, int policy)
     {
-        allocate_page(get_free_frame(), page_id, policy);
+        allocate_page(policy & PAGE_PRESENT ? get_free_frame() : 0, page_id, policy);
     }
 
     uint get_contiguous_pages(uint n, const hint_info& hint_info, const page_table_t* pt, uint lowest_free_page_entry)

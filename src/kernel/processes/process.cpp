@@ -175,9 +175,6 @@ uint Process::new_proc_mapping(uint start_page, uint num_pages, const Process* t
     if (map_pte_id == -1U)
         return -1U;; // Not enough contiguous pages to perform mapping
 
-    if (!target_process->memtree.get_addr_alloc(PAGE_ADDR(start_page)))
-        return -1U;
-
     const Memory::allocation target_alloc = target_process->memtree.get_addr_alloc(PAGE_ADDR(start_page)).expect("?");
     // Allocate in those pages, mapping them to target pages
     for (uint i = 0; i < num_pages; i++)
@@ -358,8 +355,8 @@ pid_t Process::fork()
         return -1;
 
     // Allocate PDT and page tables
-    auto child_page_tables = (Memory::page_table_t*)Memory::calloca(768, sizeof(Memory::page_table_t));
-    auto child_pdt = (Memory::pdt_t*)Memory::malloca(sizeof(Memory::pdt_t));
+    auto child_page_tables = (Memory::page_table_t*)Memory::calloca(768, sizeof(Memory::page_table_t), true);
+    auto child_pdt = (Memory::pdt_t*)Memory::calloca(1, sizeof(Memory::pdt_t), false);
 
     // Creat child process
     auto child = new Process(strdup(bin_path), num_pages, child_page_tables, child_pdt, &stack_state, priority, child_pid,
@@ -397,20 +394,7 @@ pid_t Process::fork()
     for (int i = 0; i < PROCESS_SYSCALL_STACK_N_PAGES; i++) // Next proceed with syscall stack
         copy_page_to_other_process(child, ADDR_PAGE(KERNEL_VIRTUAL_BASE - PAGE_SIZE * (PROCESS_STACK_N_PAGES + i + 1)), bridge);
 
-    // Duplicate PDT entries - This MUST be done after copying the pages, because page tables are lazily allocated.
-    // If we do it before, the page tables would not be actually allocated yet, thus PHYS_ADDR would return 0
-    for (uint i = 0; i < 768; i++)
-    {
-        if (pdt->entries[i] == 0)
-        {
-            child->pdt->entries[i] = 0;
-            continue;
-        }
-
-        const auto flags = pdt->entries[i] & 0x7FF;
-        const auto frame_val = PHYS_ADDR(Memory::page_tables, (uint) &child->page_tables[i]);
-        child->pdt->entries[i] = frame_val | flags;
-    }
+    // Set child PDT: user PDEs have been set by update_page while mapping the child's pages above. Only share kernel ones
     memcpy(child_pdt->entries + 768, pdt->entries + 768, sizeof(uint) * (PDT_ENTRIES - 768));
 
     // Copy file descriptors
@@ -445,7 +429,8 @@ pid_t Process::fork()
 
 void Process::update_pte(uint pte, uint val, bool update_cache) const
 {
-    Memory::update_page(pte, pdt, page_tables, val, update_cache);
+    Memory::page_table_t* pt = CORRECT_PT_FOR_HIGHER_HALF(page_tables, PAGE_ADDR(pte));
+    Memory::update_page(pte, pdt, pt, val, update_cache);
 }
 
 void Process::execve_transfer(Process* proc)

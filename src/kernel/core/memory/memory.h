@@ -37,7 +37,7 @@ namespace Memory
 	 */
 	void* malloca(uint size);
 
-	void* calloca(size_t nmemb, size_t size);
+	void* calloca(size_t nmemb, size_t size, bool lazy_zero);
 
 	/**
 	 * Allocates memory which is both virtually and physically contiguous.
