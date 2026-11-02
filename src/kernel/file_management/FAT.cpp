@@ -626,11 +626,51 @@ Status FAT::read_from_active_sector(ctx& ctx, void* buffer, uint offset, uint le
     return Status::success();
 }
 
+/**
+ * Rejects names that DirEntry::DirEntry cannot store correctly as an 8.3 short name (no LFN writing support yet):
+ * - more than 8 chars in total (DirEntry::DirEntry panics), which also rejects valid 8.3 names such as "abcdefgh.txt"
+ * - files: more than one dot, a leading dot, or an extension of 1 or 2 chars (stored misaligned, read back without it)
+ * - directories: any dot (DirEntry::DirEntry stores directory names verbatim, without extension handling)
+ * Lowercase names are accepted with a warning: BrebOS reads them back fine, but they violate the FAT spec, so other
+ * systems (Linux, Windows, fsck.fat) may show them wrongly or flag them.
+ */
+static Status check_short_name(const char* name, bool is_dir)
+{
+    const size_t len = strlen(name);
+    if (len == 0 || len > 8)
+        return Status::failure("'%s': names longer than 8 chars require LFN support, which is not implemented", name);
+
+    const char* dot = strchr(name, '.');
+    if (is_dir && dot)
+        return Status::failure("'%s': directory names containing a dot are not supported", name);
+    if (dot)
+    {
+        if (dot == name || strchr(dot + 1, '.'))
+            return Status::failure("'%s': names with a leading dot or several dots require LFN support", name);
+        if (const size_t ext_len = len - (dot + 1 - name); ext_len != 3)
+            return Status::failure("'%s': only 3-char extensions are supported, got %u", name, ext_len);
+    }
+
+    for (const char* c = name; *c; c++)
+    {
+        if (*c >= 'a' && *c <= 'z')
+        {
+            printf_warn("'%s': lowercase 8.3 names violate the FAT spec (LFN writing not implemented), the entry may "
+                        "not be read correctly outside of BrebOS", name);
+            break;
+        }
+    }
+
+    return Status::success();
+}
+
 Result<SharedPointer<Dentry>> FAT::touch(SharedPointer<Dentry>& parent_dentry, const char* entry_name)
 {
     // Make sure path makes sense
     if (!entry_name || entry_name[0] == '/')
         return make_ok<SharedPointer<Dentry>>(nullptr);
+
+    TRY(check_short_name(entry_name, false));
 
     const FAT_Inode* fat_parent_inode = finode(parent_dentry->inode.get());
 
@@ -652,7 +692,7 @@ Result<SharedPointer<Dentry>> FAT::touch(SharedPointer<Dentry>& parent_dentry, c
 
     // No free entry in wd cluster
     if (ctx.dir_entry_id * sizeof(DirEntry) == bs.bytes_per_sector * bs.sectors_per_cluster)
-        MAKE_ERR("Working directory cluster is full, cluster chain extension implementation is needed");
+        return MAKE_ERR("Working directory cluster is full, cluster chain extension implementation is needed");
 
     // Write file entry
     DirEntry new_entry(entry_name, 0, 0, 0);
@@ -664,9 +704,7 @@ Result<SharedPointer<Dentry>> FAT::touch(SharedPointer<Dentry>& parent_dentry, c
 
 Result<SharedPointer<Dentry>> FAT::mkdir(SharedPointer<Dentry>& parent_dentry, const char* entry_name)
 {
-    uint l = strlen(entry_name);
-    if (l >= 12 - 3)
-        MAKE_ERR("Dir name requires LFN support");
+    TRY(check_short_name(entry_name, true));
 
     const FAT_Inode* fat_parent_inode = finode(parent_dentry->inode.get());
 
@@ -687,11 +725,11 @@ Result<SharedPointer<Dentry>> FAT::mkdir(SharedPointer<Dentry>& parent_dentry, c
 
     // No free entry in wd cluster
     if (ctx.dir_entry_id * sizeof(DirEntry) == bs.bytes_per_sector * bs.sectors_per_cluster)
-        MAKE_ERR("Working directory cluster is full, cluster chain extension implementation is needed");
+        return MAKE_ERR("Working directory cluster is full, cluster chain extension implementation is needed");
 
     auto free_clusters_list = TRY(get_free_clusters(1));
     if (free_clusters_list == nullptr)
-        MAKE_ERR("No free cluster found");
+        return MAKE_ERR("No free cluster found");
     uint dir_content_cluster = free_clusters_list[0];
     delete[] free_clusters_list;
 
