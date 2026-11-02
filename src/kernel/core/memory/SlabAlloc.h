@@ -146,7 +146,10 @@ namespace Memory
         const uint pow = SlabAllocation::p2(size);
         const uint idx = (32 - __builtin_clz(pow - 1));
         if (idx >= SlabAllocation::AllocatorsTable::count)
+        {
             free(data); // Free fallback for big allocations
+            return;
+        }
         SlabAllocation::DeallocatorsTable::value[idx](data);
     }
 }
