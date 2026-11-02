@@ -4,6 +4,12 @@
 file isodir/boot/kernel.elf
 set architecture i8086
 source gdb_elf_loader.py
+source gdb_kvm_breakpoints.py
+
+# Under KVM, software breakpoints can only be inserted once paging is enabled, see gdb_kvm_breakpoints.py
+define target hookpost-remote
+python brebos_kvm_arm()
+end
 #  layout asm
 # layout reg
 # target remote localhost:26000
