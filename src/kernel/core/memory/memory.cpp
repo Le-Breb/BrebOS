@@ -455,7 +455,7 @@ namespace Memory
     {
         const uint num_pages = ADDR_PAGE(size + PAGE_SIZE - 1);
         int err;
-        return mmap((void*)KERNEL_VIRTUAL_BASE, num_pages * size, DEFAULT_K_PROT, DEFAULT_K_FLAGS, DEFAULT_K_POLICY, 0, err, kernel_process, false, false);
+        return mmap((void*)KERNEL_VIRTUAL_BASE, num_pages * PAGE_SIZE, DEFAULT_K_PROT, DEFAULT_K_FLAGS, DEFAULT_K_POLICY, 0, err, kernel_process, false, false);
     }
 
     void* calloca(size_t nmemb, size_t size, bool lazy_zero)
@@ -471,7 +471,7 @@ namespace Memory
             return nullptr;
 
         int err;
-        void* alloc = mmap((void*)KERNEL_VIRTUAL_BASE, num_pages * size, DEFAULT_K_PROT, DEFAULT_K_FLAGS, 0, 0, err, kernel_process, lazy_zero, false);
+        void* alloc = mmap((void*)KERNEL_VIRTUAL_BASE, new_size, DEFAULT_K_PROT, DEFAULT_K_FLAGS, 0, 0, err, kernel_process, lazy_zero, false);
         if (!alloc)
             return nullptr;
         zero_out_possibly_lazily_allocated_memory(new_size, alloc, kernel_process);
