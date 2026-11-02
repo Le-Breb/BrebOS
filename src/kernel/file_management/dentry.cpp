@@ -33,6 +33,11 @@ string Dentry::get_absolute_path_tmp() const
 	return res;
 }
 
+bool Dentry::is_negative() const
+{
+	return inode == nullptr;
+}
+
 void Dentry::mount_at(const SharedPointer<Dentry>& mount_point)
 {
 	if (inode->type != Inode::Dir || mount_point->inode->type != Inode::Dir)

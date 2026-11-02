@@ -181,6 +181,10 @@ Result<SharedPointer<Dentry>> VFS::browse_to(const Path& path, const SharedPoint
 		if (!next_entry) //  Nothing found in cache
 			break;
 
+		if (next_entry->is_negative()) // We already know this path does not exist, exit
+			return MAKE_ERR("%s: no such directory", (*path).c_str());
+
+
 		dentry = Dentry::follow_mount(next_entry);
 		++token;
 		if (next_entry->inode->type != Inode::Dir) // Stop browsing if we hit a file's cached dentry
@@ -206,8 +210,20 @@ Result<SharedPointer<Dentry>> VFS::browse_to(const Path& path, const SharedPoint
 			next_entry = dentry;
 		else if (!strcmp("..", *token))
 			next_entry = dentry->parent;
-		else // Ask the FS dentry belongs to, which changes when crossing a mount point
+		else
+		{
+			// Ask the FS dentry belongs to, which changes when crossing a mount point
 			next_entry = dentry->inode->superblock->get_fs()->get_child_dentry(dentry, *token);
+
+			// Name does not exist: cache a negative dentry so that next lookups don't have to ask the FS again.
+			// Note: get_child_dentry returning nullptr must only mean "not found", never an I/O error
+			if (!next_entry)
+			{
+				if (!cache_dentry(new Dentry(nullptr, dentry, *token)))
+					irrecoverable_error("Too many dentries");
+				return MAKE_ERR("%s: no such file or directory", (*path).c_str());
+			}
+		}
 		if (!next_entry)
 			return MAKE_ERR("%s: no such directory", (*path).c_str());
 		dentry = Dentry::follow_mount(next_entry);
@@ -229,6 +245,22 @@ Result<SharedPointer<Dentry>> VFS::browse_to(const char* pathname, const SharedP
 
 bool VFS::cache_dentry(const SharedPointer<Dentry>& dentry)
 {
+	if (const auto existing_entry = dentries->find(dentry); existing_entry != dentries->end())
+	{
+		const SharedPointer<Dentry> cached = *existing_entry;
+		if (!cached->is_negative())
+		{
+			// Same object already cached (".", ".." or a mount root resolved by browse_to): nothing to do
+			if (cached.get() == dentry.get())
+				return true;
+			// Two different dentries for the same name
+			irrecoverable_error("%s: '%s' already has a different positive cached dentry", __func__, dentry->name);
+		}
+
+		// Cached as not existing, replace with whatever new entry says
+		dentries->erase(cached);
+	}
+
 	if (dentries->size() == MAX_DENTRIES)
 		free_unused_dentry_cache_entries();
 	// No need to check for lowest_free_inode cause there is one or more dentry per inode,
@@ -237,7 +269,7 @@ bool VFS::cache_dentry(const SharedPointer<Dentry>& dentry)
 	if (dentries->size() == MAX_DENTRIES)
 		return false;
 
- 	dentries->emplace(dentry).expect(); // Should never throw since number of dentries is checked above
+	dentries->emplace(dentry).expect(); // Should never throw since number of dentries is checked above
 
 	return true;
 }
@@ -656,10 +688,12 @@ bool VFS::mount(FS* fs)
 	const auto n = fs->get_root_node();
 	SharedPointer<Dentry> d = new Dentry(n, get_mnt_dentry(), mount_point + id_off);
 
-	// If there's a cached dentry at that path, update it
-	if (const auto it = dentries->find(dentry_cache_key{mount_point + id_off, get_mnt_dentry().get()}); it != dentries->end())
+	// If there's a cached (positive) dentry at that path, update it
+	if (const auto it = dentries->find(dentry_cache_key{mount_point + id_off, get_mnt_dentry().get()});
+		it != dentries->end() && !(*it)->is_negative())
 		(*it)->mount_at(d);
-	// Otherwise, insert new dentry in cache
+	// Otherwise, insert new dentry in cache. cache_dentry replaces a negative dentry at that path, if any, so that the
+	// cached dentry is d, which mount_points keeps alive
 	else if (!cache_dentry(d))
 		return false;
 

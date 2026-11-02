@@ -19,6 +19,9 @@ public:
 	[[nodiscard]]
 	string get_absolute_path_tmp() const;
 
+	[[nodiscard]]
+	bool is_negative() const;
+
 	void mount_at(const SharedPointer<Dentry>& mount_point);
 
 	// If this entry is a mount point, return the mounted directory. Otherwise returns self.
