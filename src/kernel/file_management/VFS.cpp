@@ -115,14 +115,13 @@ bool VFS::mkdir(const char* pathname)
 		return false;
 	}
 
-	const auto dentry_res = dentry->inode->superblock->get_fs()->mkdir(dentry, *--path.end());
-	if (dentry_res.warn_is_ok())
-	{
-		if (dentry)
-			cache_dentry(dentry);
-		return true;
-	}
-	return false;
+	auto dentry_res = dentry->inode->superblock->get_fs()->mkdir(dentry, *--path.end());
+	if (!dentry_res.warn_is_ok())
+		return false;
+    
+	if (const SharedPointer<Dentry> new_dentry = std::move(dentry_res).expect())
+		cache_dentry(new_dentry);
+	return true;
 }
 
 char* VFS::get_absolute_path(const char* path)
