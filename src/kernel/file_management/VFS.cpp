@@ -437,12 +437,9 @@ FileInterface* VFS::open_file(const char* pathname, int flags, mode_t mode, int&
 			open_file_leave_with_error(-ENOENT) // File not found
 	};
 
-	if (flags & O_TRUNC)
-	{
-		if (dentry->inode->type != Inode::File)
-			open_file_leave_with_error(-EINVAL);
-		resize(dentry, 0);
-	}
+	// Directories can't be opened for writing (this also prevents truncating them)
+	if (dentry->inode->type == Inode::Dir && (flags & O_WRONLY || flags & O_RDWR))
+		open_file_leave_with_error(-EISDIR)
 
 	// Truncate file if asked and permitted by flags
 	if (flags & O_TRUNC && (flags & O_WRONLY || flags & O_RDWR))
