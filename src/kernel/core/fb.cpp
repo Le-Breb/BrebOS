@@ -1016,50 +1016,114 @@ int kvprintf(const char* format, void (*output_char_func)(char, int*), void (*ou
 				{
 					double floating = va_arg(list, double);
 
-					while (emode && floating >= 10)
+					const uint negative = floating < 0;
+					if (negative)
 					{
-						floating /= 10;
+						floating = -floating;
+					}
+
+					if (emode && floating != 0)
+					{
+						while (floating >= 10)
+						{
+							floating /= 10;
+							++expo;
+						}
+						while (floating < 1)
+						{
+							floating *= 10;
+							--expo;
+						}
+					}
+
+					// Round once on the scaled value so that carries propagate into the integer part (0.999 -> 1.00)
+					intmax_t scale = 1;
+					for (int p = 0; p < precSpec; ++p)
+					{
+						scale *= 10;
+					}
+					intmax_t scaled = (intmax_t) (floating * (double) scale + 0.5);
+					if (emode && scaled >= 10 * scale)
+					{
+						// Rounding produced 10.xx: renormalize
+						scaled /= 10;
 						++expo;
 					}
+					const intmax_t intPart = scaled / scale;
+					const intmax_t decPlaces = scaled % scale;
 
-					int form = lengthSpec - precSpec - expo - (precSpec || altForm ? 1 : 0);
-					if (emode)
+					const char sign = negative ? '-' : plusSign ? '+' : spaceNoSign ? ' ' : 0;
+
+					// Build the whole number in a buffer so that width/justification apply to all of it
+					char floatBuffer[256] = {0};
+					uint len = 0;
+					if (sign)
 					{
-						form -= 4;      // 'e+00'
+						floatBuffer[len++] = sign;
 					}
-					if (form < 0)
+					const uint digitsStart = len;
+
+					k__int_str(intPart, intStrBuffer, 10, 0, 0, 0, 0, 0);
+					strcpy(floatBuffer + len, intStrBuffer);
+					len += strlen(intStrBuffer);
+
+					if (precSpec || altForm)
 					{
-						form = 0;
+						floatBuffer[len++] = '.';
 					}
-
-					k__int_str(floating, intStrBuffer, base, plusSign, spaceNoSign, form, \
-                              leftJustify, zeroPad);
-
-					output_string_func(intStrBuffer, &chars);
-
-					floating -= (int) floating;
-
-					for (int i = 0; i < precSpec; ++i)
-					{
-						floating *= 10;
-					}
-					intmax_t decPlaces = (intmax_t) (floating + 0.5);
-
 					if (precSpec)
 					{
-						output_char_func('.', &chars);
-						k__int_str(decPlaces, intStrBuffer, 10, 0, 0, 0, 0, 0);
-						intStrBuffer[precSpec] = 0;
-						output_string_func(intStrBuffer, &chars);
+						k__int_str(decPlaces, intStrBuffer, 10, 0, 0, precSpec, 0, 1);
+						strcpy(floatBuffer + len, intStrBuffer);
+						len += strlen(intStrBuffer);
 					}
-					else if (altForm)
+
+					if (emode)
 					{
-						output_char_func('.', &chars);
+						floatBuffer[len++] = specifier;
+						floatBuffer[len++] = expo < 0 ? '-' : '+';
+						k__int_str(expo < 0 ? -expo : expo, intStrBuffer, 10, 0, 0, 2, 0, 1);
+						strcpy(floatBuffer + len, intStrBuffer);
+						len += strlen(intStrBuffer);
+					}
+
+					int padding = lengthSpec - (int) len;
+					if (leftJustify)
+					{
+						output_string_func(floatBuffer, &chars);
+						while (padding-- > 0)
+						{
+							output_char_func(' ', &chars);
+						}
+					}
+					else if (zeroPad)
+					{
+						// Zeros go between the sign and the digits
+						if (sign)
+						{
+							output_char_func(sign, &chars);
+						}
+						while (padding-- > 0)
+						{
+							output_char_func('0', &chars);
+						}
+						output_string_func(floatBuffer + digitsStart, &chars);
+					}
+					else
+					{
+						while (padding-- > 0)
+						{
+							output_char_func(' ', &chars);
+						}
+						output_string_func(floatBuffer, &chars);
 					}
 
 					break;
 				}
 
+				case '%':
+					output_char_func('%', &chars);
+					break;
 
 				case 'a':
 				case 'A':
@@ -1068,21 +1132,6 @@ int kvprintf(const char* format, void (*output_char_func)(char, int*), void (*ou
 
 				default:
 					break;
-			}
-
-			if (specifier == 'e')
-			{
-				output_string_func("e+", &chars);
-			}
-			else if (specifier == 'E')
-			{
-				output_string_func("E+", &chars);
-			}
-
-			if (specifier == 'e' || specifier == 'E')
-			{
-				k__int_str(expo, intStrBuffer, 10, 0, 0, 2, 0, 1);
-				output_string_func(intStrBuffer, &chars);
 			}
 
 		}
