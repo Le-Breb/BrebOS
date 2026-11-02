@@ -36,6 +36,11 @@ BUSYBOX_DIR=busybox
 BUSYBOX_PROGRAMS_LIST=src/busybox_config/programs.list
 BUSYBOX_LIB=$(BUSYBOX_DIR)/0_lib/libbusybox.so.1.36.1
 
+# QEMU tries accelerators in order: KVM if available, TCG (emulation) otherwise.
+# -cpu max exposes host features under KVM and all emulated features under TCG (-cpu host would fail under TCG).
+# Force emulation with `make run QEMU_ACCEL="-accel tcg"` (e.g. to debug early boot or user programs)
+QEMU_ACCEL ?= -accel kvm -accel tcg -cpu max
+
 SRC=$(shell cd $(SRC_DIR)/kernel; find . -name '*.cpp' -o -name '*.s' | sed 's|^\./||')
 OBJECTS = $(patsubst %.cpp, $(KERNEL_BUILD_DIR)/%.o, $(filter %.cpp, $(SRC))) \
           $(patsubst %.s, $(KERNEL_BUILD_DIR)/%.o, $(filter %.s, $(SRC)))
@@ -254,7 +259,7 @@ run: $(OS_ISO)
 #	  -device usb-storage,bus=xhci.0,drive=usbstick \
 #	  -trace "usb_xhci_*" -D qemu_trace.log \
 #      || true
-	qemu-system-i386 \
+	qemu-system-i386 $(QEMU_ACCEL) \
       -device isa-debug-exit \
       -drive file=disk_image.img,format=raw,if=ide \
       -netdev tap,id=net0,ifname=tap0,script=no,downscript=no \
