@@ -38,6 +38,18 @@
 #define LFN_MAX_TOTAL_LEN 255
 #define LFN_MAX_LEN 13
 
+class FAT_Inode : public Inode
+{
+public:
+	FAT_Inode(const Superblock* superblock, uint size, Type type, ino_t id, nlink_t nlink, uid_t uid, gid_t gid,
+		  dev_t rdev, blkcnt_t blocks, time_t atime, time_t mtime, time_t ctime, uint first_cluster, uint dir_entry_first_cluster, uint dir_entry_index);
+
+	uint first_cluster; // 0 if file is empty
+	// Location of the file's directory entry: cluster of the parent directory holding it, and index of the entry in it.
+	// dir_entry_cluster == 0 means the file has no on-disk entry (root directory)
+	uint dir_entry_cluster, dir_entry_index;
+};
+
 enum FAT_type
 {
 	ExFAT,
@@ -211,7 +223,8 @@ class FAT : public FS
 	SharedPointer<Dentry> get_child_dentry(SharedPointer<Dentry>& parent_dentry, const char* name) override;
 
 	Result<SharedPointer<Dentry>> dir_entry_to_dentry(const DirEntry& dir_entry,
-	                                                  const SharedPointer<Dentry>& parent_dentry, const char* name);
+	                                                  const SharedPointer<Dentry>& parent_dentry, const char* name,
+	                                                  uint dir_entry_cluster, uint dir_entry_index);
 
 	Status write_fat(const ctx& ctx) const;
 
@@ -242,7 +255,7 @@ public:
 
 	static void shutdown();
 
-	Status load_file_to_buf(void* buf, const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset,
+	Status load_file_to_buf(void* buf, const SharedPointer<Dentry>& dentry, uint offset,
 	                        uint length, uint& loaded_bytes) override;
 
 	~FAT() override;

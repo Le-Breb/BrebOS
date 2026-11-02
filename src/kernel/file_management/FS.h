@@ -49,10 +49,9 @@ public:
 	virtual Status getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t max_size, size_t* bytes_read,
 	                        uint& fd_off) = 0;
 
-	Result<void*> load_file_to_buf(const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset,
-	                               uint length, uint& loaded_bytes);
+	Result<void*> load_file_to_buf(const SharedPointer<Dentry>& dentry, uint offset, uint length, uint& loaded_bytes);
 
-	virtual Status load_file_to_buf(void* buf, const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset,
+	virtual Status load_file_to_buf(void* buf, const SharedPointer<Dentry>& dentry, uint offset,
 	                                uint length, uint& loaded_bytes) = 0;
 
 	virtual Status write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length, uint offset) = 0;

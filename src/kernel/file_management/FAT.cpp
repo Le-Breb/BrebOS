@@ -16,6 +16,12 @@
 
 #define ALIGN_UP(x, align) (((x) + (align) - 1) & ~((align) - 1))
 
+// Every inode a FAT instance handles has been created by it, so downcasting is safe
+static FAT_Inode* finode(Inode* inode)
+{
+    return static_cast<FAT_Inode*>(inode);
+}
+
 list<FAT*>* FAT::drives = nullptr;
 
 #define ERR_RET_FALSE(err_msg) \
@@ -29,6 +35,13 @@ list<FAT*>* FAT::drives = nullptr;
         printf_error("%s: %s", __func__, err_msg); \
         return nullptr;        \
     }
+
+ FAT_Inode::FAT_Inode(const Superblock* superblock, uint size, Type type, ino_t id, nlink_t nlink, uid_t uid,
+     gid_t gid, dev_t rdev, blkcnt_t blocks, time_t atime, time_t mtime, time_t ctime, uint first_cluster,
+     uint dir_entry_cluster, uint dir_entry_index) : Inode(superblock, size, type, id, nlink, uid, gid, rdev,
+         blocks, atime, mtime, ctime), first_cluster(first_cluster), dir_entry_cluster(dir_entry_cluster), dir_entry_index(dir_entry_index)
+ {
+ }
 
 string LongDirEntry::utf16_to_utf8_cautionless_cast(const char* str, const uint length)
 {
@@ -402,20 +415,19 @@ void FAT::shutdown()
     delete drives;
 }
 
-Status FAT::load_file_to_buf(void* buf, const char* file_name, SharedPointer<Dentry>& parent_dentry, uint offset,
-                                   uint length, uint& loaded_bytes)
+Status FAT::load_file_to_buf(void* buf, const SharedPointer<Dentry>& dentry, uint offset,
+                             uint length, uint& loaded_bytes)
 {
+
+    const FAT_Inode* fat_inode = finode(dentry->inode.get());
+
     ctx ctx{};
-    uint file_entry_id;
     loaded_bytes = 0;
-    if ((file_entry_id = TRY(get_child_dir_entry_id(parent_dentry, file_name, ctx))) == ENTRY_NOT_FOUND)
-        return Status::failure("File not found");
-    const DirEntry* file_entry = &entries[file_entry_id];
-    if (offset + length > file_entry->file_size)
+    if (offset + length > fat_inode->size)
         return Status::failure("Offset + length exceeds file size");
 
     // Set cursor in file
-    TRY(change_active_cluster(file_entry->first_cluster_addr(), ctx, nullptr));
+    TRY(change_active_cluster(fat_inode->first_cluster, ctx, nullptr));
 
     // Skip clusters until we reach the offset
     const uint N_OFFSET_CLUSTERS = offset / FAT_SECTOR_SIZE;
@@ -474,8 +486,9 @@ Result<uint> FAT::get_child_dir_entry_id(const SharedPointer<Dentry>& parent_den
     if (!name || name[0] == '/')
         return make_ok(ENTRY_NOT_FOUND);
 
-    uint parent_sector = parent_dentry->inode->lba;
-    uint parent_cluster = parent_sector * bs.sectors_per_cluster;
+    const FAT_Inode* fat_parent_inode = finode(parent_dentry->inode.get());
+
+    uint parent_cluster = fat_parent_inode->first_cluster;
     uint curr_cluster = parent_cluster;
 
     char lfn[LFN_MAX_TOTAL_LEN + 1];
@@ -520,15 +533,18 @@ Result<uint> FAT::get_child_dir_entry_id(const SharedPointer<Dentry>& parent_den
 
 SharedPointer<Dentry> FAT::get_child_dentry(SharedPointer<Dentry>& parent_dentry, const char* name)
 {
-    uint entry_id;
-    if (ctx ctx{}; (entry_id = get_child_dir_entry_id(parent_dentry, name, ctx).expect()) == ENTRY_NOT_FOUND)
+    ctx ctx{};
+    const uint entry_id = get_child_dir_entry_id(parent_dentry, name, ctx).expect();
+    if (entry_id == ENTRY_NOT_FOUND)
         return nullptr;
-    return dir_entry_to_dentry(entries[entry_id], parent_dentry, name).expect();
+    // get_child_dir_entry_id returns with the cluster holding the entry still active
+    return dir_entry_to_dentry(entries[entry_id], parent_dentry, name, ctx.active_cluster, entry_id).expect();
 }
 
 Result<SharedPointer<Dentry>> FAT::dir_entry_to_dentry(const DirEntry& dir_entry,
                                                              const SharedPointer<Dentry>& parent_dentry,
-                                                             const char* name)
+                                                             const char* name, uint dir_entry_cluster,
+                                                             uint dir_entry_index)
 {
     Inode::Type inode_type = dir_entry.attrs & DIRECTORY ? Inode::Dir : Inode::File;
 
@@ -539,9 +555,7 @@ Result<SharedPointer<Dentry>> FAT::dir_entry_to_dentry(const DirEntry& dir_entry
     else
     {
         blocks = 0;
-        uint sector = dir_entry.first_cluster_addr();
-        uint cluster = sector * bs.sectors_per_cluster;
-        uint curr_cluster = cluster;
+        uint curr_cluster = dir_entry.first_cluster_addr();
         ctx ctx{};
 
         // Count blocks until we reach the end of the cluster chain
@@ -552,8 +566,8 @@ Result<SharedPointer<Dentry>> FAT::dir_entry_to_dentry(const DirEntry& dir_entry
             blocks++;
         } while (curr_cluster < CLUSTER_MIN_EOC);
     }
-    auto inode = new Inode(superblock, dir_entry.file_size, dir_entry.first_cluster_addr(), inode_type,
-                           dir_entry.first_cluster_addr(), 1, 0, 0, 0, blocks, 0, 0, 0);
+    auto inode = new FAT_Inode(superblock, dir_entry.file_size, inode_type, dir_entry.first_cluster_addr(), 1, 0, 0, 0,
+                               blocks, 0, 0, 0, dir_entry.first_cluster_addr(), dir_entry_cluster, dir_entry_index);
 
     return make_ok<SharedPointer<Dentry>>(new Dentry(inode, parent_dentry, name));
 }
@@ -618,8 +632,9 @@ Result<SharedPointer<Dentry>> FAT::touch(SharedPointer<Dentry>& parent_dentry, c
     if (!entry_name || entry_name[0] == '/')
         return make_ok<SharedPointer<Dentry>>(nullptr);
 
-    const uint parent_sector = parent_dentry->inode->lba;
-    const uint parent_cluster = parent_sector * bs.sectors_per_cluster;
+    const FAT_Inode* fat_parent_inode = finode(parent_dentry->inode.get());
+
+    const uint parent_cluster = fat_parent_inode->first_cluster;
     ctx ctx{};
 
     // ~= cd wd
@@ -644,7 +659,7 @@ Result<SharedPointer<Dentry>> FAT::touch(SharedPointer<Dentry>& parent_dentry, c
     memcpy(&entries[ctx.dir_entry_id], &new_entry, sizeof(DirEntry));
     TRY(write_data_sectors(1, ctx.active_sector, buf, ctx));
 
-    return dir_entry_to_dentry(new_entry, parent_dentry, entry_name);
+    return dir_entry_to_dentry(new_entry, parent_dentry, entry_name, ctx.active_cluster, ctx.dir_entry_id);
 }
 
 Result<SharedPointer<Dentry>> FAT::mkdir(SharedPointer<Dentry>& parent_dentry, const char* entry_name)
@@ -653,8 +668,9 @@ Result<SharedPointer<Dentry>> FAT::mkdir(SharedPointer<Dentry>& parent_dentry, c
     if (l >= 12 - 3)
         MAKE_ERR("Dir name requires LFN support");
 
-    const uint parent_sector = parent_dentry->inode->lba;
-    const uint parent_cluster = parent_sector * bs.sectors_per_cluster;
+    const FAT_Inode* fat_parent_inode = finode(parent_dentry->inode.get());
+
+    const uint parent_cluster = fat_parent_inode->first_cluster;
     ctx ctx{};
 
     // ~= cd wd
@@ -684,6 +700,10 @@ Result<SharedPointer<Dentry>> FAT::mkdir(SharedPointer<Dentry>& parent_dentry, c
     memcpy(&entries[ctx.dir_entry_id], &new_entry, sizeof(DirEntry));
     TRY(write_data_sectors(1, ctx.active_sector, buf, ctx));
 
+    // Save the new entry's location before ctx moves to the new directory's cluster
+    const uint new_entry_cluster = ctx.active_cluster;
+    const uint new_entry_index = ctx.dir_entry_id;
+
     // ~= cd new directory
     TRY(change_active_cluster(dir_content_cluster, ctx, this->buf));
 
@@ -705,7 +725,7 @@ Result<SharedPointer<Dentry>> FAT::mkdir(SharedPointer<Dentry>& parent_dentry, c
     // Write them to disk
     TRY(write_data_sectors(1, dir_content_sector, buf, ctx));
 
-    return dir_entry_to_dentry(new_entry, parent_dentry, entry_name);
+    return dir_entry_to_dentry(new_entry, parent_dentry, entry_name, new_entry_cluster, new_entry_index);
 }
 
 bool FAT::drive_present(uint drive_id)
@@ -716,7 +736,8 @@ bool FAT::drive_present(uint drive_id)
 SharedPointer<Inode> FAT::get_root_node()
 {
     if (!root_node)
-        root_node = new Inode(superblock, 0, extBS_32.root_cluster, Inode::Dir, 0, 1, 0, 0, 1, 0, 0, 0, 0);
+        // Root directory has no directory entry: dir_entry_cluster = 0
+        root_node = new FAT_Inode(superblock, 0, Inode::Dir, 0, 1, 0, 0, 1, 0, 0, 0, 0, extBS_32.root_cluster, 0, 0);
     return root_node;
 }
 
@@ -732,13 +753,9 @@ Status FAT::write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, ui
         return Status::success();
 
     ctx ctx{};
-    uint entry_id;
-    if ((entry_id = TRY(get_child_dir_entry_id(dentry->parent, dentry->name, ctx))) == ENTRY_NOT_FOUND)
-        return Status::failure("couldn't find file");
-    const DirEntry* file_entry = &entries[entry_id];
 
-    // Set cursor to first cluster of the file
-    TRY(change_active_cluster(file_entry->first_cluster_addr(), ctx, nullptr));
+    // Set cursor to first cluster of the file. resize() above keeps first_cluster up to date
+    TRY(change_active_cluster(finode(dentry->inode.get())->first_cluster, ctx, nullptr));
     size_t wrote_bytes = 0;
 
     // Skip whole clusters in offset
@@ -794,11 +811,12 @@ Status FAT::write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, ui
 
 Status FAT::resize(SharedPointer<Dentry>& dentry, uint new_size)
 {
-    ctx ctx{};
+    FAT_Inode* fat_inode = finode(dentry->inode.get());
 
-    uint entry_id;
-    if ((entry_id = TRY(get_child_dir_entry_id(dentry->parent, dentry->name, ctx))) == ENTRY_NOT_FOUND)
-        return Status::failure("%s: couldn't find file %s", __func__, dentry->name);
+    // Load the cluster holding the file's directory entry
+    ctx ctx{};
+    TRY(change_active_cluster(fat_inode->dir_entry_cluster, ctx, this->buf));
+    const uint entry_id = fat_inode->dir_entry_index;
 
     uint current_file_size = dentry->inode->size;
     uint curr_num_data_sectors = (current_file_size + FAT_SECTOR_SIZE - 1) / FAT_SECTOR_SIZE;
@@ -816,6 +834,7 @@ Status FAT::resize(SharedPointer<Dentry>& dentry, uint new_size)
         {
             entries[entry_id].first_cluster_high = 0;
             entries[entry_id].first_cluster_low = 0;
+            fat_inode->first_cluster = 0;
         }
         // Persist disk file size metadata modification (and cluster beginning change if one has been made)
         TRY(write_data_sectors(1, ctx.active_sector, this->buf, ctx));
@@ -864,6 +883,7 @@ Status FAT::resize(SharedPointer<Dentry>& dentry, uint new_size)
         {
             entries[entry_id].first_cluster_high = free_cluster_list[0] >> 16;
             entries[entry_id].first_cluster_low = free_cluster_list[0] & 0xFFFF;
+            fat_inode->first_cluster = free_cluster_list[0];
             clusters_to_be_registered_start_idx = 1;
         }
         // Persist disk file size metadata modification (and cluster chain's first sector change if it's the case)
@@ -909,8 +929,8 @@ Status FAT::getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t m
                            uint& fd_off)
 
 {
-    uint parent_sector = dentry->inode->lba;
-    uint parent_cluster = parent_sector * bs.sectors_per_cluster;
+    const FAT_Inode* fat_inode = finode(dentry->inode.get());
+    uint parent_cluster = fat_inode->first_cluster;
     ctx ctx{};
     *bytes_read = 0;
     auto remaining_bytes = [&]() {return max_size - *bytes_read;};

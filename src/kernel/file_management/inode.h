@@ -15,13 +15,13 @@ public:
         Dir
     };
 
-    Inode(const Superblock* superblock, uint size, uint lba, Type type, ino_t id, nlink_t nlink, uid_t uid, gid_t gid,
+    Inode(const Superblock* superblock, uint size, Type type, ino_t id, nlink_t nlink, uid_t uid, gid_t gid,
           dev_t rdev, blkcnt_t blocks, time_t atime, time_t mtime, time_t ctime);
 
-public:
+    virtual ~Inode() = default;
+
     const Superblock* superblock;
     uint size;
-    const uint lba; // Logical block address, will be interpreted as needed by FS driver
 
     const Type type;
     ino_t id;

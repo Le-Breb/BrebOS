@@ -329,7 +329,7 @@ void* VFS::load_file(const SharedPointer<Dentry>& file, uint offset, uint length
 
 	uint loaded_bytes;
 	const uint l = length ? min(length, file->inode->size) : file->inode->size;
-	void* buf = WARN_TRY_OR_RETURN(file->inode->superblock->get_fs()->load_file_to_buf(file->name, file->parent, offset, l,
+	void* buf = WARN_TRY_OR_RETURN(file->inode->superblock->get_fs()->load_file_to_buf(file, offset, l,
 																	loaded_bytes), nullptr);
 
 	if (loaded_bytes != l)

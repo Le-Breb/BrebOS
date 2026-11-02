@@ -27,8 +27,7 @@ int File::read(void* buf, uint count)
 
     if (preload_read(buf, offset, count, dentry))
         loaded_bytes = count;
-    else if (!dentry->inode->superblock->get_fs()->load_file_to_buf(buf, dentry->name, dentry->parent, offset, l,
-                                                                        loaded_bytes).warn_is_ok())
+    else if (!dentry->inode->superblock->get_fs()->load_file_to_buf(buf, dentry, offset, l, loaded_bytes).warn_is_ok())
         return -EIO; // IO error
 
     offset += loaded_bytes;
