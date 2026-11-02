@@ -32,6 +32,10 @@ extern "C" bool fpu_init_asm_();
 // Todo: more robust TCP stack
 // Todo: optimize ELF loading (investigate all possible sources of poor performance. FAT can be sped up with FAT cache)
 // Todo: add a deallocator for register_physical_data and identity_map and physically_aligned_malloc
+// Todo: check global code review
+// Todo: check issues regarding recursive page faults caused by page tables lazy allocation
+// Todo: add an LRU cache for evictable dentries and free some space from there. Full virtual entries (like /dev/null) should have an additional refcount held by VFS to never be put in LRU
+// Todo: make shared library actually shared in memory
 extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure pointer
 {
     Interrupts::disable_asm();
