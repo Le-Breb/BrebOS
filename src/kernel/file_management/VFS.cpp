@@ -196,17 +196,21 @@ Result<SharedPointer<Dentry>> VFS::browse_to(const Path& path, const SharedPoint
 		return MAKE_ERR("%s: no such directory", (*path).c_str());
 
 	// Full path cannot be fully browsed only using cached entries, now manually browse
-	FS* fs = dentry->inode->superblock->get_fs();
 	while (token != path.end())
 	{
 		if (dentry->inode->type != Inode::Dir)
 			return MAKE_ERR("%s not a directory", (*path).c_str());
-		dentry = strcmp(".", *token) ?
-			strcmp("..", *token) ? fs->get_child_dentry(dentry, *token) : dentry->parent
-			: dentry;
-		if (!dentry)
+
+		SharedPointer<Dentry> next_entry = nullptr;
+		if (!strcmp(".", *token))
+			next_entry = dentry;
+		else if (!strcmp("..", *token))
+			next_entry = dentry->parent;
+		else // Ask the FS dentry belongs to, which changes when crossing a mount point
+			next_entry = dentry->inode->superblock->get_fs()->get_child_dentry(dentry, *token);
+		if (!next_entry)
 			return MAKE_ERR("%s: no such directory", (*path).c_str());
-		dentry = Dentry::follow_mount(dentry);
+		dentry = Dentry::follow_mount(next_entry);
 
 		if (!cache_dentry(dentry))
 			irrecoverable_error("Too many dentries");
