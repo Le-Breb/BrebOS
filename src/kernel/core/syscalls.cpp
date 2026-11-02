@@ -114,7 +114,7 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
             case SyscallNumber::MKDIR:
                 return mkdir(&p->cpu_state);
             case SyscallNumber::TOUCH:
-                return touch(&p->cpu_state);
+                return touch(p);
             case SyscallNumber::CLEAR_SCREEN:
                 FB::clear_screen();
                 return SyscallResult::ReturnToUser;
@@ -249,10 +249,10 @@ Syscall::SyscallResult Syscall::mkdir(cpu_state_t* cpu_state)
     return SyscallResult::ReturnToUser;
 }
 
-Syscall::SyscallResult Syscall::touch(cpu_state_t* cpu_state)
+Syscall::SyscallResult Syscall::touch(Process* p)
 {
-    const char* path = (const char*)cpu_state->ebx;
-    cpu_state->eax = (uint)(VFS::touch(path) ? 1 : 0);
+    const char* path = (const char*)p->cpu_state.ebx;
+    p->cpu_state.eax = (uint)(VFS::touch(path, p->get_work_dir()) ? 1 : 0);
 
     return SyscallResult::ReturnToUser;
 }

@@ -98,13 +98,20 @@ public:
 
 	static void shutdown();
 
-	static SharedPointer<Dentry> touch(const char* pathname);
+	/**
+	 * @param work_dir Directory relative pathnames are resolved from. May be nullptr if pathname is absolute
+	 */
+	static SharedPointer<Dentry> touch(const char* pathname, const char* work_dir);
 
 	static bool mkdir(const char* pathname);
 
 	static char* get_absolute_path(const char* path);
 
-	static Result<SharedPointer<Dentry>> get_file_parent_dentry(const char* pathname, const char*& file_name);
+	/**
+	 * @param work_dir Directory relative pathnames are resolved from. May be nullptr if pathname is absolute
+	 */
+	static Result<SharedPointer<Dentry>> get_file_parent_dentry(const char* pathname, const char*& file_name,
+	                                                            const char* work_dir = nullptr);
 
 	/**
 	 * Mounts a file system at /mnt/FS_index

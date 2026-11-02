@@ -49,7 +49,7 @@ class Syscall
 
 	static SyscallResult mkdir(cpu_state_t* cpu_state);
 
-	static SyscallResult touch(cpu_state_t* cpu_state);
+	static SyscallResult touch(Process* p);
 
 	static SyscallResult dns(const cpu_state_t* cpu_state);
 

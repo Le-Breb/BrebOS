@@ -80,10 +80,10 @@ void VFS::shutdown()
 	delete dentries;
 }
 
-SharedPointer<Dentry> VFS::touch(const char* pathname)
+SharedPointer<Dentry> VFS::touch(const char* pathname, const char* work_dir)
 {
 	const char* file_name = nullptr;
-	SharedPointer<Dentry> parent_dentry = WARN_TRY_OR(get_file_parent_dentry(pathname, file_name), nullptr);
+	SharedPointer<Dentry> parent_dentry = WARN_TRY_OR(get_file_parent_dentry(pathname, file_name, work_dir), nullptr);
 	if (!parent_dentry)
 		{ delete[] file_name; return nullptr; }
 
@@ -250,8 +250,13 @@ void VFS::free_unused_dentry_cache_entries()
 	}
 }
 
-Result<SharedPointer<Dentry>> VFS::get_file_parent_dentry(const char* pathname, const char*& file_name)
+Result<SharedPointer<Dentry>> VFS::get_file_parent_dentry(const char* pathname, const char*& file_name,
+                                                          const char* work_dir)
 {
+	const bool is_path_abs = pathname && pathname[0] == '/';
+	if (!is_path_abs && !work_dir)
+		return MAKE_ERR("non absolute path '%s' without work dir", pathname);
+
 	Result<Path> path_res = Path::build_path(pathname);
 	if (!path_res.is_ok())
 		return MAKE_ERR("invalid_path '%s'", pathname);
@@ -267,7 +272,12 @@ Result<SharedPointer<Dentry>> VFS::get_file_parent_dentry(const char* pathname, 
 	// Extract parent directory path
 	file_name = strdup(*--path.end());
 
-	const SharedPointer<Dentry> dentry = TRY_OR(browse_to(parent.value(), get_root_dentry()), nullptr);
+	// Relative paths are resolved from the work dir
+	const SharedPointer<Dentry> start = is_path_abs ? get_root_dentry() : TRY_OR(browse_to(work_dir), nullptr);
+	if (!start)
+		return MAKE_ERR("%s: invalid work dir '%s'", pathname, work_dir);
+
+	const SharedPointer<Dentry> dentry = TRY_OR(browse_to(parent.value(), start), nullptr);
 	if (!dentry || dentry->inode->type != Inode::Dir)
 		return MAKE_ERR("%s no such/not a directory", pathname);
 
@@ -420,7 +430,7 @@ FileInterface* VFS::open_file(const char* pathname, int flags, mode_t mode, int&
 	{
 		if (flags & O_CREAT)
 		{
-			dentry = touch(pathname);
+			dentry = touch(pathname, work_dir);
 			if (!dentry)
 				open_file_leave_with_error(-EACCES)
 		}
