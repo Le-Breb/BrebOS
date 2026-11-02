@@ -33,6 +33,9 @@
 #define PTE_PHYS_ADDR(i) (FRAME_ID_ADDR((PDT_ENTRIES + (i))))
 #define PTE_USED(page_tables, i) (PTE(page_tables, i) & (PAGE_PRESENT | PAGE_LAZY_ZERO))
 #define PTE(page_tables, i) (page_tables[(i) >> 10].entries[(i) & 0x3FF])
+#define PTE_FLAGS_MASK 0xFFF
+#define PTE_FLAGS(pte) ((pte) & PTE_FLAGS_MASK)
+#define PTE_FRAME(pte) ((pte) >> 12)
 #define FRAME_USED(i) (Memory::frame_rc[i])
 #define FRAME_FREE(i) !(FRAME_USED(i))
 #define MARK_FRAME_USED(frame_id) {\

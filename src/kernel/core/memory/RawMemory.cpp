@@ -49,30 +49,27 @@ namespace Memory
         return *lowest_free_pe;
     }
 
-    void update_page(uint page_id, pdt_t* pdt, page_table_t* pt, uint val, bool update_cache)
+    /**
+     * Writes a page table entry and releases the frame previously mapped by it.
+     * The frame referenced by val, if any, MUST already account for this mapping in frame_rc: pt may be lazily
+     * allocated, in which case accessing it page faults, and the fault handler would otherwise be free to pick that
+     * very frame to back the page table.
+     */
+    static void write_pte(uint page_id, pdt_t* pdt, page_table_t* pt, uint val, bool update_cache)
     {
         // Decrease previously mapped frame reference count if there were one being referenced
-        uint previous_frame = PTE(pt, page_id) >> 12;
+        const uint previous_pte = PTE(pt, page_id);
+        const uint previous_frame = PTE_FRAME(previous_pte);
         if (frame_rc[previous_frame])
         {
             frame_rc[previous_frame]--;
             if (previous_frame && !frame_rc[previous_frame])
                 MARK_FRAME_FREE(previous_frame); // Internal deallocation registration
         }
-        else if (PTE(pt, page_id) & PAGE_PRESENT && !(PTE(pt, page_id) & PAGE_LAZY_ZERO))
-            irrecoverable_error("huh");
+        else if (previous_pte & PAGE_PRESENT && !(previous_pte & PAGE_LAZY_ZERO))
+            irrecoverable_error("%s: page %u maps frame %u which is not referenced", __func__, page_id, previous_frame);
 
         PTE(pt, page_id) = val;
-
-        // Increase frame reference count if we are actually mapping a frame
-        // This MUST be done before dealing with PDT. Indeed, the latter may be lazily allocated. Reading it would then
-        // page fault again, and selected frame wouldn't have been marked used yet. The frame would then be used for
-        // both the current faulting page and the PDT
-        if (val & PAGE_PRESENT && !(val & PAGE_LAZY_ZERO))
-        {
-            uint frame_id = val >> 12;
-            frame_rc[frame_id]++;
-        }
 
         const uint pde = page_id >> 10;
         if (!pdt->entries[pde])
@@ -86,14 +83,54 @@ namespace Memory
             INVALIDATE_PAGE(pde, page_id);
     }
 
+    static bool maps_frame(uint flags)
+    {
+        return flags & PAGE_PRESENT && !(flags & PAGE_LAZY_ZERO);
+    }
+
+    void update_page(uint page_id, pdt_t* pdt, page_table_t* pt, uint frame_id, uint flags, bool update_cache)
+    {
+        if (flags & ~PTE_FLAGS_MASK) [[unlikely]]
+            irrecoverable_error("%s: invalid flags 0x%x", __func__, flags);
+
+        if (maps_frame(flags))
+        {
+            // Take the reference before touching pt, see write_pte
+            if (!frame_rc[frame_id]) [[unlikely]]
+                irrecoverable_error("%s: frame %u is not referenced", __func__, frame_id);
+            frame_rc[frame_id]++;
+        }
+        else if (frame_id) [[unlikely]]
+            irrecoverable_error("%s: frame %u provided for a mapping without frame (flags 0x%x)", __func__, frame_id,
+                                flags);
+
+        write_pte(page_id, pdt, pt, FRAME_ID_ADDR(frame_id) | flags, update_cache);
+    }
+
+    void update_page(uint page_id, pdt_t* pdt, page_table_t* pt, uint flags, bool update_cache)
+    {
+        if (flags & ~PTE_FLAGS_MASK) [[unlikely]]
+            irrecoverable_error("%s: invalid flags 0x%x", __func__, flags);
+
+        uint frame_id = 0;
+        if (maps_frame(flags))
+        {
+            // Mark the frame used before touching pt, see write_pte
+            frame_id = get_free_frame();
+            MARK_FRAME_USED(frame_id);
+        }
+
+        write_pte(page_id, pdt, pt, FRAME_ID_ADDR(frame_id) | flags, update_cache);
+    }
+
     void allocate_page(uint frame_id, uint page_id, int policy)
     {
+        if (policy & PAGE_PRESENT)
+            MARK_FRAME_USED(frame_id);
+
         // Write PTE
         PTE(page_tables, page_id) = FRAME_ID_ADDR(frame_id) | policy;
         __asm__ volatile("invlpg (%0)" : : "r" (PAGE_ADDR(page_id)));
-
-        if (policy & PAGE_PRESENT)
-            MARK_FRAME_USED(frame_id);
     }
 
     void allocate_page(uint page_id, int policy)

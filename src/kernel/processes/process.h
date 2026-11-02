@@ -260,12 +260,22 @@ public:
 	pid_t fork();
 
 	/**
-	 * Updates a page table entry.
+	 * Maps a page to an already referenced frame. Cf. Memory::update_page
 	 * @param pte page id
-	 * @param val new page entry value
+	 * @param frame_id frame to map, must already be referenced. 0 if flags do not describe a present, non lazy page
+	 * @param flags new page entry flags
 	 * @param update_cache whether TLB cache should be updated after applying the update
 	 */
-	void update_pte(uint pte, uint val, bool update_cache) const;
+	void update_pte(uint pte, uint frame_id, uint flags, bool update_cache) const;
+
+	/**
+	 * Sets a page table entry flags, allocating a new frame if they describe a present, non lazy page.
+	 * Cf. Memory::update_page
+	 * @param pte page id
+	 * @param flags new page entry flags
+	 * @param update_cache whether TLB cache should be updated after applying the update
+	 */
+	void update_pte(uint pte, uint flags, bool update_cache) const;
 
 	/**
 	 * Transfer various data to proc, which is set as exec replacement

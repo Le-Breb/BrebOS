@@ -89,7 +89,17 @@ namespace Memory
 	/** Get index of lowest free page entry id in higher half and update lowest_free_pe to next free page id */
 	uint get_free_pe();
 
-	void update_page(uint page_id, pdt_t* pdt, page_table_t* pt, uint val, bool update_cache);
+	/**
+	 * Maps a page to an already referenced frame (sharing), or updates the flags of a mapping without frame (frame_id
+	 * must then be 0). The new reference is taken before the page table is accessed.
+	 */
+	void update_page(uint page_id, pdt_t* pdt, page_table_t* pt, uint frame_id, uint flags, bool update_cache);
+
+	/**
+	 * Sets a page's flags. If they describe a present, non lazy page, a free frame is allocated and marked used before
+	 * the page table is accessed. Otherwise, the entry is written without frame (unmapping, lazy zero...).
+	 */
+	void update_page(uint page_id, pdt_t* pdt, page_table_t* pt, uint flags, bool update_cache);
 
 	uint get_contiguous_pages(uint n, const hint_info& hint_info, const page_table_t* pt, uint lowest_free_page_entry);
 }

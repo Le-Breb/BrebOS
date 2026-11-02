@@ -180,7 +180,7 @@ uint Process::new_proc_mapping(uint start_page, uint num_pages, const Process* t
     for (uint i = 0; i < num_pages; i++)
     {
         const uint target_pte = PTE(target_process->page_tables, start_page + i) | (force_write ? PAGE_WRITE : 0);
-        update_pte(map_pte_id + i, target_pte, true);
+        update_pte(map_pte_id + i, PTE_FRAME(target_pte), PTE_FLAGS(target_pte), true);
     }
     Memory::allocation alloc{PAGE_ADDR(map_pte_id), PAGE_ADDR(map_pte_id + num_pages), target_alloc.page_info, true};
     if (force_write)
@@ -344,8 +344,8 @@ void Process::copy_page_to_other_process_shared(const Process* other, uint page_
     // Mark page as COW in current and other process
     const bool write = pte & PAGE_WRITE || pte & PAGE_COW;
     const uint pte_val = (pte | (write ? PAGE_COW : PAGE_SHRO)) & ~PAGE_WRITE;
-    update_pte(page_id, pte_val, true);
-    other->update_pte(page_id , pte_val, false);
+    update_pte(page_id, PTE_FRAME(pte_val), PTE_FLAGS(pte_val), true);
+    other->update_pte(page_id, PTE_FRAME(pte_val), PTE_FLAGS(pte_val), false);
 }
 
 pid_t Process::fork()
@@ -427,10 +427,16 @@ pid_t Process::fork()
     return child->pid;
 }
 
-void Process::update_pte(uint pte, uint val, bool update_cache) const
+void Process::update_pte(uint pte, uint frame_id, uint flags, bool update_cache) const
 {
     Memory::page_table_t* pt = CORRECT_PT_FOR_HIGHER_HALF(page_tables, PAGE_ADDR(pte));
-    Memory::update_page(pte, pdt, pt, val, update_cache);
+    Memory::update_page(pte, pdt, pt, frame_id, flags, update_cache);
+}
+
+void Process::update_pte(uint pte, uint flags, bool update_cache) const
+{
+    Memory::page_table_t* pt = CORRECT_PT_FOR_HIGHER_HALF(page_tables, PAGE_ADDR(pte));
+    Memory::update_page(pte, pdt, pt, flags, update_cache);
 }
 
 void Process::execve_transfer(Process* proc)

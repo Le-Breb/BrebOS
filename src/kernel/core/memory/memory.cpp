@@ -381,7 +381,7 @@ namespace Memory
             uint pte = PTE(process->page_tables, page_id);
             pte &= flags_mask;
             pte |= new_flags;
-            process->update_pte(page_id, pte, true);
+            process->update_pte(page_id, PTE_FRAME(pte), PTE_FLAGS(pte), true);
         }
 
         return 0;
@@ -409,19 +409,10 @@ namespace Memory
             for (uint i = b; i < e; ++i)
                 allocate_page(i, page_info.policy);
         }
-        else
+        else // Frames are allocated by update_pte, unless allocation is lazy
         {
-            if (!(page_info.policy & PAGE_LAZY_ZERO))
-            {
-                for (uint i = b; i < e; ++i)
-                {
-                    const uint pte = get_free_frame() << 12 | page_info.policy;
-                    process->update_pte(i, pte, true);
-                }
-            }
-            else // Lazy allocation, do not allocate in kernel page tables
-                for (uint i = b; i < e; ++i)
-                    process->update_pte(i, page_info.policy, true);
+            for (uint i = b; i < e; ++i)
+                process->update_pte(i, page_info.policy, true);
         }
 
         while (PTE_USED(process->page_tables, process->lowest_free_pe))
@@ -610,15 +601,15 @@ namespace Memory
         if (higher_half)
             irrecoverable_error("COW on higher half");
 
-        const uint frame = get_free_frame(); // Get frame id
-        const uint current_policy = PTE(pt, page_id) & 0x7FF;
+        const uint pte = PTE(pt, page_id);
+        const uint current_policy = pte & PAGE_BREBOS_MANAGED_FLAGS;
         const uint new_policy = (current_policy & ~PAGE_COW) | PAGE_WRITE;
         const uint mapping_pe = get_contiguous_pages(1, DEFAULT_HINT_INFO, current_process); // Get a free pe
 
         // Move old page to mapping page
-        current_process->update_pte(mapping_pe, PTE(pt, page_id), true);
-        // Update page table entry to point to new page
-        current_process->update_pte(page_id, FRAME_ID_ADDR(frame) | new_policy, true);
+        current_process->update_pte(mapping_pe, PTE_FRAME(pte), PTE_FLAGS(pte), true);
+        // Update page table entry to point to a new frame
+        current_process->update_pte(page_id, new_policy, true);
 
         // Copy page to new page
         memcpy((void*)PAGE_ADDR(page_id), (void*)PAGE_ADDR(mapping_pe), PAGE_SIZE);
@@ -631,9 +622,8 @@ namespace Memory
     {
         // Allocate frame and update memory mapping
         const bool page_user = PTE(pt, page_id) & PAGE_USER; // Should page be user accessible ?
-        const uint frame_id = get_free_frame(); // Get frame
-        const uint new_val = FRAME_ID_ADDR(frame_id) | (page_user ? PAGE_USER : 0) | PAGE_WRITE | PAGE_PRESENT; // Update pte
-        current_process->update_pte(page_id, new_val, true);
+        const uint new_flags = (page_user ? PAGE_USER : 0) | PAGE_WRITE | PAGE_PRESENT;
+        current_process->update_pte(page_id, new_flags, true);
         memset((void*)PAGE_ADDR(page_id), 0, PAGE_SIZE); // Zero out page
     }
 
