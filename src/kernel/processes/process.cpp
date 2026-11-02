@@ -390,13 +390,25 @@ pid_t Process::fork()
     // Cache still needs to be updated, so we do it all at once with a full TLB flush
     Memory::reload_cr3_asm();
 
-    Memory::AddressSpaceBridge bridge(this, child);
+    for (uint i = 768 - (PROCESS_N_STACKS_PAGES + PT_ENTRIES - 1) / PT_ENTRIES; i < 768 ; i++)
+    {
+        if (pdt->entries[i])
+        {
+            for (uint j = 0; j < PT_ENTRIES; j++)
+            {
+                const uint parent_pte = page_tables[i].entries[j];
+                if (!parent_pte)
+                    continue;
 
-    // Duplicate stacks - do not use COW for stacks, because they are not shared
-    for (int i = 0; i < PROCESS_STACK_N_PAGES; i++) // First copy the process stack
-        copy_page_to_other_process(child, ADDR_PAGE(KERNEL_VIRTUAL_BASE - PAGE_SIZE * (i + 1)), bridge);
-    for (int i = 0; i < PROCESS_SYSCALL_STACK_N_PAGES; i++) // Next proceed with syscall stack
-        copy_page_to_other_process(child, ADDR_PAGE(KERNEL_VIRTUAL_BASE - PAGE_SIZE * (PROCESS_STACK_N_PAGES + i + 1)), bridge);
+                // Allocate a new frame with the same flags
+                child->update_pte(i * PT_ENTRIES + j, parent_pte & PAGE_BREBOS_MANAGED_FLAGS, false);
+            }
+        }
+    }
+
+    Memory::AddressSpaceBridge bridge(this, child);
+    const void* stacks_start_addr = (void*)(KERNEL_VIRTUAL_BASE - PAGE_SIZE * PROCESS_N_STACKS_PAGES);
+    ELFTools::Lptr(stacks_start_addr, &bridge).memcpy(stacks_start_addr, PROCESS_N_STACKS_PAGES * PAGE_SIZE);
 
     // Set child PDT: user PDEs have been set by update_page while mapping the child's pages above. Only share kernel ones
     memcpy(child_pdt->entries + 768, pdt->entries + 768, sizeof(uint) * (PDT_ENTRIES - 768));
