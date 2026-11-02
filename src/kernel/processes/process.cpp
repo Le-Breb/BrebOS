@@ -559,7 +559,7 @@ int Process::close(int fd)
         return -EBADF; // File descriptor not found
 
     release_fd(fd);
-    if (int err = VFS::close(sys_fd) < 0)
+    if (const int err = VFS::close(sys_fd); err < 0)
         return err; // Propagate error from VFS
 
     return 0; // Success
@@ -715,7 +715,7 @@ int Process::dup(int oldfd)
 int Process::dup2(int oldfd, int newfd)
 {
     int sys_fd = proc_to_sys_fd(oldfd);
-    if (sys_fd == -1)
+    if (sys_fd == -1 || newfd < 0 || newfd >= MAX_FD_PER_PROCESS)
         return -EBADF;
 
     if (oldfd == newfd)
@@ -887,9 +887,9 @@ int Process::sigprogmask(int how, const sigset_t* set, sigset_t* oldset)
 
 int Process::getdents(int fd, void* buffer, size_t max_size, size_t* bytes_read) const
 {
-    int sys_fd = proc_to_sys_fd(fd);
+    const int sys_fd = proc_to_sys_fd(fd);
 
-    if (fd == -1)
+    if (sys_fd == -1)
         return -EBADF;
 
     return VFS::getdents(sys_fd, buffer, max_size, bytes_read);
