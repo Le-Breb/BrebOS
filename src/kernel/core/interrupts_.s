@@ -138,6 +138,9 @@ common_interrupt_handler:               ; the common parts of the generic interr
     ; save the registers
     save_regs
 
+    ; Interrupt gates don't clear DF, and code compiled for the kernel expects it cleared (rep movs/stos)
+    cld
+
     mov ax, 0x10
     mov ds, ax
     mov es, ax
