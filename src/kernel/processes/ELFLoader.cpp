@@ -212,9 +212,13 @@ ELF* ELFLoader::load_elf(const SharedPointer<Dentry>& file, ELF_type expected_ty
     if (fd < 0)
         return nullptr;
     const auto buf = new char[file->inode->size];
-    if (current_process->read(fd, buf, file->inode->size) < 0) // Read file with read (and not VFS::load_file) to benefit from preload
+    // Read file with read (and not VFS::load_file) to benefit from preload
+    const bool read_ok = current_process->read(fd, buf, file->inode->size) >= 0;
+    // Always close, otherwise the fd would be transferred to the new process by execve_transfer
+    current_process->close(fd);
+    if (!read_ok)
     {
-        current_process->close(fd);
+        delete[] buf;
         return nullptr;
     }
 
