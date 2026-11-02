@@ -62,7 +62,7 @@ namespace Memory
      * @param mem pointer to memory region
      * @param process process with relevant page tables
      */
-    void zero_out_possibly_lazily_allocated_memory(uint total_size, void* mem, const Process* process);
+    void zero_out_mem(uint total_size, void* mem, const Process* process);
 
     /**
      * Creates the process that will store global kernel memory mapping.
@@ -465,7 +465,8 @@ namespace Memory
         void* alloc = mmap((void*)KERNEL_VIRTUAL_BASE, new_size, DEFAULT_K_PROT, DEFAULT_K_FLAGS, 0, 0, err, kernel_process, lazy_zero, false);
         if (!alloc)
             return nullptr;
-        zero_out_possibly_lazily_allocated_memory(new_size, alloc, kernel_process);
+        if (!lazy_zero) // Zero memory if it's not lazily allocatd
+            zero_out_mem(new_size, alloc, kernel_process);
         return alloc;
     }
 
@@ -717,41 +718,21 @@ namespace Memory
         return nullptr;
     }
 
-    void zero_out_possibly_lazily_allocated_memory(uint total_size, void* mem, const Process* process)
+    void zero_out_mem(uint total_size, void* mem, const Process* process)
     {
         const uintptr_t uaddr = reinterpret_cast<uintptr_t>(mem);
-        const page_table_t* pt = process->page_tables; // Page tables to use
-        const uint first_page_id = ADDR_PAGE(uaddr);
-        const uintptr_t mem_off = ADDR_PAGE_OFF(uaddr);
-        const uint bytes_on_first_page = min(PAGE_SIZE - mem_off, total_size);
 
         Process* current_process = Scheduler::get_running_process();
-        AddressSpaceBridge address_space_bridge(current_process, process);
-        auto memset_func = [&](void* addr, char c, uint size)
+        if (uaddr >= KERNEL_VIRTUAL_BASE || process == current_process)
+            memset(mem, 0, total_size);
+        else
         {
-            // If setting mem in an address range accessible from current process, use memset, otherwise use Lptr to jump between address spaces
-            if (process == current_process || uaddr >= KERNEL_VIRTUAL_BASE)
-                memset(addr, c, size);
-            else
-                ELFTools::Lptr(addr, &address_space_bridge).memset(c, size);
-        };
+            if (uaddr + total_size > KERNEL_VIRTUAL_BASE)
+                irrecoverable_error("%s: region [0x%08x-0x%08x] spans over both lower and higher half, this is not supported",
+                    __func__, uaddr, uaddr + total_size);
 
-        // Handle first page alone since start address is not necessarily page aligned
-        if (PTE(pt, first_page_id) & PAGE_PRESENT)
-            memset_func(mem, 0, bytes_on_first_page);
-
-        // Handle other pages
-        const uint num_remaining_pages = ADDR_PAGE(total_size - bytes_on_first_page + PAGE_SIZE - 1);
-        uint rem = total_size - bytes_on_first_page; // Remaining bytes to zero out
-        for (size_t i = 0; i < num_remaining_pages; i++)
-        {
-            const uint n = min(rem, (uint)PAGE_SIZE); // How many bytes are on this page
-            if (PTE(pt, first_page_id + 1 + i) & PAGE_PRESENT)
-            {
-                const uint address = PAGE_ADDR(first_page_id + 1 + i); // Address of the beginning of the page
-                memset_func((void*)address, 0, n); // Zero out
-            }
-            rem -= n; // Update remaining byte count
+            AddressSpaceBridge address_space_bridge(current_process, process);
+            ELFTools::Lptr(mem, &address_space_bridge).memset(0, total_size);
         }
     }
 }
@@ -835,8 +816,9 @@ void* calloc(size_t nmemb, size_t size, const page_info& page_info, Process* pro
     if (!mem) [[unlikely]]
         return nullptr;
 
-    // Zero out memory which isn't in lazily allocated pages
-    zero_out_possibly_lazily_allocated_memory(total_size, mem, process);
+    // Zero out memory if it's not lazily allocated
+    if (!(page_info.policy & PAGE_LAZY_ZERO))
+        zero_out_mem(total_size, mem, process);
 
     return mem;
 }
