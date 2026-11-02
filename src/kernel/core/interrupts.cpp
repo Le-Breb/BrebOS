@@ -70,7 +70,7 @@ void Interrupts::page_fault_handler(const stack_state_t* stack_state)
 	FB::flush();
 	if (running_process->bin_path)
 	{
-		running_process->kill(SIGSEGV);
+		running_process->terminate_with_signal(SIGSEGV);
 		TRIGGER_TIMER_INTERRUPT
 	}
 	else
@@ -86,6 +86,7 @@ void Interrupts::gpf_handler(const stack_state* stack_state)
 	FB::flush();
 
 	Scheduler::get_running_process()->terminate_with_signal(SIGSEGV);
+	TRIGGER_TIMER_INTERRUPT
 }
 
 [[noreturn]]
@@ -284,7 +285,7 @@ void Interrupts::invalid_opcode(const stack_state_t* stack_state)
 	{
 		printf_error("Invalid opcode at address 0x%x by program '%s'. Aborting", stack_state->eip, bin_path);
 		FB::flush();
-		running_process->kill(SIGKILL);
+		running_process->terminate_with_signal(SIGKILL);
 		TRIGGER_TIMER_INTERRUPT
 		irrecoverable_error("%s: unreachable code reached!", __PRETTY_FUNCTION__);
 	}
