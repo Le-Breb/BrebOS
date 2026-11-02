@@ -329,7 +329,7 @@ void Process::copy_page_to_other_process(Process* other, uint page_id, Memory::A
     ELFTools::Lptr((void*)addr, &bridge).memcpy((void*)addr, PAGE_SIZE);
 }
 
-void Process::copy_page_to_other_process_shared(const Process* other, uint page_id) const
+void Process::copy_page_to_other_process_shared(const Process* other, uint page_id, bool update_cache) const
 {
     const auto pte = PTE(page_tables, page_id);
 
@@ -344,7 +344,8 @@ void Process::copy_page_to_other_process_shared(const Process* other, uint page_
     // Mark page as COW in current and other process
     const bool write = pte & PAGE_WRITE || pte & PAGE_COW;
     const uint pte_val = (pte | (write ? PAGE_COW : PAGE_SHRO)) & ~PAGE_WRITE;
-    update_pte(page_id, PTE_FRAME(pte_val), PTE_FLAGS(pte_val), true);
+    if (PTE_FLAGS(pte_val) != PTE_FLAGS(pte)) // Update current process page table if flags changed
+        update_pte(page_id, PTE_FRAME(pte_val), PTE_FLAGS(pte_val), update_cache);
     other->update_pte(page_id, PTE_FRAME(pte_val), PTE_FLAGS(pte_val), false);
 }
 
@@ -380,11 +381,14 @@ pid_t Process::fork()
             for (uint j = 0; j < PT_ENTRIES; j++)
             {
                 if (page_tables[i].entries[j])
-                    copy_page_to_other_process_shared(child, page_id_off + j);
+                    copy_page_to_other_process_shared(child, page_id_off + j, false);
             }
         }
         page_id_off += PT_ENTRIES;
     }
+    // Some PTE may have been updated by copy_page_to_other_process_shared, with update_cache = false for performance.
+    // Cache still needs to be updated, so we do it all at once with a full TLB flush
+    Memory::reload_cr3_asm();
 
     Memory::AddressSpaceBridge bridge(this, child);
 

@@ -137,7 +137,7 @@ private:
 
 	void copy_page_to_other_process(Process* other, uint page_id, Memory::AddressSpaceBridge& bridge) const;
 
-	void copy_page_to_other_process_shared(const Process* other, uint page_id) const;
+	void copy_page_to_other_process_shared(const Process* other, uint page_id, bool update_cache) const;
 
 public:
 	uint lowest_free_pe;
