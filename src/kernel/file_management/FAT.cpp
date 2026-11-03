@@ -628,33 +628,37 @@ Status FAT::read_from_active_sector(ctx& ctx, void* buffer, uint offset, uint le
 }
 
 /**
- * Rejects names that DirEntry::DirEntry cannot store correctly as an 8.3 short name (no LFN writing support yet):
- * - more than 8 chars in total (DirEntry::DirEntry panics), which also rejects valid 8.3 names such as "abcdefgh.txt"
- * - files: more than one dot, a leading dot, an empty extension (trailing dot) or one longer than 3 chars
- * - directories: any dot (DirEntry::DirEntry stores directory names verbatim, without extension handling)
+ * Rejects names that cannot be stored as an 8.3 short name (no LFN writing support yet), for files and directories:
+ * - a base name longer than 8 chars, or an extension longer than 3 chars (DirEntry::DirEntry panics on those)
+ * - more than one dot, a leading dot, or an empty extension (trailing dot)
  * Lowercase names are accepted with a warning: BrebOS reads them back fine, but they violate the FAT spec, so other
  * systems (Linux, Windows, fsck.fat) may show them wrongly or flag them.
  */
-static Status check_short_name(const PathView::Component& name, bool is_dir)
+static Status check_short_name(const PathView::Component& name)
 {
     const size_t len = name.len;
     // Don't print the name: it may be up to NAME_MAX_LEN chars, which would overflow Status message buffer
-    if (len == 0 || len > 8)
-        return Status::failure("names longer than 8 chars require LFN support, which is not implemented (got %u)",
-                               static_cast<unsigned>(len));
+    if (len == 0 || len > SHORT_NAME_MAX_LEN)
+        return Status::failure("names longer than %u chars (8.3) require LFN support, which is not implemented (got %u)",
+                               static_cast<unsigned>(SHORT_NAME_MAX_LEN), static_cast<unsigned>(len));
 
     // Null terminated copy for printing (kernel printf ignores %.*s precision) and strchr
-    char cname[9];
+    char cname[SHORT_NAME_MAX_LEN + 1];
     memcpy(cname, name.ptr, len);
     cname[len] = '\0';
 
     const char* dot = strchr(cname, '.');
-    if (is_dir && dot)
-        return Status::failure("'%s': directory names containing a dot are not supported", cname);
-    if (dot)
+    if (!dot)
+    {
+        if (len > 8)
+            return Status::failure("'%s': names without extension longer than 8 chars require LFN support", cname);
+    }
+    else
     {
         if (dot == cname || strchr(dot + 1, '.'))
             return Status::failure("'%s': names with a leading dot or several dots require LFN support", cname);
+        if (dot - cname > 8)
+            return Status::failure("'%s': base names longer than 8 chars require LFN support", cname);
         const size_t ext_len = len - (dot + 1 - cname);
         if (ext_len == 0)
             return Status::failure("'%s': names ending with a dot are not supported", cname);
@@ -699,7 +703,7 @@ static bool same_short_name(const string& lowercase_name, const PathView::Compon
 
 Result<SharedPointer<Dentry>> FAT::touch(SharedPointer<Dentry>& parent_dentry, const PathView::Component& entry_name)
 {
-    TRY(check_short_name(entry_name, false));
+    TRY(check_short_name(entry_name));
 
     const FAT_Inode* fat_parent_inode = finode(parent_dentry->inode.get());
 
@@ -724,8 +728,8 @@ Result<SharedPointer<Dentry>> FAT::touch(SharedPointer<Dentry>& parent_dentry, c
 
             if (same_short_name(entry.get_name(), entry_name))
             {
-                // check_short_name ensured entry_name is at most 8 chars
-                char cname[9];
+                // check_short_name ensured entry_name is at most SHORT_NAME_MAX_LEN chars
+                char cname[SHORT_NAME_MAX_LEN + 1];
                 memcpy(cname, entry_name.ptr, entry_name.len);
                 cname[entry_name.len] = '\0';
                 return MAKE_ERR("'%s' already exists", cname);
@@ -750,7 +754,7 @@ Result<SharedPointer<Dentry>> FAT::touch(SharedPointer<Dentry>& parent_dentry, c
 
 Result<SharedPointer<Dentry>> FAT::mkdir(SharedPointer<Dentry>& parent_dentry, const PathView::Component& entry_name)
 {
-    TRY(check_short_name(entry_name, true));
+    TRY(check_short_name(entry_name));
 
     const FAT_Inode* fat_parent_inode = finode(parent_dentry->inode.get());
 
@@ -1142,32 +1146,27 @@ DirEntry::DirEntry(const PathView::Component& name, uint8_t attrs, uint32_t firs
     memset(this->name, NAME_PADDING_BYTE, DIR_ENTRY_NAME_LEN);
     if (!name.ptr || name.len == 0) // Dummy entry
         return;
-    if (name.len > 8)
-        irrecoverable_error("%s: file name of %u chars too long, requires LFN support. Max supported length is 8",
-                            __func__, static_cast<unsigned>(name.len));
 
-    // Directories are stored verbatim, without extension handling
-    if (attrs & DIRECTORY)
+    // "." and ".." are stored verbatim (their dots aren't extension separators)
+    if (name == "." || name == "..")
     {
         memcpy(this->name, name.ptr, name.len);
         return;
     }
 
-    // Split on the last dot: base goes in name[0..8), extension left aligned in name[8..11) (where get_name reads it)
+    // Split on the last dot, for files and directories alike: base goes in name[0..8), extension left aligned in
+    // name[8..11) (where get_name reads it)
     size_t dot = name.len;
     while (dot > 0 && name.ptr[dot - 1] != '.')
         --dot;
 
-    if (dot == 0) // No extension
-    {
-        memcpy(this->name, name.ptr, name.len);
-        return;
-    }
+    const size_t base_len = dot == 0 ? name.len : dot - 1;
+    const size_t ext_len = dot == 0 ? 0 : name.len - dot;
+    if (base_len > 8 || ext_len > 3)
+        irrecoverable_error("%s: name of %u chars does not fit 8.3 (base %u, extension %u), requires LFN support",
+                            __func__, static_cast<unsigned>(name.len), static_cast<unsigned>(base_len),
+                            static_cast<unsigned>(ext_len));
 
-    const size_t base_len = dot - 1;
-    size_t ext_len = name.len - dot;
-    if (ext_len > 3)
-        ext_len = 3;
     memcpy(this->name, name.ptr, base_len);
     memcpy(this->name + 8, name.ptr + dot, ext_len);
 }
@@ -1178,8 +1177,8 @@ string DirEntry::get_name() const
     while (base_len < 8 && name[base_len] != NAME_PADDING_BYTE)
         ++base_len;
 
-    // If entry is a file, and it has an extension, add .
-    const bool has_dot = !is_directory() && name[8] != NAME_PADDING_BYTE;
+    // If entry has an extension (files and directories alike), add .
+    const bool has_dot = name[8] != NAME_PADDING_BYTE;
 
     int ext_len = 0;
     while (ext_len < 3 && name[8 + ext_len] != NAME_PADDING_BYTE)

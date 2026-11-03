@@ -31,6 +31,7 @@
 
 #define NAME_PADDING_BYTE 0x20
 #define DIR_ENTRY_NAME_LEN 11
+#define SHORT_NAME_MAX_LEN 12 // 8.3 name with its dot: 8 base chars + '.' + 3 extension chars
 
 #define ENTRY_NOT_FOUND ((uint)-1)
 
@@ -135,7 +136,7 @@ public:
 	uint16_t first_cluster_low;
 	uint32_t file_size;
 
-	// name must be a valid 8.3 name (see check_short_name), its length must be <= 8
+	// name must be a valid 8.3 name (see check_short_name): base <= 8 chars, extension <= 3 chars
 	DirEntry(const PathView::Component& name, uint8_t attrs, uint32_t first_cluster_addr, uint32_t fileSize,
 	         uint8_t creationTimeTenth = -1,
 	         int16_t creationTime = -1, int16_t creationDate = -1, int16_t lastAccessDate = -1,
