@@ -493,7 +493,7 @@ namespace Memory
 
         if (!((flags & MAP_PRIVATE) | (flags & MAP_SHARED)))
             mmap_ret_err(EINVAL)  // According to man page
-        if (!IS_PAGE_SIZE_MUL((Elf32_Addr)hint) || !IS_PAGE_SIZE_MUL(size) || !(IS_PAGE_SIZE_MUL(offset)))
+        if (!IS_PAGE_SIZE_MUL((Elf32_Addr)hint) || !(IS_PAGE_SIZE_MUL(offset)))
             mmap_ret_err(EINVAL); // According to man page
 
         // When memory mapped files will be implemented, don't forget to handle EACCES error or mprotect (cf man page)
