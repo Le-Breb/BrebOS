@@ -630,7 +630,7 @@ Status FAT::read_from_active_sector(ctx& ctx, void* buffer, uint offset, uint le
 /**
  * Rejects names that DirEntry::DirEntry cannot store correctly as an 8.3 short name (no LFN writing support yet):
  * - more than 8 chars in total (DirEntry::DirEntry panics), which also rejects valid 8.3 names such as "abcdefgh.txt"
- * - files: more than one dot, a leading dot, or an extension of 1 or 2 chars (stored misaligned, read back without it)
+ * - files: more than one dot, a leading dot, an empty extension (trailing dot) or one longer than 3 chars
  * - directories: any dot (DirEntry::DirEntry stores directory names verbatim, without extension handling)
  * Lowercase names are accepted with a warning: BrebOS reads them back fine, but they violate the FAT spec, so other
  * systems (Linux, Windows, fsck.fat) may show them wrongly or flag them.
@@ -655,9 +655,11 @@ static Status check_short_name(const PathView::Component& name, bool is_dir)
     {
         if (dot == cname || strchr(dot + 1, '.'))
             return Status::failure("'%s': names with a leading dot or several dots require LFN support", cname);
-        if (const size_t ext_len = len - (dot + 1 - cname); ext_len != 3)
-            return Status::failure("'%s': only 3-char extensions are supported, got %u", cname,
-                                   static_cast<unsigned>(ext_len));
+        const size_t ext_len = len - (dot + 1 - cname);
+        if (ext_len == 0)
+            return Status::failure("'%s': names ending with a dot are not supported", cname);
+        if (ext_len > 3)
+            return Status::failure("'%s': extensions longer than 3 chars require LFN support", cname);
     }
 
     for (const char* c = cname; *c; c++)
