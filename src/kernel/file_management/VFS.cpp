@@ -87,6 +87,14 @@ SharedPointer<Dentry> VFS::touch(const char* pathname, const char* work_dir)
 	if (!parent_dentry)
 		return nullptr;
 
+	// Trailing slash ("file/"): the target must be a directory, so it can't be created as a regular file.
+	// file_name is the last component, so only trailing slashes can follow it
+	if (file_name.ptr[file_name.len] == '/')
+	{
+		printf_error("%s: cannot create a regular file with a trailing slash", pathname);
+		return nullptr;
+	}
+
 	auto dentry_res = parent_dentry->inode->superblock->get_fs()->touch(parent_dentry, file_name);
 	auto dentry = WARN_TRY_OR_RETURN(dentry_res, nullptr);
 	if (dentry)
@@ -234,6 +242,10 @@ Result<SharedPointer<Dentry>> VFS::browse_to(const PathView& path, const SharedP
 		++token;
 	}
 
+	// A trailing slash requires the target to be a directory (POSIX ENOTDIR)
+	if (path.must_be_dir() && dentry->inode->type != Inode::Dir)
+		return MAKE_ERR("%s: not a directory", path.data());
+
 	return make_ok(dentry);
 }
 
@@ -328,7 +340,9 @@ Result<SharedPointer<Dentry>> VFS::get_file_dentry(const char* pathname, const c
 	if (!is_path_abs)
 		return browse_to(pathname, parent_dentry);
 
-	return browse_to(PathView(file_name.ptr, file_name.len), parent_dentry);
+	// file_name is the last component, so up to the end of pathname there are only its trailing slashes, if any.
+	// Keeping them preserves the trailing slash => must be a directory check
+	return browse_to(PathView(file_name.ptr, strlen(file_name.ptr)), parent_dentry);
 }
 
 Result<SharedPointer<Dentry>> VFS::browse_to(const char* path)
