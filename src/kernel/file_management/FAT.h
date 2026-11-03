@@ -9,6 +9,7 @@
 #include "dentry.h"
 #include "../utils/string.h"
 #include "../utils/Result.h"
+#include "../utils/Path.h"
 
 // https://download.microsoft.com/download/1/6/1/161ba512-40e2-4cc9-843a-923143f3456c/fatgen103.doc
 // https://wiki.osdev.org/FAT
@@ -134,6 +135,13 @@ public:
 	uint16_t first_cluster_low;
 	uint32_t file_size;
 
+	// name must be a valid 8.3 name (see check_short_name), its length must be <= 8
+	DirEntry(const PathView::Component& name, uint8_t attrs, uint32_t first_cluster_addr, uint32_t fileSize,
+	         uint8_t creationTimeTenth = -1,
+	         int16_t creationTime = -1, int16_t creationDate = -1, int16_t lastAccessDate = -1,
+	         uint16_t writeTime = -1, uint16_t writeDate = -1);
+
+	// Null terminated name, delegates to the Component constructor. nullptr gives an all-padding name
 	DirEntry(const char* name, uint8_t attrs, uint32_t first_cluster_addr, uint32_t fileSize,
 	         uint8_t creationTimeTenth = -1,
 	         int16_t creationTime = -1, int16_t creationDate = -1, int16_t lastAccessDate = -1,
@@ -218,12 +226,12 @@ class FAT : public FS
 
 	static FAT_type get_FAT_type(const fat_BS_t* fat_boot);
 
-	Result<uint> get_child_dir_entry_id(const SharedPointer<Dentry>& parent_dentry, const char* name, ctx& ctx);
+	Result<uint> get_child_dir_entry_id(const SharedPointer<Dentry>& parent_dentry, const PathView::Component& name, ctx& ctx);
 
-	SharedPointer<Dentry> get_child_dentry(SharedPointer<Dentry>& parent_dentry, const char* name) override;
+	SharedPointer<Dentry> get_child_dentry(SharedPointer<Dentry>& parent_dentry, const PathView::Component& name) override;
 
 	Result<SharedPointer<Dentry>> dir_entry_to_dentry(const DirEntry& dir_entry,
-	                                                  const SharedPointer<Dentry>& parent_dentry, const char* name,
+	                                                  const SharedPointer<Dentry>& parent_dentry, const PathView::Component& name,
 	                                                  uint dir_entry_cluster, uint dir_entry_index);
 
 	Status write_fat(const ctx& ctx) const;
@@ -247,9 +255,9 @@ class FAT : public FS
 	[[nodiscard]]
 	Status read_from_active_sector(ctx& ctx, void* buffer, uint offset, uint length) const;
 public:
-	Result<SharedPointer<Dentry>> touch(SharedPointer<Dentry>& parent_dentry, const char* entry_name) override;
+	Result<SharedPointer<Dentry>> touch(SharedPointer<Dentry>& parent_dentry, const PathView::Component& entry_name) override;
 
-	Result<SharedPointer<Dentry>> mkdir(SharedPointer<Dentry>& parent_dentry, const char* entry_name) override;
+	Result<SharedPointer<Dentry>> mkdir(SharedPointer<Dentry>& parent_dentry, const PathView::Component& entry_name) override;
 
 	[[nodiscard]] static bool drive_present(uint drive_id);
 

@@ -5,10 +5,16 @@
 __attribute__ ((format (printf, 1, 2)))
 extern int irrecoverable_error(const char* format, ...);
 
-Dentry::Dentry(const SharedPointer<Inode>& inode, const SharedPointer<Dentry>& parent, const char* name) : inode(inode),
-                                                                                                           parent(parent), name(new char[strlen(name) + 1])
+Dentry::Dentry(const SharedPointer<Inode>& inode, const SharedPointer<Dentry>& parent, const char* name) :
+	Dentry(inode, parent, PathView::Component{name, strlen(name)})
 {
-	strcpy((char*)this->name, name);
+}
+
+Dentry::Dentry(const SharedPointer<Inode>& inode, const SharedPointer<Dentry>& parent,
+               const PathView::Component& name) : inode(inode), parent(parent), name(new char[name.len + 1])
+{
+	memcpy((char*)this->name, name.ptr, name.len);
+	((char*)this->name)[name.len] = '\0';
 }
 
 Dentry::~Dentry()

@@ -117,9 +117,8 @@ Process::Process(char* bin_path, uint num_elf_pages, Memory::page_table_t* page_
         if (file_descriptors[i] == nullptr)
             lowest_free_fd = i;
 
-    const char* file_name = nullptr;
+    PathView::Component file_name{};
     work_dir = bin_path ? std::move(VFS::get_file_parent_dentry(bin_path, file_name)).expect()->get_absolute_path() : nullptr;
-    delete[] file_name;
 
     for (int i = 0; i < HIGHEST_SIGNAL; i++)
         signal_action[i] = SIG_DFL;

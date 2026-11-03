@@ -5,11 +5,14 @@
 #include "../utils/optional.h"
 #include "../utils/shared_pointer.h"
 #include "../utils/string.h"
+#include "../utils/Path.h"
 
 class Dentry
 {
 public:
 	Dentry(const SharedPointer<Inode>& inode, const SharedPointer<Dentry>& parent, const char* name);
+	// Dentry owns a null terminated copy of name
+	Dentry(const SharedPointer<Inode>& inode, const SharedPointer<Dentry>& parent, const PathView::Component& name);
 
 	~Dentry();
 

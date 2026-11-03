@@ -29,16 +29,19 @@ public:
 private:
 	struct dentry_cache_key
 	{
-		const char* const name;
+		const PathView::Component name; // Not null terminated
 		Dentry* parent;
+
+		dentry_cache_key(const PathView::Component& name, Dentry* parent) : name(name), parent(parent) {}
+		dentry_cache_key(const char* name, Dentry* parent) : name{name, strlen(name)}, parent(parent) {}
 	};
 	struct cached_dentry_equality
 	{
 		using is_transparent = void;
 
 		bool operator()(const SharedPointer<Dentry>& a, const SharedPointer<Dentry>& b) const {return !strcmp(a->name, b->name) && a->parent.get() == b->parent.get();}
-		bool operator()(const dentry_cache_key& a, const SharedPointer<Dentry>& b)  const {return !strcmp(a.name, b->name) && a.parent == b->parent.get();}
-		bool operator()(const SharedPointer<Dentry>& a, const dentry_cache_key& b)  const {return !strcmp(a->name, b.name) && a->parent.get() == b.parent;}
+		bool operator()(const dentry_cache_key& a, const SharedPointer<Dentry>& b)  const {return a.name == b->name && a.parent == b->parent.get();}
+		bool operator()(const SharedPointer<Dentry>& a, const dentry_cache_key& b)  const {return b.name == a->name && a->parent.get() == b.parent;}
 	};
 	struct dentry_hash
 	{
@@ -46,7 +49,9 @@ private:
 
 		uint32_t operator()(const dentry_cache_key& key) const noexcept
 		{
-			return fnv_32a_buf((void*)&key.parent, sizeof(key.parent), fnv_32a_str(key.name, FNV1A_32_INIT));
+			// Same bytes as fnv_32a_str(val->name) below: FNV-1a is identical over a buffer or a C string
+			return fnv_32a_buf((void*)&key.parent, sizeof(key.parent),
+			                   fnv_32a_buf((void*)key.name.ptr, key.name.len, FNV1A_32_INIT));
 		}
 		uint32_t operator()(const SharedPointer<Dentry>& val) const noexcept
 		{
@@ -67,11 +72,11 @@ private:
 	 * @param name name of looked after dentry
 	 * @return matching cached dentry, or nullptr if not found
 	 */
-	static SharedPointer<Dentry> get_cached_dentry(const SharedPointer<Dentry>& parent, const char* name);
+	static SharedPointer<Dentry> get_cached_dentry(const SharedPointer<Dentry>& parent, const PathView::Component& name);
 
 	static bool add_to_path(const char* path);
 
-	static Result<SharedPointer<Dentry>> browse_to(const Path& path, const SharedPointer<Dentry>& starting_point);
+	static Result<SharedPointer<Dentry>> browse_to(const PathView& path, const SharedPointer<Dentry>& starting_point);
 
 	static Result<SharedPointer<Dentry>> browse_to(const char* pathname, const SharedPointer<Dentry>& starting_point);
 
@@ -108,9 +113,10 @@ public:
 	static char* get_absolute_path(const char* path);
 
 	/**
+	 * @param file_name Set to the last component of pathname. Points into pathname: valid as long as pathname is
 	 * @param work_dir Directory relative pathnames are resolved from. May be nullptr if pathname is absolute
 	 */
-	static Result<SharedPointer<Dentry>> get_file_parent_dentry(const char* pathname, const char*& file_name,
+	static Result<SharedPointer<Dentry>> get_file_parent_dentry(const char* pathname, PathView::Component& file_name,
 	                                                            const char* work_dir = nullptr);
 
 	/**

@@ -6,6 +6,7 @@
 #include "../utils/Result.h"
 #include "dentry.h"
 #include <sys/stat.h>
+#include "../utils/Path.h"
 
 #include "BlockDevice.h"
 
@@ -40,11 +41,11 @@ public:
 
 	static list<FS*>* fs_list;
 
-	virtual SharedPointer<Dentry> get_child_dentry(SharedPointer<Dentry>& parent_dentry, const char* entry_name) = 0;
+	virtual SharedPointer<Dentry> get_child_dentry(SharedPointer<Dentry>& parent_dentry, const PathView::Component& entry_name) = 0;
 
-	virtual Result<SharedPointer<Dentry>> touch(SharedPointer<Dentry>& parent_dentry, const char* entry_name) = 0;
+	virtual Result<SharedPointer<Dentry>> touch(SharedPointer<Dentry>& parent_dentry, const PathView::Component& entry_name) = 0;
 
-	virtual Result<SharedPointer<Dentry>> mkdir(SharedPointer<Dentry>& parent_dentry, const char* entry_name) = 0;
+	virtual Result<SharedPointer<Dentry>> mkdir(SharedPointer<Dentry>& parent_dentry, const PathView::Component& entry_name) = 0;
 
 	virtual Status getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t max_size, size_t* bytes_read,
 	                        uint& fd_off) = 0;

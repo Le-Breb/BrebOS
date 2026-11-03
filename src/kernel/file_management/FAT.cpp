@@ -480,10 +480,11 @@ Status FAT::load_file_to_buf(void* buf, const SharedPointer<Dentry>& dentry, uin
     return Status::success();
 }
 
-Result<uint> FAT::get_child_dir_entry_id(const SharedPointer<Dentry>& parent_dentry, const char* name, ctx& ctx)
+Result<uint> FAT::get_child_dir_entry_id(const SharedPointer<Dentry>& parent_dentry, const PathView::Component& name,
+                                         ctx& ctx)
 {
-    // Make sure path makes sense
-    if (!name || name[0] == '/')
+    // A component never contains '/', only an empty one can't match anything
+    if (!name.ptr || name.len == 0)
         return make_ok(ENTRY_NOT_FOUND);
 
     const FAT_Inode* fat_parent_inode = finode(parent_dentry->inode.get());
@@ -518,7 +519,7 @@ Result<uint> FAT::get_child_dir_entry_id(const SharedPointer<Dentry>& parent_den
             }
             else
             {
-                if ((prev_is_lfn && !strcmp(lfn, name)) || !strcmp(entries[ctx.dir_entry_id].get_name().c_str(), name))
+                if ((prev_is_lfn && name == lfn) || name == entries[ctx.dir_entry_id].get_name())
                     return make_ok( ctx.dir_entry_id);
                 prev_is_lfn = false;
             }
@@ -531,7 +532,7 @@ Result<uint> FAT::get_child_dir_entry_id(const SharedPointer<Dentry>& parent_den
     return make_ok(ENTRY_NOT_FOUND);
 }
 
-SharedPointer<Dentry> FAT::get_child_dentry(SharedPointer<Dentry>& parent_dentry, const char* name)
+SharedPointer<Dentry> FAT::get_child_dentry(SharedPointer<Dentry>& parent_dentry, const PathView::Component& name)
 {
     ctx ctx{};
     const uint entry_id = get_child_dir_entry_id(parent_dentry, name, ctx).expect();
@@ -542,9 +543,9 @@ SharedPointer<Dentry> FAT::get_child_dentry(SharedPointer<Dentry>& parent_dentry
 }
 
 Result<SharedPointer<Dentry>> FAT::dir_entry_to_dentry(const DirEntry& dir_entry,
-                                                             const SharedPointer<Dentry>& parent_dentry,
-                                                             const char* name, uint dir_entry_cluster,
-                                                             uint dir_entry_index)
+                                                       const SharedPointer<Dentry>& parent_dentry,
+                                                       const PathView::Component& name, uint dir_entry_cluster,
+                                                       uint dir_entry_index)
 {
     Inode::Type inode_type = dir_entry.attrs & DIRECTORY ? Inode::Dir : Inode::File;
 
@@ -634,29 +635,37 @@ Status FAT::read_from_active_sector(ctx& ctx, void* buffer, uint offset, uint le
  * Lowercase names are accepted with a warning: BrebOS reads them back fine, but they violate the FAT spec, so other
  * systems (Linux, Windows, fsck.fat) may show them wrongly or flag them.
  */
-static Status check_short_name(const char* name, bool is_dir)
+static Status check_short_name(const PathView::Component& name, bool is_dir)
 {
-    const size_t len = strlen(name);
+    const size_t len = name.len;
+    // Don't print the name: it may be up to NAME_MAX_LEN chars, which would overflow Status message buffer
     if (len == 0 || len > 8)
-        return Status::failure("'%s': names longer than 8 chars require LFN support, which is not implemented", name);
+        return Status::failure("names longer than 8 chars require LFN support, which is not implemented (got %u)",
+                               static_cast<unsigned>(len));
 
-    const char* dot = strchr(name, '.');
+    // Null terminated copy for printing (kernel printf ignores %.*s precision) and strchr
+    char cname[9];
+    memcpy(cname, name.ptr, len);
+    cname[len] = '\0';
+
+    const char* dot = strchr(cname, '.');
     if (is_dir && dot)
-        return Status::failure("'%s': directory names containing a dot are not supported", name);
+        return Status::failure("'%s': directory names containing a dot are not supported", cname);
     if (dot)
     {
-        if (dot == name || strchr(dot + 1, '.'))
-            return Status::failure("'%s': names with a leading dot or several dots require LFN support", name);
-        if (const size_t ext_len = len - (dot + 1 - name); ext_len != 3)
-            return Status::failure("'%s': only 3-char extensions are supported, got %u", name, ext_len);
+        if (dot == cname || strchr(dot + 1, '.'))
+            return Status::failure("'%s': names with a leading dot or several dots require LFN support", cname);
+        if (const size_t ext_len = len - (dot + 1 - cname); ext_len != 3)
+            return Status::failure("'%s': only 3-char extensions are supported, got %u", cname,
+                                   static_cast<unsigned>(ext_len));
     }
 
-    for (const char* c = name; *c; c++)
+    for (const char* c = cname; *c; c++)
     {
         if (*c >= 'a' && *c <= 'z')
         {
             printf_warn("'%s': lowercase 8.3 names violate the FAT spec (LFN writing not implemented), the entry may "
-                        "not be read correctly outside of BrebOS", name);
+                        "not be read correctly outside of BrebOS", cname);
             break;
         }
     }
@@ -664,12 +673,8 @@ static Status check_short_name(const char* name, bool is_dir)
     return Status::success();
 }
 
-Result<SharedPointer<Dentry>> FAT::touch(SharedPointer<Dentry>& parent_dentry, const char* entry_name)
+Result<SharedPointer<Dentry>> FAT::touch(SharedPointer<Dentry>& parent_dentry, const PathView::Component& entry_name)
 {
-    // Make sure path makes sense
-    if (!entry_name || entry_name[0] == '/')
-        return make_ok<SharedPointer<Dentry>>(nullptr);
-
     TRY(check_short_name(entry_name, false));
 
     const FAT_Inode* fat_parent_inode = finode(parent_dentry->inode.get());
@@ -695,14 +700,13 @@ Result<SharedPointer<Dentry>> FAT::touch(SharedPointer<Dentry>& parent_dentry, c
         return MAKE_ERR("Working directory cluster is full, cluster chain extension implementation is needed");
 
     // Write file entry
-    DirEntry new_entry(entry_name, 0, 0, 0);
-    memcpy(&entries[ctx.dir_entry_id], &new_entry, sizeof(DirEntry));
+    new (&entries[ctx.dir_entry_id]) DirEntry(entry_name, 0, 0, 0);
     TRY(write_data_sectors(1, ctx.active_sector, buf, ctx));
 
-    return dir_entry_to_dentry(new_entry, parent_dentry, entry_name, ctx.active_cluster, ctx.dir_entry_id);
+    return dir_entry_to_dentry(entries[ctx.dir_entry_id], parent_dentry, entry_name, ctx.active_cluster, ctx.dir_entry_id);
 }
 
-Result<SharedPointer<Dentry>> FAT::mkdir(SharedPointer<Dentry>& parent_dentry, const char* entry_name)
+Result<SharedPointer<Dentry>> FAT::mkdir(SharedPointer<Dentry>& parent_dentry, const PathView::Component& entry_name)
 {
     TRY(check_short_name(entry_name, true));
 
@@ -734,8 +738,8 @@ Result<SharedPointer<Dentry>> FAT::mkdir(SharedPointer<Dentry>& parent_dentry, c
     delete[] free_clusters_list;
 
     // Write new entry
-    DirEntry new_entry(entry_name, DIRECTORY, dir_content_cluster, 0);
-    memcpy(&entries[ctx.dir_entry_id], &new_entry, sizeof(DirEntry));
+    new (&entries[ctx.dir_entry_id]) DirEntry(entry_name, DIRECTORY, dir_content_cluster, 0);
+    DirEntry new_entry = entries[ctx.dir_entry_id];
     TRY(write_data_sectors(1, ctx.active_sector, buf, ctx));
 
     // Save the new entry's location before ctx moves to the new directory's cluster
@@ -755,10 +759,8 @@ Result<SharedPointer<Dentry>> FAT::mkdir(SharedPointer<Dentry>& parent_dentry, c
     TRY(dev->read_blocks(dir_content_sector, 1, buf));
 
     // Create dot and dot dot entries
-    DirEntry dot_entry(".", DIRECTORY, dir_content_cluster, 0);
-    DirEntry dot_dot_entry("..", DIRECTORY, parent_cluster, 0);
-    memcpy(&entries[0], &dot_entry, sizeof(DirEntry));
-    memcpy(&entries[1], &dot_dot_entry, sizeof(DirEntry));
+    new (&entries[0]) DirEntry(".", DIRECTORY, dir_content_cluster, 0);
+    new (&entries[1]) DirEntry ("..", DIRECTORY, parent_cluster, 0);
 
     // Write them to disk
     TRY(write_data_sectors(1, dir_content_sector, buf, ctx));
@@ -1075,40 +1077,57 @@ inline bool DirEntry::is_LFN() const
 
 DirEntry::DirEntry(const char* name, uint8_t attrs, uint32_t first_cluster_addr, uint32_t fileSize,
                    uint8_t creationTimeTenth, int16_t creationTime, int16_t creationDate, int16_t lastAccessDate,
+                   uint16_t writeTime, uint16_t writeDate) :
+    DirEntry(PathView::Component{name, name ? strlen(name) : 0}, attrs, first_cluster_addr, fileSize,
+             creationTimeTenth, creationTime, creationDate, lastAccessDate, writeTime, writeDate)
+{
+}
+
+DirEntry::DirEntry(const PathView::Component& name, uint8_t attrs, uint32_t first_cluster_addr, uint32_t fileSize,
+                   uint8_t creationTimeTenth, int16_t creationTime, int16_t creationDate, int16_t lastAccessDate,
                    uint16_t writeTime, uint16_t writeDate) : attrs(attrs),
-                                                             creation_time_tenth(
-                                                                 creationTimeTenth),
+                                                             creation_time_tenth(creationTimeTenth),
                                                              creation_time(creationTime),
                                                              creation_date(creationDate),
-                                                             last_access_date(
-                                                                 lastAccessDate),
+                                                             last_access_date(lastAccessDate),
                                                              first_cluster_high((first_cluster_addr >> 16) & 0xFFFF),
                                                              write_time(writeTime),
                                                              write_date(writeDate),
                                                              first_cluster_low(first_cluster_addr & 0xFFFF),
                                                              file_size(fileSize)
 {
-    memset(this->name, NAME_PADDING_BYTE, 10);
-    if (!name) // Dummy constructor with no arguments call this constructor with nullptr as name
+    // Whole 8.3 field is space padded, no null terminator anywhere
+    memset(this->name, NAME_PADDING_BYTE, DIR_ENTRY_NAME_LEN);
+    if (!name.ptr || name.len == 0) // Dummy entry
         return;
-    if (strlen(name) > 8)
-        irrecoverable_error("%s: file name '%s' too long, requires LFN support. Max supported length is 8", __func__, name);
+    if (name.len > 8)
+        irrecoverable_error("%s: file name of %u chars too long, requires LFN support. Max supported length is 8",
+                            __func__, static_cast<unsigned>(name.len));
+
+    // Directories are stored verbatim, without extension handling
     if (attrs & DIRECTORY)
-        strcpy(this->name, name);
-    else
     {
-        uint l = strlen(name);
-        uint i = l - 1;
-        for (; i < DIR_ENTRY_NAME_LEN && name[i] != '.'; i--)
-            this->name[10 - (l - 1 - i)] = name[i];
-        if (i == (uint)-1)
-        {
-            memset(this->name, NAME_PADDING_BYTE, DIR_ENTRY_NAME_LEN);
-            i = l;
-        }
-        for (uint j = 0; j < i; j++)
-            this->name[j] = name[j];
+        memcpy(this->name, name.ptr, name.len);
+        return;
     }
+
+    // Split on the last dot: base goes in name[0..8), extension left aligned in name[8..11) (where get_name reads it)
+    size_t dot = name.len;
+    while (dot > 0 && name.ptr[dot - 1] != '.')
+        --dot;
+
+    if (dot == 0) // No extension
+    {
+        memcpy(this->name, name.ptr, name.len);
+        return;
+    }
+
+    const size_t base_len = dot - 1;
+    size_t ext_len = name.len - dot;
+    if (ext_len > 3)
+        ext_len = 3;
+    memcpy(this->name, name.ptr, base_len);
+    memcpy(this->name + 8, name.ptr + dot, ext_len);
 }
 
 string DirEntry::get_name() const
