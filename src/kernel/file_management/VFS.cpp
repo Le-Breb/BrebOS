@@ -95,6 +95,10 @@ SharedPointer<Dentry> VFS::touch(const char* pathname, const char* work_dir)
 		return nullptr;
 	}
 
+	if (Result<SharedPointer<Dentry>> existing_entry_res = browse_to(PathView(file_name.ptr, file_name.len), parent_dentry);
+		existing_entry_res.is_ok())
+		return std::move(existing_entry_res).expect();
+
 	auto dentry_res = parent_dentry->inode->superblock->get_fs()->touch(parent_dentry, file_name);
 	auto dentry = WARN_TRY_OR_RETURN(dentry_res, nullptr);
 	if (dentry)

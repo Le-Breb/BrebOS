@@ -675,30 +675,70 @@ static Status check_short_name(const PathView::Component& name, bool is_dir)
     return Status::success();
 }
 
+/**
+ * FAT short names are case insensitive
+ * @param lowercase_name name as returned by DirEntry::get_name(), which lowercases it
+ * @param name name as passed to FAT::get_child_dentry, FAT::touch or FAT::mkdir
+ */
+static bool same_short_name(const string& lowercase_name, const PathView::Component& name)
+{
+    if (lowercase_name.size() != name.len)
+        return false;
+
+    for (size_t i = 0; i < name.len; i++)
+    {
+        char c = name.ptr[i];
+        if (c >= 'A' && c <= 'Z')
+            c += 'a' - 'A';
+        if (c != lowercase_name.data()[i])
+            return false;
+    }
+
+    return true;
+}
+
 Result<SharedPointer<Dentry>> FAT::touch(SharedPointer<Dentry>& parent_dentry, const PathView::Component& entry_name)
 {
     TRY(check_short_name(entry_name, false));
 
     const FAT_Inode* fat_parent_inode = finode(parent_dentry->inode.get());
 
-    const uint parent_cluster = fat_parent_inode->first_cluster;
     ctx ctx{};
 
-    // ~= cd wd
-    TRY(change_active_cluster(parent_cluster, ctx, nullptr));
+    uint curr_cluster = fat_parent_inode->first_cluster;
+    bool found_free = false;
+    do
+    {
+        TRY(change_active_cluster(curr_cluster, ctx, this->buf));
 
-    while (ctx.table_value < CLUSTER_MIN_EOC)
-        TRY(advance_in_cluster_chain(1, ctx, nullptr));
+        for (; ctx.dir_entry_id * sizeof(DirEntry) < FAT_SECTOR_SIZE; ctx.dir_entry_id++)
+        {
+            const DirEntry& entry = entries[ctx.dir_entry_id];
+            if (entry.is_free())
+            {
+                found_free = true;
+                break;
+            }
+            if (entry.is_LFN() || entry.is_unused())
+                continue;
 
-    TRY(change_active_cluster(ctx.active_cluster, ctx, this->buf)); // Reached last cluster, load its data
+            if (same_short_name(entry.get_name(), entry_name))
+            {
+                // check_short_name ensured entry_name is at most 8 chars
+                char cname[9];
+                memcpy(cname, entry_name.ptr, entry_name.len);
+                cname[entry_name.len] = '\0';
+                return MAKE_ERR("'%s' already exists", cname);
+            }
+        }
 
-    // Skip used dir entries, aka files/folders inside wd
-    while (ctx.dir_entry_id * sizeof(DirEntry) < FAT_SECTOR_SIZE && !entries[ctx.dir_entry_id].is_free() &&
-        entries[ctx.dir_entry_id].get_name() != entry_name)
-        ctx.dir_entry_id++;
+        if (found_free)
+            break;
+        curr_cluster = ctx.table_value;
+    } while (curr_cluster < CLUSTER_MIN_EOC);
 
-    // No free entry in wd cluster
-    if (ctx.dir_entry_id * sizeof(DirEntry) == bs.bytes_per_sector * bs.sectors_per_cluster)
+    // No free entry in wd clusters
+    if (!found_free)
         return MAKE_ERR("Working directory cluster is full, cluster chain extension implementation is needed");
 
     // Write file entry
