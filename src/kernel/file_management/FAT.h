@@ -264,7 +264,7 @@ public:
 
 	static void shutdown();
 
-	Status load_file_to_buf(void* buf, const SharedPointer<Dentry>& dentry, uint offset,
+	Status load_file_to_buf(void* buf, Inode* inode, uint offset,
 	                        uint length, uint& loaded_bytes) override;
 
 	~FAT() override;
@@ -272,11 +272,11 @@ public:
 	[[nodiscard]]
 	SharedPointer<Inode> get_root_node() override;
 
-	Status write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length, uint offset) override;
+	Status write_buf_to_file(Inode* inode, const void* buf, uint length, uint offset) override;
 
-	Status resize(SharedPointer<Dentry>& dentry, uint new_size) override;
+	Status resize(Inode* inode, uint new_size) override;
 
-	Status getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t max_size, size_t* bytes_read,
+	Status getdents(Inode* inode, void* buffer, size_t max_size, size_t* bytes_read,
 	                uint& fd_off) override;
 
 	static Result<FAT*> from_block_device(BlockDevice* dev, uint first_lba);

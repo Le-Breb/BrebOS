@@ -599,7 +599,7 @@ int Process::proc_to_sys_fd(int fd) const
 {
     if (fd >= 0 && fd < MAX_FD_PER_PROCESS && file_descriptors[fd])
     {
-        FileInterface* sys_fd = VFS::file_descriptors[file_descriptors[fd]->sys_fd];
+        const FileInterface* sys_fd = VFS::file_descriptors[file_descriptors[fd]->sys_fd].get();
         if (!sys_fd)
             irrecoverable_error("Dangling process file descriptor");
         return sys_fd->fd; // Return system file descriptor

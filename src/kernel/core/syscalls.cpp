@@ -307,7 +307,7 @@ Syscall::SyscallResult Syscall::load_file(Process* p)
     uint size = dentry->inode->size;
 
     // Load file in user space
-    auto f = VFS::load_file(dentry, 0, size);
+    const auto f = VFS::load_file(dentry->inode.get(), 0, size);
     if (!f)
     {
         p->cpu_state.eax = 0;
@@ -590,7 +590,7 @@ Syscall::SyscallResult Syscall::opendir(Process* process)
         process->kill(SIGTERM);
         return SyscallResult::ReturnToUser;
     }
-    if (((File*)sys_fi)->dentry->inode->type == Inode::Dir)
+    if (((File*)sys_fi.get())->inode->type == Inode::Dir)
     {
         process->cpu_state.eax = tmp_fd;
         return SyscallResult::ReturnToUser;

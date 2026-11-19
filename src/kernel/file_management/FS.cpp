@@ -83,7 +83,7 @@ void FS::init()
 	}
 }
 
-Result<void*> FS::load_file_to_buf(const SharedPointer<Dentry>& dentry, uint offset, uint length, uint& loaded_bytes)
+Result<void*> FS::load_file_to_buf(Inode* inode, uint offset, uint length, uint& loaded_bytes)
 {
 	// If reading an empty file, just return a dummy vector without solicitation of the disk
 	if (length == 0)
@@ -91,7 +91,7 @@ Result<void*> FS::load_file_to_buf(const SharedPointer<Dentry>& dentry, uint off
 
 	auto buf = new char[length];
 
-	const auto res = load_file_to_buf(buf, dentry, offset, length, loaded_bytes);
+	const auto res = load_file_to_buf(buf, inode, offset, length, loaded_bytes);
 	if (res.is_ok())
 		return make_ok((void*)buf);
 	delete[] buf;

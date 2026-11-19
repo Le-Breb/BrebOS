@@ -18,7 +18,7 @@
 
 VFS::dentry_cache_t* VFS::dentries = nullptr;
 VFS::dentry_cache_t* VFS::mount_points = nullptr;
-FileInterface* VFS::file_descriptors[MAX_FD] = {};
+SharedPointer<FileInterface> VFS::file_descriptors[MAX_FD] = {};
 int VFS::lowest_free_fd = 0;
 
 void VFS::init()
@@ -50,21 +50,6 @@ void VFS::init()
 
 	if (!add_to_path("/bin"))
 		printf_error("Failed to add /bin to path");
-
-	printf_info("Starting ELF preload...");
-	if (File::enable_preload)
-	{
-		// Preload files
-		for (auto& [path, data] : File::preloads_list)
-		{
-			printf("    Preloading %s\n", path);
-			if (auto file = get_file_dentry(path, "/"); !file.is_ok())
-				irrecoverable_error("couldn't preload '%s'", path);
-			else
-				data = load_file(std::move(file).expect());
-		}
-	}
-	printf_info("ELF preload finished");
 }
 
 void VFS::shutdown()
@@ -373,17 +358,17 @@ void* VFS::load_file(const char* path, uint offset, uint length)
 		printf_error("%s: no such file", path);
 		return nullptr;
 	}
-	else return load_file(dentry, offset, length);
+	else return load_file(dentry->inode.get(), offset, length);
 }
 
-void* VFS::load_file(const SharedPointer<Dentry>& file, uint offset, uint length)
+void* VFS::load_file(Inode* inode, uint offset, uint length)
 {
-	if (!file)
+	if (!inode)
 		return nullptr;
 
 	uint loaded_bytes;
-	const uint l = length ? min(length, file->inode->size) : file->inode->size;
-	void* buf = WARN_TRY_OR_RETURN(file->inode->superblock->get_fs()->load_file_to_buf(file, offset, l,
+	const uint l = length ? min(length, inode->size) : inode->size;
+	void* buf = WARN_TRY_OR_RETURN(inode->superblock->get_fs()->load_file_to_buf(inode, offset, l,
 																	loaded_bytes), nullptr);
 
 	if (loaded_bytes != l)
@@ -439,7 +424,6 @@ int VFS::close(int fd)
 	{
 		const int write_fd = f->get_write_fd();
 		const int read_fd = f->get_read_fd();
-		delete f;
 		file_descriptors[fd] = nullptr;
 		lowest_free_fd = min(lowest_free_fd, fd);
 		if (write_fd != -1 && read_fd != -1)
@@ -488,11 +472,11 @@ FileInterface* VFS::open_file(const char* pathname, int flags, mode_t mode, int&
 
 	// Truncate file if asked and permitted by flags
 	if (flags & O_TRUNC && (flags & O_WRONLY || flags & O_RDWR))
-		if (const auto res = dentry->inode->superblock->get_fs()->resize(dentry, 0); !res.warn_is_ok())
+		if (const auto res = dentry->inode->superblock->get_fs()->resize(dentry->inode.get(), 0); !res.warn_is_ok())
 			open_file_leave_with_error(-EIO) // IO error (I did not check if this whether it's man compliant)
-	file_descriptors[system_fd] = new File(system_fd, flags, 0, dentry);
+	file_descriptors[system_fd] = new File(system_fd, flags, 0, dentry->inode);
 
-	return file_descriptors[system_fd];
+	return file_descriptors[system_fd].get();
 }
 
 FileInterface* VFS::open_tty(TTY::Target target, int& err)
@@ -502,7 +486,7 @@ FileInterface* VFS::open_tty(TTY::Target target, int& err)
 	if (sys_fd == -1)
 		leave_with_error(-EMFILE); // No more FDs available
 
-	return file_descriptors[sys_fd] = new TTY(sys_fd, O_RDWR, target);
+	return (file_descriptors[sys_fd] = new TTY(sys_fd, O_RDWR, target)).get();
 }
 
 
@@ -526,9 +510,9 @@ int VFS::fstat(int fd, struct stat* statbuf)
 	return f->fstat(statbuf);
 }
 
-bool VFS::resize(SharedPointer<Dentry>& dentry, size_t new_size)
+bool VFS::resize(Inode* inode, size_t new_size)
 {
-	return dentry->inode->superblock->get_fs()->resize(dentry, new_size).warn_is_ok();
+	return inode->superblock->get_fs()->resize(inode, new_size).warn_is_ok();
 }
 
 int VFS::pipe(int pipefd[2])
@@ -575,12 +559,11 @@ int VFS::getdents(int fd, void* buffer, size_t max_size, size_t* bytes_read)
 	if (sys_fd->type != FileInterface::File)
 		return -ENOTDIR;
 
-	const auto dir = (File*)sys_fd;
-	if (dir->dentry->inode->type != Inode::Dir)
+	const auto dir = (File*)sys_fd.get();
+	if (dir->inode->type != Inode::Dir)
 		return -ENOTDIR;
-	auto dentry = Dentry::follow_mount(dir->dentry);
 
-	if (!dir->dentry->inode->superblock->get_fs()->getdents(dentry, buffer, max_size, bytes_read, sys_fd->offset).warn_is_ok())
+	if (!dir->inode->superblock->get_fs()->getdents(dir->inode.get(), buffer, max_size, bytes_read, sys_fd->offset).warn_is_ok())
 		return -EIO;
 
 	return 0;

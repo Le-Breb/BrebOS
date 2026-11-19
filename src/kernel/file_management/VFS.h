@@ -25,7 +25,7 @@
 class VFS
 {
 public:
-	static FileInterface* file_descriptors[MAX_FD];
+	static SharedPointer<FileInterface> file_descriptors[MAX_FD];
 private:
 	struct dentry_cache_key
 	{
@@ -142,7 +142,7 @@ public:
 
 	static void* load_file(const char* path, uint offset = 0, uint length = 0);
 
-	static void* load_file(const SharedPointer<Dentry>& path, uint offset = 0, uint length = 0);
+	static void* load_file(Inode* inode, uint offset = 0, uint length = 0);
 
 	/**
 	 * Reads data from a file descriptor
@@ -201,11 +201,11 @@ public:
 
 	/**
 	 * Resizes a file
-	 * @param dentry dentry of the file to resize
+	 * @param inode inode of the file to resize
 	 * @param new_size new size of the file
 	 * @return boolean indicating success of the operation
 	 */
-	static bool resize(SharedPointer<Dentry>& dentry, size_t new_size);
+	static bool resize(Inode* inode, size_t new_size);
 
 	/**
 	 * Opens a pipe with the specified flags

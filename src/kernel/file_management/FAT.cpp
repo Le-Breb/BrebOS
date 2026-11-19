@@ -415,11 +415,10 @@ void FAT::shutdown()
     delete drives;
 }
 
-Status FAT::load_file_to_buf(void* buf, const SharedPointer<Dentry>& dentry, uint offset,
-                             uint length, uint& loaded_bytes)
+Status FAT::load_file_to_buf(void* buf, Inode* inode, uint offset, uint length, uint& loaded_bytes)
 {
 
-    const FAT_Inode* fat_inode = finode(dentry->inode.get());
+    const FAT_Inode* fat_inode = finode(inode);
 
     ctx ctx{};
     loaded_bytes = 0;
@@ -827,21 +826,22 @@ SharedPointer<Inode> FAT::get_root_node()
     return root_node;
 }
 
-Status FAT::write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length, uint offset)
+Status FAT::write_buf_to_file(Inode* inode, const void* buf, uint length, uint offset)
 {
-    if (dentry->inode->type != Inode::File)
+    const FAT_Inode* fat_inode = finode(inode);
+    if (fat_inode->type != Inode::File)
         return Status::failure("Trying to write data on something which is not a file");
     // Resize file if necessary
     const auto min_size = offset + length;
-    if (dentry->inode->size < min_size)
-        TRY(resize(dentry, min_size));
+    if (inode->size < min_size)
+        TRY(resize(inode, min_size));
     if (length == 0)
         return Status::success();
 
     ctx ctx{};
 
     // Set cursor to first cluster of the file. resize() above keeps first_cluster up to date
-    TRY(change_active_cluster(finode(dentry->inode.get())->first_cluster, ctx, nullptr));
+    TRY(change_active_cluster(fat_inode->first_cluster, ctx, nullptr));
     size_t wrote_bytes = 0;
 
     // Skip whole clusters in offset
@@ -895,16 +895,16 @@ Status FAT::write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, ui
     return Status::success();
 }
 
-Status FAT::resize(SharedPointer<Dentry>& dentry, uint new_size)
+Status FAT::resize(Inode* inode, uint new_size)
 {
-    FAT_Inode* fat_inode = finode(dentry->inode.get());
+    FAT_Inode* fat_inode = finode(inode);
 
     // Load the cluster holding the file's directory entry
     ctx ctx{};
     TRY(change_active_cluster(fat_inode->dir_entry_cluster, ctx, this->buf));
     const uint entry_id = fat_inode->dir_entry_index;
 
-    uint current_file_size = dentry->inode->size;
+    uint current_file_size = fat_inode->size;
     uint curr_num_data_sectors = (current_file_size + FAT_SECTOR_SIZE - 1) / FAT_SECTOR_SIZE;
     uint new_num_data_sectors = (new_size + FAT_SECTOR_SIZE - 1) / FAT_SECTOR_SIZE;
 
@@ -1007,15 +1007,15 @@ Status FAT::resize(SharedPointer<Dentry>& dentry, uint new_size)
         TRY(write_data_sectors(1, ctx.active_sector, this->buf, ctx));
     }
 
-    dentry->inode->size = new_size; // Update inode size
+    inode->size = new_size; // Update inode size
     return Status::success();
 }
 
-Status FAT::getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t max_size, size_t* bytes_read,
-                           uint& fd_off)
+Status FAT::getdents(Inode* inode, void* buffer, size_t max_size, size_t* bytes_read,
+                     uint& fd_off)
 
 {
-    const FAT_Inode* fat_inode = finode(dentry->inode.get());
+    const FAT_Inode* fat_inode = finode(inode);
     uint parent_cluster = fat_inode->first_cluster;
     ctx ctx{};
     *bytes_read = 0;

@@ -47,17 +47,17 @@ public:
 
 	virtual Result<SharedPointer<Dentry>> mkdir(SharedPointer<Dentry>& parent_dentry, const PathView::Component& entry_name) = 0;
 
-	virtual Status getdents(const SharedPointer<Dentry>& dentry, void* buffer, size_t max_size, size_t* bytes_read,
+	virtual Status getdents(Inode* inode, void* buffer, size_t max_size, size_t* bytes_read,
 	                        uint& fd_off) = 0;
 
-	Result<void*> load_file_to_buf(const SharedPointer<Dentry>& dentry, uint offset, uint length, uint& loaded_bytes);
+	Result<void*> load_file_to_buf(Inode* inode, uint offset, uint length, uint& loaded_bytes);
 
-	virtual Status load_file_to_buf(void* buf, const SharedPointer<Dentry>& dentry, uint offset,
+	virtual Status load_file_to_buf(void* buf, Inode* inode, uint offset,
 	                                uint length, uint& loaded_bytes) = 0;
 
-	virtual Status write_buf_to_file(SharedPointer<Dentry>& dentry, const void* buf, uint length, uint offset) = 0;
+	virtual Status write_buf_to_file(Inode* inode, const void* buf, uint length, uint offset) = 0;
 
-	virtual Status resize(SharedPointer<Dentry>& dentry, uint new_size) = 0;
+	virtual Status resize(Inode* inode, uint new_size) = 0;
 
 	[[nodiscard]]
 	virtual SharedPointer<Inode> get_root_node() = 0;

@@ -12,22 +12,20 @@ FileInterface::FileInterface(int fd, int flags, uint offset, FileType type) : fd
 {
 }
 
-File::File(int fd, int flags, uint offset, const SharedPointer<Dentry>& dentry) : FileInterface(fd, flags, offset, FileType::File), dentry(dentry)
+File::File(int fd, int flags, uint offset, const SharedPointer<Inode>& inode) : FileInterface(fd, flags, offset, FileType::File), inode(inode)
 {
 
 }
 
 int File::read(void* buf, uint count)
 {
-    auto l = min(count, dentry->inode->size - offset);
+    auto l = min(count, inode->size - offset);
     uint loaded_bytes;
 
-    if (dentry->inode->type != Inode::File)
+    if (inode->type != Inode::File)
         return -EINVAL; // Not a regular file
 
-    if (preload_read(buf, offset, count, dentry))
-        loaded_bytes = count;
-    else if (!dentry->inode->superblock->get_fs()->load_file_to_buf(buf, dentry, offset, l, loaded_bytes).warn_is_ok())
+    if (!inode->superblock->get_fs()->load_file_to_buf(buf, inode.get(), offset, l, loaded_bytes).warn_is_ok())
         return -EIO; // IO error
 
     offset += loaded_bytes;
@@ -43,13 +41,13 @@ int File::lseek(int offset, int whence)
 
     // Compute the new offset based on whence
     int ref = whence == SEEK_SET ? 0 :
-        whence == SEEK_CUR ? offset : dentry->inode->size;
+        whence == SEEK_CUR ? offset : inode->size;
     int new_offset = ref + offset;
 
     // Check if the new offset is valid
     if (new_offset < 0)
         return -EINVAL; // Invalid offset
-    if ((uint)new_offset > dentry->inode->size)
+    if ((uint)new_offset > inode->size)
     {
         printf_error("lseek called with an offset which would result in a new offset greater than file size. "
                "This is compliant with the man page, but BrebOS VFS does not support this.");
@@ -64,15 +62,15 @@ int File::lseek(int offset, int whence)
 
 int File::write(void* buf, uint count)
 {
-    if (dentry->inode->type != Inode::File)
+    if (inode->type != Inode::File)
         return -EINVAL; // Not a regular file
 
-    const uint file_size = dentry->inode->size;
+    const uint file_size = inode->size;
 
     if (flags & O_APPEND)
         offset = file_size;
 
-    if (!dentry->inode->superblock->get_fs()->write_buf_to_file(dentry, buf, count, offset).warn_is_ok())
+    if (!inode->superblock->get_fs()->write_buf_to_file(inode.get(), buf, count, offset).warn_is_ok())
         return -EIO; // IO error
 
     offset += count;
@@ -82,7 +80,6 @@ int File::write(void* buf, uint count)
 
 int File::fstat(struct stat* statbuf)
 {
-    auto inode = dentry->inode;
     statbuf->st_dev = inode->superblock->get_fs()->get_device()->get_dev();
     statbuf->st_ino = inode->id;
     statbuf->st_mode = inode->mode;
@@ -91,7 +88,7 @@ int File::fstat(struct stat* statbuf)
     statbuf->st_gid = inode->gid;
     statbuf->st_rdev = 0;
     statbuf->st_size = (off_t)inode->size;
-    statbuf->st_blksize = dentry->inode->superblock->get_fs()->get_block_size();
+    statbuf->st_blksize = inode->superblock->get_fs()->get_block_size();
     statbuf->st_blocks = inode->blocks;
     statbuf->st_atime = inode->atime;
     statbuf->st_mtime = inode->mtime;
@@ -113,38 +110,6 @@ int File::get_write_fd() const
 int File::get_read_fd() const
 {
     return -1;
-}
-
-void* File::libc_preload = nullptr;
-void* File::libm_preload = nullptr;
-void* File::ld_preload = nullptr;
-const bool File::enable_preload = true;
-File::preload File::preloads_list[] = {
-    {"/usr/lib/libc.so", nullptr},
-    {"/usr/lib/libk.so", nullptr},
-    {"/usr/lib/libm.so", nullptr},
-    {"/usr/lib/ld.so", nullptr},
-    {"/bin/42sh", nullptr},
-    {"/usr/lib/libgcc_s.so.1", nullptr},
-    {"/usr/lib/libstdc++.so.6", nullptr}
-};
-
-bool File::preload_read(void* buf, uint offset, uint count, const SharedPointer<Dentry>& dentry)
-{
-    if constexpr (!enable_preload)
-        return false;
-
-    const auto abs_path = dentry->get_absolute_path_tmp();
-    for (const auto& [path, data] : preloads_list)
-    {
-        if (path == abs_path)
-        {
-            memcpy(buf, static_cast<char*>(data) + offset, count);
-            return true;
-        }
-    }
-
-    return false;
 }
 
 TTY::TTY(int fd, int flags, Target target) : FileInterface(fd, flags, 0, FileType::TTY), target(target)

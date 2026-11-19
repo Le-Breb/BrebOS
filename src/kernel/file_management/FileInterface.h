@@ -43,21 +43,8 @@ public:
 
 class File : public FileInterface
 {
-    static void* libc_preload;
-    static void* libm_preload;
-    static void* ld_preload;
-
-    /**
-     * Tries to read the requested data using preloaded files.
-     * @param buf output buffer
-     * @param offset read offset
-     * @param count num bytes to read
-     * @param dentry file dentry
-     * @return whether a read using preloaded data has been done
-     */
-    static bool preload_read(void* buf, uint offset, uint count, const SharedPointer<Dentry>& dentry);
 public:
-    File(int fd, int flags, uint offset, const SharedPointer<Dentry>& dentry);
+    File(int fd, int flags, uint offset, const SharedPointer<Inode>& inode);
     int read(void* buf, uint count) override;
     int lseek(int offset, int whence) override;
     int write(void* buf, uint count) override;
@@ -66,14 +53,7 @@ public:
     [[nodiscard]] int get_write_fd() const override;
     [[nodiscard]] int get_read_fd() const override;
 
-    struct preload
-    {
-        const char* path;
-        void* data;
-    };
-    static const bool enable_preload;
-    static preload preloads_list[7];
-    SharedPointer<Dentry> dentry;
+    SharedPointer<Inode> inode;
 };
 
 class TTY : public FileInterface
