@@ -480,31 +480,27 @@ namespace Memory
         if (busy) [[unlikely]]
             irrecoverable_error("reentrency detected");
         busy = 2;
-        while (root)
+        while (const Node* lowest_alloc = get_lowest_alloc())
         {
-            Node* lowest_alloc = get_lowest_alloc();
+            // Clear by regions of contiguous allocations, whatever their kind or state: a heap block can end in the
+            // middle of a page, but the region containing it is made of whole pages
             const uintptr_t region_start = lowest_alloc->data.start;
             uintptr_t region_end = lowest_alloc->data.end;
-            Node previous_lowest_alloc = *lowest_alloc;
-            deleteNode(lowest_alloc);
+            for (const Node* next = get_next_node(region_start); next && next->data.start == region_end;
+                 next = get_next_node(next->data.start))
+                region_end = next->data.end;
 
-            Node* next_lowest_alloc = get_lowest_alloc();
-            while (next_lowest_alloc && previous_lowest_alloc.data.is_similar_and_contiguous(next_lowest_alloc->data))
-            {
-                region_end = next_lowest_alloc->data.end;
-                previous_lowest_alloc = *next_lowest_alloc;
-                deleteNode(next_lowest_alloc);
-                next_lowest_alloc = get_lowest_alloc();
-            }
+            if (!IS_PAGE_ALIGNED(region_start) || !IS_PAGE_ALIGNED(region_end)) [[unlikely]]
+                irrecoverable_error("%s: memory region [0x%x, 0x%x) is not page aligned", __PRETTY_FUNCTION__,
+                                    region_start, region_end);
 
-            const uintptr_t region_size = region_end - region_start;
-            if (!IS_PAGE_SIZE_MUL(region_size) || !IS_PAGE_ALIGNED(region_start)) [[unlikely]]
-                irrecoverable_error("%s: memory region size is not a multiple of PAGE_SIZE or region start is not page aligned", __PRETTY_FUNCTION__);
+            for (uint page = ADDR_PAGE(region_start); page < ADDR_PAGE(region_end); page++)
+                process->update_pte(page, 0, false);
 
-            const uint num_pages = region_size / PAGE_SIZE;
-            const uint region_start_page = ADDR_PAGE(region_start);
-            for (uint i = 0; i < num_pages; i++)
-                process->update_pte(region_start_page + i, 0, false);
+            // Must come after clearing PTEs: deleting a node may release the last reference to a file, destroying its
+            // inode, which requires that no PTE maps its cached pages anymore
+            for (Node* node = get_lowest_alloc(); node && node->data.start < region_end; node = get_lowest_alloc())
+                deleteNode(node);
         }
         busy = false;
     }
