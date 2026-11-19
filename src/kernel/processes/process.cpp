@@ -172,16 +172,12 @@ uint Process::new_proc_mapping(uint start_page, uint num_pages, const Process* t
     if (map_pte_id == -1U)
         return -1U;; // Not enough contiguous pages to perform mapping
 
-    const Memory::allocation target_alloc = target_process->memtree.get_addr_alloc(PAGE_ADDR(start_page)).expect("?");
     // Allocate in those pages, mapping them to target pages
     for (uint i = 0; i < num_pages; i++)
     {
         const uint target_pte = PTE(target_process->page_tables, start_page + i) | (force_write ? PAGE_WRITE : 0);
         update_pte(map_pte_id + i, PTE_FRAME(target_pte), PTE_FLAGS(target_pte), true);
     }
-    Memory::allocation alloc{PAGE_ADDR(map_pte_id), PAGE_ADDR(map_pte_id + num_pages), target_alloc.page_info, true, nullopt};
-    if (force_write)
-        alloc.page_info.policy |= PAGE_WRITE;
 
     return map_pte_id;
 }
