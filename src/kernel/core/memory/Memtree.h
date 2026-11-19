@@ -27,6 +27,10 @@ namespace Memory
 
         // Minimum number of free pages required to trigger actual freeing of the memory
         static constexpr uint N_FREE_PAGES_THRESHOLD = 2;
+        // Alignment of heap blocks: alignof(max_align_t) on i386
+        static constexpr uint HEAP_ALIGNMENT = 16;
+        // Rounds a heap block size up to HEAP_ALIGNMENT, 0 giving the minimum size. Returns 0 on overflow
+        static uint heap_block_size(uint size);
         /**
          * Finds a free block that is at least size bytes long, matches page_info and respects hint_info
          * @param current search subtree root
@@ -159,8 +163,7 @@ namespace Memory
         MemTree& operator=(const MemTree& other);
 
         /**
-         * Allocates a byte-granular heap block. Heap blocks can share pages with each other and offer no alignment
-         * guarantee
+         * Allocates a heap block. Heap blocks can share pages with each other
          */
         void* allocate(uint size, const page_info& page_info, Process* process, const hint_info& hint_info = DEFAULT_HINT_INFO);
         /**

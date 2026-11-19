@@ -60,6 +60,13 @@ namespace Memory
         return node->data.end - node->data.start;
     }
 
+    uint MemTree::heap_block_size(uint size)
+    {
+        if (size > UINT32_MAX - (HEAP_ALIGNMENT - 1)) [[unlikely]]
+            return 0;
+        return size ? (size + HEAP_ALIGNMENT - 1) & ~(HEAP_ALIGNMENT - 1) : HEAP_ALIGNMENT;
+    }
+
     MemTree::Node* MemTree::merge_node_with_free_successor(Node* node)
     {
         if (!node->right)
@@ -272,6 +279,11 @@ namespace Memory
         if ((policy & PAGE_PRESENT && policy & PAGE_LAZY_ZERO) || !(policy & (PAGE_PRESENT | PAGE_LAZY_ZERO))) [[unlikely]]
             irrecoverable_error("%s: invalid policy", __PRETTY_FUNCTION__);
 
+        // Block boundaries stay aligned, as blocks are only ever split at start + size
+        size = heap_block_size(size);
+        if (!size) [[unlikely]]
+            {busy = false; return nullptr;}
+
         // Find big enough free block
         Node* node = find_free_block(root, size, page_info, hint_info);
         if (node == nullptr) // Physically allocate if needed
@@ -341,6 +353,9 @@ namespace Memory
             process->free(reinterpret_cast<void*>(address));
             return ReallocState::OK;
         }
+        size = heap_block_size(size); // Shrinking splits the block at start + size, which must stay aligned
+        if (!size) [[unlikely]]
+            return ReallocState::NOMEM;
 
         // Get header
         Node* node = search({address, address, DEFAULT_K_PAGE_INFO, false, nullopt});
