@@ -104,18 +104,11 @@ void SysdepImpl<LibcPanic>::operator()() {
 }
 
 int SysdepImpl<AnonAllocate>::operator()(size_t size, void **pointer) {
-    const auto ret = do_syscall(SyscallNumber::CALLOC, 1, size);
-    const auto mem = sc_int_result<int>(ret);
-
-    *pointer = (void*)mem;
-    
-    return mem ? 0 : ENOMEM;
+    return SysdepImpl<VmMap>{}(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0, pointer);
 }
 
-int SysdepImpl<AnonFree>::operator()(void *pointer, [[maybe_unused]] size_t size) {
-    do_syscall(SyscallNumber::FREE, pointer);
-
-    return 0;
+int SysdepImpl<AnonFree>::operator()(void *pointer, size_t size) {
+    return SysdepImpl<VmUnmap>{}(pointer, size);
 }
 
 int SysdepImpl<VmMap>::operator()(void *hint, size_t size, int prot, int flags,

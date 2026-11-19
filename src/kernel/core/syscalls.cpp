@@ -515,7 +515,7 @@ Syscall::SyscallResult Syscall::mmap(Process* p)
 	off_t offset  = p->cpu_state.ebp;
 
 	int err = 0;
-	const void* window = Memory::mmap(hint, size, prot, flags, fd, offset, err, p, false, true);
+	const void* window = Memory::mmap(hint, size, prot, flags, fd, offset, err, p, true, true);
 
 	p->cpu_state.eax = window ? (int)window : -err;
     return SyscallResult::ReturnToUser;
