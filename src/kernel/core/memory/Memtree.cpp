@@ -153,8 +153,10 @@ namespace Memory
             if (node_cpy.data.end - aligned_end)
                 insert({aligned_end, node_cpy.data.end, node_cpy.data.page_info, node_cpy.data.used, nullopt});
 
+            // Invalidate TLB entries: the freed frames may be handed out again while stale translations still point
+            // to them
             for (uint i = 0; i < num_pages; i++)
-                process->update_pte(aligned_start_page + i, 0, false);
+                process->update_pte(aligned_start_page + i, 0, true);
         }
     }
 
