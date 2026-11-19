@@ -526,6 +526,24 @@ namespace Memory
         return node && (bool)(node->data.page_info.policy & PAGE_WRITE) != write;
     }
 
+    bool MemTree::is_range_user_accessible(uintptr_t start, uintptr_t end) const
+    {
+        uintptr_t addr = start;
+        while (addr < end)
+        {
+            const Node* node = get_addr_node(addr);
+            if (!node)
+                node = get_next_node(addr);
+            if (!node || node->data.start >= end)
+                return true;
+            if (!(node->data.page_info.policy & PAGE_USER))
+                return false;
+            addr = node->data.end;
+        }
+
+        return true;
+    }
+
     bool MemTree::set_write_permission(uintptr_t start, uintptr_t end, bool write)
     {
         if (busy) [[unlikely]]
@@ -574,6 +592,64 @@ namespace Memory
             else
                 node->data.page_info.policy &= ~PAGE_WRITE;
             addr = node->data.end;
+        }
+
+#if ENSURE_VALIDITY
+        ensure_validity();
+#endif
+        busy = false;
+        return true;
+    }
+
+    bool MemTree::unmap(uintptr_t start, uintptr_t end, const Process* process)
+    {
+        if (busy) [[unlikely]]
+            irrecoverable_error("reentrency detected");
+
+        // Check before modifying anything, so that a refusal leaves the tree untouched
+        if (get_crossed_used_anon_node(start) || get_crossed_used_anon_node(end) ||
+            !is_range_user_accessible(start, end))
+            return false;
+
+        busy = 1;
+
+        uintptr_t addr = start;
+        while (addr < end)
+        {
+            Node* node = get_addr_node(addr);
+            if (!node) // No allocation there, move on to next allocation
+            {
+                const Node* next = get_next_node(addr);
+                if (!next)
+                    break;
+                addr = next->data.start;
+                continue;
+            }
+
+            // Isolate the part of the allocation within the range. Node pointers are looked up again after each
+            // split, as insertion may restructure the tree
+            if (node->data.start < addr)
+            {
+                split_node(node, addr);
+                continue;
+            }
+            if (node->data.end > end)
+            {
+                split_node(node, end);
+                node = get_addr_node(addr);
+            }
+
+            // Anonymous allocations can end in the middle of a page, whose next allocations are also within the range
+            // as it is page aligned
+            const uintptr_t node_end = node->data.end;
+            const uint end_page = ADDR_PAGE(node_end + PAGE_SIZE - 1);
+            for (uint page = ADDR_PAGE(node->data.start); page < end_page; page++)
+                process->update_pte(page, 0, true);
+
+            // Must come after clearing PTEs: deleting the node may release the last reference to a file, destroying its
+            // inode, which requires that no PTE maps its cached pages anymore
+            deleteNode(node);
+            addr = node_end;
         }
 
 #if ENSURE_VALIDITY

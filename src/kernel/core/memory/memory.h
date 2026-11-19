@@ -96,6 +96,16 @@ namespace Memory
 
 	int mprotect(void* addr, size_t len, int prot, Process* process);
 
+	/**
+	 * Unmaps every page of a range. Unmapping a range containing no mapping is not an error.
+	 * @param addr range start, must be page aligned
+	 * @param len range size, rounded up to a multiple of PAGE_SIZE. Must not be 0
+	 * @param process process in which to unmap
+	 * @return 0 on success, -EINVAL if arguments are invalid, if the range is not entirely in user space, if it partially
+	 * covers a used anonymous allocation, or if it covers memory that is not user accessible (e.g. syscall stack)
+	 */
+	int munmap(void* addr, size_t len, Process* process);
+
 	/** Tries to allocate a contiguous block of memory
 	 * @param num_pages_requested Size of the block in bytes
 	 * @param page_info page information

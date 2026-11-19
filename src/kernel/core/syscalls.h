@@ -125,6 +125,8 @@ class Syscall
 
 	static SyscallResult mprotect(Process* p);
 
+	static SyscallResult munmap(Process* p);
+
 	static SyscallResult execve(Process* p);
 
 	static SyscallResult sleep(Process* p);

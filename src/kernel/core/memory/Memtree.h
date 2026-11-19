@@ -125,6 +125,13 @@ namespace Memory
          * permission differs from the requested one
          */
         bool would_split_used_anon_node(uintptr_t bound, bool write) const;
+        /**
+         * Checks that a range only covers allocations that user code is allowed to access
+         * @param start range start
+         * @param end range end
+         * @return false if an allocation within the range is not user accessible (e.g. syscall stack), else true
+         */
+        bool is_range_user_accessible(uintptr_t start, uintptr_t end) const;
     public:
         enum class FreeState
         {
@@ -163,5 +170,15 @@ namespace Memory
          * @return false if the range partially covers a used anonymous allocation, else true
          */
         [[nodiscard]] bool set_write_permission(uintptr_t start, uintptr_t end, bool write);
+        /**
+         * Removes every allocation within [start, end) and clears the PTEs of their pages, splitting allocations that
+         * cross range bounds. Nothing is modified and false is returned if the range partially covers a used anonymous
+         * allocation, or if it covers memory that is not user accessible
+         * @param start range start, page aligned
+         * @param end range end, page aligned
+         * @param process process the allocations belong to
+         * @return false if the range was refused, else true. Range may cover no allocation at all
+         */
+        [[nodiscard]] bool unmap(uintptr_t start, uintptr_t end, const Process* process);
     };
 }

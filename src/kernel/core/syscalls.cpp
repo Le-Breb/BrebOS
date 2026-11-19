@@ -200,6 +200,8 @@ void Syscall::dispatcher(const cpu_state_t* cpu_state, const stack_state_t* stac
                 return mmap(p);;
             case SyscallNumber::MPROTECT:
                 return mprotect(p);
+            case SyscallNumber::MUNMAP:
+                return munmap(p);
             case SyscallNumber::GDB_UNLOAD_ELF:
                 GDB::get_instance()->unload_elf((const char*)p->cpu_state.ebx);
                 return SyscallResult::ReturnToUser;
@@ -526,6 +528,15 @@ Syscall::SyscallResult Syscall::mprotect(Process* p)
 	int prot = (int)p->cpu_state.edx;
 
 	p->cpu_state.eax = Memory::mprotect(addr, len, prot, p);
+    return SyscallResult::ReturnToUser;
+}
+
+Syscall::SyscallResult Syscall::munmap(Process* p)
+{
+	void* addr = (void*)p->cpu_state.ebx;
+	size_t len = p->cpu_state.ecx;
+
+	p->cpu_state.eax = Memory::munmap(addr, len, p);
     return SyscallResult::ReturnToUser;
 }
 

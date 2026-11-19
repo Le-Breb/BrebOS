@@ -129,8 +129,10 @@ int SysdepImpl<VmMap>::operator()(void *hint, size_t size, int prot, int flags,
 }
 
 int SysdepImpl<VmUnmap>::operator()(void *pointer, size_t size) {
-    (void)pointer; (void)size;
-    STUB();
+	const auto ret = do_syscall(SyscallNumber::MUNMAP, pointer, size);
+	if (const int e = sc_error(ret); e)
+		return e;
+	return 0;
 }
 
 int SysdepImpl<TcbSet>::operator()(void *pointer) {

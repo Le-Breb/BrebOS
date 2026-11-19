@@ -54,6 +54,7 @@ namespace SyscallNumber
     constexpr int MPROTECT               = 49;
     constexpr int GDB_UNLOAD_ELF         = 50;
     constexpr int GETDENTS               = 51;
+    constexpr int MUNMAP                 = 52;
 
     constexpr int DEBUG_PRINT            = 400;
 }

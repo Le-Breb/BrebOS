@@ -437,6 +437,22 @@ namespace Memory
         return 0;
     }
 
+    int munmap(void* addr, size_t len, Process* process)
+    {
+        const auto uaddr = reinterpret_cast<uintptr_t>(addr);
+        if (!IS_PAGE_ALIGNED(uaddr) || !len || uaddr >= KERNEL_VIRTUAL_BASE || len > KERNEL_VIRTUAL_BASE - uaddr)
+            return -EINVAL;
+
+        const uint first_page = ADDR_PAGE(uaddr);
+        const uint num_pages = ADDR_PAGE(len + PAGE_SIZE - 1);
+        if (!process->memtree.unmap(PAGE_ADDR(first_page), PAGE_ADDR(first_page + num_pages), process))
+            return -EINVAL;
+
+        process->lowest_free_pe = min(process->lowest_free_pe, first_page);
+
+        return 0;
+    }
+
     void* sbrk(uint num_pages_requested, const page_info& page_info, const hint_info& hint_info, Process* process)
     {
         // Memory full
