@@ -458,20 +458,128 @@ namespace Memory
         return get_total_size_aux(root);
     }
 
-    Optional<allocation> MemTree::get_addr_alloc(uintptr_t addr) const
+    MemTree::Node* MemTree::get_addr_node(uintptr_t addr) const
     {
-        const Node* curr = root;
+        Node* curr = root;
 
         while (curr)
         {
             if (curr->data.start <= addr && curr->data.end > addr)
-                return {curr->data};
+                return curr;
             if (curr->data.end <= addr)
                 curr = curr->right;
             else
                 curr = curr->left;
         }
 
+        return nullptr;
+    }
+
+    Optional<allocation> MemTree::get_addr_alloc(uintptr_t addr) const
+    {
+        if (const Node* node = get_addr_node(addr))
+            return {node->data};
         return nullopt;
+    }
+
+    MemTree::Node* MemTree::get_next_node(uintptr_t addr) const
+    {
+        Node* curr = root;
+        Node* next = nullptr;
+
+        while (curr)
+        {
+            if (curr->data.start > addr)
+            {
+                next = curr;
+                curr = curr->left;
+            }
+            else
+                curr = curr->right;
+        }
+
+        return next;
+    }
+
+    void MemTree::split_node(Node* node, uintptr_t at)
+    {
+        if (!IS_PAGE_ALIGNED(at) || at <= node->data.start || at >= node->data.end) [[unlikely]]
+            irrecoverable_error("%s: invalid split of [0x%x, 0x%x) at 0x%x", __func__, node->data.start, node->data.end, at);
+
+        allocation right = node->data;
+        right.start = at;
+        if (right.underlying_file)
+            right.underlying_file->offset_in_pages += ADDR_PAGE(at - node->data.start);
+        shrink_block(node, node->data.end - at);
+        insert(right);
+    }
+
+    const MemTree::Node* MemTree::get_crossed_used_anon_node(uintptr_t bound) const
+    {
+        const Node* node = get_addr_node(bound);
+        return node && node->data.used && !node->data.underlying_file && node->data.start < bound ? node : nullptr;
+    }
+
+    bool MemTree::would_split_used_anon_node(uintptr_t bound, bool write) const
+    {
+        const Node* node = get_crossed_used_anon_node(bound);
+        return node && (bool)(node->data.page_info.policy & PAGE_WRITE) != write;
+    }
+
+    bool MemTree::set_write_permission(uintptr_t start, uintptr_t end, bool write)
+    {
+        if (busy) [[unlikely]]
+            irrecoverable_error("reentrency detected");
+
+        // Check before modifying anything, so that a refusal leaves the tree untouched. Only allocations containing a
+        // range bound can be crossed by it
+        if (would_split_used_anon_node(start, write) || would_split_used_anon_node(end, write))
+            return false;
+
+        busy = 1;
+
+        uintptr_t addr = start;
+        while (addr < end)
+        {
+            Node* node = get_addr_node(addr);
+            if (!node) // No allocation there, move on to next allocation
+            {
+                const Node* next = get_next_node(addr);
+                if (!next)
+                    break;
+                addr = next->data.start;
+                continue;
+            }
+            if ((bool)(node->data.page_info.policy & PAGE_WRITE) == write)
+            {
+                addr = node->data.end;
+                continue;
+            }
+
+            // Isolate the part of the allocation within the range. Node pointers are looked up again after each
+            // split, as insertion may restructure the tree
+            if (node->data.start < addr)
+            {
+                split_node(node, addr);
+                continue;
+            }
+            if (node->data.end > end)
+            {
+                split_node(node, end);
+                node = get_addr_node(addr);
+            }
+
+            if (write)
+                node->data.page_info.policy |= PAGE_WRITE;
+            else
+                node->data.page_info.policy &= ~PAGE_WRITE;
+            addr = node->data.end;
+        }
+
+#if ENSURE_VALIDITY
+        ensure_validity();
+#endif
+        busy = false;
+        return true;
     }
 }

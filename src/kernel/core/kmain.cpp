@@ -2,6 +2,7 @@
 #include "GDT.h"
 #include "interrupts.h"
 #include "memory/memory.h"
+#include "memory/PageCache.h"
 #include "system.h"
 #include "../processes/scheduler.h"
 #include "PIC.h"
@@ -76,6 +77,7 @@ extern "C" int kmain(uint ebx) // Ebx contains GRUB's multiboot2 structure point
     //FB_OK_OP("Initialize network card and stack\n", Network::init());
 
     FB_OK_OP("Initializing Virtual File System\n", VFS::init());
+    Scheduler::start_kernel_process((void*)Memory::sync);
 
     // Network::run();
 

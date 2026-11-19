@@ -70,14 +70,13 @@ namespace Memory
 	bool identity_map(uint addr, uint size);
 
 	/**
-	 * Tries to handle a page fault. Checks whether the fault was caused by lazy page allocation. If so,
-	 * actually allocates the page and returns true. Otherwise, returns false.
+	 * Tries to handle a page fault: copy-on-write, lazily allocated page, or not yet loaded file page.
 	 * @param current_process process that was running when the page fault occurred
 	 * @param fault_address address which caused the fault
 	 * @param write_access whether the fault was caused by a write access
-	 * @return whether the fault has been handled or is an error
+	 * @return 0 if the fault has been handled, otherwise the signal the process must be killed with
 	 */
-	bool page_fault_handler(const Process* current_process, uint fault_address, bool write_access);
+	int page_fault_handler(const Process* current_process, uint fault_address, bool write_access);
 
 	/**
 	 * Attempts to map some memory that has been written somewhere by some entity (BIOS, GRUB...) with a known physical
@@ -95,7 +94,7 @@ namespace Memory
 	 */
 	Optional<uint> phys_to_virt_addr(uint phys_addr);
 
-	int mprotect(void* addr, size_t len, int prot, const Process* process);
+	int mprotect(void* addr, size_t len, int prot, Process* process);
 
 	/** Tries to allocate a contiguous block of memory
 	 * @param num_pages_requested Size of the block in bytes

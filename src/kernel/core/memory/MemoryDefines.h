@@ -11,8 +11,10 @@
 #define PAGE_PAT		0x80
 #define PAGE_LAZY_ZERO	0x200 // Page is lazily zeroed, meaning it will be allocated and zeroed on first access
 #define PAGE_COW		0x800 // Page is Copy On Write, meaning it is shared between processes and will be copied on first write
-#define PAGE_SHRO		0x400 // Page is shared read-only, meaning it is shared between processes but not writable
-#define PAGE_BREBOS_MANAGED_FLAGS (PAGE_PRESENT | PAGE_WRITE | PAGE_USER | PAGE_LAZY_ZERO | PAGE_COW | PAGE_SHRO)
+// Only meaningful on a non-present PTE: the page belongs to a file mapping but has not been mapped to a page cache frame
+// yet. It reserves the page so that it is not handed out to another allocation
+#define PAGE_FILE_BACKED	0x400
+#define PAGE_BREBOS_MANAGED_FLAGS (PAGE_PRESENT | PAGE_WRITE | PAGE_USER | PAGE_LAZY_ZERO | PAGE_COW | PAGE_FILE_BACKED)
 
 #define PDT_ENTRIES 1024
 #define PT_ENTRIES 1024
@@ -31,7 +33,7 @@
 #define FRAME_ID_ADDR(i) ((i) << 12)
 #define VIRT_ADDR(pde, pte, offset) ((pde) << 22 | (pte) << 12 | (offset))
 #define PTE_PHYS_ADDR(i) (FRAME_ID_ADDR((PDT_ENTRIES + (i))))
-#define PTE_USED(page_tables, i) (PTE(page_tables, i) & (PAGE_PRESENT | PAGE_LAZY_ZERO))
+#define PTE_USED(page_tables, i) (PTE(page_tables, i) & (PAGE_PRESENT | PAGE_LAZY_ZERO | PAGE_FILE_BACKED))
 #define PTE(page_tables, i) (page_tables[(i) >> 10].entries[(i) & 0x3FF])
 #define PTE_FLAGS_MASK 0xFFF
 #define PTE_FLAGS(pte) ((pte) & PTE_FLAGS_MASK)

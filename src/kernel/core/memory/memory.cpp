@@ -1,5 +1,6 @@
 #include "memory.h"
 
+#include "../../file_management/superblock.h"
 #include "../../processes/ELFTools.h"
 #include "../../utils/optional.h"
 using namespace Memory;
@@ -12,6 +13,9 @@ using namespace Memory;
 #include "../../processes/scheduler.h"
 #include "../../utils/comparison.h"
 #include "abi-bits/errno.h"
+#include "../PIT.h"
+#include "../interrupts.h"
+#include "PageCache.h"
 #include "RawMemory.h"
 
 namespace Memory
@@ -21,24 +25,33 @@ namespace Memory
     /** Initializes frame to page mapping
      *
      * This functions allocates PDT 770 to store frame_to_page, which maps frame ids to page ids.
-     * Then it fills the mapping for frames used by the kernel itself as well as and the page tables, which is the only
-     * thing dynamically allocated at this point.
+     * Then it fills the mapping for frames used by the kernel itself as well as the page tables, frame_to_page, frame_rc
+     * and frame_cache_page, which are the only things dynamically allocated at this point.
      */
     void init_frame_to_page();
 
     /** Initializes frame reference counter
      *
      * This functions allocates PDT 771 to store frame_rc, which maps frame ids to their reference count.
-     * Then it fills the mapping for frames used by the kernel itself as well as and the page tables and frame_to_page,
-     * which are the only things dynamically allocated at this point.
+     * Then it fills the mapping for frames used by the kernel itself as well as the page tables, frame_to_page, frame_rc
+     * and frame_cache_page, which are the only things dynamically allocated at this point.
+     * @warning The reference counts are deduced from page table entries, so frame_to_page and frame_cache_page must be
+     * initialized before calling this function
      */
     void init_frame_rc();
 
+    /** Initializes frame to cached page mapping
+     *
+     * This functions allocates PDT 772 to store frame_cache_page, which maps frame ids to their page cache page, if any.
+     * Every entry is set to nullptr, as no frame belongs to the page cache at this point.
+     */
+    void init_frame_cache_page();
+
     /** Allocate 1024 pages to store the 1024 pages tables required to map all the memory in PDT[769]. \n
      * 	The page table that maps kernel pages is moved into the newly allocated array of page tables and then freed. \n
-     * 	This function also allocates 1024 tables on PDT[770] for frame_to_page
+     * 	This function also allocates PDT[770] for frame_to_page, PDT[771] for frame_rc and PDT[772] for frame_cache_page
      * 	@details
-     *  Page tables will be written in frames 0 to 1023. \n
+     *  Page tables will be written in frames 1024 to 2047. \n
      *	Page tables are virtually located on pages 1024*769 to 1024*769+1023. \n
      *	@note Any call to malloc will never return 0 on a successful allocation, as virtual address 0 maps the first page
      *	table, and will consequently never be returned by malloc if allocation is successful. \n
@@ -88,8 +101,18 @@ namespace Memory
      * @param current_process process that was running when the page fault occurred
      * @param page_id page id that caused the fault
      * @param pt page table to use for the fault handling
+     * @param write_access whether the fault was caused by a write
+     * @return false if the access is not permitted (write to a page whose write permission was removed), else true
      */
-    void handle_lazy_zero_page_fault(const Process* current_process, uint page_id, page_table_t* pt);
+    bool handle_lazy_zero_page_fault(const Process* current_process, uint page_id, page_table_t* pt, bool write_access);
+
+    /**
+     * Handles a page fault in a file mapping
+     * @return 0 if handled, SIGBUS if the page is entirely past the end of the file, SIGSEGV if the access is not
+     * permitted
+     */
+    int handle_memory_backed_file_page_fault(Memory::allocation& allocation, uintptr_t fault_address, bool write_access, const Process* current_process, bool
+                                             higher_half, const page_table_t* pt);
 
     uint get_free_pe_user()
     {
@@ -112,13 +135,25 @@ namespace Memory
         memset(frame_rc, 0, PDT_ENTRIES * PT_ENTRIES * sizeof(uint));
 
         // Fill frame_rc
-        for (uint pde = 768; pde <= 771; pde++)
+        for (uint pde = 768; pde <= 772; pde++)
         {
             uint page_id_off = PDT_ENTRIES * pde;
             uint frame_off = PDT_ENTRIES * (pde - 768);
             for (uint pte = 0; pte < PT_ENTRIES; pte++)
                 frame_rc[frame_off + pte] = PTE_USED(page_tables, page_id_off + pte);
         }
+    }
+
+    void init_frame_cache_page()
+    {
+        // Allocate space for frame_cache_page
+        for (size_t i = 0; i < PT_ENTRIES; i++)
+        {
+            PTE(page_tables, 772 * PDT_ENTRIES + i) = FRAME_ID_ADDR(PDT_ENTRIES * 4 + i) | PAGE_WRITE | PAGE_PRESENT;
+            INVALIDATE_PAGE(772, i);
+        }
+        frame_cache_page = (cached_page**)VIRT_ADDR(772, 0, 0);
+        memset(frame_cache_page, 0, PDT_ENTRIES * PT_ENTRIES * sizeof(cached_page*));
     }
 
     void init_frame_to_page()
@@ -139,8 +174,8 @@ namespace Memory
                 continue;
             frame_to_page[i] = 768 * PDT_ENTRIES + i;
         }
-        // Fill frame_to_page - page tables and frame_to_page and frame_rc
-        for (size_t i = 0; i < PT_ENTRIES * 3; i++)
+        // Fill frame_to_page - page tables and frame_to_page and frame_rc and frame_cache_page
+        for (size_t i = 0; i < PT_ENTRIES * 4; i++)
             frame_to_page[PT_ENTRIES + i] = 769 * PDT_ENTRIES + i;
     }
 
@@ -189,11 +224,11 @@ namespace Memory
         // Let user access all page tables. Access will be defined in page table entries
         for (int i = 0; i < PDT_ENTRIES; ++i)
             pdt->entries[i] |= PAGE_USER;
-        /** Clear unused page tables (all but 769 and 770 and 771)
+        /** Clear unused page tables (all but 769 and 770 and 771 and 772)
          * Kernel code is for now referenced in PDT[768] entries, not in page_tables[768], so we can also clear it
         */
         memset(&page_tables[0].entries[0], 0, 769 * PT_ENTRIES * sizeof(uint));
-        memset(&page_tables[772].entries[0], 0, (PDT_ENTRIES - 772) * PT_ENTRIES * sizeof(uint));
+        memset(&page_tables[773].entries[0], 0, (PDT_ENTRIES - 773) * PT_ENTRIES * sizeof(uint));
 
         // Copy asm_pt1 (the page table that maps the pages used by the kernel) in appropriated page table
         memcpy(&page_tables[768].entries[0], &asm_pt1->entries[0], PT_ENTRIES * sizeof(uint));
@@ -208,9 +243,11 @@ namespace Memory
         reload_cr3_asm(); // Apply changes | Full TLB flush is needed because we modified every pdt entry
 
         init_frame_to_page();
+        init_frame_cache_page();
         init_frame_rc();
 
-        uint used_page_directories = 4; // 0 is kernel, 1 is page tables, 2 is frame_to_page, 3 is frame_rc
+        // 0 is kernel, 1 is page tables, 2 is frame_to_page, 3 is frame_rc, 4 is frame_cache_page
+        uint used_page_directories = 5;
         lowest_free_frame = PT_ENTRIES * used_page_directories;
         lowest_free_pe_user = 1; // 0 is reserved for page faulting
 
@@ -338,7 +375,7 @@ namespace Memory
         return (PAGE_ADDR(frame_to_page[frame_id])) + ADDR_PAGE_OFF(phys_addr);
     }
 
-    int mprotect(void* addr, size_t len, int prot, const Process* process)
+    int mprotect(void* addr, size_t len, int prot, Process* process)
     {
         const auto uaddr = (Elf32_Addr)addr;
         if (!IS_PAGE_ALIGNED(uaddr))
@@ -352,36 +389,49 @@ namespace Memory
         }
 
         // Check address range is valid within the process address space
-        const auto num_pages = ADDR_PAGE(len + PAGE_SIZE - 1);
-        bool range_is_valid = true;
+        const uint first_page = ADDR_PAGE(uaddr);
+        const uint num_pages = ADDR_PAGE(len + PAGE_SIZE - 1);
         for (uint id = 0; id < num_pages; id++)
         {
-            uint page_id = ADDR_PAGE(uaddr + id);
-            uint pte = PTE(process->page_tables, page_id);
-            if (!(pte & PAGE_PRESENT || pte & PAGE_LAZY_ZERO))
-            {
-                if (pte & PAGE_COW || pte & PAGE_SHRO)
-                    irrecoverable_error("mprotect: address range covers a COW or SHRO page, this is not supported yet");
-                range_is_valid = false;
-                break;
-            }
+            if (!PTE_USED(process->page_tables, first_page + id))
+                return -ENOMEM; // Strange error code imo, but that is what the man page says
         }
-        if (!range_is_valid)
-            return -ENOMEM; // Strange error code imo, but that is what the man page says
 
-        // For now the only flag that can be affected by mprotect is PAGE_WRITE
-        const uint new_flags = prot & PROT_WRITE ? PAGE_WRITE : 0;
+        // For now the only flag that can be affected by mprotect is write
+        const bool write = prot & PROT_WRITE;
 
-        // Apply new flags
+        // Keep memtree policies in sync with the actual permission. File mappings rely on it upon page faults.
+        // Fails if the range partially covers a block allocated through malloc/calloc/realloc syscalls, which cannot
+        // be split
+        if (!process->memtree.set_write_permission(PAGE_ADDR(first_page), PAGE_ADDR(first_page + num_pages), write))
+            return -EINVAL;
+
+        // Apply new permission to PTEs
         for (uint id = 0; id < num_pages; id++)
         {
-            constexpr uint flags_mask = ~PAGE_WRITE;
+            const uint page_id = first_page + id;
+            const uint pte = PTE(process->page_tables, page_id);
+            uint flags = PTE_FLAGS(pte);
 
-            uint page_id = ADDR_PAGE(uaddr + id);
-            uint pte = PTE(process->page_tables, page_id);
-            pte &= flags_mask;
-            pte |= new_flags;
-            process->update_pte(page_id, PTE_FRAME(pte), PTE_FLAGS(pte), true);
+            if (pte & PAGE_FILE_BACKED) // Not loaded yet, permission is read from memtree upon fault
+                continue;
+
+            if (!write)
+                flags &= ~(PAGE_WRITE | PAGE_COW); // A COW page is writable: no longer being writable, it's not COW
+            else if (pte & PAGE_LAZY_ZERO)
+                flags |= PAGE_WRITE; // Kept in PTE, lazy zero fault handler grants write access accordingly
+            else if (!(pte & PAGE_COW))
+            {
+                // A page mapping a page cache frame stays read-only, so that its first write faults: it is then either
+                // marked dirty (shared mapping) or copied (private mapping). A private copy is handled like any page
+                if (frame_cache_page[PTE_FRAME(pte)])
+                    continue;
+                // A frame shared with other processes (e.g. after a fork) must be copied on write
+                flags |= frame_rc[PTE_FRAME(pte)] > 1 ? PAGE_COW : PAGE_WRITE;
+            }
+
+            if (flags != PTE_FLAGS(pte))
+                process->update_pte(page_id, PTE_FRAME(pte), flags, true);
         }
 
         return 0;
@@ -442,6 +492,7 @@ namespace Memory
         }
     }
 
+    // this function is WRONG!! It does not guarantee alignment anymore, it needs fixing
     void* malloca(uint size)
     {
         const uint num_pages = ADDR_PAGE(size + PAGE_SIZE - 1);
@@ -480,52 +531,74 @@ namespace Memory
         return stack_top_ptr;
     }
 
-    void* mmap(void* hint, size_t size, int prot, int flags, [[maybe_unused]] int fd, off_t offset, int& err, Process* process, bool
+    void* mmap(void* hint, size_t size, int prot, int flags, int fd, off_t offset, int& err, Process* process, bool
                lazy_zero, bool page_user)
     {
 #define mmap_ret_err(error) {err = error; return nullptr;}
-#define mmap_ret_err_with_warnv(error, msg, ...) {printf_warn(msg, __VA_ARGS__); err = error; return nullptr;}
-#define mmap_ret_err_with_warn(error, msg) {printf_warn(msg); err = error; return nullptr;}
+#define mmap_ret_err_with_warn(error, msg, ...) {printf_warn(msg __VA_OPT__(,) __VA_ARGS__); err = error; return nullptr;}
 
-        constexpr int supported_flags = MAP_ANON | MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED;
+        constexpr int supported_flags = MAP_ANON | MAP_ANONYMOUS | MAP_PRIVATE | MAP_SHARED | MAP_FIXED;
         if (flags & ~supported_flags)
-            mmap_ret_err_with_warnv(EINVAL, "mmap called with the following unsupported flags: 0x%x", flags & ~supported_flags)
+            mmap_ret_err_with_warn(EINVAL, "mmap called with the following unsupported flags: 0x%x", flags & ~supported_flags)
 
-        if (!((flags & MAP_PRIVATE) | (flags & MAP_SHARED)))
+        // Exactly one of MAP_PRIVATE and MAP_SHARED must be specified
+        if (!(flags & MAP_PRIVATE) == !(flags & MAP_SHARED))
             mmap_ret_err(EINVAL)  // According to man page
-        if (!IS_PAGE_SIZE_MUL((Elf32_Addr)hint) || !(IS_PAGE_SIZE_MUL(offset)))
+        // Anonymous shared memory needs a backing object for fork to keep it shared, which does not exist yet. Refuse
+        // it rather than silently making it private
+        if (flags & MAP_SHARED && flags & (MAP_ANON | MAP_ANONYMOUS))
+            mmap_ret_err_with_warn(EINVAL, "mmap called with MAP_SHARED | MAP_ANONYMOUS, this is not supported yet")
+        // An unaligned hint is only an error with MAP_FIXED, otherwise it is just a hint
+        if ((flags & MAP_FIXED && !IS_PAGE_ALIGNED((uintptr_t)hint)) || offset < 0 || !IS_PAGE_ALIGNED(offset))
             mmap_ret_err(EINVAL); // According to man page
-
-        // When memory mapped files will be implemented, don't forget to handle EACCES error or mprotect (cf man page)
-
-        // At that point we know that flags contain MAP_PRIVATE, so this case only is handled here for now
-        // Beware that changing code above may require adding more conditional logic below
-
-        // ReSharper disable once CppIdenticalOperandsInBinaryExpression
-        if (!((flags & MAP_ANONYMOUS) | (flags & MAP_ANON)))
-            mmap_ret_err_with_warn(EINVAL, "mmap called with MAP PRIVATE without MAP_ANONYMOUS or MAP_ANON. This is not"
-                               "supported yet")
 
         if (prot == 0)
             mmap_ret_err_with_warn(EINVAL, "mmap called with prot == 0. I don't know how to implement that, returning failure")
         const bool write = prot & PROT_WRITE;
 
-        // At that point we know we have ANONYMOUS and MAP_PRIVATE
+        if (flags & (MAP_ANON | MAP_ANONYMOUS))
+        {
+            // Policy set to write for calloc, then write is removed if user did not specify it
+            const int policy = PROT_WRITE | (lazy_zero ? PAGE_LAZY_ZERO : PAGE_PRESENT) | (page_user ? PAGE_USER : 0);
+            const hint_info hint_info{reinterpret_cast<uintptr_t>(hint), (bool)(flags & MAP_FIXED)};
+            const page_info page_info{flags, policy};
+            // printf_info("mmap call on range [0x%08x, 0x%08x]", (uint)hint, (uint)hint + (uint)size);
+            // Man page states that MAP_ANON allocations MUST BE zeroed out, thus calloc is used
+            void* window = calloc(size, 1, page_info, process, hint_info);
+            if (flags & MAP_FIXED && window != hint)
+                irrecoverable_error("%s: MAP_FIXED set, but returned window does not match hit", __func__);
+            if (!window)
+                mmap_ret_err(ENOMEM);
+            if (!write) // Remove write permission if user did not specify it
+                mprotect(window, size, prot, process);
+            return window;
+        }
 
-        // Policy set to write for calloc, then write is removed if user did not specify it
-        const int policy = PROT_WRITE | (lazy_zero ? PAGE_LAZY_ZERO : PAGE_PRESENT) | (page_user ? PAGE_USER : 0);
+        // Non-anonymous mapping, use fd
+        lazy_zero = false; // Lazy zero doesn't make sense in this scenario
+        if (fd < 0 || fd >= MAX_FD_PER_PROCESS || process->file_descriptors[fd] == nullptr)
+            mmap_ret_err(EINVAL);
+        SharedPointer<FileInterface> sys_fd = VFS::file_descriptors[process->file_descriptors[fd]->sys_fd];
+        if (sys_fd->type != FileInterface::File)
+            mmap_ret_err_with_warn(EINVAL, "non anonymous mmap with non file file descriptor, this is not supported, mmap fails");
+
+        const uint offset_pages = offset / PAGE_SIZE;
+        const uint num_pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
         const hint_info hint_info{reinterpret_cast<uintptr_t>(hint), (bool)(flags & MAP_FIXED)};
-        const page_info page_info{flags, policy};
-        // printf_info("mmap call on range [0x%08x, 0x%08x]", (uint)hint, (uint)hint + (uint)size);
-        // Man page states that MAP_ANON allocations MUST BE zeroed out, thus calloc is used
-        void* window = calloc(size, 1, page_info, process, hint_info);
-        if (flags & MAP_FIXED && window != hint)
-            irrecoverable_error("%s: MAP_FIXED set, but returned window does not match hit", __func__);
-        if (!window)
+        const uint pte = get_contiguous_pages(num_pages, hint_info, process);
+        if (pte == -1U)
             mmap_ret_err(ENOMEM);
-        if (!write) // Remove write permission if user did not specify it
-            mprotect(window, size, prot, process);
-        return window;
+        if (flags & MAP_FIXED && PAGE_ADDR(pte) != reinterpret_cast<uintptr_t>(hint))
+            irrecoverable_error("%s: MAP_FIXED set, but returned window does not match hint", __func__);
+
+        // Reserve the pages with frameless PTEs: the page fault handler maps them on first access
+        const int policy = PAGE_PRESENT | (page_user ? PAGE_USER : 0) | (write ? PAGE_WRITE : 0);
+        const page_info page_info{flags, policy};
+        for (uint i = 0; i < num_pages; i++)
+            process->update_pte(pte + i, PAGE_FILE_BACKED, true);
+        process->memtree.register_external_allocation({PAGE_ADDR(pte), PAGE_ADDR(pte + num_pages), page_info, true, {sys_fd, offset_pages}});
+
+        return (void*)(pte << 12);
     }
 
     bool identity_map(uint addr, uint size)
@@ -619,16 +692,23 @@ namespace Memory
         current_process->update_pte(mapping_pe, 0, true);
     }
 
-    void handle_lazy_zero_page_fault(const Process* current_process, uint page_id, page_table_t* pt)
+    bool handle_lazy_zero_page_fault(const Process* current_process, uint page_id, page_table_t* pt, bool write_access)
     {
-        // Allocate frame and update memory mapping
-        const bool page_user = PTE(pt, page_id) & PAGE_USER; // Should page be user accessible ?
-        const uint new_flags = (page_user ? PAGE_USER : 0) | PAGE_WRITE | PAGE_PRESENT;
-        current_process->update_pte(page_id, new_flags, true);
+        // Lazy zero PTEs hold write permission (which mprotect may have removed)
+        const uint pte = PTE(pt, page_id);
+        if (write_access && !(pte & PAGE_WRITE))
+            return false; // Unauthorized write
+
+        // Allocate frame and update memory mapping. Write access is temporarily granted to zero out the page
+        const uint new_flags = (pte & PAGE_USER) | PAGE_PRESENT;
+        current_process->update_pte(page_id, new_flags | PAGE_WRITE, true);
         memset((void*)PAGE_ADDR(page_id), 0, PAGE_SIZE); // Zero out page
+        if (!(pte & PAGE_WRITE)) // Remove write access if needed
+            current_process->update_pte(page_id, PTE_FRAME(PTE(pt, page_id)), new_flags, true);
+        return true;
     }
 
-    bool page_fault_handler(const Process* current_process, uint fault_address, bool write_access)
+    int page_fault_handler(const Process* current_process, uint fault_address, bool write_access)
     {
         // Gather information
         const uint page_id = ADDR_PAGE(fault_address);
@@ -636,24 +716,95 @@ namespace Memory
         page_table_t* pt = higher_half ? page_tables : current_process->page_tables;
         const uint pte = PTE(pt, page_id);
 
-        bool handled = false;
-
         // Handle Copy-On-Write (COW) pages
         if (pte & PAGE_COW)
         {
             if (!write_access)
                 irrecoverable_error("huh ??");
             handle_cow_page_fault(current_process, higher_half, page_id, pt);
-            handled = true;
+            return 0;
         }
 
         // Check whether relevant page has been lazily allocated
-        if (!(pte && pte & PAGE_LAZY_ZERO))
-            return handled;
+        if (pte && pte & PAGE_LAZY_ZERO)
+            return handle_lazy_zero_page_fault(current_process, page_id, pt, write_access) ? 0 : SIGSEGV;
 
-        handle_lazy_zero_page_fault(current_process, page_id, pt);
+        if (Optional<allocation> alloc = current_process->memtree.get_addr_alloc(fault_address); alloc && alloc->underlying_file)
+            return handle_memory_backed_file_page_fault(*alloc, fault_address, write_access, current_process, higher_half, pt);
 
-        return true;
+        return SIGSEGV;
+    }
+
+    int handle_memory_backed_file_page_fault(allocation& allocation, uintptr_t fault_address, bool write_access, const Process* current_process, bool
+                                             higher_half, const page_table_t* pt)
+    {
+        if (write_access && !(allocation.page_info.policy & PAGE_WRITE)) [[unlikely]]
+            return SIGSEGV; // Unauthorized write
+
+        const uint fault_page = ADDR_PAGE(fault_address);
+        if (const uint pte = PTE(pt, fault_page); pte & PAGE_PRESENT && !frame_cache_page[PTE_FRAME(pte)]) [[unlikely]]
+            irrecoverable_error("%s: page %u faulted but does not map a page cache frame", __func__, fault_page);
+
+        // The rest may read from disk and allocate kernel memory: run it like a syscall handler, until return
+        const SyscallLikeSection syscall_like_section;
+
+        // Get info and relevant objects
+        underlying_file& underlying_file = allocation.underlying_file.expect("%s: no underlying file", __func__);
+        SharedPointer<FileInterface>& file_interface = underlying_file.file;
+        if (file_interface->type != FileInterface::File)
+            irrecoverable_error("%s: file interface is not of type file (got type %d), this is not supported", __func__, file_interface->type);
+        File* file = static_cast<File*>(file_interface.get());
+        Inode* inode = file->inode.get();
+
+        // Check whether that portion of the file is already loaded
+        const uint file_page = ADDR_PAGE(PAGE_ALIGN(fault_address) - allocation.start) + underlying_file.offset_in_pages;
+        cached_page* cached_page = inode->find_cached_page(file_page);
+
+        if (const bool region_already_loaded = cached_page != nullptr; !region_already_loaded)
+        {
+            // Access to a page entirely past EOF: SIGBUS, as POSIX requires. Pages past EOF are never cached, as
+            // truncation unmaps and frees them
+            const uint file_offset = PAGE_ADDR(file_page);
+            if (file_offset >= inode->size)
+                return SIGBUS;
+
+            // Let update_pte allocate the frame: the resulting kernel mapping holds the cache reference on it
+            const uint load_pte = get_free_pe();
+            kernel_process->update_pte(load_pte, PAGE_PRESENT | PAGE_WRITE, true);
+            const uint load_frame = PTE_FRAME(PTE(page_tables, load_pte));
+
+            const uint size_to_load = min((uint)PAGE_SIZE, inode->size - file_offset);
+            uint loaded_bytes = 0;
+
+            inode->superblock->get_fs()->load_file_to_buf((void*)PAGE_ADDR(load_pte), inode, file_offset, size_to_load, loaded_bytes).expect();
+            if (loaded_bytes != size_to_load)
+                irrecoverable_error("%s: could only load %u bytes out of %u", __func__, loaded_bytes, size_to_load);
+            // Zero the part of the last page past EOF, otherwise the process would see the frame's previous content
+            memset((void*)(PAGE_ADDR(load_pte) + loaded_bytes), 0, PAGE_SIZE - loaded_bytes);
+
+            inode->cached_pages.addFirst({file_page, load_pte, load_frame, false, {}});
+            cached_page = inode->cached_pages.get(0);
+            frame_cache_page[load_frame] = cached_page;
+        }
+
+        // Map the cache frame without write access unless this is a shared write: the first write must fault so that
+        // the page gets marked dirty, and a private write must not reach the cache frame
+        uint flags = allocation.page_info.policy & ~PAGE_WRITE;
+        const bool shared = allocation.page_info.flags & MAP_SHARED;
+        if (write_access && shared)
+        {
+            flags |= PAGE_WRITE;
+            cached_page->dirty = true;
+            if (!dirty_inodes.contains(file->inode))
+                dirty_inodes.add(file->inode);
+        }
+        current_process->update_pte(fault_page, cached_page->frame_id, flags, true);
+
+        // Private write: handled by COW, bypassing the cache for later accesses
+        if (write_access && !shared)
+            handle_cow_page_fault(current_process, higher_half, ADDR_PAGE(fault_address), pt);
+
+        return 0;
     }
 
     void* register_physical_data(uint physical_address, uint size)

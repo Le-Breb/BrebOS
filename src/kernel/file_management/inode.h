@@ -4,6 +4,9 @@
 #include <kstddef.h>
 #include <sys/stat.h>
 
+#include "../core/memory/PageCache.h"
+#include "../utils/list.h"
+
 class Superblock;
 
 class Inode
@@ -18,7 +21,16 @@ public:
     Inode(const Superblock* superblock, uint size, Type type, ino_t id, nlink_t nlink, uid_t uid, gid_t gid,
           dev_t rdev, blkcnt_t blocks, time_t atime, time_t mtime, time_t ctime);
 
-    virtual ~Inode() = default;
+    /**
+     * Releases cached pages. Dirty pages cannot be written back from here: by the time this destructor runs, the
+     * derived part of the inode (which the FS needs to write) is already destroyed. This is fine as long as dirty
+     * inodes are referenced by the sync list until written back, which prevents their destruction.
+     */
+    virtual ~Inode();
+
+    list<Memory::cached_page> cached_pages;
+    
+    Memory::cached_page* find_cached_page(uint file_page_id) const;
 
     const Superblock* superblock;
     uint size;

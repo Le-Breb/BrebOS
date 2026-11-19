@@ -330,17 +330,27 @@ void Process::copy_page_to_other_process_shared(const Process* other, uint page_
 {
     const auto pte = PTE(page_tables, page_id);
 
-    // For lazy zero, simply copy the entry
-    if (pte & PAGE_LAZY_ZERO)
+    // For frameless entries (lazy zero, not yet loaded file page), simply copy the entry
+    if (pte & (PAGE_LAZY_ZERO | PAGE_FILE_BACKED))
     {
         other->update_pte(page_id, pte, false);
+        return;
+    }
+
+    // Page cache frame: either a MAP_SHARED page, which must stay shared, or a MAP_PRIVATE page not written yet, which
+    // is read-only (a private write copies the frame). Either way, map the same frame with the same flags. Copying
+    // PAGE_WRITE is fine: a writable cache page is always dirty, and the sync will write-protect the child's PTE as
+    // well, as update_pte references it in the page's rmap
+    if (Memory::frame_cache_page[PTE_FRAME(pte)])
+    {
+        other->update_pte(page_id, PTE_FRAME(pte), PTE_FLAGS(pte), false);
         return;
     }
 
     // Remove write permission in current process, as we cannot write to the page anymore since it is shared
     // Mark page as COW in current and other process
     const bool write = pte & PAGE_WRITE || pte & PAGE_COW;
-    const uint pte_val = (pte | (write ? PAGE_COW : PAGE_SHRO)) & ~PAGE_WRITE;
+    const uint pte_val = (pte | (write ? PAGE_COW : 0)) & ~PAGE_WRITE;
     if (PTE_FLAGS(pte_val) != PTE_FLAGS(pte)) // Update current process page table if flags changed
         update_pte(page_id, PTE_FRAME(pte_val), PTE_FLAGS(pte_val), update_cache);
     other->update_pte(page_id, PTE_FRAME(pte_val), PTE_FLAGS(pte_val), false);

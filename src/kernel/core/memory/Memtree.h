@@ -99,6 +99,32 @@ namespace Memory
         Node* duplicate_node(const Node* node, Node* parent);
         // Displays every allocation in postorder
         static void print_out(const Node* node);
+        // Returns the node whose allocation contains addr, or nullptr
+        Node* get_addr_node(uintptr_t addr) const;
+        // Returns the node with the lowest start address strictly greater than addr, or nullptr
+        Node* get_next_node(uintptr_t addr) const;
+        /**
+         * Splits a node in two at address at. The node keeps [start, at), a new node is created for [at, end). If the
+         * node is file-backed, the new node's file offset is adjusted accordingly
+         * @param node node to split
+         * @param at split address, must be page aligned and strictly inside the node
+         */
+        void split_node(Node* node, uintptr_t at);
+        /**
+         * Finds the used anonymous allocation strictly crossed by a range bound. Such an allocation cannot be split, as
+         * free and realloc look it up by its start address
+         * @param bound range bound (start or end)
+         * @return the node if there is one, nullptr otherwise
+         */
+        const Node* get_crossed_used_anon_node(uintptr_t bound) const;
+        /**
+         * Checks whether setting write permission over a range would require splitting node at bound
+         * @param bound range bound (start or end)
+         * @param write requested write permission
+         * @return true if the allocation containing bound is used, anonymous, strictly crossed by bound and its write
+         * permission differs from the requested one
+         */
+        bool would_split_used_anon_node(uintptr_t bound, bool write) const;
     public:
         enum class FreeState
         {
@@ -125,5 +151,17 @@ namespace Memory
         void register_external_allocation(const allocation& allocation); // Registered externally allocated memory
         [[nodiscard]] uint get_total_size() const;
         [[nodiscard]] Optional<allocation> get_addr_alloc(uintptr_t addr) const;
+        /**
+         * Sets or removes write permission in the policy of allocations within [start, end), splitting allocations
+         * that cross range bounds. File mappings rely on it to check permission upon page faults, and policies are
+         * reused when growing or reusing allocations, so they must match the actual permission of their pages.
+         * Used anonymous allocations cannot be split, as free and realloc look them up by their start address: if
+         * one crosses a range bound and its permission would change, nothing is modified and false is returned
+         * @param start range start, page aligned
+         * @param end range end, page aligned
+         * @param write whether write permission should be granted
+         * @return false if the range partially covers a used anonymous allocation, else true
+         */
+        [[nodiscard]] bool set_write_permission(uintptr_t start, uintptr_t end, bool write);
     };
 }

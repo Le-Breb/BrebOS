@@ -2,6 +2,7 @@
 #define CUSTOM_OS_SCHEDULER_H
 
 #include "process.h"
+#include "../core/interrupts.h"
 #include "../utils/min_heap.h"
 #include "../utils/queue.h"
 
@@ -183,6 +184,37 @@ public:
 
 	[[nodiscard]]
 	static Memory::page_table_t* get_current_page_tables();
+};
+
+/**
+ * Gives the code of the enclosing scope the environment of a syscall handler, then restores the previous state when
+ * the scope is left:
+ * - Preemption disabled, otherwise another process could be scheduled in the middle of e.g. a kernel allocation.
+ * - Interrupts enabled, as drivers wait for completion interrupts. Code reached through an interrupt gate (e.g. a page
+ *   fault handler) runs with them disabled.
+ * Restoring matters as such a scope may itself run inside a syscall (e.g. page fault in a syscall)
+ */
+class SyscallLikeSection
+{
+	const bool was_locked = Scheduler::preemption_lock;
+	const bool interrupts_were_enabled = Interrupts::are_enabled();
+
+public:
+	SyscallLikeSection()
+	{
+		Scheduler::preemption_lock = true;
+		Interrupts::enable_asm();
+	}
+
+	~SyscallLikeSection()
+	{
+		if (!interrupts_were_enabled)
+			Interrupts::disable_asm();
+		Scheduler::preemption_lock = was_locked;
+	}
+
+	SyscallLikeSection(const SyscallLikeSection&) = delete;
+	SyscallLikeSection& operator=(const SyscallLikeSection&) = delete;
 };
 
 

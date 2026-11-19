@@ -32,6 +32,15 @@ namespace Memory
 		bool mandatory_hint;
 	};
 
+	struct cached_page; // Defined in PageCache.h
+	extern cached_page** frame_cache_page; // frame id -> page cache page, nullptr if none
+
+	/** References a PTE in the reverse map of a cached page. Defined in PageCache.cpp */
+	void rmap_add(cached_page* page, pdt_t* pdt, page_table_t* pt, uint page_id);
+
+	/** Removes a PTE from the reverse map of a cached page, it must be referenced. Defined in PageCache.cpp */
+	void rmap_remove(cached_page* page, page_table_t* pt, uint page_id);
+
 	extern "C" void boot_page_directory();
 
 	extern "C" void boot_page_table1();

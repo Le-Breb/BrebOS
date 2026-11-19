@@ -62,6 +62,11 @@ namespace Memory
         const uint previous_frame = PTE_FRAME(previous_pte);
         if (frame_rc[previous_frame])
         {
+            // If the previous frame was a cached frame, remove the page from its rmap. Kernel mappings are not
+            // referenced there: the rmap lists the PTEs of processes borrowing the frame
+            if (cached_page* page = frame_cache_page[previous_frame]; page && pt != page_tables)
+                rmap_remove(page, pt, page_id);
+
             frame_rc[previous_frame]--;
             if (previous_frame && !frame_rc[previous_frame])
                 MARK_FRAME_FREE(previous_frame); // Internal deallocation registration
@@ -81,6 +86,10 @@ namespace Memory
         }
         else if (update_cache)
             INVALIDATE_PAGE(pde, page_id);
+
+        // Reference page in the rmap of the new frame if it is cached, kernel mappings excepted (see above)
+        if (cached_page* page = frame_cache_page[PTE_FRAME(val)]; page && pt != page_tables)
+            rmap_add(page, pdt, pt, page_id);
     }
 
     static bool maps_frame(uint flags)
