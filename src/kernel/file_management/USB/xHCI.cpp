@@ -137,6 +137,8 @@ void xHCI::setup_dcbaa()
         dcbaa = static_cast<uint64_t*>(dcbaa_addr);
     else
         irrecoverable_error("%s: physically_aligned_malloc failed", __func__);
+    // Unused slots must be null. Memory is not zeroed on allocation, and after a warm reboot it holds stale data
+    memset(dcbaa, 0, dcbaa_size);
 
     const auto max_scratchpad_buffers = XHCI_MAX_SCRATCHPAD_BUFFERS(cap_regs);
 
@@ -159,6 +161,8 @@ void xHCI::setup_dcbaa()
                 XHCI_DEVICE_CONTEXT_BOUNDARY
             )
         );
+        if (!scratchpad_array)
+            irrecoverable_error("%s: physically_aligned_malloc failed", __func__);
 
         // Create scratchpad pages
         for (uint8_t i = 0; i < max_scratchpad_buffers; i++) {

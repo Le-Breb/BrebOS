@@ -3,6 +3,7 @@
 #include "xHCI_common.h"
 #include "../../core/memory/memory.h"
 #include "../kernel/processes/scheduler.h"
+#include <kstring.h>
 
 xhci_command_ring::xhci_command_ring(size_t max_trbs) {
     m_max_trb_count = max_trbs;
@@ -19,6 +20,9 @@ xhci_command_ring::xhci_command_ring(size_t max_trbs) {
     );
     if (!m_trbs)
         irrecoverable_error("%s: physically_aligned_malloc failed", __func__);
+    // TRBs past the enqueue pointer must not look valid to the controller. Memory is not zeroed on allocation, and
+    // after a warm reboot it still holds the previous boot's TRBs, whose cycle bit may match the ring's
+    memset(m_trbs, 0, ring_size);
 
     m_physical_base = PHYS_ADDR(Scheduler::get_current_page_tables(), (uintptr_t)m_trbs);
 
@@ -69,6 +73,10 @@ xhci_event_ring::xhci_event_ring(
         XHCI_EVENT_RING_SEGMENTS_ALIGNMENT,
         XHCI_EVENT_RING_SEGMENTS_BOUNDARY
     );
+    if (!m_trbs)
+        irrecoverable_error("%s: physically_aligned_malloc failed", __func__);
+    // Same as the command ring: stale TRBs from a previous boot would be taken for events
+    memset(m_trbs, 0, segment_size);
 
     // Store the physical DMA base
     m_physical_base = PHYS_ADDR(Scheduler::get_current_page_tables(), (uintptr_t)m_trbs);
@@ -79,6 +87,9 @@ xhci_event_ring::xhci_event_ring(
         XHCI_EVENT_RING_SEGMENT_TABLE_ALIGNMENT,
         XHCI_EVENT_RING_SEGMENT_TABLE_BOUNDARY
     );
+    if (!m_segment_table)
+        irrecoverable_error("%s: physically_aligned_malloc failed", __func__);
+    memset(m_segment_table, 0, segment_table_size);
 
     // Construct the segment table entry
     xhci_erst_entry entry;
