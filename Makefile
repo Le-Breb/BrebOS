@@ -130,7 +130,7 @@ $(libc): $(libc_sources)
 $(libk): $(libk_sources)
 	+$(MAKE) -C $(SRC_DIR)/libk
 
-$(MLIBC_STAMP): $(shell find mlibc/options -type f) $(shell find mlibc/sysdeps/brebos -type f) $(shell find mlibc -maxdepth 1 -type f)
+$(MLIBC_STAMP): $(shell find mlibc/options -type f) $(shell find -L mlibc/sysdeps/brebos -type f) $(shell find mlibc -maxdepth 1 -type f)
 	cd $(BREBOS)/mlibc && \
 	DESTDIR=$(SYSROOT_DIR) ninja -C build install
 	touch $@
