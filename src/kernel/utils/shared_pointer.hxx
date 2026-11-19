@@ -5,29 +5,47 @@
 template <typename T>
 SharedPointer<T>::SharedPointer(element_type* p)
     : data_(p)
-    , count_(p == nullptr ? nullptr : new long{ 1 })
+    , cb_(nullptr)
+{
+    if (p != nullptr)
+        cb_ = new ControlBlock{1, &delete_data};
+}
+
+template <typename T>
+SharedPointer<T>::SharedPointer(decltype(nullptr))
+    : data_(nullptr)
+    , cb_(nullptr)
 {}
+
+template <typename T>
+void SharedPointer<T>::delete_data(void* p)
+{
+    delete static_cast<T*>(p);
+}
+
+template <typename T>
+void SharedPointer<T>::release()
+{
+    if (cb_ && --cb_->count == 0)
+    {
+        cb_->destroy(data_);
+        delete cb_;
+    }
+}
 
 template <typename T>
 SharedPointer<T>::~SharedPointer()
 {
-    if (count_)
-    {
-        if (--(*count_) == 0)
-        {
-            delete data_;
-            delete count_;
-        }
-    }
+    release();
 }
 
 template <typename T>
 SharedPointer<T>::SharedPointer(const SharedPointer<element_type>& other)
     : data_(other.data_)
-    , count_(other.count_)
+    , cb_(other.cb_)
 {
-    if (count_)
-        ++(*count_);
+    if (cb_)
+        ++cb_->count;
 }
 
 template <typename T>
@@ -35,35 +53,19 @@ void SharedPointer<T>::reset(element_type* p)
 {
     if (p == data_)
         return;
-    if (count_)
-    {
-        if (--(*count_) == 0)
-        {
-            delete data_;
-            delete count_;
-        }
-    }
+    release();
     data_ = p;
-    count_ = p == nullptr ? nullptr : new long(1);
+    cb_ = p == nullptr ? nullptr : new ControlBlock{1, &delete_data};
 }
 
 template <typename T>
 SharedPointer<T>& SharedPointer<T>::operator=(const SharedPointer& other)
 {
-    if (count_)
-    {
-        if (--(*count_) == 0)
-        {
-            delete data_;
-            delete count_;
-        }
-    }
+    if (other.cb_)
+        ++other.cb_->count; // Before release, in case of self-assignment
+    release();
     data_ = other.data_;
-    count_ = other.count_;
-    if (count_)
-    {
-        ++(*count_);
-    }
+    cb_ = other.cb_;
 
     return *this;
 }
@@ -89,7 +91,7 @@ typename SharedPointer<T>::element_type* SharedPointer<T>::get() const
 template <typename T>
 long SharedPointer<T>::use_count() const
 {
-    return count_ ? *count_ : 0;
+    return cb_ ? cb_->count : 0;
 }
 
 template <typename T>
@@ -124,18 +126,11 @@ SharedPointer<T>::operator=(SharedPointer&& other) noexcept
 {
     if (this != &other)
     {
-        if (count_)
-        {
-            if (--(*count_) == 0)
-            {
-                delete data_;
-                delete count_;
-            }
-        }
+        release();
         data_ = other.data_;
-        count_ = other.count_;
+        cb_ = other.cb_;
         other.data_ = nullptr;
-        other.count_ = nullptr;
+        other.cb_ = nullptr;
     }
     return *this;
 }
@@ -143,10 +138,10 @@ SharedPointer<T>::operator=(SharedPointer&& other) noexcept
 template <typename T>
 SharedPointer<T>::SharedPointer(SharedPointer&& other)
     : data_(other.data_)
-    , count_(other.count_)
+    , cb_(other.cb_)
 {
     other.data_ = nullptr;
-    other.count_ = nullptr;
+    other.cb_ = nullptr;
 }
 
 template <typename T>

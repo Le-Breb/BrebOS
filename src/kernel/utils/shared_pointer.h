@@ -10,7 +10,13 @@ public:
     /**
     ** \brief Construct a counted reference to a newly allocated object.
     */
-    SharedPointer(element_type* p = nullptr);
+    SharedPointer(element_type* p);
+
+    /**
+    ** \brief Construct an empty SharedPointer.
+    ** Kept separate from the pointer constructor so that it does not require element_type to be complete.
+    */
+    SharedPointer(decltype(nullptr) = nullptr);
 
     /**
     ** \brief Destroy the SharedPointer.
@@ -152,10 +158,25 @@ public:
     bool is_a() const;
 
 private:
+    /**
+    ** Shared between all ref pointers to \a data_. \a destroy is set where the pointer is created (where T is
+    ** complete), so that releasing the last reference does not require T to be complete.
+    */
+    struct ControlBlock
+    {
+        long count;
+        void (*destroy)(void*);
+    };
+
+    // Only instantiated where its address is taken, i.e. where a pointer is created
+    static void delete_data(void* p);
+
+    // Drop this reference, destroying the data and the control block if it was the last one.
+    void release();
+
     // Pointer to the underlying data.
     element_type* data_;
-    // A counter shared between all ref pointers to \a data_.
-    long* count_;
+    ControlBlock* cb_;
 };
 
 #include "shared_pointer.hxx"
