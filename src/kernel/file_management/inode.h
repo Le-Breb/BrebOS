@@ -45,6 +45,15 @@ public:
      */
     Result<Memory::cached_page*> get_cached_page(uint file_page_id, bool load);
 
+    /**
+     * Updates the page cache after the file shrank, so that data past the new end of file can never reappear if the
+     * file grows again:
+     * - the page containing the new end of file is zeroed past it
+     * - pages entirely past it are unmapped from processes still mapping them
+     * @param new_size new size of the file, smaller than the previous one
+     */
+    void truncate_cached_pages(uint new_size);
+
     const Superblock* superblock;
     uint size;
 

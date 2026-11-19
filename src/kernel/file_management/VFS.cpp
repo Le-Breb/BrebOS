@@ -470,7 +470,7 @@ FileInterface* VFS::open_file(const char* pathname, int flags, mode_t mode, int&
 
 	// Truncate file if asked and permitted by flags
 	if (flags & O_TRUNC && (flags & O_WRONLY || flags & O_RDWR))
-		if (const auto res = dentry->inode->superblock->get_fs()->resize(dentry->inode.get(), 0); !res.warn_is_ok())
+		if (!resize(dentry->inode.get(), 0))
 			open_file_leave_with_error(-EIO) // IO error (I did not check if this whether it's man compliant)
 	file_descriptors[system_fd] = SharedPointer<FileInterface>(new File(system_fd, flags, 0, dentry->inode));
 
@@ -510,7 +510,14 @@ int VFS::fstat(int fd, struct stat* statbuf)
 
 bool VFS::resize(Inode* inode, size_t new_size)
 {
-	return inode->superblock->get_fs()->resize(inode, new_size).warn_is_ok();
+	const uint old_size = inode->size; // Updated by the FS
+	if (!inode->superblock->get_fs()->resize(inode, new_size).warn_is_ok())
+		return false;
+
+	if (new_size < old_size)
+		inode->truncate_cached_pages(new_size);
+
+	return true;
 }
 
 int VFS::pipe(int pipefd[2])

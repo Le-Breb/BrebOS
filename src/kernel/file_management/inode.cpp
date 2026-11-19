@@ -119,6 +119,35 @@ Status Inode::read_cached(void* buf, uint offset, uint length)
     return Status::success();
 }
 
+void Inode::truncate_cached_pages(uint new_size)
+{
+    // Page containing the new end of file: zero past it. It stays within the file, so its dirty state is kept
+    if (const uint offset_in_page = ADDR_PAGE_OFF(new_size))
+        if (const Memory::cached_page* page = find_cached_page(new_size / PAGE_SIZE))
+            memset((char*)PAGE_ADDR(page->kernel_pte) + offset_in_page, 0, PAGE_SIZE - offset_in_page);
+
+    // Pages entirely past the new end of file are freed
+    const uint first_page_past_eof = (new_size + PAGE_SIZE - 1) / PAGE_SIZE;
+    cached_pages.remove_if([&](Memory::cached_page& page) {
+        if (page.file_page_id < first_page_past_eof)
+            return false;
+
+        // Unmap it from processes still mapping it: their PTEs go back to the not yet loaded file page marker, so
+        // that the next access faults, and raises SIGBUS as it is past the end of file (POSIX behaviour). update_page
+        // removes each PTE from the rmap, which is why the first entry is taken until there is none left
+        while (page.rmap.size() > 0)
+        {
+            const Memory::rmap_entry entry = *page.rmap.get(0);
+            Memory::update_page(entry.page_id, entry.pdt, entry.pt, PAGE_FILE_BACKED, true);
+        }
+
+        // Unregister the frame, then drop the cache reference on it. Dirty data past the end of file is discarded
+        Memory::frame_cache_page[page.frame_id] = nullptr;
+        Memory::kernel_process->update_pte(page.kernel_pte, 0, true);
+        return true;
+    });
+}
+
 Inode::~Inode()
 {
     for (const auto& [file_page_id, kernel_pte, frame_id, dirty, rmap] : cached_pages)

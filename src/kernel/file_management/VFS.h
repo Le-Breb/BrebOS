@@ -200,7 +200,8 @@ public:
 	static int fstat(int fd, struct stat* statbuf);
 
 	/**
-	 * Resizes a file
+	 * Resizes a file. Every resize of a file must go through this function, which keeps the page cache consistent
+	 * when the file shrinks
 	 * @param inode inode of the file to resize
 	 * @param new_size new size of the file
 	 * @return boolean indicating success of the operation
