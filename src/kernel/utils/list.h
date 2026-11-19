@@ -125,6 +125,15 @@ public:
     bool remove(E e);
 
     /**
+     * Removes every element for which the predicate returns true
+     *
+     * @param pred predicate called on each element, which it may modify
+     * @return the number of removed elements
+     */
+    template <typename Pred>
+    int remove_if(Pred pred);
+
+    /**
      * Removes and returns the first element from this list.
      */
     bool removeFirst();

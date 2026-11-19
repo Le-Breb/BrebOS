@@ -186,6 +186,29 @@ bool list<E>::remove(E e)
 }
 
 template <class E>
+template <typename Pred>
+int list<E>::remove_if(Pred pred)
+{
+    int removed = 0;
+    Node** link = &head; // Pointer to the pointer to the current node, so that unlinking needs no special case
+    while (*link != nullptr)
+    {
+        Node* current = *link;
+        if (pred(current->value))
+        {
+            *link = current->next;
+            delete current;
+            s--;
+            removed++;
+        }
+        else
+            link = &current->next;
+    }
+
+    return removed;
+}
+
+template <class E>
 bool list<E>::removeFirst()
 {
     Node* tmp = head;
