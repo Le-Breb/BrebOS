@@ -26,6 +26,13 @@ private:
 	 */
 	void add(Node* newNode);
 
+	/**
+	 * Appends a copy of every element of the given list to the end of this empty list.
+	 *
+	 * @param other - the list to copy
+	 */
+	void copy_elements(const list& other);
+
 public:
 
 	class Iterator
@@ -50,6 +57,26 @@ public:
     const static int SORT_DESC = 1;
 
     list();
+
+	/**
+	 * Creates a deep copy of the given list: elements are copied, nodes are not shared.
+	 */
+	list(const list& other);
+
+	/**
+	 * Takes ownership of the nodes of the given list, which is left empty.
+	 */
+	list(list&& other) noexcept;
+
+	/**
+	 * Replaces the content of this list by a deep copy of the given list.
+	 */
+	list& operator=(const list& other);
+
+	/**
+	 * Frees every element of the list.
+	 */
+	~list();
 
 	/**
 	 * Appends the specified element to the end of this list.

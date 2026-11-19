@@ -54,9 +54,55 @@ list<E>::list()
 }
 
 template <class E>
+void list<E>::copy_elements(const list& other)
+{
+    Node* tail = nullptr;
+    for (Node* current = other.head; current != nullptr; current = current->next)
+    {
+        auto* newNode = new Node(current->value);
+        if (tail == nullptr)
+            head = newNode;
+        else
+            tail->next = newNode;
+        tail = newNode;
+        s++;
+    }
+}
+
+template <class E>
+list<E>::list(const list& other) : list()
+{
+    copy_elements(other);
+}
+
+template <class E>
+list<E>::list(list&& other) noexcept : head(other.head), s(other.s)
+{
+    other.head = nullptr;
+    other.s = 0;
+}
+
+template <class E>
+list<E>& list<E>::operator=(const list& other)
+{
+    if (this == &other)
+        return *this;
+
+    clear();
+    copy_elements(other);
+    return *this;
+}
+
+template <class E>
+list<E>::~list()
+{
+    clear();
+}
+
+template <class E>
 void list<E>::addFirst(E e)
 {
-    auto* newNode = new Node(e);
+    auto* newNode = new Node(std::move(e));
     if (head == nullptr)
     {
         head = newNode;
@@ -80,7 +126,7 @@ void list<E>::add(const E& e)
 template <class E>
 void list<E>::add(E&& e)
 {
-    auto* newNode = new Node(e);
+    auto* newNode = new Node(std::move(e));
     add(newNode);
 }
 
@@ -283,7 +329,7 @@ int list<E>::size() const
 template <class E>
 void list<E>::addLast(E e)
 {
-    add(e);
+    add(std::move(e));
 }
 
 template <class E>
@@ -296,18 +342,18 @@ bool list<E>::add(int index, E e)
 
     if (index == 0)
     {
-        addFirst(e);
+        addFirst(std::move(e));
         return true;
     }
 
     if (index == s)
     {
-        addLast(e);
+        addLast(std::move(e));
         return true;
     }
 
     Node* current = head;
-    auto* newNode = new Node(e);
+    auto* newNode = new Node(std::move(e));
 
     int i = 0;
     do
