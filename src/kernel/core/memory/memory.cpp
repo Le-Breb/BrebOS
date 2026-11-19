@@ -9,6 +9,7 @@ using namespace Memory;
 #include <kstring.h>
 #include <stdint.h>
 #include <sys/mman.h>
+#include <fcntl.h>
 
 #include "../../processes/scheduler.h"
 #include "../../utils/comparison.h"
@@ -603,6 +604,10 @@ namespace Memory
         SharedPointer<FileInterface> sys_fd = VFS::file_descriptors[process->file_descriptors[fd]->sys_fd];
         if (sys_fd->type != FileInterface::File)
             mmap_ret_err_with_warn(EINVAL, "non anonymous mmap with non file file descriptor, this is not supported, mmap fails");
+        // The fd must be readable, and writable for a writable shared mapping
+        const int access_mode = sys_fd->flags & (O_RDONLY | O_WRONLY | O_RDWR);
+        if (access_mode == O_WRONLY || (flags & MAP_SHARED && write && access_mode != O_RDWR))
+            mmap_ret_err(EACCES);
 
         const uint offset_pages = offset / PAGE_SIZE;
         const uint pte = get_contiguous_pages(num_pages, hint_info, process);
