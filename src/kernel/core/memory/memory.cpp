@@ -772,36 +772,13 @@ namespace Memory
         File* file = static_cast<File*>(file_interface.get());
         Inode* inode = file->inode.get();
 
-        // Check whether that portion of the file is already loaded
+        // Access to a page entirely past EOF: SIGBUS, as POSIX requires. Pages past EOF are never cached, as truncation
+        // unmaps and frees them
         const uint file_page = ADDR_PAGE(PAGE_ALIGN(fault_address) - allocation.start) + underlying_file.offset_in_pages;
-        cached_page* cached_page = inode->find_cached_page(file_page);
+        if (PAGE_ADDR(file_page) >= inode->size)
+            return SIGBUS;
 
-        if (const bool region_already_loaded = cached_page != nullptr; !region_already_loaded)
-        {
-            // Access to a page entirely past EOF: SIGBUS, as POSIX requires. Pages past EOF are never cached, as
-            // truncation unmaps and frees them
-            const uint file_offset = PAGE_ADDR(file_page);
-            if (file_offset >= inode->size)
-                return SIGBUS;
-
-            // Let update_pte allocate the frame: the resulting kernel mapping holds the cache reference on it
-            const uint load_pte = get_free_pe();
-            kernel_process->update_pte(load_pte, PAGE_PRESENT | PAGE_WRITE, true);
-            const uint load_frame = PTE_FRAME(PTE(page_tables, load_pte));
-
-            const uint size_to_load = min((uint)PAGE_SIZE, inode->size - file_offset);
-            uint loaded_bytes = 0;
-
-            inode->superblock->get_fs()->load_file_to_buf((void*)PAGE_ADDR(load_pte), inode, file_offset, size_to_load, loaded_bytes).expect();
-            if (loaded_bytes != size_to_load)
-                irrecoverable_error("%s: could only load %u bytes out of %u", __func__, loaded_bytes, size_to_load);
-            // Zero the part of the last page past EOF, otherwise the process would see the frame's previous content
-            memset((void*)(PAGE_ADDR(load_pte) + loaded_bytes), 0, PAGE_SIZE - loaded_bytes);
-
-            inode->cached_pages.addFirst({file_page, load_pte, load_frame, false, {}});
-            cached_page = inode->cached_pages.get(0);
-            frame_cache_page[load_frame] = cached_page;
-        }
+        cached_page* cached_page = inode->get_cached_page(file_page, true).expect();
 
         // Map the cache frame without write access unless this is a shared write: the first write must fault so that
         // the page gets marked dirty, and a private write must not reach the cache frame

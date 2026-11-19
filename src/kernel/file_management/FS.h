@@ -50,8 +50,6 @@ public:
 	virtual Status getdents(Inode* inode, void* buffer, size_t max_size, size_t* bytes_read,
 	                        uint& fd_off) = 0;
 
-	Result<void*> load_file_to_buf(Inode* inode, uint offset, uint length, uint& loaded_bytes);
-
 	virtual Status load_file_to_buf(void* buf, Inode* inode, uint offset,
 	                                uint length, uint& loaded_bytes) = 0;
 

@@ -19,18 +19,19 @@ File::File(int fd, int flags, uint offset, const SharedPointer<Inode>& inode) : 
 
 int File::read(void* buf, uint count)
 {
-    auto l = min(count, inode->size - offset);
-    uint loaded_bytes;
-
     if (inode->type != Inode::File)
         return -EINVAL; // Not a regular file
+    if (offset >= inode->size)
+        return 0; // EOF
+    count = min(count, inode->size - offset);
 
-    if (!inode->superblock->get_fs()->load_file_to_buf(buf, inode.get(), offset, l, loaded_bytes).warn_is_ok())
+    // Read through the page cache, which correctly handles the fact that buf may be lazily allocated, which DMA isn't fond of
+    if (!inode->read_cached(buf, offset, count).warn_is_ok())
         return -EIO; // IO error
 
-    offset += loaded_bytes;
+    offset += count;
 
-    return (int)loaded_bytes;
+    return (int)count;
 }
 
 int File::lseek(int offset, int whence)
@@ -65,13 +66,50 @@ int File::write(void* buf, uint count)
     if (inode->type != Inode::File)
         return -EINVAL; // Not a regular file
 
-    const uint file_size = inode->size;
-
     if (flags & O_APPEND)
-        offset = file_size;
+        offset = inode->size;
+    if (!count)
+        return 0;
 
-    if (!inode->superblock->get_fs()->write_buf_to_file(inode.get(), buf, count, offset).warn_is_ok())
-        return -EIO; // IO error
+    // Grow the file if needed
+    const uint old_size = inode->size;
+    if (offset + count > inode->size)
+        if (!inode->superblock->get_fs()->resize(inode.get(), offset + count).warn_is_ok())
+            return -EIO; // IO error
+
+    // Write in the page cache: the disk never reads buf directly, and pages are written back by sync
+    uint processed_bytes = 0;
+    while (processed_bytes < count)
+    {
+        const uint pos = offset + processed_bytes;
+        const uint page_start = PAGE_ALIGN(pos);
+        const uint offset_in_page = pos - page_start;
+        const uint n = min(PAGE_SIZE - offset_in_page, count - processed_bytes); // Rest of the page, within the request
+
+        // The previous content of an uncached page is only needed if some data of the file before it grew is not
+        // overwritten
+        const bool keeps_old_data = page_start < old_size &&
+                                    (pos > page_start || pos + n < min(old_size, page_start + PAGE_SIZE));
+        Memory::cached_page* page = TRY_OR(inode->get_cached_page(pos / PAGE_SIZE, keeps_old_data), nullptr);
+        if (!page)
+            return -EIO; // IO error
+
+        // Past the old end of file, the page holds zeros or what the disk had there: zero it, so that a gap between the
+        // old end of file and the written data reads as zeros
+        char* page_addr = (char*)PAGE_ADDR(page->kernel_pte);
+        if (page_start + PAGE_SIZE > old_size)
+        {
+            const uint zero_from = max(old_size, page_start) - page_start;
+            memset(page_addr + zero_from, 0, PAGE_SIZE - zero_from);
+        }
+
+        memcpy(page_addr + offset_in_page, (char*)buf + processed_bytes, n);
+        page->dirty = true;
+        processed_bytes += n;
+    }
+
+    if (!Memory::dirty_inodes.contains(inode))
+        Memory::dirty_inodes.add(inode);
 
     offset += count;
 

@@ -366,15 +366,13 @@ void* VFS::load_file(Inode* inode, uint offset, uint length)
 	if (!inode)
 		return nullptr;
 
-	uint loaded_bytes;
 	const uint l = length ? min(length, inode->size) : inode->size;
-	void* buf = WARN_TRY_OR_RETURN(inode->superblock->get_fs()->load_file_to_buf(inode, offset, l,
-																	loaded_bytes), nullptr);
+	char* buf = new char[l ? l : 1]; // Dummy buffer for an empty file
 
-	if (loaded_bytes != l)
+	// Read through the page cache, which may be more up to date than the disk
+	if (!inode->read_cached(buf, offset, l).warn_is_ok())
 	{
-		printf_error("Could only read %u out of %u bytes", l, loaded_bytes);
-		delete[] (char*)buf;
+		delete[] buf;
 		return nullptr;
 	}
 

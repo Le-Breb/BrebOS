@@ -6,6 +6,7 @@
 
 #include "../core/memory/PageCache.h"
 #include "../utils/list.h"
+#include "../utils/Result.h"
 
 class Superblock;
 
@@ -32,6 +33,18 @@ public:
     
     Memory::cached_page* find_cached_page(uint file_page_id) const;
 
+    // Reads file content through the page cache, loading missing pages in it first.
+    Status read_cached(void* buf, uint offset, uint length);
+
+    /**
+     * Gets a cached page, adding it to the cache if needed
+     * @param file_page_id page index in the file
+     * @param load when the page is not cached: whether its content is loaded from disk (the page must start before
+     * the end of file) or zeroed, for a page that is about to be entirely overwritten or lies past the end of file
+     * @return the cached page, or failure if loading it failed
+     */
+    Result<Memory::cached_page*> get_cached_page(uint file_page_id, bool load);
+
     const Superblock* superblock;
     uint size;
 
@@ -46,6 +59,21 @@ public:
     time_t atime; // Last access time
     time_t mtime; // Last modification time
     time_t ctime; // Last status change time
+
+private:
+    // Maximum number of pages loaded by a single disk read, which bounds the size of device transfers
+    static constexpr uint MAX_PAGES_PER_DISK_READ = 16;
+
+    /**
+     * Adds pages to the cache. Their frames are mapped contiguously in the kernel address space, so that they are
+     * loaded with a single disk read
+     * @param first_file_page index in the file of the first page, none of the pages must be cached already
+     * @param n_pages number of pages, at most MAX_PAGES_PER_DISK_READ
+     * @param load whether the pages are loaded from disk (the first page must start before the end of file), or zeroed.
+     * Loaded pages are zeroed past the end of file
+     * @return failure if no kernel virtual memory is left or the disk read failed. Nothing is added in that case
+     */
+    Status add_cached_pages(uint first_file_page, uint n_pages, bool load);
 };
 
 

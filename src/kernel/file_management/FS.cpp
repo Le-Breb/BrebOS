@@ -83,21 +83,6 @@ void FS::init()
 	}
 }
 
-Result<void*> FS::load_file_to_buf(Inode* inode, uint offset, uint length, uint& loaded_bytes)
-{
-	// If reading an empty file, just return a dummy vector without solicitation of the disk
-	if (length == 0)
-		{ loaded_bytes = 0; return make_ok<void*>(new char[1]); }
-
-	auto buf = new char[length];
-
-	const auto res = load_file_to_buf(buf, inode, offset, length, loaded_bytes);
-	if (res.is_ok())
-		return make_ok((void*)buf);
-	delete[] buf;
-	return res;
-}
-
 blksize_t FS::get_block_size() const
 {
 	return block_size;
