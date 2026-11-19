@@ -569,7 +569,7 @@ Result<SharedPointer<Dentry>> FAT::dir_entry_to_dentry(const DirEntry& dir_entry
     auto inode = new FAT_Inode(superblock, dir_entry.file_size, inode_type, dir_entry.first_cluster_addr(), 1, 0, 0, 0,
                                blocks, 0, 0, 0, dir_entry.first_cluster_addr(), dir_entry_cluster, dir_entry_index);
 
-    return make_ok<SharedPointer<Dentry>>(new Dentry(inode, parent_dentry, name));
+    return make_ok<SharedPointer<Dentry>>(new Dentry(SharedPointer<Inode>(inode), parent_dentry, name));
 }
 
 Status FAT::write_fat(const ctx& ctx) const
@@ -822,7 +822,7 @@ SharedPointer<Inode> FAT::get_root_node()
 {
     if (!root_node)
         // Root directory has no directory entry: dir_entry_cluster = 0
-        root_node = new FAT_Inode(superblock, 0, Inode::Dir, 0, 1, 0, 0, 1, 0, 0, 0, 0, extBS_32.root_cluster, 0, 0);
+        root_node = SharedPointer<Inode>(new FAT_Inode(superblock, 0, Inode::Dir, 0, 1, 0, 0, 1, 0, 0, 0, 0, extBS_32.root_cluster, 0, 0));
     return root_node;
 }
 

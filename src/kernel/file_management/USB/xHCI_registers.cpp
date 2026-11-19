@@ -32,6 +32,6 @@ void xhci_extended_capability::_read_next_ext_caps()
     if (m_entry.next)
     {
         auto next_cap_ptr = XHCI_NEXT_EXT_CAP_PTR(m_base, m_entry.next);
-        m_next = { new xhci_extended_capability(next_cap_ptr) };
+        m_next = SharedPointer<xhci_extended_capability>(new xhci_extended_capability(next_cap_ptr));
     }
 }

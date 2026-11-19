@@ -10,7 +10,7 @@ public:
     /**
     ** \brief Construct a counted reference to a newly allocated object.
     */
-    SharedPointer(element_type* p);
+    explicit SharedPointer(element_type* p);
 
     /**
     ** \brief Construct an empty SharedPointer.

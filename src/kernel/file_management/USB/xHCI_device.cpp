@@ -82,6 +82,6 @@ const SharedPointer<xhci_transfer_ring>& xhci_device::create_transfer_ring(uint8
     if (dci < 1 || dci >= MAX_DCI)
         irrecoverable_error("%s: invalid DCI %i", __func__, dci);
 
-    m_transfer_rings[dci] = { new xhci_transfer_ring(max_trbs) };
+    m_transfer_rings[dci] = SharedPointer<xhci_transfer_ring>(new xhci_transfer_ring(max_trbs));
     return m_transfer_rings[dci];
 }

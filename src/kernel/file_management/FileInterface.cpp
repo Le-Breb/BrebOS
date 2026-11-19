@@ -176,7 +176,7 @@ Pipe::Pipe(int rfd, int wrd, int flags, End end) : FileInterface(end == End::Rea
 {
     if (end == Write)
     {
-        buf = {new CircularBuffer<char>(BUF_SIZE, (CircularBuffer<char>::mem_allocator)lazy_malloc)};
+        buf = SharedPointer<CircularBuffer<char>>(new CircularBuffer<char>(BUF_SIZE, (CircularBuffer<char>::mem_allocator)lazy_malloc));
     }
 }
 

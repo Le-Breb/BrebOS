@@ -216,7 +216,7 @@ Result<SharedPointer<Dentry>> VFS::browse_to(const PathView& path, const SharedP
 			// Note: get_child_dentry returning nullptr must only mean "not found", never an I/O error
 			if (!next_entry)
 			{
-				if (!cache_dentry(new Dentry(nullptr, dentry, name)))
+				if (!cache_dentry(SharedPointer<Dentry>(new Dentry(nullptr, dentry, name))))
 					irrecoverable_error("Too many dentries");
 				return MAKE_ERR("%s: no such file or directory", path.data());
 			}
@@ -474,7 +474,7 @@ FileInterface* VFS::open_file(const char* pathname, int flags, mode_t mode, int&
 	if (flags & O_TRUNC && (flags & O_WRONLY || flags & O_RDWR))
 		if (const auto res = dentry->inode->superblock->get_fs()->resize(dentry->inode.get(), 0); !res.warn_is_ok())
 			open_file_leave_with_error(-EIO) // IO error (I did not check if this whether it's man compliant)
-	file_descriptors[system_fd] = new File(system_fd, flags, 0, dentry->inode);
+	file_descriptors[system_fd] = SharedPointer<FileInterface>(new File(system_fd, flags, 0, dentry->inode));
 
 	return file_descriptors[system_fd].get();
 }
@@ -486,7 +486,7 @@ FileInterface* VFS::open_tty(TTY::Target target, int& err)
 	if (sys_fd == -1)
 		leave_with_error(-EMFILE); // No more FDs available
 
-	return (file_descriptors[sys_fd] = new TTY(sys_fd, O_RDWR, target)).get();
+	return (file_descriptors[sys_fd] = SharedPointer<FileInterface>(new TTY(sys_fd, O_RDWR, target))).get();
 }
 
 
@@ -530,8 +530,8 @@ int VFS::pipe(int pipefd[2])
 	Pipe::create_pipe(rfd, wfd, 0, pipes);
 	pipefd[0] = pipes[0]->fd;
 	pipefd[1] = pipes[1]->fd;
-	file_descriptors[rfd] = pipes[0];
-	file_descriptors[wfd] = pipes[1];
+	file_descriptors[rfd] = SharedPointer<FileInterface>(pipes[0]);
+	file_descriptors[wfd] = SharedPointer<FileInterface>(pipes[1]);
 
 	return 0;
 }
@@ -678,7 +678,7 @@ bool VFS::mount(FS* fs)
 
 	// Get and register FS root
 	const auto n = fs->get_root_node();
-	SharedPointer<Dentry> d = new Dentry(n, get_mnt_dentry(), mount_point + id_off);
+	SharedPointer<Dentry> d(new Dentry(n, get_mnt_dentry(), mount_point + id_off));
 
 	// If there's a cached (positive) dentry at that path, update it
 	if (const auto it = dentries->find(dentry_cache_key{mount_point + id_off, get_mnt_dentry().get()});
@@ -710,7 +710,7 @@ bool VFS::mount_rootfs(FS* fs)
 	// Get and register FS root
 	SharedPointer<Inode> n = fs->get_root_node();
 	SharedPointer<Dentry> null_parent = {nullptr};
-	SharedPointer<Dentry> d = new Dentry(n, null_parent, mount_point);
+	SharedPointer<Dentry> d(new Dentry(n, null_parent, mount_point));
 
 	if (!cache_dentry(d))
 		return false;

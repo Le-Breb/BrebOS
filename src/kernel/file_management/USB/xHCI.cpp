@@ -125,7 +125,7 @@ void xHCI::configure_operational_registers()
     setup_dcbaa();
 
     // Setup the command ring and write CRCR
-    command_ring = {new xhci_command_ring(XHCI_COMMAND_RING_TRB_COUNT)};
+    command_ring = SharedPointer<xhci_command_ring>(new xhci_command_ring(XHCI_COMMAND_RING_TRB_COUNT));
     op_regs->crcr = command_ring->get_physical_base() | command_ring->get_cycle_bit();
 }
 
@@ -208,7 +208,7 @@ void xHCI::parse_capability_registers()
     runtime_regs = reinterpret_cast<volatile xhci_runtime_registers*>(static_cast<char*>(mmio) + cap_regs->rtsoff);
 
     // Construct a manager class instance for the doorbell register array
-    doorbell_manager = {new xhci_doorbell_manager(reinterpret_cast<uintptr_t>(mmio) + cap_regs->dboff)};
+    doorbell_manager = SharedPointer<xhci_doorbell_manager>(new xhci_doorbell_manager(reinterpret_cast<uintptr_t>(mmio) + cap_regs->dboff));
 }
 
 void xHCI::parse_extended_capabilities()
@@ -217,7 +217,7 @@ void xHCI::parse_extended_capabilities()
         reinterpret_cast<uintptr_t>(mmio) + m_extended_capabilities_offset
     );
 
-    extended_capabilities_head = { new xhci_extended_capability(head_cap_ptr) };
+    extended_capabilities_head = SharedPointer<xhci_extended_capability>(new xhci_extended_capability(head_cap_ptr));
 
     auto node = extended_capabilities_head;
     while (node.get())
@@ -293,7 +293,7 @@ void xHCI::configure_runtime_registers()
 
     // Setup the event ring and write to interrupter
     // registers to set ERSTSZ, ERSDP, and ERSTBA.
-    event_ring = {new xhci_event_ring(XHCI_EVENT_RING_TRB_COUNT, interrupter_regs)};
+    event_ring = SharedPointer<xhci_event_ring>(new xhci_event_ring(XHCI_EVENT_RING_TRB_COUNT, interrupter_regs));
 
     // Clear any pending interrupts for primary interrupter
     acknowledge_irq(0);
@@ -938,7 +938,7 @@ void xHCI::setup_device(uint8_t port_num)
         return;
     }
 
-    SharedPointer<xhci_device> device = { new xhci_device(port_num + 1, slot_id, speed, m_64byte_context_size) };
+    SharedPointer<xhci_device> device(new xhci_device(port_num + 1, slot_id, speed, m_64byte_context_size));
 
     if (!address_device(device))
     {
