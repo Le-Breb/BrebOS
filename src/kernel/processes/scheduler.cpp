@@ -724,12 +724,20 @@ int Scheduler::register_process_wait(pid_t waiting_process, pid_t waited_for_pro
 
 void Scheduler::set_process_asleep(Process* p, uint duration)
 {
+    // Flagging the process and registering it in the sleeping heap must happen atomically with respect to the timer.
+    // Were p preempted in between, get_next_process() would see it flagged P_SLEEPING and drop it from the ready
+    // queue while it is not in the heap yet, so nothing would ever wake it up again.
+    const bool was_locked = preemption_lock;
+    preemption_lock = true;
+
     p->set_flag(P_SLEEPING);
     uint num_ticks_to_wait = (uint)((float)TICKS_PER_SEC * (float)duration / 1000.f);
     if (!num_ticks_to_wait)
         num_ticks_to_wait = 1;
     uint end_tick = PIT::get_tick() + num_ticks_to_wait;
     sleeping_processes->insert({p, end_tick});
+
+    preemption_lock = was_locked;
 }
 
 void Scheduler::start_kernel_process(void* eip)
