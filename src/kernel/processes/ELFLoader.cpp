@@ -251,7 +251,7 @@ Process* ELFLoader::build_process(int argc, const char** argv, pid_t pid, pid_t 
 {
     constexpr auto k_stack_top = (PAGE_ADDR(768 * PT_ENTRIES - PROCESS_STACK_N_PAGES)) - sizeof(int);
     stack_state_t dummy_stack_state{};
-    Process* p = new Process(file->get_absolute_path(), num_pages, page_tables, pdt, &dummy_stack_state, priority, pid, ppid, k_stack_top);
+    Process* p = new Process(file->get_absolute_path(), 0, page_tables, pdt, &dummy_stack_state, priority, pid, ppid, k_stack_top);
     address_space_bridge = new Memory::AddressSpaceBridge(current_process, p);
 
     if (!load_elf(file, Executable, p))
@@ -275,6 +275,7 @@ void ELFLoader::finalize_process_setup(int argc, const char** argv, const char**
     setup_pdt();
     allocate_stacks(proc);
     setup_pcb(argc, argv, envp, proc);
+    proc->lowest_free_pe = num_pages;
 }
 
 Process* ELFLoader::setup_elf_process(pid_t pid, pid_t ppid, int argc, const char** argv,

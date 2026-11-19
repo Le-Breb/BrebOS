@@ -91,16 +91,14 @@ Process::~Process()
     //printf_info("Process %u exited with code %d", pid, ret_val);
 }
 
-Process::Process(char* bin_path, uint num_elf_pages, Memory::page_table_t* page_tables,
+Process::Process(char* bin_path, uint lowest_free_pe, Memory::page_table_t* page_tables,
                  Memory::pdt_t* pdt, stack_state_t* stack_state, uint priority, pid_t pid, pid_t ppid, Elf32_Addr k_stack_top) :
     quantum(0), priority(priority),
-    num_pages(num_elf_pages),
     pid(pid), ppid(ppid), k_stack_top(k_stack_top), flags(P_READY),
-    lowest_free_pe(num_elf_pages),
+    lowest_free_pe(lowest_free_pe),
     bin_path(bin_path),
     page_tables(page_tables),
-    pdt(pdt),
-    program_break(num_elf_pages * PAGE_SIZE)
+    pdt(pdt)
 {
     memcpy(&this->stack_state, stack_state, sizeof(stack_state_t));
     memcpy(signal_action, signal_default_action, sizeof(signal_action));
@@ -359,7 +357,7 @@ pid_t Process::fork()
     auto child_pdt = (Memory::pdt_t*)Memory::calloca(1, sizeof(Memory::pdt_t), false);
 
     // Creat child process
-    auto child = new Process(strdup(bin_path), num_pages, child_page_tables, child_pdt, &stack_state, priority, child_pid,
+    auto child = new Process(strdup(bin_path), lowest_free_pe, child_page_tables, child_pdt, &stack_state, priority, child_pid,
                              pid, k_stack_top);
 
     // Copy PCB

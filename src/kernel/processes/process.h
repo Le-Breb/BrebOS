@@ -100,8 +100,6 @@ class Process
 
 	uint quantum, priority;
 
-	uint num_pages; // Num pages over which the process code spans, including unmapped pages
-
 	pid_t pid; // PID
 	pid_t ppid; // Parent PID
 
@@ -161,13 +159,12 @@ public:
 	Memory::page_table_t* page_tables;
 	Memory::pdt_t* pdt; // process page directory table
 
-	Elf32_Addr program_break;
 
 private:
 	/** Frees a terminated process */
 	~Process();
 
-	Process(char* bin_path, uint num_elf_pages, Memory::page_table_t* page_tables,
+	Process(char* bin_path, uint lowest_free_pe, Memory::page_table_t* page_tables,
 		Memory::pdt_t* pdt, stack_state_t* stack_state, uint priority, pid_t pid,
 		pid_t ppid, Elf32_Addr k_stack_top);
 
