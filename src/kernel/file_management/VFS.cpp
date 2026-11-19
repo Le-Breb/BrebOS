@@ -172,7 +172,7 @@ Result<SharedPointer<Dentry>> VFS::browse_to(const PathView& path, const SharedP
 	// Browse cached dentries as much as possible
 	while (token != path.end())
 	{
-		const PathView::Component name = *token;
+		const PathView::Component& name = *token;
 		SharedPointer<Dentry> next_entry = name == "." ? dentry : name == ".." ? dentry->parent : get_cached_dentry(dentry, name);
 		if (!next_entry) //  Nothing found in cache
 			break;
