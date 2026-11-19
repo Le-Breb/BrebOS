@@ -198,6 +198,13 @@ void Interrupts::disable_asm()
 	disable_interrupts_asm_();
 }
 
+bool Interrupts::are_enabled()
+{
+	uint eflags;
+	__asm__ volatile("pushf; pop %0" : "=r"(eflags));
+	return eflags & (1 << 9);
+}
+
 [[noreturn]]
 void Interrupts::resume_user_process_asm(const cpu_state_t* cpu_state, const stack_state_t* stack_state)
 {

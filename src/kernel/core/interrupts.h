@@ -76,6 +76,11 @@ public:
 	static void disable_asm();
 
 	/**
+	 * @return whether interrupts are currently enabled (EFLAGS.IF)
+	 */
+	static bool are_enabled();
+
+	/**
 	* Exits from a syscall and resume user program
 	*
 	* @param cpu_state process CPU state

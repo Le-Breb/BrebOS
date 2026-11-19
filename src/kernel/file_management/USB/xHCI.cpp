@@ -402,11 +402,15 @@ void xHCI::process_events()
 // poll silently kills interrupt delivery for the rest of the driver's life.
 void xHCI::poll_events()
 {
-    // Interrupts off so this cannot interleave with fire() doing the same sequence
+    // Interrupts off so this cannot interleave with fire() doing the same sequence. Their previous state is restored
+    // afterwards: callers may run with interrupts disabled (e.g. a page fault handler), which must not change behind
+    // their back
+    const bool interrupts_enabled = Interrupts::are_enabled();
     Interrupts::disable_asm();
     acknowledge_irq(0);
     process_events();
-    Interrupts::enable_asm();
+    if (interrupts_enabled)
+        Interrupts::enable_asm();
 }
 
 // Enumerates every port the interrupt handler recorded a change for. Must be called from normal
@@ -422,10 +426,12 @@ void xHCI::drain_port_changes()
     // set is empty rather than snapshotting it once.
     while (pending_port_changes)
     {
+        const bool interrupts_enabled = Interrupts::are_enabled();
         Interrupts::disable_asm();
         const uint32_t pending = pending_port_changes;
         pending_port_changes = 0;
-        Interrupts::enable_asm();
+        if (interrupts_enabled)
+            Interrupts::enable_asm();
 
         for (uint8_t port = 0; port < 32; port++)
             if (pending & (1u << port))
