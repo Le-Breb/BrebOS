@@ -88,7 +88,7 @@ namespace Memory
          * @param node node to be freed
          * @param process process where the freeing takes place
          */
-        void free_node(Node* node, const Process* process);
+        void free_node(Node* node, Process* process);
         static void ensure_validity_aux(Node* node, Node* tree_root);
         static void ensure_validity_aux_aux(Node* node, const Node* root);
         // Get the allocation with the lowest start address
@@ -183,7 +183,7 @@ namespace Memory
         /**
          * Frees a heap block. WRONG_KIND is returned if address is the start of a mapping
          */
-        [[nodiscard]] FreeState free(uintptr_t address, const Process* process);
+        [[nodiscard]] FreeState free(uintptr_t address, Process* process);
         /**
          * Frees the mapping starting at address: clears the PTEs of its pages and removes it. If the mapping was split
          * (partial munmap or mprotect), only the part starting at address is freed. WRONG_KIND is returned if address

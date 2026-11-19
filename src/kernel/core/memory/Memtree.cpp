@@ -133,7 +133,7 @@ namespace Memory
         return node;
     }
 
-    void MemTree::free_node(Node* node, const Process* process)
+    void MemTree::free_node(Node* node, Process* process)
     {
         node->data.used = false;
         node = merge_free_node(node);
@@ -164,6 +164,7 @@ namespace Memory
             // to them
             for (uint i = 0; i < num_pages; i++)
                 process->update_pte(aligned_start_page + i, 0, true);
+            process->lowest_free_pe = min(process->lowest_free_pe, aligned_start_page);
         }
     }
 
@@ -402,7 +403,7 @@ namespace Memory
         return ReallocState::OK;
     }
 
-    MemTree::FreeState MemTree::free(uintptr_t address, const Process* process)
+    MemTree::FreeState MemTree::free(uintptr_t address, Process* process)
     {
         if (busy) [[unlikely]]
             irrecoverable_error("reentrency detected");
