@@ -28,13 +28,22 @@ namespace Memory
         // Minimum number of free pages required to trigger actual freeing of the memory
         static constexpr uint N_FREE_PAGES_THRESHOLD = 2;
         /**
-         * Finds a free block that is at least size bytes long and that respects hint_info
+         * Finds a free block that is at least size bytes long, matches page_info and respects hint_info
          * @param current search subtree root
          * @param size requested size
+         * @param page_info requested page info, the block must have the same
          * @param hint_info allocation hint
          * @return A large enough free block if one has been found, else nullptr
          */
-        static Node* find_free_block(Node* current, uint size, const hint_info& hint_info);
+        static Node* find_free_block(Node* current, uint size, const page_info& page_info, const hint_info& hint_info);
+        /**
+         * Checks whether a node can be reused to satisfy an allocation
+         * @param node node to check
+         * @param size requested size
+         * @param page_info requested page info
+         * @return true if node is free, large enough, has the same page info and is not file-backed
+         */
+        static bool is_reusable(const Node* node, uint size, const page_info& page_info);
         /**
          * Shrinks a node size by shrink bytes
          * @param node node to shrink

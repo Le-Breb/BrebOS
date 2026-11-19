@@ -4,7 +4,10 @@
 #include "kstring.h"
 #include "kstddef.h"
 #include "MemoryDefines.h"
+#include "../../utils/optional.h"
+#include "../../utils/shared_pointer.h"
 
+class FileInterface;
 namespace Memory
 {
     typedef struct
@@ -59,16 +62,26 @@ namespace Memory
 		bool operator==(const page_info& other) const {return flags == other.flags && policy == other.policy;}
 	};
 
+	struct underlying_file
+	{
+		SharedPointer<FileInterface> file;
+		uint offset_in_pages;
+
+		bool operator==(const underlying_file& other) const { return file == other.file && offset_in_pages == other.offset_in_pages;}
+	};
+
 	struct allocation
 	{
 		uintptr_t start, end;
 		struct page_info page_info;
 		bool used = false;
+		Optional<struct underlying_file> underlying_file;
 
 		[[nodiscard]]
 		bool is_similar_and_contiguous(const allocation& other) const
 		{
-			return (start == other.end || end == other.start) && page_info == other.page_info && used == other.used;
+			return (start == other.end || end == other.start) && page_info == other.page_info && used == other.used &&
+				underlying_file == other.underlying_file;
 		}
 
 		bool operator==(const allocation& other) const {return !memcmp(this, &other, sizeof(*this));}

@@ -17,23 +17,37 @@ namespace Memory
                    : a.start > b.start ? 1 : -1;
     }
 
-    MemTree::Node* MemTree::find_free_block(Node* current, uint size, const hint_info& hint_info)
+    bool MemTree::is_reusable(const Node* node, uint size, const page_info& page_info)
     {
+        return !node->data.used && node_size(node) >= size && node->data.page_info == page_info &&
+            !node->data.underlying_file;
+    }
+
+    MemTree::Node* MemTree::find_free_block(Node* current, uint size, const page_info& page_info,
+                                            const hint_info& hint_info)
+    {
+        // Mandatory hint: exact lookup on block start
+        if (hint_info.is_mandatory)
+        {
+            while (current && current->data.start != hint_info.hint)
+                current = hint_info.hint < current->data.start ? current->left : current->right;
+
+            return current && is_reusable(current, size, page_info) ? current : nullptr;
+        }
+
+        // Non-mandatory hint: any suitable block starting at or after hint
         if (!current)
             return nullptr;
 
-        if (!current->data.used && node_size(current) >= size &&
-            (hint_info.hint == current->data.start || (current->data.start > hint_info.hint && !hint_info.is_mandatory)))
+        if (current->data.start >= hint_info.hint && is_reusable(current, size, page_info))
             return current;
 
         if (current->data.start > hint_info.hint)
         {
-            if (Node* free_block = find_free_block(current->left, size, hint_info); free_block)
+            if (Node* free_block = find_free_block(current->left, size, page_info, hint_info); free_block)
                 return free_block;
         }
-        if (Node* free_block = find_free_block(current->right, size, hint_info); free_block)
-            return free_block;
-        return nullptr;
+        return find_free_block(current->right, size, page_info, hint_info);
     }
 
     void MemTree::shrink_block(Node* node, uint size)
@@ -99,7 +113,7 @@ namespace Memory
 
         const uintptr_t start_addr = reinterpret_cast<uintptr_t>(alloc);
 
-        return insert_aux({start_addr, start_addr + num_pages * PAGE_SIZE, page_info, false});
+        return insert_aux({start_addr, start_addr + num_pages * PAGE_SIZE, page_info, false, nullopt});
     }
 
     RBTree<allocation>::Node* MemTree::merge_free_node(Node* node)
@@ -137,7 +151,7 @@ namespace Memory
 
             // Create part2 if there is one, using node_cpy since node may be deleted by now
             if (node_cpy.data.end - aligned_end)
-                insert({aligned_end, node_cpy.data.end, node_cpy.data.page_info, node_cpy.data.used});
+                insert({aligned_end, node_cpy.data.end, node_cpy.data.page_info, node_cpy.data.used, nullopt});
 
             for (uint i = 0; i < num_pages; i++)
                 process->update_pte(aligned_start_page + i, 0, false);
@@ -257,7 +271,7 @@ namespace Memory
             irrecoverable_error("%s: invalid policy", __PRETTY_FUNCTION__);
 
         // Find big enough free block
-        Node* node = find_free_block(root, size, hint_info);
+        Node* node = find_free_block(root, size, page_info, hint_info);
         if (node == nullptr) // Physically allocate if needed
             if ((node = node_physical_alloc(size, page_info, hint_info, process)) == nullptr) [[unlikely]]
                 {busy=false; return nullptr;}
@@ -267,7 +281,7 @@ namespace Memory
         if (const uint shrink = ns - size)
         {
             shrink_block(node, shrink);
-            insert({node->data.end,node->data.end + shrink, page_info, false});
+            insert({node->data.end,node->data.end + shrink, page_info, false, nullopt});
         }
 
         node->data.used = true;
@@ -299,7 +313,7 @@ namespace Memory
         }
 
         // Get header
-        Node* node = search({address, address, DEFAULT_K_PAGE_INFO, false});
+        Node* node = search({address, address, DEFAULT_K_PAGE_INFO, false, nullopt});
         if (!node) [[unlikely]]
             return ReallocState::FAILED;
 
@@ -316,7 +330,7 @@ namespace Memory
         {
             const uint shrink = ns - size;
             shrink_block(node, shrink);
-            insert({node->data.end, node->data.end + shrink, node->data.page_info, false});
+            insert({node->data.end, node->data.end + shrink, node->data.page_info, false, nullopt});
             new_address = address;
 #if ENSURE_VALIDITY
             ensure_validity();
@@ -352,7 +366,7 @@ namespace Memory
         if (!address) [[unlikely]]
             { busy = false; return FreeState::OK; }
 
-        const allocation dummy = {address, 0,DEFAULT_K_PAGE_INFO};
+        const allocation dummy = {address, 0,DEFAULT_K_PAGE_INFO, false, nullopt};
 
         Node* node = search(dummy);
 
