@@ -58,26 +58,24 @@ def get_txt_ba(elf_path):
     import subprocess as sp
 
     out = sp.run(["readelf", "-SW", elf_path], capture_output=True)
-    t = out.stdout.decode()
-    tt = t.split('\n')
-    tt2 = [ttt for ttt in tt if "text" in ttt][0].split()[4]
-    off = int(tt2, 16)
+    line = next(l for l in out.stdout.decode().splitlines() if " .text " in l)
+    fields = line.split("]", 1)[1].split()
 
-    return off
+    return int(fields[2], 16)
 
 def load_program(elf_name, comes_from_busybox):
     elf_path = f"./busybox/0_lib/{elf_name}" if comes_from_busybox else f"./src/programs/build/{elf_name}"
     elf_base = get_txt_ba(elf_path)
-    print(f"loading {elf_path} at 0x{elf_base}")
+    print(f"loading {elf_path} at {hex(elf_base)}")
     gdb.execute(
         f"add-symbol-file {elf_path} {hex(elf_base)}",
         to_string=True
     )
 
-gdb.execute(
-    f"add-symbol-file ./bootloader/build/bootloader2.elf 0x1000",
-    to_string=True
-)
+# gdb.execute(
+#     f"add-symbol-file ./bootloader/build/bootloader2.elf 0x1000",
+#     to_string=True
+# )
 
 # libbusybox_path = "./busybox/0_lib/libbusybox.so.1.36.1_unstripped"
 # lib_base = get_txt_ba(# libbusybox_path) + 0x41000000
