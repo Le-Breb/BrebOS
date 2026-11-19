@@ -294,6 +294,34 @@ namespace Memory
         return reinterpret_cast<void*>(node->data.start);
     }
 
+    void* MemTree::map_anonymous(uint num_pages, const page_info& page_info, Process* process, const hint_info& hint_info)
+    {
+        if (busy) [[unlikely]]
+            irrecoverable_error("reentrency detected");
+        busy = 5;
+
+        const int policy = page_info.policy;
+        if ((policy & PAGE_PRESENT && policy & PAGE_LAZY_ZERO) || !(policy & (PAGE_PRESENT | PAGE_LAZY_ZERO))) [[unlikely]]
+            irrecoverable_error("%s: invalid policy", __PRETTY_FUNCTION__);
+        if (!num_pages) [[unlikely]]
+            irrecoverable_error("%s: empty mapping requested", __PRETTY_FUNCTION__);
+
+        // Always take fresh pages: reusing pages of free heap blocks would require carving them out of the heap
+        void* mem = sbrk(num_pages, page_info, hint_info, process);
+        if (mem)
+        {
+            const uintptr_t start = reinterpret_cast<uintptr_t>(mem);
+            insert({start, start + PAGE_ADDR(num_pages), page_info, true, nullopt, true});
+        }
+
+#if ENSURE_VALIDITY
+        ensure_validity();
+#endif
+
+        busy = false;
+        return mem;
+    }
+
     MemTree::ReallocState MemTree::realloc(uintptr_t address, uint size, Process* process, uintptr_t& new_address)
     {
         if (!address) // realloc on null = malloc
@@ -314,7 +342,7 @@ namespace Memory
 
         // Get header
         Node* node = search({address, address, DEFAULT_K_PAGE_INFO, false, nullopt});
-        if (!node) [[unlikely]]
+        if (!node || node->data.mapping) [[unlikely]]
             return ReallocState::FAILED;
 
         const uint ns = node_size(node);
@@ -373,10 +401,38 @@ namespace Memory
         if (!node) [[unlikely]]
             { busy = false; return FreeState::NOT_FOUND; };
 
+        if (node->data.mapping) [[unlikely]]
+            { busy = false; return FreeState::WRONG_KIND; }
+
         if (node->data.used == false) [[unlikely]]
             { busy = false; return FreeState::DOUBLE_FREE; }
 
         free_node(node, process);
+
+#if ENSURE_VALIDITY
+        ensure_validity();
+#endif
+
+        busy = false;
+        return FreeState::OK;
+    }
+
+    MemTree::FreeState MemTree::free_mapping(uintptr_t address, const Process* process)
+    {
+        if (busy) [[unlikely]]
+            irrecoverable_error("reentrency detected");
+        busy = 6;
+
+        if (!address) [[unlikely]]
+            { busy = false; return FreeState::OK; }
+
+        Node* node = search({address, address, DEFAULT_K_PAGE_INFO, false, nullopt});
+        if (!node) [[unlikely]]
+            { busy = false; return FreeState::NOT_FOUND; }
+        if (!node->data.mapping) [[unlikely]]
+            { busy = false; return FreeState::WRONG_KIND; }
+
+        unmap_node(node, process);
 
 #if ENSURE_VALIDITY
         ensure_validity();
@@ -514,16 +570,27 @@ namespace Memory
         insert(right);
     }
 
-    const MemTree::Node* MemTree::get_crossed_used_anon_node(uintptr_t bound) const
+    const MemTree::Node* MemTree::get_crossed_used_heap_node(uintptr_t bound) const
     {
         const Node* node = get_addr_node(bound);
-        return node && node->data.used && !node->data.underlying_file && node->data.start < bound ? node : nullptr;
+        return node && node->data.used && !node->data.mapping && node->data.start < bound ? node : nullptr;
     }
 
-    bool MemTree::would_split_used_anon_node(uintptr_t bound, bool write) const
+    bool MemTree::would_split_used_heap_node(uintptr_t bound, bool write) const
     {
-        const Node* node = get_crossed_used_anon_node(bound);
+        const Node* node = get_crossed_used_heap_node(bound);
         return node && (bool)(node->data.page_info.policy & PAGE_WRITE) != write;
+    }
+
+    void MemTree::unmap_node(Node* node, const Process* process)
+    {
+        const uint end_page = ADDR_PAGE(node->data.end + PAGE_SIZE - 1);
+        for (uint page = ADDR_PAGE(node->data.start); page < end_page; page++)
+            process->update_pte(page, 0, true);
+
+        // Must come after clearing PTEs: deleting the node may release the last reference to a file, destroying its
+        // inode, which requires that no PTE maps its cached pages anymore
+        deleteNode(node);
     }
 
     bool MemTree::is_range_user_accessible(uintptr_t start, uintptr_t end) const
@@ -551,7 +618,7 @@ namespace Memory
 
         // Check before modifying anything, so that a refusal leaves the tree untouched. Only allocations containing a
         // range bound can be crossed by it
-        if (would_split_used_anon_node(start, write) || would_split_used_anon_node(end, write))
+        if (would_split_used_heap_node(start, write) || would_split_used_heap_node(end, write))
             return false;
 
         busy = 1;
@@ -607,7 +674,7 @@ namespace Memory
             irrecoverable_error("reentrency detected");
 
         // Check before modifying anything, so that a refusal leaves the tree untouched
-        if (get_crossed_used_anon_node(start) || get_crossed_used_anon_node(end) ||
+        if (get_crossed_used_heap_node(start) || get_crossed_used_heap_node(end) ||
             !is_range_user_accessible(start, end))
             return false;
 
@@ -639,16 +706,10 @@ namespace Memory
                 node = get_addr_node(addr);
             }
 
-            // Anonymous allocations can end in the middle of a page, whose next allocations are also within the range
-            // as it is page aligned
+            // A heap block can end in the middle of a page, whose next blocks are also within the range as it is page
+            // aligned, so clearing that whole page is fine
             const uintptr_t node_end = node->data.end;
-            const uint end_page = ADDR_PAGE(node_end + PAGE_SIZE - 1);
-            for (uint page = ADDR_PAGE(node->data.start); page < end_page; page++)
-                process->update_pte(page, 0, true);
-
-            // Must come after clearing PTEs: deleting the node may release the last reference to a file, destroying its
-            // inode, which requires that no PTE maps its cached pages anymore
-            deleteNode(node);
+            unmap_node(node, process);
             addr = node_end;
         }
 

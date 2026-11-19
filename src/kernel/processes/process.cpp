@@ -239,6 +239,10 @@ void Process::free(void* ptr)
             printf_warn("free called on a pointer that has not been returned by a call to malloc or calloc");
             kill(SIGSEGV);
             irrecoverable_error("%s: that should never have been reached", __PRETTY_FUNCTION__);
+        case Memory::MemTree::FreeState::WRONG_KIND:
+            printf_warn("free called on a memory mapping, use munmap instead");
+            kill(SIGSEGV);
+            irrecoverable_error("%s: that should never have been reached", __PRETTY_FUNCTION__);
     }
 }
 

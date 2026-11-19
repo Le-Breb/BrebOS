@@ -85,12 +85,16 @@ namespace Memory
 		struct page_info page_info;
 		bool used = false;
 		Optional<struct underlying_file> underlying_file;
+		// Page-granular mapping (anonymous or file-backed) rather than a heap block. A mapping is page aligned, made of
+		// whole pages shared with no other allocation, and can be split at page boundaries. It is always used: it is
+		// removed from the tree when freed or unmapped, never turned into a free block that the heap could reuse
+		bool mapping = false;
 
 		[[nodiscard]]
 		bool is_similar_and_contiguous(const allocation& other) const
 		{
 			return (start == other.end || end == other.start) && page_info == other.page_info && used == other.used &&
-				underlying_file == other.underlying_file;
+				underlying_file == other.underlying_file && mapping == other.mapping;
 		}
 
 		bool operator==(const allocation& other) const {return !memcmp(this, &other, sizeof(*this));}

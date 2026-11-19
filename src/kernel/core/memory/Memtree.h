@@ -111,20 +111,27 @@ namespace Memory
          */
         void split_node(Node* node, uintptr_t at);
         /**
-         * Finds the used anonymous allocation strictly crossed by a range bound. Such an allocation cannot be split, as
-         * free and realloc look it up by its start address
+         * Finds the used heap block strictly crossed by a range bound. Such a block cannot be split, as free and
+         * realloc look it up by its start address
          * @param bound range bound (start or end)
          * @return the node if there is one, nullptr otherwise
          */
-        const Node* get_crossed_used_anon_node(uintptr_t bound) const;
+        const Node* get_crossed_used_heap_node(uintptr_t bound) const;
         /**
          * Checks whether setting write permission over a range would require splitting node at bound
          * @param bound range bound (start or end)
          * @param write requested write permission
-         * @return true if the allocation containing bound is used, anonymous, strictly crossed by bound and its write
-         * permission differs from the requested one
+         * @return true if the allocation containing bound is a used heap block, strictly crossed by bound and its
+         * write permission differs from the requested one
          */
-        bool would_split_used_anon_node(uintptr_t bound, bool write) const;
+        bool would_split_used_heap_node(uintptr_t bound, bool write) const;
+        /**
+         * Clears the PTEs of the pages of a node, then deletes it. Pages are cleared up to the end of the node's last
+         * page: a heap block ending in the middle of a page also clears that page
+         * @param node node to remove
+         * @param process process the node belongs to
+         */
+        void unmap_node(Node* node, const Process* process);
         /**
          * Checks that a range only covers allocations that user code is allowed to access
          * @param start range start
@@ -137,7 +144,8 @@ namespace Memory
         {
             OK,
             DOUBLE_FREE,
-            NOT_FOUND
+            NOT_FOUND,
+            WRONG_KIND // Heap free called on a mapping, or mapping free called on a heap block
         };
         enum class ReallocState
         {
@@ -150,9 +158,37 @@ namespace Memory
         MemTree(const MemTree& other);
         MemTree& operator=(const MemTree& other);
 
+        /**
+         * Allocates a byte-granular heap block. Heap blocks can share pages with each other and offer no alignment
+         * guarantee
+         */
         void* allocate(uint size, const page_info& page_info, Process* process, const hint_info& hint_info = DEFAULT_HINT_INFO);
+        /**
+         * Allocates an anonymous mapping of num_pages fresh pages. Free heap blocks are never reused, so the mapping is
+         * page aligned and shares no page with any other allocation. The memory is not zeroed by this function
+         * @param num_pages number of pages, must not be 0
+         * @param page_info page info of the mapping
+         * @param process process where the allocation takes place
+         * @param hint_info hint to be respected
+         * @return mapping start address, or nullptr if no virtual or physical memory is available
+         */
+        void* map_anonymous(uint num_pages, const page_info& page_info, Process* process, const hint_info& hint_info = DEFAULT_HINT_INFO);
+        /**
+         * Reallocates a heap block. Mappings cannot be reallocated: FAILED is returned
+         */
         [[nodiscard]] ReallocState realloc(uintptr_t address, uint size, Process* process, uintptr_t& new_address);
+        /**
+         * Frees a heap block. WRONG_KIND is returned if address is the start of a mapping
+         */
         [[nodiscard]] FreeState free(uintptr_t address, const Process* process);
+        /**
+         * Frees the mapping starting at address: clears the PTEs of its pages and removes it. If the mapping was split
+         * (partial munmap or mprotect), only the part starting at address is freed. WRONG_KIND is returned if address
+         * is the start of a heap block
+         * @param address mapping start address
+         * @param process process the mapping belongs to
+         */
+        [[nodiscard]] FreeState free_mapping(uintptr_t address, const Process* process);
         void ensure_validity() const;
         void free_all(const Process* process); // Frees all allocations registered in the tree
         void register_external_allocation(const allocation& allocation); // Registered externally allocated memory
@@ -162,18 +198,18 @@ namespace Memory
          * Sets or removes write permission in the policy of allocations within [start, end), splitting allocations
          * that cross range bounds. File mappings rely on it to check permission upon page faults, and policies are
          * reused when growing or reusing allocations, so they must match the actual permission of their pages.
-         * Used anonymous allocations cannot be split, as free and realloc look them up by their start address: if
-         * one crosses a range bound and its permission would change, nothing is modified and false is returned
+         * Used heap blocks cannot be split, as free and realloc look them up by their start address: if one crosses a
+         * range bound and its permission would change, nothing is modified and false is returned
          * @param start range start, page aligned
          * @param end range end, page aligned
          * @param write whether write permission should be granted
-         * @return false if the range partially covers a used anonymous allocation, else true
+         * @return false if the range partially covers a used heap block, else true
          */
         [[nodiscard]] bool set_write_permission(uintptr_t start, uintptr_t end, bool write);
         /**
          * Removes every allocation within [start, end) and clears the PTEs of their pages, splitting allocations that
-         * cross range bounds. Nothing is modified and false is returned if the range partially covers a used anonymous
-         * allocation, or if it covers memory that is not user accessible
+         * cross range bounds. Nothing is modified and false is returned if the range partially covers a used heap
+         * block, or if it covers memory that is not user accessible
          * @param start range start, page aligned
          * @param end range end, page aligned
          * @param process process the allocations belong to

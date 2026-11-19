@@ -508,38 +508,40 @@ namespace Memory
         }
     }
 
-    // this function is WRONG!! It does not guarantee alignment anymore, it needs fixing
     void* malloca(uint size)
     {
-        const uint num_pages = ADDR_PAGE(size + PAGE_SIZE - 1);
         int err;
-        return mmap((void*)KERNEL_VIRTUAL_BASE, num_pages * PAGE_SIZE, DEFAULT_K_PROT, DEFAULT_K_FLAGS, DEFAULT_K_POLICY, 0, err, kernel_process, false, false);
+        return mmap((void*)KERNEL_VIRTUAL_BASE, size, DEFAULT_K_PROT, DEFAULT_K_FLAGS, 0, 0, err, kernel_process, false, false);
     }
 
     void* calloca(size_t nmemb, size_t size, bool lazy_zero)
     {
-        uint base_size = size;
-        if (__builtin_mul_overflow(nmemb, size, &base_size))
-            return nullptr;
         uint total_size;
-        const uint num_pages = ADDR_PAGE(base_size + PAGE_SIZE - 1);
-        const uint new_size = num_pages * PAGE_SIZE;
-        const uint additional_size = new_size - base_size;
-        if (__builtin_add_overflow(base_size, additional_size, &total_size))
+        if (__builtin_mul_overflow(nmemb, size, &total_size))
             return nullptr;
-
+        
         int err;
-        void* alloc = mmap((void*)KERNEL_VIRTUAL_BASE, new_size, DEFAULT_K_PROT, DEFAULT_K_FLAGS, 0, 0, err, kernel_process, lazy_zero, false);
-        if (!alloc)
-            return nullptr;
-        if (!lazy_zero) // Zero memory if it's not lazily allocatd
-            zero_out_mem(new_size, alloc, kernel_process);
-        return alloc;
+        return mmap((void*)KERNEL_VIRTUAL_BASE, total_size, DEFAULT_K_PROT, DEFAULT_K_FLAGS, 0, 0, err, kernel_process, lazy_zero, false);
     }
 
     void freea(void* ptr)
     {
-        free(ptr);
+        if (!ptr)
+            return;
+
+        switch (kernel_process->memtree.free_mapping(reinterpret_cast<uintptr_t>(ptr), kernel_process))
+        {
+            case MemTree::FreeState::OK:
+                break;
+            case MemTree::FreeState::WRONG_KIND:
+                irrecoverable_error("freea failed, 0x%x was not returned by malloca/calloca", (uint)ptr);
+            case MemTree::FreeState::NOT_FOUND:
+                irrecoverable_error("freea failed, 0x%x is nowhere to be found", (uint)ptr);
+            default:
+                irrecoverable_error("freea failed on 0x%x", (uint)ptr);
+        }
+
+        kernel_process->lowest_free_pe = min(kernel_process->lowest_free_pe, ADDR_PAGE(reinterpret_cast<uintptr_t>(ptr)));
     }
 
     uint* get_stack_top_ptr()
@@ -570,21 +572,25 @@ namespace Memory
 
         if (prot == 0)
             mmap_ret_err_with_warn(EINVAL, "mmap called with prot == 0. I don't know how to implement that, returning failure")
+        if (size == 0)
+            mmap_ret_err(EINVAL); // According to man page
         const bool write = prot & PROT_WRITE;
+        const uint num_pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
+        const hint_info hint_info{reinterpret_cast<uintptr_t>(hint), (bool)(flags & MAP_FIXED)};
 
         if (flags & (MAP_ANON | MAP_ANONYMOUS))
         {
-            // Policy set to write for calloc, then write is removed if user did not specify it
-            const int policy = PROT_WRITE | (lazy_zero ? PAGE_LAZY_ZERO : PAGE_PRESENT) | (page_user ? PAGE_USER : 0);
-            const hint_info hint_info{reinterpret_cast<uintptr_t>(hint), (bool)(flags & MAP_FIXED)};
+            // Write is granted so that pages can be zeroed out, then removed if user did not specify it
+            const int policy = PAGE_WRITE | (lazy_zero ? PAGE_LAZY_ZERO : PAGE_PRESENT) | (page_user ? PAGE_USER : 0);
             const page_info page_info{flags, policy};
-            // printf_info("mmap call on range [0x%08x, 0x%08x]", (uint)hint, (uint)hint + (uint)size);
-            // Man page states that MAP_ANON allocations MUST BE zeroed out, thus calloc is used
-            void* window = calloc(size, 1, page_info, process, hint_info);
-            if (flags & MAP_FIXED && window != hint)
-                irrecoverable_error("%s: MAP_FIXED set, but returned window does not match hit", __func__);
+            void* window = process->memtree.map_anonymous(num_pages, page_info, process, hint_info);
             if (!window)
                 mmap_ret_err(ENOMEM);
+            if (flags & MAP_FIXED && window != hint)
+                irrecoverable_error("%s: MAP_FIXED set, but returned window does not match hint", __func__);
+            // Man page states that MAP_ANON allocations MUST BE zeroed out. Lazy pages are zeroed upon first access
+            if (!lazy_zero)
+                zero_out_mem(PAGE_ADDR(num_pages), window, process);
             if (!write) // Remove write permission if user did not specify it
                 mprotect(window, size, prot, process);
             return window;
@@ -599,8 +605,6 @@ namespace Memory
             mmap_ret_err_with_warn(EINVAL, "non anonymous mmap with non file file descriptor, this is not supported, mmap fails");
 
         const uint offset_pages = offset / PAGE_SIZE;
-        const uint num_pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
-        const hint_info hint_info{reinterpret_cast<uintptr_t>(hint), (bool)(flags & MAP_FIXED)};
         const uint pte = get_contiguous_pages(num_pages, hint_info, process);
         if (pte == -1U)
             mmap_ret_err(ENOMEM);
@@ -612,7 +616,7 @@ namespace Memory
         const page_info page_info{flags, policy};
         for (uint i = 0; i < num_pages; i++)
             process->update_pte(pte + i, PAGE_FILE_BACKED, true);
-        process->memtree.register_external_allocation({PAGE_ADDR(pte), PAGE_ADDR(pte + num_pages), page_info, true, {sys_fd, offset_pages}});
+        process->memtree.register_external_allocation({PAGE_ADDR(pte), PAGE_ADDR(pte + num_pages), page_info, true, {sys_fd, offset_pages}, true});
 
         return (void*)(pte << 12);
     }
@@ -985,6 +989,8 @@ MemTree::FreeState free(void* ptr, Process* process)
                 irrecoverable_error("free failed, double free detected");
             case MemTree::FreeState::NOT_FOUND:
                 irrecoverable_error("free failed, allocation is nowhere to be found");
+            case MemTree::FreeState::WRONG_KIND:
+                irrecoverable_error("free failed, 0x%x is a mapping, use freea", (uint)ptr);
             default:
                 irrecoverable_error("free failed with unknown state %d", (int)free_state);
         }
