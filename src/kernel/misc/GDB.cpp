@@ -93,20 +93,6 @@ char* GDB::add_prefix_to_elf_name(const char* path, const char* prefix)
     return p;
 }
 
-[[maybe_unused]] // This function requires -debugcon qemu flag to work properly
-static void debugcon_putc(char c)
-{
-    asm volatile ("outb %0, %1"
-                  :
-                  : "a"(c), "Nd"((uint16_t)0xE9));
-}
-
-[[maybe_unused]]
-static void debugcon_pustring(const char* string)
-{
-    for (; *string; debugcon_putc(*string++)) {};
-}
-
 GDB::GDB()
 {
     int err;

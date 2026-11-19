@@ -8,6 +8,7 @@
 #include "memory/memory.h"
 #include "PIT.h"
 #include "system.h"
+#include "../misc/debugcon.h"
 
 extern char _binary_Lat15_VGA16_psf_start[]; // NOLINT(*-reserved-identifier)
 
@@ -39,6 +40,7 @@ uint FB::shadow_lim = 0;
 uint FB::shadow_start = 0;
 
 bool FB::lock_flush = false;
+volatile bool FB::ready_signal_requested = false;
 bool FB::show_cursor = false;
 
 PSF1_font* FB::font = (PSF1_font*)_binary_Lat15_VGA16_psf_start;
@@ -378,7 +380,17 @@ void FB::refresh_loop()
 	{
 		show_cursor = tick <= fps;
 		PIT::sleep(frame_duration);
-		flush();
+
+		// Consume the request before flushing: everything written before it was made is then part of this flush
+		const bool ready_requested = ready_signal_requested;
+		ready_signal_requested = false;
+		if (flush())
+		{
+			if (ready_requested)
+				debugcon_puts("READY\n");
+		}
+		else if (ready_requested)
+			ready_signal_requested = true; // Flush skipped, retry on next frame
 
 		tick++;
 		if (tick == 2 * fps) // % 2 * FPs
@@ -386,10 +398,10 @@ void FB::refresh_loop()
 	}
 }
 
-void FB::flush()
+bool FB::flush()
 {
 	if (lock_flush)
-		return;
+		return false;
 
 	auto cursor_shadow_off = shadow_start + caret_y * fb_width + caret_x;
 	if (cursor_shadow_off >= shadow_lim)
@@ -477,6 +489,8 @@ void FB::flush()
 		for (uint i = n_full; i < progress_bar_height * fb_width; i++)
 			fb[i] = BG;
 	}
+
+	return true;
 }
 
 void FB::init(uint fps)

@@ -71,6 +71,7 @@ class FB
     static uint shadow_start;
 
     static bool lock_flush;
+    static volatile bool ready_signal_requested;
     static bool show_cursor;
 
     static PSF1_font* font;
@@ -99,7 +100,13 @@ public:
     [[noreturn]]
     static void refresh_loop();
 
-    static void flush();
+    /**
+     * @return false if flushing is locked (nothing was drawn)
+     */
+    static bool flush();
+
+    // Writes "READY" to the QEMU debug console once everything written so far is displayed (see utils/vm.py)
+    static void request_ready_signal() { ready_signal_requested = true; }
 
     static void lock_flushing();
 

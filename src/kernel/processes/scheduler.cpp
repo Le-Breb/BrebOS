@@ -114,6 +114,9 @@ void Scheduler::set_first_ready_process_asleep_waiting_key_press()
 {
     pid_t pid = running_process = ready_queue->dequeue();
     waiting_queue->enqueue(pid);
+
+    // Tell the host that the system is idle, waiting for user input, once the display is up to date
+    FB::request_ready_signal();
 }
 
 void Scheduler::set_first_ready_process_asleep_waiting_process()
